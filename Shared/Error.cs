@@ -2,7 +2,7 @@
 
 namespace Resrcify.SharedKernel.Shared;
 
-public partial class Error : IEquatable<Error>
+public class Error : IEquatable<Error>
 {
     public static readonly Error None = new(string.Empty, string.Empty);
     public static readonly Error NullValue = new("Error.NullValue", "The specified result value is null.");
@@ -13,8 +13,8 @@ public partial class Error : IEquatable<Error>
         Message = message;
     }
 
-    public string Code { get; }
-    public string Message { get; }
+    public string Code { get; init; }
+    public string Message { get; init; }
 
     public static implicit operator string(Error error) => error.Code;
     public static implicit operator Result(Error error) => Result.Failure(error);

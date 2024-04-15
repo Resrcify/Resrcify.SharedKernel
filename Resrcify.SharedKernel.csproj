@@ -5,7 +5,7 @@
     <ImplicitUsings>false</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackageId>Resrcify.SharedKernel</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Authors>Rickard Marjanovic</Authors>
     <Company>Resrcify AB</Company>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
