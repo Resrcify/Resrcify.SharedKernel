@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
-using Resrcify.SharedKernel.Abstractions;
+using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
 
-namespace Resrcify.SharedKernel.Primitives;
+namespace Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 
 public abstract class AggregateRoot<TId> : Entity<TId>, IAggregateRoot
     where TId : notnull

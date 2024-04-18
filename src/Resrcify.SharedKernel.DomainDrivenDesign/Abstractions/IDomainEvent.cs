@@ -1,7 +1,7 @@
 ﻿using System;
 using MediatR;
 
-namespace Resrcify.SharedKernel.Abstractions;
+namespace Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
 
 public interface IDomainEvent : INotification
 {

@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 
-namespace Resrcify.SharedKernel.Shared;
+namespace Resrcify.SharedKernel.ResultFramework.Shared;
 
 public static class ResultExtensions
 {
@@ -50,9 +50,8 @@ public static class ResultExtensions
     public static Result<TIn> Tap<TIn>(this Result<TIn> result, Action<TIn> action)
     {
         if (result.IsSuccess)
-        {
             action(result.Value);
-        }
+
         return result;
     }
 }

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Resrcify.SharedKernel.Shared;
+namespace Resrcify.SharedKernel.ResultFramework.Shared;
 public class Result
 {
     protected internal Result(bool isSuccess, Error error)

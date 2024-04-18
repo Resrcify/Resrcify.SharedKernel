@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Resrcify.SharedKernel.Shared;
+namespace Resrcify.SharedKernel.ResultFramework.Shared;
 
 public class Result<TValue> : Result
 {

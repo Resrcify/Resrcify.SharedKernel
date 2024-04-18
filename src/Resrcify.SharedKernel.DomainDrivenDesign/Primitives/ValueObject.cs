@@ -2,7 +2,7 @@ using System.Linq;
 using System;
 using System.Collections.Generic;
 
-namespace Resrcify.SharedKernel.Primitives;
+namespace Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 public abstract class ValueObject : IEquatable<ValueObject>
 {
     public abstract IEnumerable<object> GetAtomicValues();

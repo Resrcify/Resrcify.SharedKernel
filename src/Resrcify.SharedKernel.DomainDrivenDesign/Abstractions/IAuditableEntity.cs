@@ -1,6 +1,6 @@
 using System;
 
-namespace Resrcify.SharedKernel.Abstractions;
+namespace Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
 
 public interface IAuditableEntity
 {

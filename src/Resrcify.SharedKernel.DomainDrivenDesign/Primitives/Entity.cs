@@ -1,6 +1,6 @@
 using System;
 
-namespace Resrcify.SharedKernel.Primitives;
+namespace Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 public abstract class Entity<TId> : IEquatable<Entity<TId>>
     where TId : notnull
 {

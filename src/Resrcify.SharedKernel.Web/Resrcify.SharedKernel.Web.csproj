@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>Resrcify.SharedKernel.Web</PackageId>
+    <Title>Resrcify.SharedKernel.Web</Title>
+    <Description>Maps errors from the result patterns to a problem details response.</Description>
+    <Summary>Maps errors from the result patterns to a problem details response.</Summary>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Resrcify.SharedKernel.ResultFramework\Resrcify.SharedKernel.ResultFramework.csproj" />
+  </ItemGroup>
+</Project>

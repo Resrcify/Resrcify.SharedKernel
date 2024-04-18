@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Resrcify.SharedKernel.Abstractions;
+namespace Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
 
 public interface IAggregateRoot
 {
