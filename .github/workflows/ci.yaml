@@ -21,7 +21,12 @@ jobs:
         run: dotnet test --configuration Release /p:Version=${VERSION} --no-build
       - name: Pack
         run: dotnet pack --configuration Release /p:Version=${VERSION} --no-build --output .
-      - name: Push
-        run: dotnet nuget push NuGet.Workflow.${VERSION}.nupkg --source https://api.nuget.org/v3/index.json --api-key ${NUGET_API_KEY}
+      - name: List generated packages
+        run: ls *.nupkg
+      - name: Push Packages to NuGet
+        run: |
+          for package in *.nupkg; do
+            dotnet nuget push "$package" --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
+          done
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
