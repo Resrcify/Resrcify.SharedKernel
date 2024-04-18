@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Titan.GalaxyOfHeroesWrapper.Application.Behaviors;
 
-internal sealed class ValidationPipelineBehavior<TRequest, TResponse>
+public sealed class ValidationPipelineBehavior<TRequest, TResponse>
     : IPipelineBehavior<TRequest, TResponse>
         where TRequest : IRequest<TResponse>
         where TResponse : Result
