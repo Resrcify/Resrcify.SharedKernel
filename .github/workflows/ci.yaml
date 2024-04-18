@@ -26,7 +26,7 @@ jobs:
       - name: Push Packages to NuGet
         run: |
           for package in *.nupkg; do
-            dotnet nuget push "$package" --source https://api.nuget.org/v3/index.json --api-key ${{ secrets.NUGET_API_KEY }}
+            dotnet nuget push "$package" --source https://api.nuget.org/v3/index.json --api-key $NUGET_API_KEY
           done
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
