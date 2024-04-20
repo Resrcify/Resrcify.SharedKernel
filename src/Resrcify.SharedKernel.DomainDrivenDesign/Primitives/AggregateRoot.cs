@@ -1,18 +1,14 @@
 using System.Collections.Generic;
-using System.Linq;
 using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
 
 namespace Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 
-public abstract class AggregateRoot<TId> : Entity<TId>, IAggregateRoot
+public abstract class AggregateRoot<TId>(TId id) : Entity<TId>(id), IAggregateRoot
     where TId : notnull
 {
-    private readonly List<IDomainEvent> _domainEvents = new();
-    protected AggregateRoot(TId id) : base(id)
-    {
-    }
+    private readonly List<IDomainEvent> _domainEvents = [];
 
-    public IReadOnlyCollection<IDomainEvent> GetDomainEvents() => _domainEvents.ToList();
+    public IReadOnlyCollection<IDomainEvent> GetDomainEvents() => [.. _domainEvents];
 
     public void ClearDomainEvents() => _domainEvents.Clear();
 

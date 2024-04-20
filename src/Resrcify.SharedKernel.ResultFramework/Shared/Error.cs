@@ -42,16 +42,14 @@ public class Error : IEquatable<Error>
     public static bool operator !=(Error? a, Error? b) => !(a == b);
 
     public virtual bool Equals(Error? other)
-    {
-        if (other is null)
-            return false;
-
-        return Code == other.Code && Message == other.Message;
-    }
+        => other is not null &&
+            Code == other.Code &&
+            Message == other.Message &&
+            Type == other.Type;
 
     public override bool Equals(object? obj) => obj is Error error && Equals(error);
 
-    public override int GetHashCode() => HashCode.Combine(Code, Message);
+    public override int GetHashCode() => HashCode.Combine(Code, Message, Type);
 
     public override string ToString() => Code;
 }

@@ -8,17 +8,18 @@ public class Result
     protected internal Result(bool isSuccess, Error error)
     {
         if (isSuccess && error != Error.None)
-        {
             throw new InvalidOperationException();
-        }
+
 
         if (!isSuccess && error == Error.None)
-        {
             throw new InvalidOperationException();
-        }
 
         IsSuccess = isSuccess;
-        Errors = [error];
+
+        Errors = [];
+
+        if (error != Error.None)
+            Errors = [error];
     }
 
     protected internal Result(bool isSuccess, Error[] errors)
@@ -54,11 +55,9 @@ public class Result
         value is not null ? Success(value) : Failure<TValue>(Error.NullValue);
 
     public static Result<T> Ensure<T>(T value, Func<T, bool> predicate, Error error)
-    {
-        return predicate(value) ?
+        => predicate(value) ?
             Success(value) :
             Failure<T>(error);
-    }
 
     public static Result<T> Ensure<T>(
         T value,
@@ -97,7 +96,9 @@ public class Result
             failures.AddRange(result2.Errors);
 
         if (failures.Count > 0)
-            return Failure<(T1, T2)>(failures.ToArray());
+            return Failure<(T1, T2)>(failures
+                .Distinct()
+                .ToArray());
 
         return Success((result1.Value, result2.Value));
     }
@@ -115,7 +116,9 @@ public class Result
             failures.AddRange(result3.Errors);
 
         if (failures.Count > 0)
-            return Failure<(T1, T2, T3)>(failures.ToArray());
+            return Failure<(T1, T2, T3)>(failures
+                .Distinct()
+                .ToArray());
 
         return Success((result1.Value, result2.Value, result3.Value));
     }
@@ -137,7 +140,9 @@ public class Result
             failures.AddRange(result4.Errors);
 
         if (failures.Count > 0)
-            return Failure<(T1, T2, T3, T4)>(failures.ToArray());
+            return Failure<(T1, T2, T3, T4)>(failures
+                .Distinct()
+                .ToArray());
 
         return Success((result1.Value, result2.Value, result3.Value, result4.Value));
     }
@@ -162,7 +167,9 @@ public class Result
             failures.AddRange(result5.Errors);
 
         if (failures.Count > 0)
-            return Failure<(T1, T2, T3, T4, T5)>(failures.ToArray());
+            return Failure<(T1, T2, T3, T4, T5)>(failures
+                .Distinct()
+                .ToArray());
 
         return Success((result1.Value, result2.Value, result3.Value, result4.Value, result5.Value));
     }
@@ -189,7 +196,9 @@ public class Result
             failures.AddRange(result6.Errors);
 
         if (failures.Count > 0)
-            return Failure<(T1, T2, T3, T4, T5, T6)>(failures.ToArray());
+            return Failure<(T1, T2, T3, T4, T5, T6)>(failures
+                .Distinct()
+                .ToArray());
 
         return Success((result1.Value, result2.Value, result3.Value, result4.Value, result5.Value, result6.Value));
     }
