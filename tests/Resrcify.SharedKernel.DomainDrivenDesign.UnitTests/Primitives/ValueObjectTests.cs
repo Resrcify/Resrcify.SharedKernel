@@ -71,4 +71,48 @@ public class ValueObjectTests
         // Act & Assert
         address1.GetHashCode().Should().NotBe(address2.GetHashCode());
     }
+
+    [Fact]
+    public void Operator_Equals_ShouldReturnTrue_ForIdenticalValueObjects()
+    {
+        // Arrange
+        var address1 = new Address("123 Elm St", "Somewhere", "12345");
+        var address2 = new Address("123 Elm St", "Somewhere", "12345");
+
+        // Act & Assert
+        (address1 == address2).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Operator_Equals_ShouldReturnFalse_ForDifferentValueObjects()
+    {
+        // Arrange
+        var address1 = new Address("123 Elm St", "Somewhere", "12345");
+        var address2 = new Address("124 Elm St", "Somewhere", "12345");
+
+        // Act & Assert
+        (address1 == address2).Should().BeFalse();
+    }
+
+    [Fact]
+    public void Operator_NotEquals_ShouldReturnTrue_ForDifferentValueObjects()
+    {
+        // Arrange
+        var address1 = new Address("123 Elm St", "Somewhere", "12345");
+        var address2 = new Address("124 Elm St", "Somewhere", "12345");
+
+        // Act & Assert
+        (address1 != address2).Should().BeTrue();
+    }
+
+    [Fact]
+    public void Operator_NotEquals_ShouldReturnFalse_ForIdenticalValueObjects()
+    {
+        // Arrange
+        var address1 = new Address("123 Elm St", "Somewhere", "12345");
+        var address2 = new Address("123 Elm St", "Somewhere", "12345");
+
+        // Act & Assert
+        (address1 != address2).Should().BeFalse();
+    }
 }

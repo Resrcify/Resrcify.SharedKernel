@@ -57,7 +57,7 @@ public class EntityTests
     }
 
     [Fact]
-    public void EqualsOperator_ShouldReturnTrueForSameId()
+    public void Operator_Equals_ShouldReturnTrueForSameId()
     {
         // Arrange
         var entity1 = new ConcreteEntity(1);
@@ -68,7 +68,7 @@ public class EntityTests
     }
 
     [Fact]
-    public void NotEqualsOperator_ShouldReturnTrueForDifferentIds()
+    public void Operator_NotEquals_ShouldReturnTrueForDifferentIds()
     {
         // Arrange
         var entity1 = new ConcreteEntity(1);
@@ -88,5 +88,28 @@ public class EntityTests
 
         // Act & Assert
         entity.GetHashCode().Should().Be(expectedHashCode);
+    }
+
+    [Fact]
+    public void Operator_Equals_ShouldReturnFalseForDifferentIds()
+    {
+        // Arrange
+        var entity1 = new ConcreteEntity(1);
+        var entity2 = new ConcreteEntity(2);
+
+        // Act & Assert
+        (entity1 == entity2).Should().BeFalse();
+    }
+
+
+    [Fact]
+    public void Operator_NotEquals_ShouldReturnFalseForSameId()
+    {
+        // Arrange
+        var entity1 = new ConcreteEntity(1);
+        var entity2 = new ConcreteEntity(1);
+
+        // Act & Assert
+        (entity1 != entity2).Should().BeFalse();
     }
 }
