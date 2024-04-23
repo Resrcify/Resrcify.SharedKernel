@@ -1,14 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using NSubstitute;
-using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
-using Resrcify.SharedKernel.GenericRepository.Specifications;
 using Resrcify.SharedKernel.GenericRepository.UnitTests.Models;
 using Xunit;
 

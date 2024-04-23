@@ -27,7 +27,7 @@ public sealed class UnitOfWork<TDbContext> : IUnitOfWork
         GC.SuppressFinalize(this);
     }
 
-    public async Task BeginTransaction(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted, TimeSpan? commandLifetime = null, CancellationToken cancellationToken = default)
+    public async Task BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted, TimeSpan? commandLifetime = null, CancellationToken cancellationToken = default)
     {
         if (commandLifetime is not null)
             _context.Database.SetCommandTimeout((int)commandLifetime.Value.TotalSeconds);
@@ -35,7 +35,7 @@ public sealed class UnitOfWork<TDbContext> : IUnitOfWork
         await _context.Database.BeginTransactionAsync(isolationLevel, cancellationToken);
     }
 
-    public async Task CommitTransaction(CancellationToken cancellationToken = default)
+    public async Task CommitTransactionAsync(CancellationToken cancellationToken = default)
     {
         var currentTransaction = _context.Database.CurrentTransaction;
         if (currentTransaction == null)
@@ -44,7 +44,7 @@ public sealed class UnitOfWork<TDbContext> : IUnitOfWork
         await currentTransaction.CommitAsync(cancellationToken);
     }
 
-    public async Task RollbackTransaction(CancellationToken cancellationToken = default)
+    public async Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
     {
         var currentTransaction = _context.Database.CurrentTransaction;
         if (currentTransaction == null)

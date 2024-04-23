@@ -25,9 +25,7 @@
      <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="8.0.0" />
      <PackageReference Include="MediatR" Version="12.2.0" />
      <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
-    <PackageReference Include="FluentValidation" Version="11.9.0">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    <PackageReference Include="FluentValidation" Version="11.9.0"/>
   </ItemGroup>
 
   <ItemGroup>

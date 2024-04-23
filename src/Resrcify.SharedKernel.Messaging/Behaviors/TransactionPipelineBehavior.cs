@@ -28,25 +28,22 @@ public class TransactionPipelineBehavior<TRequest, TResponse>
         {
             var commandTimeout = request.CommandTimeout ?? TimeSpan.FromSeconds(30);
             var isolationLevel = request.IsolationLevel ?? System.Data.IsolationLevel.ReadCommitted;
-            await _unitOfWork.BeginTransaction(isolationLevel, commandTimeout, cancellationToken);
+            await _unitOfWork.BeginTransactionAsync(isolationLevel, commandTimeout, cancellationToken);
             var response = await next();
             if (response is Result { IsSuccess: true })
             {
                 await _unitOfWork.CompleteAsync(cancellationToken);
-                await _unitOfWork.CommitTransaction(cancellationToken);
+                await _unitOfWork.CommitTransactionAsync(cancellationToken);
                 return response;
             }
-            await _unitOfWork.RollbackTransaction(cancellationToken);
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             return response;
         }
         catch (Exception ex)
         {
             _logger.LogError("Exception caught in UnitOfWorkPipelineBehavior: @{exception}", ex);
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw;
-        }
-        finally
-        {
-            await _unitOfWork.RollbackTransaction(cancellationToken);
         }
     }
 }

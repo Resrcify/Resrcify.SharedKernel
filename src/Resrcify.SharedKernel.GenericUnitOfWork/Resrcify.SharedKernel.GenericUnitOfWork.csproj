@@ -1,6 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <PackageId>Resrcify.SharedKernel.GenericUnitOfWork</PackageId>
+    <Authors>Rickard Marjanovic (@rmarjanovic)</Authors>
+    <Company>Resrcify AB</Company>
+    <Title>Resrcify.SharedKernel.GenericUnitOfWork</Title>
+    <Description>Implements generic unit of work pattern, including interceptors using EntityFrameworkCore.</Description>
+    <Summary>Implements generic unit of work pattern, includin interceptors using EntityFrameworkCore.</Summary>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -29,7 +35,7 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Messaging\Resrcify.SharedKernel.Messaging.csproj" />
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.DomainDrivenDesign\Resrcify.SharedKernel.DomainDrivenDesign.csproj" />
   </ItemGroup>
 
 </Project>

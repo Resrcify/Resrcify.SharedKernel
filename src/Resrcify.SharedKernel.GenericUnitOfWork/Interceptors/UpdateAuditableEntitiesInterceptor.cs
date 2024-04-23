@@ -11,14 +11,15 @@ namespace Resrcify.SharedKernel.GenericUnitOfWork.Interceptors;
 
 public sealed class UpdateAuditableEntitiesInterceptor : SaveChangesInterceptor
 {
-    public override async ValueTask<int> SavedChangesAsync(SaveChangesCompletedEventData eventData, int result, CancellationToken cancellationToken = default)
+    public async override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
     {
         if (eventData.Context is not null)
             UpdateAuditableEntities(eventData.Context);
-        return await base.SavedChangesAsync(eventData, result, cancellationToken);
+        return await base.SavingChangesAsync(eventData, result, cancellationToken);
     }
     private static void UpdateAuditableEntities(DbContext context)
     {
+        DateTime utcNow = DateTime.UtcNow;
         IEnumerable<EntityEntry<IAuditableEntity>> entries =
             context
                 .ChangeTracker
@@ -28,17 +29,22 @@ public sealed class UpdateAuditableEntitiesInterceptor : SaveChangesInterceptor
         {
             if (entityEntry.State == EntityState.Added)
             {
-                entityEntry.Property(a => a.CreatedOnUtc)
-                    .CurrentValue = DateTime.UtcNow;
-                entityEntry.Property(a => a.ModifiedOnUtc)
-                    .CurrentValue = DateTime.UtcNow;
+                SetCurrentPropertyValue(
+                    entityEntry, nameof(IAuditableEntity.CreatedOnUtc), utcNow);
+                SetCurrentPropertyValue(
+                    entityEntry, nameof(IAuditableEntity.ModifiedOnUtc), utcNow);
             }
 
             if (entityEntry.State == EntityState.Modified)
             {
-                entityEntry.Property(a => a.ModifiedOnUtc)
-                    .CurrentValue = DateTime.UtcNow;
+                SetCurrentPropertyValue(
+                    entityEntry, nameof(IAuditableEntity.ModifiedOnUtc), utcNow);
             }
         }
     }
+    static void SetCurrentPropertyValue(
+        EntityEntry entry,
+        string propertyName,
+        DateTime utcNow)
+        => entry.Property(propertyName).CurrentValue = utcNow;
 }

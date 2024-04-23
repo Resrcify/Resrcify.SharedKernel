@@ -8,7 +8,7 @@ namespace Resrcify.SharedKernel.GenericUnitOfWork.Abstractions;
 public interface IUnitOfWork : IDisposable
 {
     Task CompleteAsync(CancellationToken cancellationToken = default);
-    Task BeginTransaction(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted, TimeSpan? commandLifetime = null, CancellationToken cancellationToken = default);
-    Task CommitTransaction(CancellationToken cancellationToken = default);
-    Task RollbackTransaction(CancellationToken cancellationToken = default);
+    Task BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted, TimeSpan? commandLifetime = null, CancellationToken cancellationToken = default);
+    Task CommitTransactionAsync(CancellationToken cancellationToken = default);
+    Task RollbackTransactionAsync(CancellationToken cancellationToken = default);
 }

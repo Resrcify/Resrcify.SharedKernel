@@ -12,13 +12,14 @@ namespace Resrcify.SharedKernel.GenericUnitOfWork.Interceptors;
 
 public sealed class ConvertDomainEventsToOutboxMessagesInterceptor : SaveChangesInterceptor
 {
-    public override async ValueTask<int> SavedChangesAsync(SaveChangesCompletedEventData eventData, int result, CancellationToken cancellationToken = default)
+    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
     {
         if (eventData.Context is not null)
             ConvertDomainEventsToOutboxMessages(eventData.Context);
-        return await base.SavedChangesAsync(eventData, result, cancellationToken);
+        return base.SavingChangesAsync(eventData, result, cancellationToken);
     }
-    private static void ConvertDomainEventsToOutboxMessages(DbContext context)
+
+    private static async void ConvertDomainEventsToOutboxMessages(DbContext context)
     {
         var outboxMessages = context.ChangeTracker
             .Entries<IAggregateRoot>()
@@ -45,6 +46,6 @@ public sealed class ConvertDomainEventsToOutboxMessagesInterceptor : SaveChanges
             })
             .ToList();
 
-        context.Set<OutboxMessage>().AddRange(outboxMessages);
+        await context.Set<OutboxMessage>().AddRangeAsync(outboxMessages);
     }
 }

@@ -1,6 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <PackageId>Resrcify.SharedKernel.GenericRepository</PackageId>
+    <Authors>Rickard Marjanovic (@rmarjanovic)</Authors>
+    <Company>Resrcify AB</Company>
+    <Title>Resrcify.SharedKernel.GenericRepository</Title>
+    <Description>Implements generic repository pattern using EntityFrameworkCore.</Description>
+    <Summary>Implements generic repository pattern using EntityFrameworkCore.</Summary>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>disabled</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -15,6 +21,5 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.2">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="System.Linq.Async" Version="6.0.1" />
   </ItemGroup>
 </Project>
