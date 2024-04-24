@@ -30,6 +30,6 @@
     <ProjectReference Include="..\Resrcify.SharedKernel.ResultFramework\Resrcify.SharedKernel.ResultFramework.csproj" />
     <ProjectReference Include="..\Resrcify.SharedKernel.DomainDrivenDesign\Resrcify.SharedKernel.DomainDrivenDesign.csproj" />
     <ProjectReference Include="..\Resrcify.SharedKernel.Caching\Resrcify.SharedKernel.Caching.csproj" />
-    <ProjectReference Include="..\Resrcify.SharedKernel.GenericUnitOfWork\Resrcify.SharedKernel.GenericUnitOfWork.csproj" />
+    <ProjectReference Include="..\Resrcify.SharedKernel.UnitOfWork\Resrcify.SharedKernel.UnitOfWork.csproj" />
   </ItemGroup>
 </Project>

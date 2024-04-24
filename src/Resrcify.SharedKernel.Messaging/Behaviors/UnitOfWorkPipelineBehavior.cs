@@ -5,7 +5,7 @@ using System;
 using Microsoft.Extensions.Logging;
 using Resrcify.SharedKernel.Messaging.Abstractions;
 using Resrcify.SharedKernel.ResultFramework.Shared;
-using Resrcify.SharedKernel.GenericUnitOfWork.Abstractions;
+using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 
 namespace Resrcify.SharedKernel.Messaging.Behaviors;
 

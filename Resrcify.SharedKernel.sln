@@ -27,13 +27,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Resrcify.SharedKernel.Cachi
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Resrcify.SharedKernel.Messaging.UnitTests", "tests\Resrcify.SharedKernel.Messaging.UnitTests\Resrcify.SharedKernel.Messaging.UnitTests.csproj", "{496A8825-04A9-4BB6-9C2D-7549BC51066F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Resrcify.SharedKernel.GenericRepository", "src\Resrcify.SharedKernel.GenericRepository\Resrcify.SharedKernel.GenericRepository.csproj", "{29C76B72-8C4E-4189-BE7C-AFDE72829007}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Resrcify.SharedKernel.UnitOfWork", "src\Resrcify.SharedKernel.UnitOfWork\Resrcify.SharedKernel.UnitOfWork.csproj", "{CBC54AE4-E446-4C77-AF01-45135CDCE188}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Resrcify.SharedKernel.GenericRepository.UnitTests", "tests\Resrcify.SharedKernel.GenericRepository.UnitTests\Resrcify.SharedKernel.GenericRepository.UnitTests.csproj", "{6A60A29E-FD8A-45D8-9953-5B38D4B4EBE1}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Resrcify.SharedKernel.UnitOfWork.UnitTests", "tests\Resrcify.SharedKernel.UnitOfWork.UnitTests\Resrcify.SharedKernel.UnitOfWork.UnitTests.csproj", "{6832A206-2A95-42BD-A3B7-3205EFB00333}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Resrcify.SharedKernel.GenericUnitOfWork", "src\Resrcify.SharedKernel.GenericUnitOfWork\Resrcify.SharedKernel.GenericUnitOfWork.csproj", "{69F55232-A12C-4A40-BB23-6F36DACBE4C8}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Resrcify.SharedKernel.Repository.UnitTests", "tests\Resrcify.SharedKernel.Repository.UnitTests\Resrcify.SharedKernel.Repository.UnitTests.csproj", "{A2C2D446-A362-471C-AD38-2934383C500B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Resrcify.SharedKernel.GenericUnitOfWork.UnitTests", "tests\Resrcify.SharedKernel.GenericUnitOfWork.UnitTests\Resrcify.SharedKernel.GenericUnitOfWork.UnitTests.csproj", "{AC8830BD-475F-45F6-8D20-F836693E8C96}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Resrcify.SharedKernel.Repository", "src\Resrcify.SharedKernel.Repository\Resrcify.SharedKernel.Repository.csproj", "{2F180A52-56C3-4001-9FF6-FFFC7AE29AE2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -84,22 +84,22 @@ Global
 		{496A8825-04A9-4BB6-9C2D-7549BC51066F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{496A8825-04A9-4BB6-9C2D-7549BC51066F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{496A8825-04A9-4BB6-9C2D-7549BC51066F}.Release|Any CPU.Build.0 = Release|Any CPU
-		{29C76B72-8C4E-4189-BE7C-AFDE72829007}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{29C76B72-8C4E-4189-BE7C-AFDE72829007}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{29C76B72-8C4E-4189-BE7C-AFDE72829007}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{29C76B72-8C4E-4189-BE7C-AFDE72829007}.Release|Any CPU.Build.0 = Release|Any CPU
-		{6A60A29E-FD8A-45D8-9953-5B38D4B4EBE1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{6A60A29E-FD8A-45D8-9953-5B38D4B4EBE1}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{6A60A29E-FD8A-45D8-9953-5B38D4B4EBE1}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{6A60A29E-FD8A-45D8-9953-5B38D4B4EBE1}.Release|Any CPU.Build.0 = Release|Any CPU
-		{69F55232-A12C-4A40-BB23-6F36DACBE4C8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{69F55232-A12C-4A40-BB23-6F36DACBE4C8}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{69F55232-A12C-4A40-BB23-6F36DACBE4C8}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{69F55232-A12C-4A40-BB23-6F36DACBE4C8}.Release|Any CPU.Build.0 = Release|Any CPU
-		{AC8830BD-475F-45F6-8D20-F836693E8C96}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{AC8830BD-475F-45F6-8D20-F836693E8C96}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{AC8830BD-475F-45F6-8D20-F836693E8C96}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{AC8830BD-475F-45F6-8D20-F836693E8C96}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CBC54AE4-E446-4C77-AF01-45135CDCE188}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CBC54AE4-E446-4C77-AF01-45135CDCE188}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CBC54AE4-E446-4C77-AF01-45135CDCE188}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CBC54AE4-E446-4C77-AF01-45135CDCE188}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6832A206-2A95-42BD-A3B7-3205EFB00333}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6832A206-2A95-42BD-A3B7-3205EFB00333}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6832A206-2A95-42BD-A3B7-3205EFB00333}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6832A206-2A95-42BD-A3B7-3205EFB00333}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A2C2D446-A362-471C-AD38-2934383C500B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A2C2D446-A362-471C-AD38-2934383C500B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A2C2D446-A362-471C-AD38-2934383C500B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A2C2D446-A362-471C-AD38-2934383C500B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2F180A52-56C3-4001-9FF6-FFFC7AE29AE2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2F180A52-56C3-4001-9FF6-FFFC7AE29AE2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2F180A52-56C3-4001-9FF6-FFFC7AE29AE2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2F180A52-56C3-4001-9FF6-FFFC7AE29AE2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{12B366C4-89DE-48B1-97F5-3959C69589B0} = {CFF66F09-FB75-483C-AC82-08F41722F4D9}
@@ -112,9 +112,9 @@ Global
 		{52F2FD68-ED1A-42FF-A12C-665F93155209} = {AC21D052-DCEB-4D84-A963-556C3FD22006}
 		{B8B826CA-5C8B-4552-A314-A7D69B8B372C} = {AC21D052-DCEB-4D84-A963-556C3FD22006}
 		{496A8825-04A9-4BB6-9C2D-7549BC51066F} = {AC21D052-DCEB-4D84-A963-556C3FD22006}
-		{29C76B72-8C4E-4189-BE7C-AFDE72829007} = {CFF66F09-FB75-483C-AC82-08F41722F4D9}
-		{6A60A29E-FD8A-45D8-9953-5B38D4B4EBE1} = {AC21D052-DCEB-4D84-A963-556C3FD22006}
-		{69F55232-A12C-4A40-BB23-6F36DACBE4C8} = {CFF66F09-FB75-483C-AC82-08F41722F4D9}
-		{AC8830BD-475F-45F6-8D20-F836693E8C96} = {AC21D052-DCEB-4D84-A963-556C3FD22006}
+		{CBC54AE4-E446-4C77-AF01-45135CDCE188} = {CFF66F09-FB75-483C-AC82-08F41722F4D9}
+		{6832A206-2A95-42BD-A3B7-3205EFB00333} = {AC21D052-DCEB-4D84-A963-556C3FD22006}
+		{A2C2D446-A362-471C-AD38-2934383C500B} = {AC21D052-DCEB-4D84-A963-556C3FD22006}
+		{2F180A52-56C3-4001-9FF6-FFFC7AE29AE2} = {CFF66F09-FB75-483C-AC82-08F41722F4D9}
 	EndGlobalSection
 EndGlobal
