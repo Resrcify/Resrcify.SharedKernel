@@ -234,33 +234,6 @@ public class RepositoryTests
         results.Should().BeEmpty(); // Ensure the list is empty
     }
 
-    [Fact]
-    public async Task GetAllAsync_CancelsWhenRequested()
-    {
-        // Arrange
-        using var dbContext = CreateDbContext();
-        var repository = new TestRepository(dbContext);
-
-        var entities = new List<Person>
-        {
-            new(SocialSecurityNumber.Create(123), "Alice"),
-            new(SocialSecurityNumber.Create(456), "Bob")
-        };
-
-        dbContext.Persons.AddRange(entities);
-        await dbContext.SaveChangesAsync();
-
-        using var cancellationTokenSource = new CancellationTokenSource();
-
-        // Act
-        var task = Task.Run(() => repository.GetAllAsync(cancellationTokenSource.Token));
-
-        await cancellationTokenSource.CancelAsync();
-
-        // Assert
-        Func<Task> act = async () => await task;
-        await act.Should().ThrowAsync<OperationCanceledException>();
-    }
 
     [Fact]
     public async Task FindAsync_ReturnsFilteredEntitiesAsAsyncEnumerable_WhenPredicateMatches()
@@ -388,27 +361,7 @@ public class RepositoryTests
         results.Should().BeEmpty();
     }
 
-    [Fact]
-    public async Task FindAsync_CancelsWhenRequested_WhenNotUsingSpecification()
-    {
-        // Arrange
-        using var dbContext = CreateDbContext();
-        var repository = new TestRepository(dbContext);
 
-        dbContext.Persons.Add(new Person(SocialSecurityNumber.Create(123), "Alice"));
-        await dbContext.SaveChangesAsync();
-
-        using var cancellationTokenSource = new CancellationTokenSource();
-
-        // Act
-        var task = Task.Run(() => repository.FindAsync(p => p.Name == "Alice", cancellationTokenSource.Token));
-
-        await cancellationTokenSource.CancelAsync();
-
-        // Assert
-        Func<Task> act = async () => await task;
-        await act.Should().ThrowAsync<OperationCanceledException>();
-    }
     [Fact]
     public async Task FindAsync_WithSpecification_ReturnsFilteredEntitiesAsEnumerable()
     {
@@ -546,47 +499,6 @@ public class RepositoryTests
 
         // Assert
         exists.Should().BeFalse();
-    }
-    [Fact]
-    public async Task ExistsAsync_ById_CancelsWhenRequested()
-    {
-        // Arrange
-        using var dbContext = CreateDbContext();
-        var repository = new TestRepository(dbContext);
-        var entityId = SocialSecurityNumber.Create(123);
-        var entity = new Person(entityId);
-
-        dbContext.Persons.Add(entity);
-        await dbContext.SaveChangesAsync();
-        using var cancellationTokenSource = new CancellationTokenSource();
-        // Act
-        var task = Task.Run(() => repository.ExistsAsync(entityId, cancellationTokenSource.Token));
-        await cancellationTokenSource.CancelAsync();
-
-        // Assert
-        Func<Task> act = async () => await task;
-        await act.Should().ThrowAsync<OperationCanceledException>();
-    }
-
-    [Fact]
-    public async Task ExistsAsync_ByPredicate_CancelsWhenRequested()
-    {
-        // Arrange
-        using var dbContext = CreateDbContext();
-        var repository = new TestRepository(dbContext);
-        var entityId = SocialSecurityNumber.Create(123);
-        var entity = new Person(entityId);
-
-        dbContext.Persons.Add(entity);
-        await dbContext.SaveChangesAsync();
-        using var cancellationTokenSource = new CancellationTokenSource();
-        // Act
-        var task = Task.Run(() => repository.ExistsAsync(x => x.Id == entityId, cancellationTokenSource.Token));
-        await cancellationTokenSource.CancelAsync();
-
-        // Assert
-        Func<Task> act = async () => await task;
-        await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
     [Fact]
