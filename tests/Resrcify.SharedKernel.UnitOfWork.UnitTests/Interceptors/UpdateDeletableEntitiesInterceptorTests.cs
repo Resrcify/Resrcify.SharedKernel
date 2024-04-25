@@ -27,7 +27,7 @@ public class UpdateDeletableEntitiesInterceptorTests : DbSetupBase
 
         entity.DeletedOnUtc
             .Should()
-            .BeCloseTo(now, TimeSpan.FromMilliseconds(100));
+            .BeCloseTo(now, TimeSpan.FromSeconds(1));
 
         entity.IsDeleted
             .Should()

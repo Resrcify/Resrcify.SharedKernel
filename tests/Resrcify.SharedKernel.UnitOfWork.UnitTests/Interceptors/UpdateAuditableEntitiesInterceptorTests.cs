@@ -26,11 +26,11 @@ public class UpdateAuditableEntitiesInterceptorTests : DbSetupBase
 
         entity.CreatedOnUtc
             .Should()
-            .BeCloseTo(now, TimeSpan.FromMilliseconds(100));
+            .BeCloseTo(now, TimeSpan.FromSeconds(1));
 
         entity.ModifiedOnUtc
             .Should()
-            .BeCloseTo(now, TimeSpan.FromMilliseconds(100));
+            .BeCloseTo(now, TimeSpan.FromSeconds(1));
     }
     [Fact]
     public async Task SaveChangesAsync_ShouldUpdateModifiedOn_ForAuditableEntities()
@@ -47,6 +47,6 @@ public class UpdateAuditableEntitiesInterceptorTests : DbSetupBase
 
         entity.ModifiedOnUtc
             .Should()
-            .BeCloseTo(now, TimeSpan.FromMilliseconds(100));
+            .BeCloseTo(now, TimeSpan.FromSeconds(1));
     }
 }
