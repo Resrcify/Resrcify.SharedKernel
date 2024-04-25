@@ -28,7 +28,7 @@ public static class ResultExtensions
         };
     }
 
-    private static string GetType(ErrorType errorType)
+    internal static string GetType(ErrorType errorType)
         => errorType switch
         {
             ErrorType.Validation => "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1",
@@ -37,7 +37,7 @@ public static class ResultExtensions
             _ => "https://datatracker.ietf.org/doc/html/rfc7231#section-6.6.1"
         };
 
-    private static string GetTitle(ErrorType errorType)
+    internal static string GetTitle(ErrorType errorType)
         => errorType switch
         {
             ErrorType.Validation => "Bad Request",
@@ -45,7 +45,7 @@ public static class ResultExtensions
             ErrorType.Conflict => "Conflict",
             _ => "Internal Server Error"
         };
-    private static int GetStatusCode(ErrorType errorType)
+    internal static int GetStatusCode(ErrorType errorType)
         => errorType switch
         {
             ErrorType.Validation => StatusCodes.Status400BadRequest,

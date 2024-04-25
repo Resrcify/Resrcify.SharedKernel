@@ -4,12 +4,11 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.AspNetCore.Mvc;
 using Resrcify.SharedKernel.ResultFramework.Shared;
 using Resrcify.SharedKernel.Web.Shared;
 using Xunit;
 
-namespace Resrcify.SharedKernel.Web.UnitTests.Shared;
+namespace Resrcify.SharedKernel.Web.UnitTests.Extensions;
 
 public class ResultExtensionsTests
 {

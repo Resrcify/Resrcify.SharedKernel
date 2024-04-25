@@ -27,18 +27,18 @@ public abstract class ValueObject : IEquatable<ValueObject>
         return other is not null && ValuesAreEqual(other);
     }
 
-    public static bool operator ==(ValueObject left, ValueObject right)
+    public static bool operator ==(ValueObject? left, ValueObject? right)
     {
-        if (ReferenceEquals(left, right))
-            return true;
-
         if (left is null || right is null)
             return false;
+
+        if (ReferenceEquals(left, right))
+            return true;
 
         return left.Equals(right);
     }
 
-    public static bool operator !=(ValueObject left, ValueObject right)
+    public static bool operator !=(ValueObject? left, ValueObject? right)
     {
         return !(left == right);
     }

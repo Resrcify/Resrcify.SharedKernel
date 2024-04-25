@@ -10,7 +10,7 @@ namespace Resrcify.SharedKernel.Repository.Abstractions;
 
 public interface IRepository<TEntity, TId>
     where TEntity : AggregateRoot<TId>
-    where TId : ValueObject
+    where TId : notnull
 {
     Task<TEntity?> GetByIdAsync(TId id, CancellationToken cancellationToken = default);
     Task<TEntity?> FirstOrDefaultAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default);
