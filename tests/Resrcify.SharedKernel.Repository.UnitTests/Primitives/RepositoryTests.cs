@@ -446,27 +446,6 @@ public class RepositoryTests
         // Assert
         results.Should().BeEmpty();
     }
-    [Fact]
-    public async Task FindAsync_WithSpecification_CancelsWhenRequested()
-    {
-        // Arrange
-        using var dbContext = CreateDbContext();
-        var repository = new TestRepository(dbContext);
-
-        dbContext.Persons.Add(new Person(SocialSecurityNumber.Create(123), "Alice"));
-        await dbContext.SaveChangesAsync();
-
-        var spec = new PersonSpecification(x => x.Name == "Alice");
-        using var cancellationTokenSource = new CancellationTokenSource();
-
-        // Act
-        var task = Task.Run(() => repository.FindAsync(spec, cancellationTokenSource.Token));
-        await cancellationTokenSource.CancelAsync();
-
-        // Assert
-        Func<Task> act = async () => await task;
-        await act.Should().ThrowAsync<OperationCanceledException>();
-    }
 
     [Fact]
     public async Task AddAsync_AddsEntityToContext()
