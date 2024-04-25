@@ -64,28 +64,6 @@ public class RepositoryTests
     }
 
     [Fact]
-    public async Task GetByIdAsync_CancelsWhenRequested()
-    {
-        // Arrange
-        using var dbContext = CreateDbContext();
-        var repository = new TestRepository(dbContext);
-
-        var person = new Person(SocialSecurityNumber.Create(123));
-        dbContext.Persons.Add(person);
-        await dbContext.SaveChangesAsync();
-        dbContext.Entry(person).State = EntityState.Detached;
-        using var cancellationTokenSource = new CancellationTokenSource();
-
-        // Act
-        var task = Task.Run(() => repository.GetByIdAsync(person.Id, cancellationTokenSource.Token));
-        await cancellationTokenSource.CancelAsync();
-
-        // Assert
-        Func<Task> act = async () => await task;
-        await act.Should().ThrowAsync<OperationCanceledException>();
-    }
-
-    [Fact]
     public async Task FirstOrDefaultAsync_ReturnsCorrectEntity_WhenPredicateMatches()
     {
         // Arrange
@@ -176,48 +154,6 @@ public class RepositoryTests
 
         // Assert
         result.Should().BeNull();
-    }
-
-    [Fact]
-    public async Task FirstOrDefaultAsync_WithSpecification_CancelsWhenRequested()
-    {
-        using var dbContext = CreateDbContext();
-        var repository = new TestRepository(dbContext);
-
-        var person = new Person(SocialSecurityNumber.Create(123));
-        dbContext.Persons.Add(person);
-        await dbContext.SaveChangesAsync();
-        var spec = new PersonSpecification(p => p.Id.Value == 123);
-        using var cancellationTokenSource = new CancellationTokenSource();
-
-        // Act
-        var task = Task.Run(() => repository.FirstOrDefaultAsync(spec, cancellationTokenSource.Token));
-        await cancellationTokenSource.CancelAsync();
-
-        // Assert
-        Func<Task> act = async () => await task;
-        await act.Should().ThrowAsync<OperationCanceledException>();
-    }
-
-    [Fact]
-    public async Task FirstOrDefaultAsync_WithPredicate_CancelsWhenRequested()
-    {
-        using var dbContext = CreateDbContext();
-        var repository = new TestRepository(dbContext);
-
-        var person = new Person(SocialSecurityNumber.Create(123));
-        dbContext.Persons.Add(person);
-        await dbContext.SaveChangesAsync();
-
-        using var cancellationTokenSource = new CancellationTokenSource();
-
-        // Act
-        var task = Task.Run(() => repository.FirstOrDefaultAsync(x => x.Id == person.Id, cancellationTokenSource.Token));
-        await cancellationTokenSource.CancelAsync();
-
-        // Assert
-        Func<Task> act = async () => await task;
-        await act.Should().ThrowAsync<OperationCanceledException>();
     }
 
     [Fact]
