@@ -13,18 +13,18 @@ namespace Resrcify.SharedKernel.Repository.Primitives;
 public abstract class Repository<TDbContext, TEntity, TId> : IRepository<TEntity, TId>
     where TDbContext : DbContext
     where TEntity : AggregateRoot<TId>
-    where TId : ValueObject
+    where TId : notnull
 {
-    protected readonly TDbContext _context;
+    protected readonly TDbContext Context;
     public Repository(TDbContext context)
-        => _context = context;
+        => Context = context;
 
     public virtual async Task<TEntity?> GetByIdAsync(TId id, CancellationToken cancellationToken = default)
-        => await _context
+        => await Context
             .Set<TEntity>()
             .FindAsync([id], cancellationToken: cancellationToken);
     public virtual async Task<TEntity?> FirstOrDefaultAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
-        => await _context
+        => await Context
             .Set<TEntity>()
             .FirstOrDefaultAsync(predicate, cancellationToken: cancellationToken);
     public async Task<TEntity?> FirstOrDefaultAsync(Specification<TEntity, TId> specification, CancellationToken cancellationToken = default)
@@ -33,15 +33,15 @@ public abstract class Repository<TDbContext, TEntity, TId> : IRepository<TEntity
 
 
     public virtual IAsyncEnumerable<TEntity> GetAllAsync()
-        => _context
+        => Context
             .Set<TEntity>()
             .AsAsyncEnumerable();
     public virtual async Task<IEnumerable<TEntity>> GetAllAsync(CancellationToken cancellationToken = default)
-        => await _context
+        => await Context
             .Set<TEntity>()
             .ToListAsync(cancellationToken: cancellationToken);
     public virtual IAsyncEnumerable<TEntity> FindAsync(Expression<Func<TEntity, bool>> predicate)
-        => _context
+        => Context
             .Set<TEntity>()
             .Where(predicate)
             .AsAsyncEnumerable();
@@ -49,7 +49,7 @@ public abstract class Repository<TDbContext, TEntity, TId> : IRepository<TEntity
         => ApplySpecification(specification)
             .AsAsyncEnumerable();
     public virtual async Task<IEnumerable<TEntity>> FindAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
-        => await _context
+        => await Context
             .Set<TEntity>()
             .Where(predicate)
             .ToListAsync(cancellationToken: cancellationToken);
@@ -59,33 +59,33 @@ public abstract class Repository<TDbContext, TEntity, TId> : IRepository<TEntity
 
 
     public async Task AddAsync(TEntity entity, CancellationToken cancellationToken = default)
-        => await _context
+        => await Context
             .Set<TEntity>()
             .AddAsync(entity, cancellationToken);
     public async Task AddRangeAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default)
-        => await _context
+        => await Context
             .Set<TEntity>()
             .AddRangeAsync(entities, cancellationToken);
 
 
     public async Task<bool> ExistsAsync(TId id, CancellationToken cancellationToken = default)
-        => await _context
+        => await Context
             .Set<TEntity>()
             .AnyAsync(
-                entity => entity.Id == id,
+                entity => Equals(entity.Id, id),
                 cancellationToken: cancellationToken);
     public async Task<bool> ExistsAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
-        => await _context
+        => await Context
             .Set<TEntity>()
             .AnyAsync(predicate, cancellationToken: cancellationToken);
 
 
     public void Remove(TEntity entity)
-        => _context
+        => Context
             .Set<TEntity>()
             .Remove(entity);
     public void RemoveRange(IEnumerable<TEntity> entities)
-        => _context
+        => Context
             .Set<TEntity>()
             .RemoveRange(entities);
 
@@ -93,6 +93,6 @@ public abstract class Repository<TDbContext, TEntity, TId> : IRepository<TEntity
     protected IQueryable<TEntity> ApplySpecification(Specification<TEntity, TId> specification)
         => SpecificationEvaluator
             .GetQuery(
-                _context.Set<TEntity>(),
+                Context.Set<TEntity>(),
                 specification);
 }
