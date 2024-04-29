@@ -32,7 +32,6 @@ public class TransactionPipelineBehavior<TRequest, TResponse>
             var response = await next();
             if (response is Result { IsSuccess: true })
             {
-                await _unitOfWork.CompleteAsync(cancellationToken);
                 await _unitOfWork.CommitTransactionAsync(cancellationToken);
                 return response;
             }

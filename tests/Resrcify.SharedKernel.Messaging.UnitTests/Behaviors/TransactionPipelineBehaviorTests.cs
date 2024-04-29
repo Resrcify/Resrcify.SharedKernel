@@ -28,7 +28,7 @@ public class TransactionPipelineBehaviorTests
     }
 
     [Fact]
-    public async Task Handle_ShouldCompleteAndCommitTransaction_WhenResultIsSuccess()
+    public async Task Handle_ShouldCommitTransaction_WhenResultIsSuccess()
     {
         // Arrange
         var result = Result.Success();
@@ -47,10 +47,6 @@ public class TransactionPipelineBehaviorTests
         await _unitOfWork
             .Received(1)
             .BeginTransactionAsync(Arg.Any<IsolationLevel>(), Arg.Any<TimeSpan>(), Arg.Any<CancellationToken>());
-
-        await _unitOfWork
-            .Received(1)
-            .CompleteAsync(Arg.Any<CancellationToken>());
 
         await _unitOfWork
             .Received(1)
