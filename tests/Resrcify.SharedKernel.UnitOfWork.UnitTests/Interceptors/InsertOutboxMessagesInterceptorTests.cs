@@ -11,9 +11,9 @@ using Xunit;
 
 namespace Resrcify.SharedKernel.GenericUnitOfWork.UnitTests.Interceptors;
 
-public class ConvertDomainEventsToOutboxMessagesInterceptorTests : DbSetupBase
+public class InsertOutboxMessagesInterceptorTests : DbSetupBase
 {
-    public ConvertDomainEventsToOutboxMessagesInterceptorTests() : base(new ConvertDomainEventsToOutboxMessagesInterceptor())
+    public InsertOutboxMessagesInterceptorTests() : base(new InsertOutboxMessagesInterceptor())
     {
     }
 

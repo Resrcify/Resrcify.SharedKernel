@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -23,17 +24,16 @@ public sealed class UpdateDeletableEntitiesInterceptor : SaveChangesInterceptor
         IEnumerable<EntityEntry<IDeletableEntity>> entries =
             context
                 .ChangeTracker
-                .Entries<IDeletableEntity>();
+                .Entries<IDeletableEntity>()
+                .Where(e => e.State == EntityState.Deleted);
 
         foreach (EntityEntry<IDeletableEntity> entityEntry in entries)
         {
-            if (entityEntry.State == EntityState.Deleted)
-            {
-                entityEntry.Property(a => a.DeletedOnUtc)
-                    .CurrentValue = DateTime.UtcNow;
-                entityEntry.Property(a => a.IsDeleted)
-                    .CurrentValue = true;
-            }
+            entityEntry.State = EntityState.Modified;
+            entityEntry.Property(a => a.DeletedOnUtc)
+                .CurrentValue = DateTime.UtcNow;
+            entityEntry.Property(a => a.IsDeleted)
+                .CurrentValue = true;
         }
     }
 }
