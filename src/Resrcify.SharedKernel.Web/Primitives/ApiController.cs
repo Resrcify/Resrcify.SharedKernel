@@ -5,7 +5,7 @@ using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Resrcify.SharedKernel.ResultFramework.Shared;
-using ResultExtensions = Resrcify.SharedKernel.Web.Shared.ResultExtensions;
+using ResultExtensions = Resrcify.SharedKernel.Web.Extensions.ResultExtensions;
 
 namespace Resrcify.SharedKernel.Web.Primitives;
 
@@ -14,7 +14,8 @@ public abstract class ApiController : ControllerBase
 {
     protected readonly ISender _sender;
 
-    protected ApiController(ISender sender) => _sender = sender;
+    protected ApiController(ISender sender)
+        => _sender = sender;
 
     public static IResult ToProblemDetails(Result result)
     {

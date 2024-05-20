@@ -14,11 +14,11 @@ public class Error : IEquatable<Error>
         => new(code, message, ErrorType.Conflict);
     public static Error Failure(string code, string message)
         => new(code, message, ErrorType.Failure);
-    public Error(string code, string message, ErrorType errorType)
+    public Error(string code, string message, ErrorType type)
     {
         Code = code;
         Message = message;
-        Type = errorType;
+        Type = type;
     }
 
     public string Code { get; init; }
@@ -39,7 +39,8 @@ public class Error : IEquatable<Error>
         return a.Equals(b);
     }
 
-    public static bool operator !=(Error? a, Error? b) => !(a == b);
+    public static bool operator !=(Error? a, Error? b)
+        => !(a == b);
 
     public virtual bool Equals(Error? other)
         => other is not null &&
@@ -47,9 +48,12 @@ public class Error : IEquatable<Error>
             Message == other.Message &&
             Type == other.Type;
 
-    public override bool Equals(object? obj) => obj is Error error && Equals(error);
+    public override bool Equals(object? obj)
+        => obj is Error error && Equals(error);
 
-    public override int GetHashCode() => HashCode.Combine(Code, Message, Type);
+    public override int GetHashCode()
+        => HashCode.Combine(Code, Message, Type);
 
-    public override string ToString() => Code;
+    public override string ToString()
+        => Code;
 }
