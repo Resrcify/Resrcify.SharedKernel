@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 
-namespace Resrcify.SharedKernel.ResultFramework.Shared;
+namespace Resrcify.SharedKernel.ResultFramework.Primitives;
 
 public static class ResultExtensions
 {

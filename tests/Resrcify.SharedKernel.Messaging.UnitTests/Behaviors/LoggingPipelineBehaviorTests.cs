@@ -5,11 +5,11 @@ using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using System.Threading;
 using MediatR;
-using Resrcify.SharedKernel.ResultFramework.Shared;
 using FluentAssertions;
 using System;
 using Resrcify.SharedKernel.Messaging.Behaviors;
 using System.Linq;
+using Resrcify.SharedKernel.ResultFramework.Primitives;
 
 namespace Resrcify.SharedKernel.Messaging.UnitTests.Behaviors;
 

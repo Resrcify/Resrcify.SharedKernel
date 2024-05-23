@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Resrcify.SharedKernel.ResultFramework.Shared;
+namespace Resrcify.SharedKernel.ResultFramework.Primitives;
 public class Result
 {
     protected internal Result(bool isSuccess, Error error)
@@ -73,14 +73,12 @@ public class Result
     public static Result<T> Combine<T>(params Result<T>[] results)
     {
         if (results.Any(r => r.IsFailure))
-        {
             return Failure<T>(
                 results
                     .SelectMany(r => r.Errors)
                     .Where(e => e != Error.None)
                     .Distinct()
                     .ToArray());
-        }
 
         return Success(results[0].Value);
     }

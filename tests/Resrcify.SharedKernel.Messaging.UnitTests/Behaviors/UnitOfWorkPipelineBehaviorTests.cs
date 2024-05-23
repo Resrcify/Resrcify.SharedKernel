@@ -7,9 +7,9 @@ using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Xunit;
 using Resrcify.SharedKernel.Messaging.Abstractions;
-using Resrcify.SharedKernel.ResultFramework.Shared;
 using Resrcify.SharedKernel.Messaging.Behaviors;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
+using Resrcify.SharedKernel.ResultFramework.Primitives;
 
 namespace Resrcify.SharedKernel.Messaging.UnitTests.Behaviors;
 

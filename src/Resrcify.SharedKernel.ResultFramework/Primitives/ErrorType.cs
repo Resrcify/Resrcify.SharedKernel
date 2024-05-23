@@ -1,4 +1,4 @@
-namespace Resrcify.SharedKernel.ResultFramework.Shared;
+namespace Resrcify.SharedKernel.ResultFramework.Primitives;
 
 public enum ErrorType
 {

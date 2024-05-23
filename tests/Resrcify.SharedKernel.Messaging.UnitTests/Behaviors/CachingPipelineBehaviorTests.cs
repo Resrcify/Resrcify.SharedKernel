@@ -8,7 +8,7 @@ using NSubstitute;
 using Resrcify.SharedKernel.Caching.Abstractions;
 using Resrcify.SharedKernel.Messaging.Abstractions;
 using Resrcify.SharedKernel.Messaging.Behaviors;
-using Resrcify.SharedKernel.ResultFramework.Shared;
+using Resrcify.SharedKernel.ResultFramework.Primitives;
 using Xunit;
 
 namespace Resrcify.SharedKernel.Messaging.UnitTests.Behaviors;

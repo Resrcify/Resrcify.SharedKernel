@@ -1,6 +1,6 @@
 using FluentValidation;
 using MediatR;
-using Resrcify.SharedKernel.ResultFramework.Shared;
+using Resrcify.SharedKernel.ResultFramework.Primitives;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;

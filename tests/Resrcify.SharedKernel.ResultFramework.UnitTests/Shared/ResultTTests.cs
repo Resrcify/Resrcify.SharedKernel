@@ -1,6 +1,6 @@
 using System;
 using FluentAssertions;
-using Resrcify.SharedKernel.ResultFramework.Shared;
+using Resrcify.SharedKernel.ResultFramework.Primitives;
 using Xunit;
 
 

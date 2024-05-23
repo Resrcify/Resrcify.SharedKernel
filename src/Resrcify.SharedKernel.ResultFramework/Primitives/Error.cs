@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Resrcify.SharedKernel.ResultFramework.Shared;
+namespace Resrcify.SharedKernel.ResultFramework.Primitives;
 
 public class Error : IEquatable<Error>
 {

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Resrcify.SharedKernel.ResultFramework.Shared;
+using Resrcify.SharedKernel.ResultFramework.Primitives;
 using Resrcify.SharedKernel.Web.Primitives;
 using Xunit;
 

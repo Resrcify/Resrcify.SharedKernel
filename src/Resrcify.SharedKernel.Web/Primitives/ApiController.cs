@@ -4,7 +4,7 @@ using System.Linq;
 using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Resrcify.SharedKernel.ResultFramework.Shared;
+using Resrcify.SharedKernel.ResultFramework.Primitives;
 using ResultExtensions = Resrcify.SharedKernel.Web.Extensions.ResultExtensions;
 
 namespace Resrcify.SharedKernel.Web.Primitives;

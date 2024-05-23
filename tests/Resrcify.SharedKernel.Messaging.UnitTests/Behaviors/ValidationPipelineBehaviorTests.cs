@@ -7,7 +7,7 @@ using FluentValidation.Results;
 using MediatR;
 using NSubstitute;
 using Resrcify.SharedKernel.Messaging.Behaviors;
-using Resrcify.SharedKernel.ResultFramework.Shared;
+using Resrcify.SharedKernel.ResultFramework.Primitives;
 using Xunit;
 using ValidationResult = FluentValidation.Results.ValidationResult;
 

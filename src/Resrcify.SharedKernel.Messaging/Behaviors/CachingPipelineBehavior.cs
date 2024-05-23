@@ -4,7 +4,7 @@ using MediatR;
 using Microsoft.Extensions.Logging;
 using Resrcify.SharedKernel.Caching.Abstractions;
 using Resrcify.SharedKernel.Messaging.Abstractions;
-using Resrcify.SharedKernel.ResultFramework.Shared;
+using Resrcify.SharedKernel.ResultFramework.Primitives;
 
 namespace Resrcify.SharedKernel.Messaging.Behaviors;
 

@@ -1,6 +1,6 @@
 ﻿using Resrcify.SharedKernel.ResultFramework.Abstractions;
 
-namespace Resrcify.SharedKernel.ResultFramework.Shared;
+namespace Resrcify.SharedKernel.ResultFramework.Primitives;
 
 public sealed class ValidationResult<TValue> : Result<TValue>, IValidationResult
 {
