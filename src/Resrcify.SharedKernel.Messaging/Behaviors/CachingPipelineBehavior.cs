@@ -8,8 +8,9 @@ using Resrcify.SharedKernel.ResultFramework.Shared;
 
 namespace Resrcify.SharedKernel.Messaging.Behaviors;
 
-public class CachingPipelineBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
-    where TRequest : ICachingQuery<TRequest>
+public class CachingPipelineBehavior<TRequest, TResponse>
+    : IPipelineBehavior<TRequest, TResponse>
+    where TRequest : ICacheable
     where TResponse : Result
 {
     private readonly ICachingService _cachingService;

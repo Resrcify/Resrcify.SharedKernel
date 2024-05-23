@@ -10,7 +10,7 @@ using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 namespace Resrcify.SharedKernel.Messaging.Behaviors;
 
 public class UnitOfWorkPipelineBehavior<TRequest, TResponse>
-: IPipelineBehavior<TRequest, TResponse>
+    : IPipelineBehavior<TRequest, TResponse>
     where TRequest : ICommand
     where TResponse : Result
 {

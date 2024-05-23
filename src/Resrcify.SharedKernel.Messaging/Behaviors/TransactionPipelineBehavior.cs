@@ -10,8 +10,8 @@ using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 namespace Resrcify.SharedKernel.Messaging.Behaviors;
 
 public class TransactionPipelineBehavior<TRequest, TResponse>
-: IPipelineBehavior<TRequest, TResponse>
-    where TRequest : ITransactionalCommand
+    : IPipelineBehavior<TRequest, TResponse>
+    where TRequest : ITransactional
     where TResponse : Result
 {
     private readonly IUnitOfWork _unitOfWork;

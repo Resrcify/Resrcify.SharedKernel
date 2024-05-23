@@ -16,16 +16,14 @@ namespace Resrcify.SharedKernel.Messaging.UnitTests.Behaviors;
 
 public class TransactionPipelineBehaviorTests
 {
-    private readonly TransactionPipelineBehavior<ITransactionalCommand, Result> _behavior;
+    private readonly TransactionPipelineBehavior<ITransactionCommand, Result> _behavior;
     private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
-    private readonly ILogger<TransactionPipelineBehavior<ITransactionalCommand, Result>> _logger = Substitute.For<ILogger<TransactionPipelineBehavior<ITransactionalCommand, Result>>>();
+    private readonly ILogger<TransactionPipelineBehavior<ITransactionCommand, Result>> _logger = Substitute.For<ILogger<TransactionPipelineBehavior<ITransactionCommand, Result>>>();
     private readonly RequestHandlerDelegate<Result> _next = Substitute.For<RequestHandlerDelegate<Result>>();
-    private readonly ITransactionalCommand _command = Substitute.For<ITransactionalCommand>();
+    private readonly ITransactionCommand _command = Substitute.For<ITransactionCommand>();
 
     public TransactionPipelineBehaviorTests()
-    {
-        _behavior = new TransactionPipelineBehavior<ITransactionalCommand, Result>(_unitOfWork, _logger);
-    }
+        => _behavior = new TransactionPipelineBehavior<ITransactionCommand, Result>(_unitOfWork, _logger);
 
     [Fact]
     public async Task Handle_ShouldCommitTransaction_WhenResultIsSuccess()
