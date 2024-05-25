@@ -97,7 +97,10 @@ public static class ResultExtensions
         Converters = { new JsonStringEnumConverter() }
     };
 
-    public static async Task<Result<T>> Convert<T>(this HttpResponseMessage response, JsonSerializerOptions? options = null, CancellationToken cancellationToken = default)
+    public static async Task<Result<T>> Convert<T>(
+        this HttpResponseMessage response,
+        JsonSerializerOptions? options = null,
+        CancellationToken cancellationToken = default)
     {
         await using var content = await response.Content.ReadAsStreamAsync(cancellationToken);
 
@@ -112,12 +115,39 @@ public static class ResultExtensions
             options ?? _options,
             cancellationToken: cancellationToken);
 
-        if (problemDetails?.Extensions.TryGetValue("Errors", out var errorsObject) == true && errorsObject is JsonElement jsonElement && jsonElement.ValueKind == JsonValueKind.Array)
+        if (problemDetails?.Extensions.TryGetValue("Errors", out var errorsObject) == true &&
+            errorsObject is JsonElement jsonElement &&
+            jsonElement.ValueKind == JsonValueKind.Array)
         {
             var errors = jsonElement.Deserialize<Error[]>(options ?? _options);
             return Result.Failure<T>(errors ?? [Error.None]);
         }
 
         return Result.Failure<T>([Error.None]);
+    }
+    public static async Task<Result> Convert(
+        this HttpResponseMessage response,
+        JsonSerializerOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (response.IsSuccessStatusCode)
+            return Result.Success();
+
+        await using var content = await response.Content.ReadAsStreamAsync(cancellationToken);
+
+        var problemDetails = await JsonSerializer.DeserializeAsync<ProblemDetails>(
+            content,
+            options ?? _options,
+            cancellationToken: cancellationToken);
+
+        if (problemDetails?.Extensions.TryGetValue("Errors", out var errorsObject) == true &&
+            errorsObject is JsonElement jsonElement &&
+            jsonElement.ValueKind == JsonValueKind.Array)
+        {
+            var errors = jsonElement.Deserialize<Error[]>(options ?? _options);
+            return Result.Failure(errors ?? [Error.None]);
+        }
+
+        return Result.Failure([Error.None]);
     }
 }

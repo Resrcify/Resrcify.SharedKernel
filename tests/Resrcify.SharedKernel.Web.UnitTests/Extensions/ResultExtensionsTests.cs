@@ -101,7 +101,7 @@ public class ResultExtensionsTests
     };
 
     [Fact]
-    public async Task Convert_ShouldConvertToT_WhenHttpResponseMessageIsSuccess()
+    public async Task ConvertT_ShouldConvertToT_WhenHttpResponseMessageIsSuccess()
     {
         //Arrange
         string test = "Test";
@@ -119,9 +119,116 @@ public class ResultExtensionsTests
             .Should()
             .BeTrue();
 
+        result
+            .Should()
+            .BeOfType<Result<string>>();
+
         result.Value
             .Should()
             .Be(test);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.BadRequest, ErrorType.Validation)]
+    [InlineData(HttpStatusCode.NotFound, ErrorType.NotFound)]
+    [InlineData(HttpStatusCode.Conflict, ErrorType.Conflict)]
+    [InlineData(HttpStatusCode.InternalServerError, ErrorType.Failure)]
+    public async Task ConvertT_ShouldConvertToProblemsDetails_WhenHttpResponseMessageIsFailure(HttpStatusCode httpStatusCode, ErrorType errorType)
+    {
+        //Arrange
+        var error = new Error("Title", "Message", errorType);
+        var resultObject = Result.Failure<string>(error);
+        var problemDetails = resultObject.ToProblemDetails() as ProblemHttpResult;
+        var message = new HttpResponseMessage()
+        {
+            StatusCode = httpStatusCode,
+            Content = new StringContent(JsonSerializer.Serialize(problemDetails!.ProblemDetails, _options), Encoding.UTF8, "application/json")
+        };
+
+        //Act
+        var result = await message.Convert<string>();
+
+        //Assert
+        result.IsFailure
+            .Should()
+            .BeTrue();
+
+        result
+            .Should()
+            .BeOfType<Result<string>>();
+
+        result.Errors
+            .Should()
+            .HaveCount(1);
+
+        result.Errors
+            .Should()
+            .ContainEquivalentOf(error, options => options.ExcludingMissingMembers());
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.BadRequest, ErrorType.Validation)]
+    [InlineData(HttpStatusCode.NotFound, ErrorType.NotFound)]
+    [InlineData(HttpStatusCode.Conflict, ErrorType.Conflict)]
+    [InlineData(HttpStatusCode.InternalServerError, ErrorType.Failure)]
+    public async Task ConvertT_ShouldReturnErrorArrayWithEmptyError_WhenHttpResponseMessageDoesntContainErrors(HttpStatusCode httpStatusCode, ErrorType errorType)
+    {
+        //Arrange
+        var error = new Error("Title", "Message", errorType);
+        var resultObject = Result.Failure<string>(error);
+        var problemDetails = resultObject.ToProblemDetails() as ProblemHttpResult;
+
+        problemDetails!.ProblemDetails.Extensions = new Dictionary<string, object?>();
+
+        var message = new HttpResponseMessage()
+        {
+            StatusCode = httpStatusCode,
+            Content = new StringContent(JsonSerializer.Serialize(problemDetails!.ProblemDetails, _options), Encoding.UTF8, "application/json")
+        };
+
+        //Act
+        var result = await message.Convert<string>();
+
+        //Assert
+        result.IsFailure
+            .Should()
+            .BeTrue();
+
+        result
+            .Should()
+            .BeOfType<Result<string>>();
+
+        result.Errors
+            .Should()
+            .HaveCount(1);
+
+        result.Errors
+            .Should()
+            .ContainEquivalentOf(Error.None, options => options.ExcludingMissingMembers());
+    }
+
+    [Fact]
+    public async Task Convert_ShouldConvertToResult_WhenHttpResponseMessageIsSuccess()
+    {
+        //Arrange
+        string test = "Test";
+        var message = new HttpResponseMessage()
+        {
+            StatusCode = HttpStatusCode.OK,
+            Content = new StringContent(JsonSerializer.Serialize(test, _options), Encoding.UTF8, "application/json")
+        };
+
+        //Act
+        var result = await message.Convert();
+
+        //Assert
+        result.IsSuccess
+            .Should()
+            .BeTrue();
+
+        result
+            .Should()
+            .BeOfType<Result>();
     }
 
     [Theory]
@@ -142,12 +249,16 @@ public class ResultExtensionsTests
         };
 
         //Act
-        var result = await message.Convert<string>();
+        var result = await message.Convert();
 
         //Assert
         result.IsFailure
             .Should()
             .BeTrue();
+
+        result
+            .Should()
+            .BeOfType<Result>();
 
         result.Errors
             .Should()
@@ -179,12 +290,16 @@ public class ResultExtensionsTests
         };
 
         //Act
-        var result = await message.Convert<string>();
+        var result = await message.Convert();
 
         //Assert
         result.IsFailure
             .Should()
             .BeTrue();
+
+        result
+            .Should()
+            .BeOfType<Result>();
 
         result.Errors
             .Should()

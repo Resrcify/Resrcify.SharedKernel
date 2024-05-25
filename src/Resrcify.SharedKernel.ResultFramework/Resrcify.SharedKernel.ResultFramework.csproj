@@ -7,6 +7,7 @@
     <Title>Resrcify.SharedKernel.ResultFramework</Title>
     <Description>Implements the result pattern.</Description>
     <Summary>Implements the result pattern.</Summary>
+
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
