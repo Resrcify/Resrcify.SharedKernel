@@ -28,7 +28,7 @@ public static class ResultExtensions
                 type: GetType(errorType),
                 extensions: new Dictionary<string, object?>
                 {
-                    { nameof(result.Errors), result.Errors }
+                    { "errors", result.Errors }
                 })
         };
     }
@@ -115,15 +115,12 @@ public static class ResultExtensions
             options ?? _options,
             cancellationToken: cancellationToken);
 
-        if (problemDetails?.Extensions.TryGetValue("Errors", out var errorsObject) == true &&
-            errorsObject is JsonElement jsonElement &&
-            jsonElement.ValueKind == JsonValueKind.Array)
-        {
-            var errors = jsonElement.Deserialize<Error[]>(options ?? _options);
-            return Result.Failure<T>(errors ?? [Error.None]);
-        }
+        object? errorsObject = null;
+        var problemsDetailsContainsErrors = problemDetails?.Extensions.TryGetValue("errors", out errorsObject) ?? false;
+        if (!problemsDetailsContainsErrors || errorsObject is not JsonElement jsonElement)
+            return Result.Failure<T>([Error.None]);
 
-        return Result.Failure<T>([Error.None]);
+        return Result.Failure<T>(ConvertProblemsDetailErrors(options, jsonElement).Errors);
     }
     public static async Task<Result> Convert(
         this HttpResponseMessage response,
@@ -140,12 +137,30 @@ public static class ResultExtensions
             options ?? _options,
             cancellationToken: cancellationToken);
 
-        if (problemDetails?.Extensions.TryGetValue("Errors", out var errorsObject) == true &&
-            errorsObject is JsonElement jsonElement &&
-            jsonElement.ValueKind == JsonValueKind.Array)
+        object? errorsObject = null;
+        var problemsDetailsContainsErrors = problemDetails?.Extensions.TryGetValue("errors", out errorsObject) ?? false;
+        if (!problemsDetailsContainsErrors || errorsObject is not JsonElement jsonElement)
+            return Result.Failure([Error.None]);
+
+        return ConvertProblemsDetailErrors(options, jsonElement);
+    }
+
+    private static Result ConvertProblemsDetailErrors(JsonSerializerOptions? options, JsonElement jsonElement)
+    {
+        if (jsonElement.ValueKind == JsonValueKind.Array)
         {
             var errors = jsonElement.Deserialize<Error[]>(options ?? _options);
             return Result.Failure(errors ?? [Error.None]);
+        }
+
+        if (jsonElement.ValueKind == JsonValueKind.Object)
+        {
+            var errors = jsonElement.Deserialize<Dictionary<string, string[]>>(options ?? _options) ?? [];
+            var errorArray = errors
+                .SelectMany(kvp => kvp.Value.Select(v => Error.Validation(kvp.Key, v)))
+                .ToArray();
+
+            return Result.Failure(errorArray);
         }
 
         return Result.Failure([Error.None]);

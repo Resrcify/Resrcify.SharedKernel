@@ -86,9 +86,9 @@ public class ResultExtensionsTests
         problemDetails?.ProblemDetails.Title.Should().Be(expectedTitle);
         problemDetails?.ProblemDetails.Status.Should().Be(expectedStatusCode);
         problemDetails?.StatusCode.Should().Be(expectedStatusCode);
-        problemDetails?.ProblemDetails.Extensions.Should().ContainKey("Errors");
-        problemDetails?.ProblemDetails.Extensions["Errors"].Should().BeAssignableTo<IEnumerable<Error>>();
-        ((IEnumerable<Error>)problemDetails?.ProblemDetails.Extensions["Errors"]!).Should().ContainEquivalentOf(error, options => options.ExcludingMissingMembers());
+        problemDetails?.ProblemDetails.Extensions.Should().ContainKey("errors");
+        problemDetails?.ProblemDetails.Extensions["errors"].Should().BeAssignableTo<IEnumerable<Error>>();
+        ((IEnumerable<Error>)problemDetails?.ProblemDetails.Extensions["errors"]!).Should().ContainEquivalentOf(error, options => options.ExcludingMissingMembers());
     }
 
     private static readonly JsonSerializerOptions _options = new()
@@ -126,6 +126,50 @@ public class ResultExtensionsTests
         result.Value
             .Should()
             .Be(test);
+    }
+
+    [Fact]
+    public async Task ConvertT_ShouldConvertToProblemsDetails_WhenHttpResponseMessageIsValidationError()
+    {
+        //Arrange
+        string test = @"
+        {
+            ""type"": ""https://tools.ietf.org/html/rfc9110#section-15.5.1"",
+            ""title"": ""One or more validation errors occurred."",
+            ""status"": 400,
+            ""errors"": {
+                ""useCurrentGp"": [
+                    ""The value 'null' is not valid.""
+                ]
+            },
+            ""traceId"": ""00-4627c2f9dd83de593525c82b41f99e92-0f526beb524ba8c1-00""
+        }";
+        var message = new HttpResponseMessage()
+        {
+            StatusCode = HttpStatusCode.BadRequest,
+            Content = new StringContent(test, Encoding.UTF8, "application/json")
+        };
+        var error = Error.Validation("useCurrentGp", "The value 'null' is not valid.");
+
+        //Act
+        var result = await message.Convert<string>();
+
+        //Assert
+        result.IsFailure
+            .Should()
+            .BeTrue();
+
+        result
+            .Should()
+            .BeOfType<Result<string>>();
+
+        result.Errors
+            .Should()
+            .HaveCount(1);
+
+        result.Errors
+            .Should()
+            .ContainEquivalentOf(error, options => options.ExcludingMissingMembers());
     }
 
     [Theory]
@@ -229,6 +273,50 @@ public class ResultExtensionsTests
         result
             .Should()
             .BeOfType<Result>();
+    }
+
+    [Fact]
+    public async Task Convert_ShouldConvertToProblemsDetails_WhenHttpResponseMessageIsValidationError()
+    {
+        //Arrange
+        string test = @"
+        {
+            ""type"": ""https://tools.ietf.org/html/rfc9110#section-15.5.1"",
+            ""title"": ""One or more validation errors occurred."",
+            ""status"": 400,
+            ""errors"": {
+                ""useCurrentGp"": [
+                    ""The value 'null' is not valid.""
+                ]
+            },
+            ""traceId"": ""00-4627c2f9dd83de593525c82b41f99e92-0f526beb524ba8c1-00""
+        }";
+        var message = new HttpResponseMessage()
+        {
+            StatusCode = HttpStatusCode.BadRequest,
+            Content = new StringContent(test, Encoding.UTF8, "application/json")
+        };
+        var error = Error.Validation("useCurrentGp", "The value 'null' is not valid.");
+
+        //Act
+        var result = await message.Convert();
+
+        //Assert
+        result.IsFailure
+            .Should()
+            .BeTrue();
+
+        result
+            .Should()
+            .BeOfType<Result>();
+
+        result.Errors
+            .Should()
+            .HaveCount(1);
+
+        result.Errors
+            .Should()
+            .ContainEquivalentOf(error, options => options.ExcludingMissingMembers());
     }
 
     [Theory]
