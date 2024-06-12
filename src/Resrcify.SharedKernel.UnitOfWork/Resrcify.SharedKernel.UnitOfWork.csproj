@@ -7,7 +7,6 @@
     <Title>Resrcify.SharedKernel.UnitOfWork</Title>
     <Description>Implements a c unit of work pattern, including interceptors using EntityFrameworkCore.</Description>
     <Summary>Implements a unit of work pattern, includin interceptors using EntityFrameworkCore.</Summary>
-
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
