@@ -2,7 +2,7 @@ using Xunit;
 using FluentAssertions;
 using Resrcify.SharedKernel.ResultFramework.Primitives;
 
-namespace Resrcify.SharedKernel.ResultFramework.UnitTests.Shared;
+namespace Resrcify.SharedKernel.ResultFramework.UnitTests.Primitives;
 
 public class ErrorTests
 {

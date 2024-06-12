@@ -4,7 +4,7 @@ using Resrcify.SharedKernel.ResultFramework.Primitives;
 using Xunit;
 
 
-namespace Resrcify.SharedKernel.ResultFramework.UnitTests.Shared;
+namespace Resrcify.SharedKernel.ResultFramework.UnitTests.Primitives;
 
 public class ResultTests
 {
