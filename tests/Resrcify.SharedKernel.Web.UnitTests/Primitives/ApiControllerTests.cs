@@ -44,8 +44,8 @@ public class ApiControllerTests
         problemDetails?.ProblemDetails.Title.Should().Be(expectedTitle);
         problemDetails?.ProblemDetails.Status.Should().Be(expectedStatusCode);
         problemDetails?.StatusCode.Should().Be(expectedStatusCode);
-        problemDetails?.ProblemDetails.Extensions.Should().ContainKey("Errors");
-        problemDetails?.ProblemDetails.Extensions["Errors"].Should().BeAssignableTo<IEnumerable<Error>>();
-        ((IEnumerable<Error>)problemDetails?.ProblemDetails.Extensions["Errors"]!).Should().ContainEquivalentOf(error, options => options.ExcludingMissingMembers());
+        problemDetails?.ProblemDetails.Extensions.Should().ContainKey("errors");
+        problemDetails?.ProblemDetails.Extensions["errors"].Should().BeAssignableTo<IEnumerable<Error>>();
+        ((IEnumerable<Error>)problemDetails?.ProblemDetails.Extensions["errors"]!).Should().ContainEquivalentOf(error, options => options.ExcludingMissingMembers());
     }
 }

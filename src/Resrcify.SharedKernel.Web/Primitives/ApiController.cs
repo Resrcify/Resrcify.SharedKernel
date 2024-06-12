@@ -31,7 +31,7 @@ public abstract class ApiController : ControllerBase
             type: ResultExtensions.GetType(errorType),
             extensions: new Dictionary<string, object?>
             {
-                { nameof(result.Errors), result.Errors }
+                { nameof(result.Errors).ToLower(), result.Errors }
             });
     }
 }
