@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 
-namespace Resrcify.SharedKernel.GenericRepository.UnitTests.Models;
+namespace Resrcify.SharedKernel.Repository.UnitTests.Models;
 
 public class SocialSecurityNumber : ValueObject
 {
@@ -16,4 +16,6 @@ public class SocialSecurityNumber : ValueObject
     {
         yield return Value;
     }
+    public static explicit operator int(SocialSecurityNumber socialSecurityNumber)
+        => socialSecurityNumber.Value;
 }

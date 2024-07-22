@@ -1,6 +1,5 @@
 using System;
 using System.Linq.Expressions;
-using Resrcify.SharedKernel.GenericRepository.UnitTests.Models;
 using Resrcify.SharedKernel.Repository.Primitives;
 
 namespace Resrcify.SharedKernel.Repository.UnitTests.Models;

@@ -5,8 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Resrcify.SharedKernel.GenericRepository.UnitTests.GenericRepository;
-using Resrcify.SharedKernel.GenericRepository.UnitTests.Models;
 using Resrcify.SharedKernel.Repository.UnitTests.Models;
 using Xunit;
 

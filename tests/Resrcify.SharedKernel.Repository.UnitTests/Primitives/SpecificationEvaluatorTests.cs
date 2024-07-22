@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using FluentAssertions;
-using Resrcify.SharedKernel.GenericRepository.UnitTests.Models;
 using Resrcify.SharedKernel.Repository.Primitives;
 using Resrcify.SharedKernel.Repository.UnitTests.Models;
 using Xunit;
@@ -72,7 +71,7 @@ public class SpecificationEvaluatorTests
     {
         // Arrange
         var first = persons.FirstOrDefault();
-        first!.Children.Add(new Child(SocialSecurityNumber.Create(1)));
+        first!.Children.Add(new Child(SocialSecurityNumber.Create(1), first.Id));
         var data = persons.AsQueryable();
         var specification = new PersonSpecification(addInclude: x => x.Children);
 

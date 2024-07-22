@@ -75,7 +75,9 @@ public static class ResultExtensions
     )
     {
         var result = await resultTask;
-        return result.IsSuccess ? onSuccess() : onFailure(result);
+        return result.IsSuccess
+            ? onSuccess()
+            : onFailure(result);
     }
 
     public static async Task<IResult> Match<TIn>(
@@ -85,7 +87,9 @@ public static class ResultExtensions
     )
     {
         var result = await resultTask;
-        return result.IsSuccess ? onSuccess(result.Value) : onFailure(result);
+        return result.IsSuccess
+            ? onSuccess(result.Value)
+            : onFailure(result);
     }
 
     private static readonly JsonSerializerOptions _options = new()

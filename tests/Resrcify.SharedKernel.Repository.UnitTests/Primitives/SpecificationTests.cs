@@ -1,7 +1,6 @@
 using System;
 using System.Linq.Expressions;
 using FluentAssertions;
-using Resrcify.SharedKernel.GenericRepository.UnitTests.Models;
 using Resrcify.SharedKernel.Repository.UnitTests.Models;
 using Xunit;
 

@@ -42,7 +42,7 @@ public sealed class UpdateAuditableEntitiesInterceptor : SaveChangesInterceptor
             }
         }
     }
-    static void SetCurrentPropertyValue(
+    private static void SetCurrentPropertyValue(
         EntityEntry entry,
         string propertyName,
         DateTime utcNow)

@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
-using Resrcify.SharedKernel.GenericRepository.UnitTests.Models;
 
 namespace Resrcify.SharedKernel.Repository.UnitTests.Models;
 

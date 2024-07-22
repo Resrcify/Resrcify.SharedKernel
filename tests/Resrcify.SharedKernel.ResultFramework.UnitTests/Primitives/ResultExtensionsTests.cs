@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Resrcify.SharedKernel.ResultFramework.Primitives;
@@ -81,7 +83,7 @@ public class ResultExtensionsTests
     {
         // Arrange
         var result = Result.Success(42);
-        async Task<Result<int>> AsyncFunc(int value) => await Task.FromResult(Result.Success(value * 2));
+        static async Task<Result<int>> AsyncFunc(int value) => await Task.FromResult(Result.Success(value * 2));
 
         // Act
         var boundResult = await result.Bind(AsyncFunc);
@@ -152,6 +154,231 @@ public class ResultExtensionsTests
         // Assert
         actionInvoked.Should().BeFalse();
         tappedResult.Should().Be(result);
+    }
+
+    [Fact]
+    public async Task Create_WithSuccess_ShouldReturnMappedResult()
+    {
+        // Arrange
+        var resultTask = Task.FromResult(Result.Success(42));
+        static string func(int i) => (i * 2).ToString();
+
+        // Act
+        var createdResult = await resultTask.Create(func);
+
+        // Assert
+        createdResult.IsSuccess.Should().BeTrue();
+        createdResult.Value.Should().Be("84");
+    }
+
+    [Fact]
+    public async Task Create_WithFailure_ShouldReturnOriginalFailureResult()
+    {
+        // Arrange
+        var resultTask = Task.FromResult(Result.Failure<int>(Error.NullValue));
+        static string func(int i) => (i * 2).ToString();
+
+        // Act
+        var createdResult = await resultTask.Create(func);
+
+        // Assert
+        createdResult.IsSuccess.Should().BeFalse();
+        createdResult.Errors.Should().Contain(Error.NullValue);
+    }
+
+    [Fact]
+    public void TryCatch_WithSuccessAndNonThrowingFunc_ShouldReturnMappedResult()
+    {
+        // Arrange
+        var result = Result.Success(42);
+        static string func(int i) => (i * 2).ToString();
+
+        // Act
+        var tryCatchResult = result.TryCatch(func, Error.NullValue);
+
+        // Assert
+        tryCatchResult.IsSuccess.Should().BeTrue();
+        tryCatchResult.Value.Should().Be("84");
+    }
+
+    [Fact]
+    public void TryCatch_WithSuccessAndThrowingFunc_ShouldReturnFailureResult()
+    {
+        // Arrange
+        var result = Result.Success(42);
+        static string func(int i) => throw new InvalidOperationException();
+
+        // Act
+        var tryCatchResult = result.TryCatch(func, Error.NullValue);
+
+        // Assert
+        tryCatchResult.IsSuccess.Should().BeFalse();
+        tryCatchResult.Errors.Should().Contain(Error.NullValue);
+    }
+
+    [Fact]
+    public void TryCatch_WithFailure_ShouldReturnOriginalFailureResult()
+    {
+        // Arrange
+        var result = Result.Failure<int>(Error.NullValue);
+        static string func(int i) => (i * 2).ToString();
+
+        // Act
+        var tryCatchResult = result.TryCatch(func, Error.None);
+
+        // Assert
+        tryCatchResult.IsSuccess.Should().BeFalse();
+        tryCatchResult.Errors.Should().Contain(Error.NullValue);
+    }
+
+    [Fact]
+    public async Task TryCatchAsync_WithSuccessAndNonThrowingFunc_ShouldReturnMappedResult()
+    {
+        // Arrange
+        var resultTask = Task.FromResult(Result.Success(42));
+        static string func(int i) => (i * 2).ToString();
+
+        // Act
+        var tryCatchResult = await resultTask.TryCatch(func, Error.NullValue);
+
+        // Assert
+        tryCatchResult.IsSuccess.Should().BeTrue();
+        tryCatchResult.Value.Should().Be("84");
+    }
+
+    [Fact]
+    public async Task TryCatchAsync_WithSuccessAndThrowingFunc_ShouldReturnFailureResult()
+    {
+        // Arrange
+        var resultTask = Task.FromResult(Result.Success(42));
+        static string func(int i) => throw new InvalidOperationException();
+
+        // Act
+        var tryCatchResult = await resultTask.TryCatch(func, Error.NullValue);
+
+        // Assert
+        tryCatchResult.IsSuccess.Should().BeFalse();
+        tryCatchResult.Errors.Should().Contain(Error.NullValue);
+    }
+
+    [Fact]
+    public async Task TryCatchAsync_WithFailure_ShouldReturnOriginalFailureResult()
+    {
+        // Arrange
+        var resultTask = Task.FromResult(Result.Failure<int>(Error.NullValue));
+        static string func(int i) => (i * 2).ToString();
+
+        // Act
+        var tryCatchResult = await resultTask.TryCatch(func, Error.None);
+
+        // Assert
+        tryCatchResult.IsSuccess.Should().BeFalse();
+        tryCatchResult.Errors.Should().Contain(Error.NullValue);
+    }
+
+    [Fact]
+    public async Task BindAsync_WithSuccessAndPassingAsyncFunc_ShouldReturnResultFromFunc()
+    {
+        // Arrange
+        var resultTask = Task.FromResult(Result.Success(42));
+        static Task<Result<string>> func(int i) => Task.FromResult(Result.Success(i.ToString()));
+
+        // Act
+        var boundResult = await resultTask.Bind(func);
+
+        // Assert
+        boundResult.IsSuccess.Should().BeTrue();
+        boundResult.Value.Should().Be("42");
+    }
+
+    [Fact]
+    public async Task BindAsync_WithSuccessAndFailingAsyncFunc_ShouldReturnFailureResultFromFunc()
+    {
+        // Arrange
+        var resultTask = Task.FromResult(Result.Success(42));
+        static Task<Result<string>> func(int i) => Task.FromResult(Result.Failure<string>(Error.NullValue));
+
+        // Act
+        var boundResult = await resultTask.Bind(func);
+
+        // Assert
+        boundResult.IsSuccess.Should().BeFalse();
+        boundResult.Errors.Should().Contain(Error.NullValue);
+    }
+
+    [Fact]
+    public async Task BindAsync_WithFailure_ShouldReturnOriginalFailureResult()
+    {
+        // Arrange
+        var resultTask = Task.FromResult(Result.Failure<int>(Error.NullValue));
+        static Task<Result<string>> func(int i) => Task.FromResult(Result.Success(i.ToString()));
+
+        // Act
+        var boundResult = await resultTask.Bind(func);
+
+        // Assert
+        boundResult.IsSuccess.Should().BeFalse();
+        boundResult.Errors.Should().Contain(Error.NullValue);
+    }
+
+    [Fact]
+    public void Match_WithSuccess_ShouldInvokeOnSuccess()
+    {
+        // Arrange
+        var result = Result.Success(42);
+        Func<int, string> onSuccess = x => $"Success: {x}";
+        Func<Error[], string> onFailure = errors => "Failure";
+
+        // Act
+        var matchResult = result.Match(onSuccess, onFailure);
+
+        // Assert
+        matchResult.Should().Be("Success: 42");
+    }
+
+    [Fact]
+    public void Match_WithFailure_ShouldInvokeOnFailure()
+    {
+        // Arrange
+        var result = Result.Failure<int>(Error.NullValue);
+        Func<int, string> onSuccess = x => $"Success: {x}";
+        Func<Error[], string> onFailure = errors => $"Failure: {errors.First().Code}";
+
+        // Act
+        var matchResult = result.Match(onSuccess, onFailure);
+
+        // Assert
+        matchResult.Should().Be($"Failure: {Error.NullValue.Code}");
+    }
+
+    [Fact]
+    public async Task MatchAsync_WithSuccess_ShouldInvokeOnSuccess()
+    {
+        // Arrange
+        var resultTask = Task.FromResult(Result.Success(42));
+        static string onSuccess(int x) => $"Success: {x}";
+        static string onFailure(Error[] errors) => "Failure";
+
+        // Act
+        var matchResult = await resultTask.Match(onSuccess, onFailure);
+
+        // Assert
+        matchResult.Should().Be("Success: 42");
+    }
+
+    [Fact]
+    public async Task MatchAsync_WithFailure_ShouldInvokeOnFailure()
+    {
+        // Arrange
+        var resultTask = Task.FromResult(Result.Failure<int>(Error.NullValue));
+        static string onSuccess(int x) => $"Success: {x}";
+        static string onFailure(Error[] errors) => $"Failure: {errors.First().Code}";
+
+        // Act
+        var matchResult = await resultTask.Match(onSuccess, onFailure);
+
+        // Assert
+        matchResult.Should().Be($"Failure: {Error.NullValue.Code}");
     }
 
 }
