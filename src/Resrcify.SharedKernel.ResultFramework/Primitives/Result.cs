@@ -10,7 +10,6 @@ public class Result
         if (isSuccess && error != Error.None)
             throw new InvalidOperationException();
 
-
         if (!isSuccess && error == Error.None)
             throw new InvalidOperationException();
 
@@ -83,7 +82,9 @@ public class Result
         return Success(results[0].Value);
     }
 
-    public static Result<(T1, T2)> Combine<T1, T2>(Result<T1> result1, Result<T2> result2)
+    public static Result<(T1, T2)> Combine<T1, T2>(
+        Result<T1> result1,
+        Result<T2> result2)
     {
         var failures = new List<Error>();
 
@@ -101,7 +102,10 @@ public class Result
         return Success((result1.Value, result2.Value));
     }
 
-    public static Result<(T1, T2, T3)> Combine<T1, T2, T3>(Result<T1> result1, Result<T2> result2, Result<T3> result3)
+    public static Result<(T1, T2, T3)> Combine<T1, T2, T3>(
+        Result<T1> result1,
+        Result<T2> result2,
+        Result<T3> result3)
     {
         var failures = new List<Error>();
         if (result1.IsFailure)
@@ -121,7 +125,11 @@ public class Result
         return Success((result1.Value, result2.Value, result3.Value));
     }
 
-    public static Result<(T1, T2, T3, T4)> Combine<T1, T2, T3, T4>(Result<T1> result1, Result<T2> result2, Result<T3> result3, Result<T4> result4)
+    public static Result<(T1, T2, T3, T4)> Combine<T1, T2, T3, T4>(
+        Result<T1> result1,
+        Result<T2> result2,
+        Result<T3> result3,
+        Result<T4> result4)
     {
         var failures = new List<Error>();
 
@@ -145,7 +153,12 @@ public class Result
         return Success((result1.Value, result2.Value, result3.Value, result4.Value));
     }
 
-    public static Result<(T1, T2, T3, T4, T5)> Combine<T1, T2, T3, T4, T5>(Result<T1> result1, Result<T2> result2, Result<T3> result3, Result<T4> result4, Result<T5> result5)
+    public static Result<(T1, T2, T3, T4, T5)> Combine<T1, T2, T3, T4, T5>(
+        Result<T1> result1,
+        Result<T2> result2,
+        Result<T3> result3,
+        Result<T4> result4,
+        Result<T5> result5)
     {
         var failures = new List<Error>();
 
@@ -171,7 +184,13 @@ public class Result
 
         return Success((result1.Value, result2.Value, result3.Value, result4.Value, result5.Value));
     }
-    public static Result<(T1, T2, T3, T4, T5, T6)> Combine<T1, T2, T3, T4, T5, T6>(Result<T1> result1, Result<T2> result2, Result<T3> result3, Result<T4> result4, Result<T5> result5, Result<T6> result6)
+    public static Result<(T1, T2, T3, T4, T5, T6)> Combine<T1, T2, T3, T4, T5, T6>(
+        Result<T1> result1,
+        Result<T2> result2,
+        Result<T3> result3,
+        Result<T4> result4,
+        Result<T5> result5,
+        Result<T6> result6)
     {
         var failures = new List<Error>();
 
@@ -200,5 +219,187 @@ public class Result
 
         return Success((result1.Value, result2.Value, result3.Value, result4.Value, result5.Value, result6.Value));
     }
+
+    public static Result<(T1, T2, T3, T4, T5, T6, T7)> Combine<T1, T2, T3, T4, T5, T6, T7>(
+        Result<T1> result1,
+        Result<T2> result2,
+        Result<T3> result3,
+        Result<T4> result4,
+        Result<T5> result5,
+        Result<T6> result6,
+        Result<T7> result7)
+    {
+        var failures = new List<Error>();
+
+        if (result1.IsFailure)
+            failures.AddRange(result1.Errors);
+
+        if (result2.IsFailure)
+            failures.AddRange(result2.Errors);
+
+        if (result3.IsFailure)
+            failures.AddRange(result3.Errors);
+
+        if (result4.IsFailure)
+            failures.AddRange(result4.Errors);
+
+        if (result5.IsFailure)
+            failures.AddRange(result5.Errors);
+
+        if (result6.IsFailure)
+            failures.AddRange(result6.Errors);
+
+        if (result7.IsFailure)
+            failures.AddRange(result7.Errors);
+
+        if (failures.Count > 0)
+            return Failure<(T1, T2, T3, T4, T5, T6, T7)>(failures
+                .Distinct()
+                .ToArray());
+
+        return Success((result1.Value, result2.Value, result3.Value, result4.Value, result5.Value, result6.Value, result7.Value));
+    }
+    public static Result<(T1, T2, T3, T4, T5, T6, T7, T8)> Combine<T1, T2, T3, T4, T5, T6, T7, T8>(
+        Result<T1> result1,
+        Result<T2> result2,
+        Result<T3> result3,
+        Result<T4> result4,
+        Result<T5> result5,
+        Result<T6> result6,
+        Result<T7> result7,
+        Result<T8> result8)
+    {
+        var failures = new List<Error>();
+
+        if (result1.IsFailure)
+            failures.AddRange(result1.Errors);
+
+        if (result2.IsFailure)
+            failures.AddRange(result2.Errors);
+
+        if (result3.IsFailure)
+            failures.AddRange(result3.Errors);
+
+        if (result4.IsFailure)
+            failures.AddRange(result4.Errors);
+
+        if (result5.IsFailure)
+            failures.AddRange(result5.Errors);
+
+        if (result6.IsFailure)
+            failures.AddRange(result6.Errors);
+
+        if (result7.IsFailure)
+            failures.AddRange(result7.Errors);
+
+        if (result8.IsFailure)
+            failures.AddRange(result8.Errors);
+
+        if (failures.Count > 0)
+            return Failure<(T1, T2, T3, T4, T5, T6, T7, T8)>(failures
+                .Distinct()
+                .ToArray());
+
+        return Success((result1.Value, result2.Value, result3.Value, result4.Value, result5.Value, result6.Value, result7.Value, result8.Value));
+    }
+    public static Result<(T1, T2, T3, T4, T5, T6, T7, T8, T9)> Combine<T1, T2, T3, T4, T5, T6, T7, T8, T9>(
+        Result<T1> result1,
+        Result<T2> result2,
+        Result<T3> result3,
+        Result<T4> result4,
+        Result<T5> result5,
+        Result<T6> result6,
+        Result<T7> result7,
+        Result<T8> result8,
+        Result<T9> result9)
+    {
+        var failures = new List<Error>();
+
+        if (result1.IsFailure)
+            failures.AddRange(result1.Errors);
+
+        if (result2.IsFailure)
+            failures.AddRange(result2.Errors);
+
+        if (result3.IsFailure)
+            failures.AddRange(result3.Errors);
+
+        if (result4.IsFailure)
+            failures.AddRange(result4.Errors);
+
+        if (result5.IsFailure)
+            failures.AddRange(result5.Errors);
+
+        if (result6.IsFailure)
+            failures.AddRange(result6.Errors);
+
+        if (result7.IsFailure)
+            failures.AddRange(result7.Errors);
+
+        if (result8.IsFailure)
+            failures.AddRange(result8.Errors);
+
+        if (result9.IsFailure)
+            failures.AddRange(result9.Errors);
+
+        if (failures.Count > 0)
+            return Failure<(T1, T2, T3, T4, T5, T6, T7, T8, T9)>(failures
+                .Distinct()
+                .ToArray());
+
+        return Success((result1.Value, result2.Value, result3.Value, result4.Value, result5.Value, result6.Value, result7.Value, result8.Value, result9.Value));
+    }
+    public static Result<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)> Combine<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(
+        Result<T1> result1,
+        Result<T2> result2,
+        Result<T3> result3,
+        Result<T4> result4,
+        Result<T5> result5,
+        Result<T6> result6,
+        Result<T7> result7,
+        Result<T8> result8,
+        Result<T9> result9,
+        Result<T10> result10)
+    {
+        var failures = new List<Error>();
+
+        if (result1.IsFailure)
+            failures.AddRange(result1.Errors);
+
+        if (result2.IsFailure)
+            failures.AddRange(result2.Errors);
+
+        if (result3.IsFailure)
+            failures.AddRange(result3.Errors);
+
+        if (result4.IsFailure)
+            failures.AddRange(result4.Errors);
+
+        if (result5.IsFailure)
+            failures.AddRange(result5.Errors);
+
+        if (result6.IsFailure)
+            failures.AddRange(result6.Errors);
+
+        if (result7.IsFailure)
+            failures.AddRange(result7.Errors);
+
+        if (result8.IsFailure)
+            failures.AddRange(result8.Errors);
+
+        if (result9.IsFailure)
+            failures.AddRange(result9.Errors);
+
+        if (result10.IsFailure)
+            failures.AddRange(result10.Errors);
+
+        if (failures.Count > 0)
+            return Failure<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)>(failures
+                .Distinct()
+                .ToArray());
+
+        return Success((result1.Value, result2.Value, result3.Value, result4.Value, result5.Value, result6.Value, result7.Value, result8.Value, result9.Value, result10.Value));
+    }
+
 
 }

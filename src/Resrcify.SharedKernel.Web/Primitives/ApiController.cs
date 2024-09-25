@@ -12,10 +12,10 @@ namespace Resrcify.SharedKernel.Web.Primitives;
 [ApiController]
 public abstract class ApiController : ControllerBase
 {
-    protected readonly ISender _sender;
+    protected readonly ISender Sender;
 
     protected ApiController(ISender sender)
-        => _sender = sender;
+        => Sender = sender;
 
     public static IResult ToProblemDetails(Result result)
     {

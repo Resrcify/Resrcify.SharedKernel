@@ -7,7 +7,6 @@
     <Title>Resrcify.SharedKernel.UnitOfWork</Title>
     <Description>Implements a c unit of work pattern, including interceptors using EntityFrameworkCore.</Description>
     <Summary>Implements a unit of work pattern, includin interceptors using EntityFrameworkCore.</Summary>
-
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -16,19 +15,19 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.2">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.4">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.2">
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.4">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="MediatR" Version="12.3.0">
+    <PackageReference Include="MediatR" Version="12.4.1">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Quartz" Version="3.9.0" >
+    <PackageReference Include="Quartz" Version="3.13.0" >
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Quartz.Extensions.Hosting" Version="3.9.0" >

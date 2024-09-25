@@ -7,19 +7,18 @@
     <Title>Resrcify.SharedKernel.Messaging</Title>
     <Description>Implements custom messaging abstractions based on MediatR and several different pipeline behaviors.</Description>
     <Summary>Implements custom messaging abstractions based on MediatR and several different pipeline behaviors.</Summary>
-
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="FluentValidation" Version="11.9.2">
+    <PackageReference Include="FluentValidation" Version="11.10.0">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.9.2">
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.10.0">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="MediatR" Version="12.3.0">
+    <PackageReference Include="MediatR" Version="12.4.1">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0">
