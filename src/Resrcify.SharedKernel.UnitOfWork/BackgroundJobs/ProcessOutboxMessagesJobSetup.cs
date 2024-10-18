@@ -5,7 +5,10 @@ using Quartz;
 
 namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 
-public sealed class ProcessOutboxMessagesJobSetup<TDbContext> : IConfigureOptions<QuartzOptions>
+public sealed class ProcessOutboxMessagesJobSetup<TDbContext>(
+    int processIntervalInSeconds = 60,
+    int delayInSecondsBeforeStart = 60)
+    : IConfigureOptions<QuartzOptions>
     where TDbContext : DbContext
 {
     public void Configure(QuartzOptions options)
@@ -17,10 +20,10 @@ public sealed class ProcessOutboxMessagesJobSetup<TDbContext> : IConfigureOption
             .AddTrigger(
                 trigger =>
                     trigger.ForJob(jobKey)
-                        .StartAt(DateTime.UtcNow.AddMinutes(1))
+                        .StartAt(DateTime.UtcNow.AddSeconds(delayInSecondsBeforeStart))
                         .WithSimpleSchedule(
                             schedule =>
-                                schedule.WithIntervalInSeconds(60)
+                                schedule.WithIntervalInSeconds(processIntervalInSeconds)
                                     .RepeatForever()));
     }
 }

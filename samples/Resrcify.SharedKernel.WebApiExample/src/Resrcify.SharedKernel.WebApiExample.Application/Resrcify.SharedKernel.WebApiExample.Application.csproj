@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Resrcify.SharedKernel.WebApiExample.Domain\Resrcify.SharedKernel.WebApiExample.Domain.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.Messaging\Resrcify.SharedKernel.Messaging.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.Repository\Resrcify.SharedKernel.Repository.csproj" />
+  </ItemGroup>
+
+<ItemGroup>
+    <PackageReference Include="FluentValidation" Version="11.10.0" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.10.0" />
+    <PackageReference Include="MediatR" Version="12.4.1" />
+    <PackageReference Include="System.Linq.Async" Version="6.0.1" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+  </ItemGroup>
+</Project>

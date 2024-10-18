@@ -13,18 +13,18 @@ public static class ResultExtensions
         if (result.IsFailure)
             return result;
 
-        return predicate(result.Value) ?
-            result :
-            Result.Failure<T>(error);
+        return predicate(result.Value)
+            ? result
+            : Result.Failure<T>(error);
     }
 
     public static Result<TOut> Map<TIn, TOut>(
         this Result<TIn> result,
         Func<TIn, TOut> mappingFunc)
     {
-        return result.IsSuccess ?
-            Result.Success(mappingFunc(result.Value)) :
-            Result.Failure<TOut>(result.Errors);
+        return result.IsSuccess
+            ? Result.Success(mappingFunc(result.Value))
+            : Result.Failure<TOut>(result.Errors);
     }
 
     public static async Task<Result> Bind<TIn>(

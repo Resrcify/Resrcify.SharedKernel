@@ -12,16 +12,22 @@ using Resrcify.SharedKernel.UnitOfWork.Outbox;
 namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 
 [DisallowConcurrentExecution]
-public sealed class ProcessOutboxMessagesJob<TDbContext> : IJob
+public sealed class ProcessOutboxMessagesJob<TDbContext>
+    : IJob
     where TDbContext : DbContext
 {
     private readonly TDbContext _context;
     private readonly IPublisher _publisher;
+    private readonly int _processBatchSize;
 
-    public ProcessOutboxMessagesJob(TDbContext context, IPublisher publisher)
+    public ProcessOutboxMessagesJob(
+        TDbContext context,
+        IPublisher publisher,
+        int processBatchSize = 20)
     {
         _context = context;
         _publisher = publisher;
+        _processBatchSize = processBatchSize;
     }
 
     public async Task Execute(IJobExecutionContext context)
@@ -30,7 +36,7 @@ public sealed class ProcessOutboxMessagesJob<TDbContext> : IJob
             .Set<OutboxMessage>()
             .Where(m => m.ProcessedOnUtc == null)
             .OrderBy(x => x.OccurredOnUtc)
-            .Take(20)
+            .Take(_processBatchSize)
             .ToListAsync(context.CancellationToken);
 
         foreach (OutboxMessage outboxMessage in messages)

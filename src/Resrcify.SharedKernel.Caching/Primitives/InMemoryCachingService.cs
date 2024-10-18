@@ -11,7 +11,7 @@ using Resrcify.SharedKernel.Caching.Abstractions;
 namespace Resrcify.SharedKernel.Caching.Primitives;
 
 
-public class InMemoryCachingService : ICachingService
+public sealed class InMemoryCachingService : ICachingService
 {
     private readonly IDistributedCache _distributedCache;
 

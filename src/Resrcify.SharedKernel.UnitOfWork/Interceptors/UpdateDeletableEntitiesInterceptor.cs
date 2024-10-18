@@ -10,9 +10,13 @@ using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Interceptors;
 
-public sealed class UpdateDeletableEntitiesInterceptor : SaveChangesInterceptor
+public sealed class UpdateDeletableEntitiesInterceptor
+    : SaveChangesInterceptor
 {
-    public async override ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+    public async override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+        DbContextEventData eventData,
+        InterceptionResult<int> result,
+        CancellationToken cancellationToken = default)
     {
         if (eventData.Context is not null)
             UpdateDeletableEntities(eventData.Context);

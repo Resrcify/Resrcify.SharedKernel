@@ -5,14 +5,14 @@
     <Authors>Rickard Marjanovic (@rmarjanovic)</Authors>
     <Company>Resrcify AB</Company>
     <Title>Resrcify.SharedKernel.UnitOfWork</Title>
-    <Description>Implements a c unit of work pattern, including interceptors using EntityFrameworkCore.</Description>
+    <Description>Implements a unit of work pattern, including interceptors using EntityFrameworkCore.</Description>
     <Summary>Implements a unit of work pattern, includin interceptors using EntityFrameworkCore.</Summary>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0">
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.4">
@@ -30,7 +30,7 @@
     <PackageReference Include="Quartz" Version="3.13.0" >
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Quartz.Extensions.Hosting" Version="3.9.0" >
+    <PackageReference Include="Quartz.Extensions.Hosting" Version="3.13.0" >
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
   </ItemGroup>

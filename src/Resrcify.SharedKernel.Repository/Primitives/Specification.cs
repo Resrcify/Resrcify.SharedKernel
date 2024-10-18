@@ -8,7 +8,6 @@ namespace Resrcify.SharedKernel.Repository.Primitives;
 public abstract class Specification<TEntity, TId>
     where TEntity : AggregateRoot<TId>
     where TId : notnull
-
 {
     protected Specification(Expression<Func<TEntity, bool>>? criteria)
         => Criteria = criteria;

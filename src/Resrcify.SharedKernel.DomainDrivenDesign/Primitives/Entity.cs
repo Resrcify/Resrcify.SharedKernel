@@ -11,8 +11,10 @@ public abstract class Entity<TId> : IEquatable<Entity<TId>>
         Id = id;
     }
 
-    public static bool operator ==(Entity<TId> first, Entity<TId> second) =>
-        first is not null && second is not null && first.Equals(second);
+    public static bool operator ==(Entity<TId> first, Entity<TId> second)
+        => first is not null &&
+            second is not null &&
+            first.Equals(second);
 
     public static bool operator !=(Entity<TId> first, Entity<TId> second)
         => !(first == second);
@@ -27,6 +29,9 @@ public abstract class Entity<TId> : IEquatable<Entity<TId>>
             return false;
         return Id.Equals(entity.Id);
     }
+
+    public override string ToString()
+        => Id?.ToString() ?? string.Empty;
 
     public override int GetHashCode()
         => Id.GetHashCode() * 41;

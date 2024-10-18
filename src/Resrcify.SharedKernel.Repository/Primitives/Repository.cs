@@ -19,15 +19,21 @@ public abstract class Repository<TDbContext, TEntity, TId> : IRepository<TEntity
     public Repository(TDbContext context)
         => Context = context;
 
-    public virtual async Task<TEntity?> GetByIdAsync(TId id, CancellationToken cancellationToken = default)
+    public virtual async Task<TEntity?> GetByIdAsync(
+        TId id,
+        CancellationToken cancellationToken = default)
         => await Context
             .Set<TEntity>()
             .FindAsync([id], cancellationToken: cancellationToken);
-    public virtual async Task<TEntity?> FirstOrDefaultAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
+    public virtual async Task<TEntity?> FirstOrDefaultAsync(
+        Expression<Func<TEntity, bool>> predicate,
+        CancellationToken cancellationToken = default)
         => await Context
             .Set<TEntity>()
             .FirstOrDefaultAsync(predicate, cancellationToken: cancellationToken);
-    public async Task<TEntity?> FirstOrDefaultAsync(Specification<TEntity, TId> specification, CancellationToken cancellationToken = default)
+    public async Task<TEntity?> FirstOrDefaultAsync(
+        Specification<TEntity, TId> specification,
+        CancellationToken cancellationToken = default)
         => await ApplySpecification(specification)
             .FirstOrDefaultAsync(cancellationToken: cancellationToken);
 
@@ -48,33 +54,45 @@ public abstract class Repository<TDbContext, TEntity, TId> : IRepository<TEntity
     public IAsyncEnumerable<TEntity> FindAsync(Specification<TEntity, TId> specification)
         => ApplySpecification(specification)
             .AsAsyncEnumerable();
-    public virtual async Task<IEnumerable<TEntity>> FindAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
+    public virtual async Task<IEnumerable<TEntity>> FindAsync(
+        Expression<Func<TEntity, bool>> predicate,
+        CancellationToken cancellationToken = default)
         => await Context
             .Set<TEntity>()
             .Where(predicate)
             .ToListAsync(cancellationToken: cancellationToken);
-    public async Task<IEnumerable<TEntity>> FindAsync(Specification<TEntity, TId> specification, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<TEntity>> FindAsync(
+        Specification<TEntity, TId> specification,
+        CancellationToken cancellationToken = default)
         => await ApplySpecification(specification)
             .ToListAsync(cancellationToken: cancellationToken);
 
 
-    public async Task AddAsync(TEntity entity, CancellationToken cancellationToken = default)
+    public async Task AddAsync(
+        TEntity entity,
+        CancellationToken cancellationToken = default)
         => await Context
             .Set<TEntity>()
             .AddAsync(entity, cancellationToken);
-    public async Task AddRangeAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default)
+    public async Task AddRangeAsync(
+        IEnumerable<TEntity> entities,
+        CancellationToken cancellationToken = default)
         => await Context
             .Set<TEntity>()
             .AddRangeAsync(entities, cancellationToken);
 
 
-    public async Task<bool> ExistsAsync(TId id, CancellationToken cancellationToken = default)
+    public async Task<bool> ExistsAsync(
+        TId id,
+        CancellationToken cancellationToken = default)
         => await Context
             .Set<TEntity>()
             .AnyAsync(
                 entity => Equals(entity.Id, id),
                 cancellationToken: cancellationToken);
-    public async Task<bool> ExistsAsync(Expression<Func<TEntity, bool>> predicate, CancellationToken cancellationToken = default)
+    public async Task<bool> ExistsAsync(
+        Expression<Func<TEntity, bool>> predicate,
+        CancellationToken cancellationToken = default)
         => await Context
             .Set<TEntity>()
             .AnyAsync(predicate, cancellationToken: cancellationToken);

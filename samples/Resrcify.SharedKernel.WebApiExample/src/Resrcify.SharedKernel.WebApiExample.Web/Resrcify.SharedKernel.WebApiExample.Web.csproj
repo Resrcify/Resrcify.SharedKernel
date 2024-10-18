@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Resrcify.SharedKernel.WebApiExample.Application\Resrcify.SharedKernel.WebApiExample.Application.csproj" />
+    <ProjectReference Include="..\Resrcify.SharedKernel.WebApiExample.Infrastructure\Resrcify.SharedKernel.WebApiExample.Infrastructure.csproj" />
+    <ProjectReference Include="..\Resrcify.SharedKernel.WebApiExample.Persistence\Resrcify.SharedKernel.WebApiExample.Persistence.csproj" />
+    <ProjectReference Include="..\Resrcify.SharedKernel.WebApiExample.Presentation\Resrcify.SharedKernel.WebApiExample.Presentation.csproj" />
+  </ItemGroup>
+
+</Project>

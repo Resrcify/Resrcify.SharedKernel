@@ -4,16 +4,34 @@ namespace Resrcify.SharedKernel.ResultFramework.Primitives;
 
 public class Error : IEquatable<Error>
 {
-    public static readonly Error None = new(string.Empty, string.Empty, ErrorType.Failure);
-    public static readonly Error NullValue = new("Error.NullValue", "The specified result value is null.", ErrorType.Failure);
+    public static readonly Error None = new(
+        string.Empty,
+        string.Empty,
+        ErrorType.Failure);
+    public static readonly Error NullValue = new(
+        "Error.NullValue",
+        "The specified result value is null.",
+        ErrorType.Failure);
     public static Error NotFound(string code, string message)
-        => new(code, message, ErrorType.NotFound);
+        => new(
+            code,
+            message,
+            ErrorType.NotFound);
     public static Error Validation(string code, string message)
-        => new(code, message, ErrorType.Validation);
+        => new(
+            code,
+            message,
+            ErrorType.Validation);
     public static Error Conflict(string code, string message)
-        => new(code, message, ErrorType.Conflict);
+        => new(
+            code,
+            message,
+            ErrorType.Conflict);
     public static Error Failure(string code, string message)
-        => new(code, message, ErrorType.Failure);
+        => new(
+            code,
+            message,
+            ErrorType.Failure);
     public Error(string code, string message, ErrorType type)
     {
         Code = code;
@@ -25,8 +43,10 @@ public class Error : IEquatable<Error>
     public string Message { get; init; }
     public ErrorType Type { get; init; }
 
-    public static implicit operator string(Error error) => error.Code;
-    public static implicit operator Result(Error error) => Result.Failure(error);
+    public static implicit operator string(Error error)
+        => error.Code;
+    public static implicit operator Result(Error error)
+        => Result.Failure(error);
 
     public static bool operator ==(Error? a, Error? b)
     {

@@ -16,13 +16,18 @@ public class UnitOfWorkPipelineBehavior<TRequest, TResponse>
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger _logger;
-    public UnitOfWorkPipelineBehavior(IUnitOfWork unitOfWork, ILogger<UnitOfWorkPipelineBehavior<TRequest, TResponse>> logger)
+    public UnitOfWorkPipelineBehavior(
+        IUnitOfWork unitOfWork,
+        ILogger<UnitOfWorkPipelineBehavior<TRequest, TResponse>> logger)
     {
         _unitOfWork = unitOfWork;
         _logger = logger;
     }
 
-    public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
+    public async Task<TResponse> Handle(
+        TRequest request,
+        RequestHandlerDelegate<TResponse> next,
+        CancellationToken cancellationToken)
     {
         try
         {

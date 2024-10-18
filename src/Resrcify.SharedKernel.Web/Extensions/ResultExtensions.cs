@@ -71,8 +71,7 @@ public static class ResultExtensions
     public static async Task<IResult> Match(
         this Task<Result> resultTask,
         Func<IResult> onSuccess,
-        Func<Result, IResult> onFailure
-    )
+        Func<Result, IResult> onFailure)
     {
         var result = await resultTask;
         return result.IsSuccess
@@ -83,8 +82,7 @@ public static class ResultExtensions
     public static async Task<IResult> Match<TIn>(
         this Task<Result<TIn>> resultTask,
         Func<TIn, IResult> onSuccess,
-        Func<Result, IResult> onFailure
-    )
+        Func<Result, IResult> onFailure)
     {
         var result = await resultTask;
         return result.IsSuccess
@@ -120,7 +118,8 @@ public static class ResultExtensions
             cancellationToken: cancellationToken);
 
         object? errorsObject = null;
-        var problemsDetailsContainsErrors = problemDetails?.Extensions.TryGetValue("errors", out errorsObject) ?? false;
+        var problemsDetailsContainsErrors = problemDetails?.Extensions.TryGetValue("errors", out errorsObject)
+            ?? false;
         if (!problemsDetailsContainsErrors || errorsObject is not JsonElement jsonElement)
             return Result.Failure<T>([Error.None]);
 
@@ -142,7 +141,8 @@ public static class ResultExtensions
             cancellationToken: cancellationToken);
 
         object? errorsObject = null;
-        var problemsDetailsContainsErrors = problemDetails?.Extensions.TryGetValue("errors", out errorsObject) ?? false;
+        var problemsDetailsContainsErrors = problemDetails?.Extensions.TryGetValue("errors", out errorsObject)
+            ?? false;
         if (!problemsDetailsContainsErrors || errorsObject is not JsonElement jsonElement)
             return Result.Failure([Error.None]);
 

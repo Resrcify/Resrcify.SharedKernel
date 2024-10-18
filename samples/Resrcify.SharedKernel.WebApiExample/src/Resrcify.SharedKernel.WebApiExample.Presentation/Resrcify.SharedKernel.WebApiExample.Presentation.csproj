@@ -1,0 +1,13 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Resrcify.SharedKernel.WebApiExample.Application\Resrcify.SharedKernel.WebApiExample.Application.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.Web\Resrcify.SharedKernel.Web.csproj" />
+  </ItemGroup>
+
+</Project>

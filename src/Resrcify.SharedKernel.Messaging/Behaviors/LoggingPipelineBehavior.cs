@@ -16,7 +16,10 @@ public class LoggingPipelineBehavior<TRequest, TResponse>
     public LoggingPipelineBehavior(ILogger<LoggingPipelineBehavior<TRequest, TResponse>> logger)
         => _logger = logger;
 
-    public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
+    public async Task<TResponse> Handle(
+        TRequest request,
+        RequestHandlerDelegate<TResponse> next,
+        CancellationToken cancellationToken)
     {
         var start = DateTime.UtcNow;
         _logger.LogInformation("Starting request {@RequestName}, {@DateTimeUtc}",
