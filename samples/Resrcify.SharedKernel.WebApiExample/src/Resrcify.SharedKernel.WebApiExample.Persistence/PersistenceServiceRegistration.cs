@@ -5,6 +5,8 @@ using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.Interceptors;
 using Resrcify.SharedKernel.UnitOfWork.Primitives;
+using Resrcify.SharedKernel.WebApiExample.Application.Abstractions.Repositories;
+using Resrcify.SharedKernel.WebApiExample.Persistence.Repositories;
 
 namespace Resrcify.SharedKernel.WebApiExample.Persistence;
 
@@ -22,6 +24,8 @@ public static class PersistenceServiceRegistration
         });
 
         services.AddScoped<IUnitOfWork, UnitOfWork<AppDbContext>>();
+        services.AddScoped<ICompanyRepository, CompanyRepository>();
+
         services.ApplyMigrations<AppDbContext>();
 
         return services;

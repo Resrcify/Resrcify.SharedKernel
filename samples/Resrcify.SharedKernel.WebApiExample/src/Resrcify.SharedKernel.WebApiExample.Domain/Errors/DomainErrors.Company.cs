@@ -5,6 +5,12 @@ namespace Resrcify.SharedKernel.WebApiExample.Domain.Errors;
 
 public static class DomainErrors
 {
+    public static class Company
+    {
+        public static readonly Func<string, Error> OrganizationNumberAlreadyExist = (organizationNumber) => Error.Conflict(
+            "Company.OrganizationNumberAlreadyExist",
+            $"Company with the organization number {organizationNumber} already exist.");
+    }
     public static class CompanyId
     {
         public static readonly Error Empty = Error.Validation(

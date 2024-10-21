@@ -5,9 +5,9 @@ namespace Resrcify.SharedKernel.ResultFramework.Primitives;
 
 public static class ResultExtensions
 {
-    public static Result<T> Ensure<T>(
-        this Result<T> result,
-        Func<T, bool> predicate,
+    public static Result<TIn> Ensure<TIn>(
+        this Result<TIn> result,
+        Func<TIn, bool> predicate,
         Error error)
     {
         if (result.IsFailure)
@@ -15,7 +15,35 @@ public static class ResultExtensions
 
         return predicate(result.Value)
             ? result
-            : Result.Failure<T>(error);
+            : Result.Failure<TIn>(error);
+    }
+
+    public static async Task<Result<TIn>> Ensure<TIn>(
+        this Result<TIn> result,
+        Func<TIn, Task<bool>> predicate,
+        Error error)
+    {
+        if (result.IsFailure)
+            return result;
+
+        return await predicate(result.Value)
+            ? result
+            : Result.Failure<TIn>(error);
+    }
+
+    public static async Task<Result<TIn>> Ensure<TIn>(
+        this Task<Result<TIn>> resultTask,
+        Func<TIn, Task<bool>> predicate,
+        Error error)
+    {
+        var result = await resultTask;
+
+        if (result.IsFailure)
+            return result;
+
+        return await predicate(result.Value)
+            ? result
+            : Result.Failure<TIn>(error);
     }
 
     public static Result<TOut> Map<TIn, TOut>(
@@ -99,6 +127,16 @@ public static class ResultExtensions
     {
         if (result.IsSuccess)
             await func();
+
+        return result;
+    }
+    public static async Task<Result<TIn>> Tap<TIn>(
+        this Result<TIn> result,
+        Func<TIn, Task> func)
+    {
+
+        if (result.IsSuccess)
+            await func(result.Value);
 
         return result;
     }

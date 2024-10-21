@@ -1,0 +1,10 @@
+services:
+  webapiexample:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - 11000:11000
+
+  webapiexampledb:
+    ports:
+      - 5440:5432

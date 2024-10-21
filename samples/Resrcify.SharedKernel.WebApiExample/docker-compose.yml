@@ -1,0 +1,18 @@
+services:
+  webapiexample:
+    image: webapiexample:latest
+    container_name: Resrcify.WebApiExample
+    restart: always
+    depends_on:
+      - webapiexampledb
+
+  webapiexampledb:
+    image: postgres:latest
+    container_name: WebApiExampleDb
+    cap_add:
+      - SYS_NICE # CAP_SYS_NICE
+    environment:
+      - POSTGRES_DB=AppDb
+      - POSTGRES_USER=ExampleUser
+      - POSTGRES_PASSWORD=testingStuffOut
+    restart: always
