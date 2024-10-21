@@ -18,5 +18,11 @@
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FluentAssertions" Version="6.12.1" />
+  </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.WebApiExample.Domain\Resrcify.SharedKernel.WebApiExample.Domain.csproj" />
+  </ItemGroup>
 </Project>
