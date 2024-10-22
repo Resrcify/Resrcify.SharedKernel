@@ -140,6 +140,27 @@ public class CompanyTests
     }
 
     [Fact]
+    public void RemoveContactByEmail_ShouldReturnFailureResult_WhenEmailDoesNotExist()
+    {
+        // Arrange
+        var company = Company.Create(_validCompanyId, _validName, _validOrganizationNumber).Value;
+
+        // Act
+        var result = company.RemoveContactByEmail(_validContactEmail);
+
+        // Assert
+        result.IsFailure
+            .Should()
+            .BeTrue();
+        result.Errors
+            .Should()
+            .ContainSingle()
+                .Which
+                .Should()
+                .Be(DomainErrors.Contact.NotFound(_validContactEmail));
+    }
+
+    [Fact]
     public void UpdateContactByEmail_ShouldUpdateContact_WhenEmailExists()
     {
         // Arrange

@@ -13,8 +13,6 @@ public static class ApplicationServiceRegistration
         {
             config.RegisterServicesFromAssemblies(Assembly.GetExecutingAssembly());
             config.AddOpenBehavior(typeof(LoggingPipelineBehavior<,>));
-            config.AddOpenBehavior(typeof(ValidationPipelineBehavior<,>));
-            config.AddOpenBehavior(typeof(TransactionPipelineBehavior<,>));
             config.AddOpenBehavior(typeof(UnitOfWorkPipelineBehavior<,>));
             config.AddOpenBehavior(typeof(CachingPipelineBehavior<,>));
         });

@@ -9,7 +9,7 @@
     <ProjectReference Include="..\Resrcify.SharedKernel.WebApiExample.Application\Resrcify.SharedKernel.WebApiExample.Application.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Resrcify.SharedKernel.Web" Version = "1.8.3"/>
+    <PackageReference Include="Resrcify.SharedKernel.Web" Version = "1.8.5"/>
   </ItemGroup>
 
 </Project>

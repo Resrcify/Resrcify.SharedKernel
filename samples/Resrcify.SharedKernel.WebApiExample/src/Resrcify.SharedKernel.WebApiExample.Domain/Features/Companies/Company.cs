@@ -90,6 +90,9 @@ public sealed class Company
     public Result RemoveContactByEmail(string email)
         => Email
             .Create(email)
+            .Ensure(
+                e => _contacts.Exists(c => c.Email.Equals(e)),
+                DomainErrors.Contact.NotFound(email))
             .Tap(e => _contacts.RemoveAll(c => c.Email.Equals(e)));
 
     public Result UpdateContactByEmail(
