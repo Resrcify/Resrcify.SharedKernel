@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text.Json.Serialization;
 
 namespace Resrcify.SharedKernel.ResultFramework.Primitives;
 
@@ -10,6 +11,7 @@ public class Result<TValue> : Result
         : base(isSuccess, error) =>
         _value = value;
 
+    [JsonConstructor]
     protected internal Result(TValue? value, bool isSuccess, Error[] errors)
         : base(isSuccess, errors) =>
         _value = value;

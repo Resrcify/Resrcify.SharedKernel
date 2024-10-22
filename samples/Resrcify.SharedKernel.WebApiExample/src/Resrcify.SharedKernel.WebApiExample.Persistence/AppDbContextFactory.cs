@@ -7,9 +7,9 @@ public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
     public AppDbContext CreateDbContext(string[] args)
     {
-        var connectionString = "Data Source=LocalDatabase.db";
+        var connectionString = "host=webapiexampledb;database=AppDb;username=ExampleUser;password=testingStuffOut;";
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>()
-             .UseSqlite(connectionString);
+             .UseNpgsql(connectionString);
 
         return new AppDbContext(optionsBuilder.Options);
     }

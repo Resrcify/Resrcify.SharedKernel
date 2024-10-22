@@ -12,25 +12,22 @@ USER appuser
 
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 
-# Copy project files
-COPY ["samples/Resrcify.SharedKernel.WebApiExample/", "Resrcify.SharedKernel.WebApiExample/"]
-
-# Copy project references
-COPY ["src/Resrcify.SharedKernel.ResultFramework/Resrcify.SharedKernel.ResultFramework.csproj", "Resrcify.SharedKernel.ResultFramework/"]
-COPY ["src/Resrcify.SharedKernel.DomainDrivenDesign/Resrcify.SharedKernel.DomainDrivenDesign.csproj", "Resrcify.SharedKernel.DomainDrivenDesign/"]
-COPY ["src/Resrcify.SharedKernel.Messaging/Resrcify.SharedKernel.Messaging.csproj", "Resrcify.SharedKernel.Messaging/"]
-COPY ["src/Resrcify.SharedKernel.Repository/Resrcify.SharedKernel.Repository.csproj", "Resrcify.SharedKernel.Repository/"]
-COPY ["src/Resrcify.SharedKernel.Web/Resrcify.SharedKernel.Web.csproj", "Resrcify.SharedKernel.Web/"]
-
-WORKDIR /Resrcify.SharedKernel.WebApiExample
+# copy all the layers' csproj files into respective folders
+COPY ["src/Resrcify.SharedKernel.WebApiExample.Domain/Resrcify.SharedKernel.WebApiExample.Domain.csproj", "Resrcify.SharedKernel.WebApiExample.Domain/"]
+COPY ["src/Resrcify.SharedKernel.WebApiExample.Application/Resrcify.SharedKernel.WebApiExample.Application.csproj", "Resrcify.SharedKernel.WebApiExample.Application/"]
+COPY ["src/Resrcify.SharedKernel.WebApiExample.Infrastructure/Resrcify.SharedKernel.WebApiExample.Infrastructure.csproj", "Resrcify.SharedKernel.WebApiExample.Infrastructure/"]
+COPY ["src/Resrcify.SharedKernel.WebApiExample.Persistence/Resrcify.SharedKernel.WebApiExample.Persistence.csproj", "Resrcify.SharedKernel.WebApiExample.Persistence/"]
+COPY ["src/Resrcify.SharedKernel.WebApiExample.Presentation/Resrcify.SharedKernel.WebApiExample.Presentation.csproj", "Resrcify.SharedKernel.WebApiExample.Presentation/"]
+COPY ["src/Resrcify.SharedKernel.WebApiExample.Web/Resrcify.SharedKernel.WebApiExample.Web.csproj", "Resrcify.SharedKernel.WebApiExample.Web/"]
 
 RUN dotnet restore "Resrcify.SharedKernel.WebApiExample.Web/Resrcify.SharedKernel.WebApiExample.Web.csproj"
 
+# WORKDIR /app
 COPY . .
-RUN dotnet build "Resrcify.SharedKernel.WebApiExample.Web/Resrcify.SharedKernel.WebApiExample.Web.csproj" -c Release -o /app/build
+RUN dotnet build -c Release --property:OutputPath=/app/build
 
 FROM build AS publish
-RUN dotnet publish "Resrcify.SharedKernel.WebApiExample.Web/Resrcify.SharedKernel.WebApiExample.Web.csproj" -c Release -o /app/publish
+RUN dotnet publish -c Release --property:PublishDir=/app/publish
 
 FROM base AS final
 WORKDIR /app

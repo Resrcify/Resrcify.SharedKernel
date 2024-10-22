@@ -2,6 +2,9 @@ services:
   webapiexample:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+    build:
+      context: ./
+      dockerfile: Dockerfile
     ports:
       - 11000:11000
 

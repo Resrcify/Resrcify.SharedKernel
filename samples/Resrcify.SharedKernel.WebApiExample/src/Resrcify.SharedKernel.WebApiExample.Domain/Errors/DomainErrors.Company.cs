@@ -10,6 +10,9 @@ public static class DomainErrors
         public static readonly Func<string, Error> OrganizationNumberAlreadyExist = (organizationNumber) => Error.Conflict(
             "Company.OrganizationNumberAlreadyExist",
             $"Company with the organization number {organizationNumber} already exist.");
+        public static readonly Func<Guid, Error> NotFound = (companyId) => Error.NotFound(
+            "Company.NotFound",
+            $"Company with the id {companyId} not found.");
     }
     public static class CompanyId
     {

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 
 namespace Resrcify.SharedKernel.ResultFramework.Primitives;
 public class Result
@@ -21,6 +22,7 @@ public class Result
             Errors = [error];
     }
 
+    [JsonConstructor]
     protected internal Result(bool isSuccess, Error[] errors)
     {
         IsSuccess = isSuccess;
@@ -68,7 +70,10 @@ public class Result
             ? Success(value)
             : Failure<TValue>(Error.NullValue);
 
-    public static Result<T> Ensure<T>(T value, Func<T, bool> predicate, Error error)
+    public static Result<T> Ensure<T>(
+        T value,
+        Func<T, bool> predicate,
+        Error error)
         => predicate(value) ?
             Success(value) :
             Failure<T>(error);

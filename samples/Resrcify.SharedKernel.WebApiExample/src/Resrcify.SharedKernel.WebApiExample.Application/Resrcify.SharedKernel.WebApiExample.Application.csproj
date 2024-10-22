@@ -4,13 +4,17 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Resrcify.SharedKernel.WebApiExample.Domain\Resrcify.SharedKernel.WebApiExample.Domain.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.Messaging\Resrcify.SharedKernel.Messaging.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.Repository\Resrcify.SharedKernel.Repository.csproj" />
   </ItemGroup>
 
-<ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Resrcify.SharedKernel.Messaging" Version = "1.8.3"/>
+    <PackageReference Include="Resrcify.SharedKernel.Repository" Version = "1.8.3"/>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="FluentValidation" Version="11.10.0" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.10.0" />
     <PackageReference Include="MediatR" Version="12.4.1" />

@@ -16,7 +16,7 @@ public static class PersistenceServiceRegistration
     {
         services.AddDbContext<AppDbContext>(option =>
         {
-            option.UseSqlite(configuration["Database"]);
+            option.UseNpgsql(configuration.GetConnectionString("Database"));
             option.AddInterceptors(
                 new InsertOutboxMessagesInterceptor(),
                 new UpdateAuditableEntitiesInterceptor(),

@@ -161,8 +161,30 @@ public static class ResultExtensions
         if (result.IsFailure)
             return Result.Failure<TOut>(result.Errors);
 
-        var newValue = func(result.Value);
-        return Result.Success(newValue);
+        var value = func(result.Value);
+        return Result.Success(value);
+    }
+
+    public static async Task<Result<TOut>> Create<TIn, TOut>(
+       this Task<Result<TIn>> resultTask,
+       Func<TIn, Task<TOut>> func)
+    {
+        var result = await resultTask;
+        if (result.IsFailure)
+            return Result.Failure<TOut>(result.Errors);
+
+        var value = await func(result.Value);
+        return Result.Success(value);
+    }
+    public static async Task<Result<TOut>> Create<TIn, TOut>(
+       this Result<TIn> result,
+       Func<TIn, Task<TOut>> func)
+    {
+        if (result.IsFailure)
+            return Result.Failure<TOut>(result.Errors);
+
+        var value = await func(result.Value);
+        return Result.Success(value);
     }
 
     public static Result<TOut> TryCatch<TIn, TOut>(
@@ -218,8 +240,8 @@ public static class ResultExtensions
         if (result.IsFailure && error is null)
             return Result.Failure<TOut>(result.Errors);
 
-        var newValue = func(result.Value);
-        return Result.Success(newValue);
+        var value = func(result.Value);
+        return Result.Success(value);
     }
 
     public static async Task<TOut> Match<TIn, TOut>(
