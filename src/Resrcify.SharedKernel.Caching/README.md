@@ -89,3 +89,4 @@ Here are a few ideas for extending this library in the future:
 - **Monitoring and Metrics:** Add instrumentation to monitor cache hits, misses, and other metrics using telemetry or logging frameworks.
 - **Serialization Customization:** Allow customization of serialization (e.g., adding support for Newtonsoft.Json, BSON or other custom formats).
 - **Support for Compression:** Adding optional compression for cached data to reduce memory usage.
+- **Integration tests using TestContainers:** Adding integration tests using TestContainers to be able to run the test in pipelines. This will further strengthen comfort especially if external dependencies are used.

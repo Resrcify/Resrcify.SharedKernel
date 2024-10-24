@@ -132,3 +132,4 @@ Here are a few ideas for extending this library in the future:
 
 - **Expand the specification:** Implementing additional logic in the Specification.
 - **Implement optional type safety:** Use type constraint to optionally make the Repository pattern tie into Domain-Driven Design by forcing a ValueObject as an Id.
+- **Integration tests using TestContainers:** Adding integration tests using TestContainers to be able to run the test in pipelines. This will further strengthen comfort especially if external dependencies are used.
