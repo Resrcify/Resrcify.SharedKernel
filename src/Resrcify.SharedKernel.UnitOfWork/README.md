@@ -42,7 +42,7 @@ git clone https://github.com/Resrcify/Resrcify.SharedKernel.git
     ```
 
 ## Configuration
-To use the repository service, configure it in your application's startup code or dependency injection setup.
+To use this library, configure it in your application's startup code or dependency injection setup.
 ```csharp
 using Microsoft.Extensions.DependencyInjection;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
@@ -53,7 +53,7 @@ public void AddPersistanceServices(this IServiceCollection services)
 }
 ```
 
-Optionally if you wish to implement processing of domain events using quartz use the following.
+Optionally if you wish to implement processing of domain events using the Quartz library add the following.
 
 ```csharp
 using Microsoft.Extensions.DependencyInjection;

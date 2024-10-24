@@ -42,7 +42,7 @@ git clone https://github.com/Resrcify/Resrcify.SharedKernel.git
     ```
 
 ## Configuration
-To use the messaging service, configure it in your application's startup code or dependency injection setup.
+To use this library, configure it in your application's startup code or dependency injection setup.
 ```csharp
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;

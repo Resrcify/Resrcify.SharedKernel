@@ -44,9 +44,8 @@ git clone https://github.com/Resrcify/Resrcify.SharedKernel.git
     ```
 
 ## Configuration
-To use the caching service, configure it in your application's startup code or dependency injection setup.
+To use this library, configure it in your application's startup code or dependency injection setup.
 
-Example:
 ```csharp
 using Resrcify.SharedKernel.Caching.Abstractions;
 using Resrcify.SharedKernel.Caching.Primitives;

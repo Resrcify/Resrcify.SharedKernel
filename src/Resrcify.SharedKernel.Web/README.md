@@ -44,7 +44,7 @@ git clone https://github.com/Resrcify/Resrcify.SharedKernel.git
     ```
 
 ## Configuration
-To use the services, configure it in your application's startup code or dependency injection setup.
+To use this library, configure it in your application's startup code or dependency injection setup.
 ```csharp
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http.Json;
