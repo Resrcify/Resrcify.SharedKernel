@@ -7,10 +7,10 @@ namespace Resrcify.SharedKernel.WebApiExample.ArchitectureTests.Tests;
 public class LayerTests : BaseTest
 {
     [Theory]
-    [InlineData("Resrcify.Sandbox.Application")]
-    [InlineData("Resrcify.Sandbox.Presentation")]
-    [InlineData("Resrcify.Sandbox.Infrastructure")]
-    [InlineData("Resrcify.Sandbox.Web")]
+    [InlineData("Resrcify.SharedKernel.WebApiExample.Application")]
+    [InlineData("Resrcify.SharedKernel.WebApiExample.Presentation")]
+    [InlineData("Resrcify.SharedKernel.WebApiExample.Infrastructure")]
+    [InlineData("Resrcify.SharedKernel.WebApiExample.Web")]
     public void Domain_Should_NotHaveDependecyOn(string assemblyName)
         => Types
             .InAssembly(DomainAssembly)
@@ -19,10 +19,10 @@ public class LayerTests : BaseTest
             .Evaluate();
 
     [Theory]
-    [InlineData("Resrcify.Sandbox.Presentation")]
-    [InlineData("Resrcify.Sandbox.Infrastructure")]
-    [InlineData("Resrcify.Sandbox.Persistence")]
-    [InlineData("Resrcify.Sandbox.Web")]
+    [InlineData("Resrcify.SharedKernel.WebApiExample.Presentation")]
+    [InlineData("Resrcify.SharedKernel.WebApiExample.Infrastructure")]
+    [InlineData("Resrcify.SharedKernel.WebApiExample.Persistence")]
+    [InlineData("Resrcify.SharedKernel.WebApiExample.Web")]
     public void Application_Should_NotHaveDependecyOn(string assemblyName)
         => Types
             .InAssembly(ApplicationAssembly)
@@ -31,8 +31,8 @@ public class LayerTests : BaseTest
             .Evaluate();
 
     [Theory]
-    [InlineData("Resrcify.Sandbox.Presentation")]
-    [InlineData("Resrcify.Sandbox.Web")]
+    [InlineData("Resrcify.SharedKernel.WebApiExample.Presentation")]
+    [InlineData("Resrcify.SharedKernel.WebApiExample.Web")]
     public void Infrastructure_Should_NotHaveDependecyOn(string assemblyName)
         => Types
             .InAssembly(InfrastructureAssembly)
@@ -41,9 +41,9 @@ public class LayerTests : BaseTest
             .Evaluate();
 
     [Theory]
-    [InlineData("Resrcify.Sandbox.Presentation")]
-    [InlineData("Resrcify.Sandbox.Infrastructure")]
-    [InlineData("Resrcify.Sandbox.Web")]
+    [InlineData("Resrcify.SharedKernel.WebApiExample.Presentation")]
+    [InlineData("Resrcify.SharedKernel.WebApiExample.Infrastructure")]
+    [InlineData("Resrcify.SharedKernel.WebApiExample.Web")]
     public void Persistence_Should_NotHaveDependecyOn(string assemblyName)
         => Types
             .InAssembly(PersistenceAssembly)
@@ -52,9 +52,9 @@ public class LayerTests : BaseTest
             .Evaluate();
 
     [Theory]
-    [InlineData("Resrcify.Sandbox.Persistence")]
-    [InlineData("Resrcify.Sandbox.Infrastructure")]
-    [InlineData("Resrcify.Sandbox.Web")]
+    [InlineData("Resrcify.SharedKernel.WebApiExample.Persistence")]
+    [InlineData("Resrcify.SharedKernel.WebApiExample.Infrastructure")]
+    [InlineData("Resrcify.SharedKernel.WebApiExample.Web")]
     public void Presentation_Should_NotHaveDependecyOn(string assemblyName)
         => Types
             .InAssembly(PresentationAssembly)
@@ -63,7 +63,7 @@ public class LayerTests : BaseTest
             .Evaluate();
 
     [Theory]
-    [InlineData("Resrcify.Sandbox.Domain")]
+    [InlineData("Resrcify.SharedKernel.WebApiExample.Domain")]
     public void Web_Should_NotHaveDependecyOn(string assemblyName)
         => Types
             .InAssembly(WebAssembly)
