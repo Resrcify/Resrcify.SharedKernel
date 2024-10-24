@@ -19,7 +19,7 @@ To integrate **Resrcify.SharedKernel.Caching** into your project, you can either
 ### Download and reference the project files
 1. Clone this repository
 ```bash
-git clone https://github.com/Resrcify/Resrcify.SharedKernel.Caching.git
+git clone https://github.com/Resrcify/Resrcify.SharedKernel.git
 ```
 2. Add the **Resrcify.SharedKernel.Caching** project to your solution/project.
 
@@ -82,7 +82,7 @@ Caching is used within the sister project **Resrcify.SharedKernel.Messaging** in
 
 ## Suggestions for further development
 
-Here are a few ideas for extending this caching library in the future:
+Here are a few ideas for extending this library in the future:
 
 - **Custom Cache Invalidation Strategies:** Implementing additional or custom cache invalidation policies, such as sliding window expiration or similar.
 - **Additional Distributed Cache Providers:** Adding support for other custom distributed cache providers, i.e for Redis Cache or SQL Server.

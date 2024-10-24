@@ -15,7 +15,7 @@ To integrate **Resrcify.SharedKernel.DomainDrivenDesign** into your project, you
 ### Download and reference the project files
 1. Clone this repository
 ```bash
-git clone https://github.com/Resrcify/Resrcify.SharedKernel.DomainDrivenDesign.git
+git clone https://github.com/Resrcify/Resrcify.SharedKernel.git
 ```
 2. Add the **Resrcify.SharedKernel.DomainDrivenDesign** project to your solution/project.
 
@@ -154,7 +154,7 @@ Furthermore a sample project [**Resrcify.SharedKernel.WebApiExample**](../../sam
 
 ## Suggestions for further development
 
-Here are a few ideas for extending this caching library in the future:
+Here are a few ideas for extending this library in the future:
 
 - **Event Sourcing Support:** Implement support for event sourcing patterns.
 - **Domain Service Abstractions:** Introduce abstractions for domain services that operate on aggregates.

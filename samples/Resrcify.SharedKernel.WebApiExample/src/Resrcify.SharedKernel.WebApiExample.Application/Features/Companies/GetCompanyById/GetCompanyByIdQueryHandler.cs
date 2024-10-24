@@ -22,8 +22,9 @@ internal sealed class GetAllCompaniesQueryHandler(
                 company!.Id.Value,
                 company.Name.Value,
                 company.OrganizationNumber.Value.ToString(),
-                company.Contacts.Select(contact => new ContactDto(
-                contact.FirstName.Value,
-                contact.LastName.Value,
-                contact.Email.Value))));
+                company.Contacts.Select(contact =>
+                    new ContactDto(
+                        contact.FirstName.Value,
+                        contact.LastName.Value,
+                        contact.Email.Value))));
 }
