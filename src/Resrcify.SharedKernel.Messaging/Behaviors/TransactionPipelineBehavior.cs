@@ -11,7 +11,7 @@ namespace Resrcify.SharedKernel.Messaging.Behaviors;
 
 public class TransactionPipelineBehavior<TRequest, TResponse>
     : IPipelineBehavior<TRequest, TResponse>
-    where TRequest : ITransactional
+    where TRequest : ITransactionalCommand
     where TResponse : Result
 {
     private readonly IUnitOfWork _unitOfWork;

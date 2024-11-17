@@ -4,12 +4,12 @@ using System.Data;
 namespace Resrcify.SharedKernel.Messaging.Abstractions;
 
 public interface ITransactionCommand
-    : ICommand, ITransactional;
+    : ICommand, ITransactionalCommand;
 
 public interface ITransactionCommand<TResponse>
-    : ICommand<TResponse>, ITransactional;
+    : ICommand<TResponse>, ITransactionalCommand;
 
-public interface ITransactional
+public interface ITransactionalCommand
 {
     TimeSpan? CommandTimeout { get; }
     IsolationLevel? IsolationLevel { get; }

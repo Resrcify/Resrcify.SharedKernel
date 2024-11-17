@@ -11,7 +11,7 @@ namespace Resrcify.SharedKernel.Messaging.Behaviors;
 
 public class UnitOfWorkPipelineBehavior<TRequest, TResponse>
     : IPipelineBehavior<TRequest, TResponse>
-    where TRequest : ICommand
+    where TRequest : IBaseCommand
     where TResponse : Result
 {
     private readonly IUnitOfWork _unitOfWork;

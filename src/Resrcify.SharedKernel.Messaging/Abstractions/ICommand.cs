@@ -4,7 +4,9 @@ using Resrcify.SharedKernel.ResultFramework.Primitives;
 namespace Resrcify.SharedKernel.Messaging.Abstractions;
 
 public interface ICommand
-    : IRequest<Result>;
+    : IRequest<Result>, IBaseCommand;
 
 public interface ICommand<TResponse>
-    : IRequest<Result<TResponse>>;
+    : IRequest<Result<TResponse>>, IBaseCommand;
+
+public interface IBaseCommand;

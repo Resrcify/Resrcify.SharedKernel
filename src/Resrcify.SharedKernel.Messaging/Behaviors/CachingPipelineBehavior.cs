@@ -10,7 +10,7 @@ namespace Resrcify.SharedKernel.Messaging.Behaviors;
 
 public class CachingPipelineBehavior<TRequest, TResponse>
     : IPipelineBehavior<TRequest, TResponse>
-    where TRequest : ICacheable
+    where TRequest : ICachingQuery
     where TResponse : Result
 {
     private readonly ICachingService _cachingService;
