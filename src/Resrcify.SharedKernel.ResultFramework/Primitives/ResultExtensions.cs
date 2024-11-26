@@ -48,7 +48,7 @@ public static class ResultExtensions
 
     public static async Task<Result<TIn>> Ensure<TIn>(
         this Task<Result<TIn>> resultTask,
-        Func<TIn, Task<bool>> predicate,
+        Func<TIn, bool> predicate,
         Error error)
     {
         var result = await resultTask;
@@ -56,7 +56,7 @@ public static class ResultExtensions
         if (result.IsFailure)
             return result;
 
-        return await predicate(result.Value)
+        return predicate(result.Value)
             ? result
             : Result.Failure<TIn>(error);
     }
