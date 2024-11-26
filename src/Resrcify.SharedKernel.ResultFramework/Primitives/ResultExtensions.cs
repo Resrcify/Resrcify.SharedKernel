@@ -20,20 +20,20 @@ public static class ResultExtensions
 
     public static async Task<Result<TIn>> Ensure<TIn>(
         this Result<TIn> result,
-        Func<TIn, Task<bool>> predicate,
+        Func<TIn, Task<bool>> asyncPredicate,
         Error error)
     {
         if (result.IsFailure)
             return result;
 
-        return await predicate(result.Value)
+        return await asyncPredicate(result.Value)
             ? result
             : Result.Failure<TIn>(error);
     }
 
     public static async Task<Result<TIn>> Ensure<TIn>(
         this Task<Result<TIn>> resultTask,
-        Func<TIn, Task<bool>> predicate,
+        Func<TIn, Task<bool>> asyncPredicate,
         Error error)
     {
         var result = await resultTask;
@@ -41,7 +41,7 @@ public static class ResultExtensions
         if (result.IsFailure)
             return result;
 
-        return await predicate(result.Value)
+        return await asyncPredicate(result.Value)
             ? result
             : Result.Failure<TIn>(error);
     }
@@ -80,19 +80,19 @@ public static class ResultExtensions
 
     public static async Task<Result<TOut>> Map<TIn, TOut>(
         this Task<Result<TIn>> resultTask,
-        Func<TIn, Task<TOut>> mappingFunc)
+        Func<TIn, Task<TOut>> asyncMappingFunc)
     {
         var result = await resultTask;
         return result.IsSuccess
-                ? Result.Success(await mappingFunc(result.Value))
+                ? Result.Success(await asyncMappingFunc(result.Value))
                 : Result.Failure<TOut>(result.Errors);
     }
 
     public static async Task<Result<TOut>> Map<TIn, TOut>(
         this Result<TIn> result,
-        Func<TIn, Task<TOut>> mappingFunc)
+        Func<TIn, Task<TOut>> asyncMappingFunc)
         => result.IsSuccess
-                ? Result.Success(await mappingFunc(result.Value))
+                ? Result.Success(await asyncMappingFunc(result.Value))
                 : Result.Failure<TOut>(result.Errors);
 
     public static Result Bind<TIn>(
@@ -104,19 +104,19 @@ public static class ResultExtensions
 
     public static async Task<Result> Bind<TIn>(
         this Result<TIn> result,
-        Func<TIn, Task<Result>> func)
+        Func<TIn, Task<Result>> asyncFunc)
         => result.IsFailure
             ? Result.Failure(result.Errors)
-            : await func(result.Value);
+            : await asyncFunc(result.Value);
 
     public static async Task<Result> Bind<TIn>(
         this Task<Result<TIn>> resultTask,
-        Func<TIn, Task<Result>> func)
+        Func<TIn, Task<Result>> asyncFunc)
     {
         var result = await resultTask;
         return result.IsFailure
             ? Result.Failure(result.Errors)
-            : await func(result.Value);
+            : await asyncFunc(result.Value);
     }
 
     public static async Task<Result> Bind<TIn>(
@@ -138,19 +138,19 @@ public static class ResultExtensions
 
     public static async Task<Result<TOut>> Bind<TIn, TOut>(
         this Result<TIn> result,
-        Func<TIn, Task<Result<TOut>>> func)
+        Func<TIn, Task<Result<TOut>>> asyncFunc)
         => result.IsFailure
             ? Result.Failure<TOut>(result.Errors)
-            : await func(result.Value);
+            : await asyncFunc(result.Value);
 
     public static async Task<Result<TOut>> Bind<TIn, TOut>(
         this Task<Result<TIn>> resultTask,
-        Func<TIn, Task<Result<TOut>>> func)
+        Func<TIn, Task<Result<TOut>>> asyncFunc)
     {
         var result = await resultTask;
         return result.IsFailure
             ? Result.Failure<TOut>(result.Errors)
-            : await func(result.Value);
+            : await asyncFunc(result.Value);
     }
 
     public static async Task<Result<TOut>> Bind<TIn, TOut>(
@@ -175,31 +175,31 @@ public static class ResultExtensions
 
     public static async Task<Result<TIn>> Tap<TIn>(
         this Result<TIn> result,
-        Func<Task> func)
+        Func<Task> asyncFunc)
     {
         if (result.IsSuccess)
-            await func();
+            await asyncFunc();
 
         return result;
     }
     public static async Task<Result<TIn>> Tap<TIn>(
         this Result<TIn> result,
-        Func<TIn, Task> func)
+        Func<TIn, Task> asyncFunc)
     {
         if (result.IsSuccess)
-            await func(result.Value);
+            await asyncFunc(result.Value);
 
         return result;
     }
 
     public static async Task<Result<TIn>> Tap<TIn>(
         this Task<Result<TIn>> resultTask,
-        Func<TIn, Task> func)
+        Func<TIn, Task> asyncFunc)
     {
         var result = await resultTask;
 
         if (result.IsSuccess)
-            await func(result.Value);
+            await asyncFunc(result.Value);
 
         return result;
     }
@@ -230,25 +230,25 @@ public static class ResultExtensions
 
     public static async Task<Result<TIn>> Tap<TIn>(
         this Task<Result<TIn>> resultTask,
-        Func<TIn, Task<Result>> func)
+        Func<TIn, Task<Result>> asyncFunc)
     {
         var result = await resultTask;
         if (result.IsFailure)
             return result;
 
-        var value = await func(result.Value);
+        var value = await asyncFunc(result.Value);
         return value.IsSuccess
             ? result
             : Result.Failure<TIn>(value.Errors);
     }
     public static async Task<Result<TIn>> Tap<TIn>(
         this Result<TIn> result,
-        Func<TIn, Task<Result>> func)
+        Func<TIn, Task<Result>> asyncFunc)
     {
         if (result.IsFailure)
             return result;
 
-        var value = await func(result.Value);
+        var value = await asyncFunc(result.Value);
         return value.IsSuccess
             ? result
             : Result.Failure<TIn>(value.Errors);
@@ -268,23 +268,23 @@ public static class ResultExtensions
 
     public static async Task<Result<TOut>> Create<TIn, TOut>(
        this Task<Result<TIn>> resultTask,
-       Func<TIn, Task<TOut>> func)
+       Func<TIn, Task<TOut>> asyncFunc)
     {
         var result = await resultTask;
         if (result.IsFailure)
             return Result.Failure<TOut>(result.Errors);
 
-        var value = await func(result.Value);
+        var value = await asyncFunc(result.Value);
         return Result.Success(value);
     }
     public static async Task<Result<TOut>> Create<TIn, TOut>(
        this Result<TIn> result,
-       Func<TIn, Task<TOut>> func)
+       Func<TIn, Task<TOut>> asyncFunc)
     {
         if (result.IsFailure)
             return Result.Failure<TOut>(result.Errors);
 
-        var value = await func(result.Value);
+        var value = await asyncFunc(result.Value);
         return Result.Success(value);
     }
 
