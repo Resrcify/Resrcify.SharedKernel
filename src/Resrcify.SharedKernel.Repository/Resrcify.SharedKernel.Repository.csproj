@@ -7,12 +7,12 @@
     <Title>Resrcify.SharedKernel.Repository</Title>
     <Description>Implements a generic repository pattern using EntityFrameworkCore.</Description>
     <Summary>Implements a generic repository pattern using EntityFrameworkCore.</Summary>
-
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>disabled</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Resrcify.SharedKernel.ResultFramework\Resrcify.SharedKernel.ResultFramework.csproj" />
     <ProjectReference Include="..\Resrcify.SharedKernel.DomainDrivenDesign\Resrcify.SharedKernel.DomainDrivenDesign.csproj" />
   </ItemGroup>
   <ItemGroup>

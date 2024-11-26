@@ -46,6 +46,21 @@ public static class ResultExtensions
             : Result.Failure<TIn>(error);
     }
 
+    public static async Task<Result<TIn>> Ensure<TIn>(
+        this Task<Result<TIn>> resultTask,
+        Func<TIn, Task<bool>> predicate,
+        Error error)
+    {
+        var result = await resultTask;
+
+        if (result.IsFailure)
+            return result;
+
+        return await predicate(result.Value)
+            ? result
+            : Result.Failure<TIn>(error);
+    }
+
     public static Result<TOut> Map<TIn, TOut>(
         this Result<TIn> result,
         Func<TIn, TOut> mappingFunc)

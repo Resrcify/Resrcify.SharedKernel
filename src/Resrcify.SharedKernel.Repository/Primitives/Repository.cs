@@ -31,7 +31,7 @@ public abstract class Repository<TDbContext, TEntity, TId> : IRepository<TEntity
         => await Context
             .Set<TEntity>()
             .FirstOrDefaultAsync(predicate, cancellationToken: cancellationToken);
-    public async Task<TEntity?> FirstOrDefaultAsync(
+    public virtual async Task<TEntity?> FirstOrDefaultAsync(
         Specification<TEntity, TId> specification,
         CancellationToken cancellationToken = default)
         => await ApplySpecification(specification)
