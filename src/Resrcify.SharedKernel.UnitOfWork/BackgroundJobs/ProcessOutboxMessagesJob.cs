@@ -35,9 +35,6 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>
 
     public async Task Execute(IJobExecutionContext context)
     {
-        if (!context.MergedJobDataMap.TryGetString("EventsAssemblyName", out string? assemblyName))
-            assemblyName = Assembly.GetExecutingAssembly().FullName;
-
         if (!context.MergedJobDataMap.TryGetInt("ProcessBatchSize", out var batchSize))
             batchSize = 20;
 

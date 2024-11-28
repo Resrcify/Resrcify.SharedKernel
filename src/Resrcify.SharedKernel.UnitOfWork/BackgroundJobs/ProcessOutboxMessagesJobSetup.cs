@@ -7,7 +7,6 @@ using Quartz;
 namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 
 public sealed class ProcessOutboxMessagesJobSetup<TDbContext>(
-    Assembly eventsAssembly,
     int processBatchSize = 20,
     int processIntervalInSeconds = 60,
     int delayInSecondsBeforeStart = 60)
@@ -22,7 +21,6 @@ public sealed class ProcessOutboxMessagesJobSetup<TDbContext>(
             .AddJob<ProcessOutboxMessagesJob<TDbContext>>(jobBuilder =>
                 jobBuilder
                     .WithIdentity(jobKey)
-                    .UsingJobData("EventsAssemblyName", eventsAssembly.FullName!)
                     .UsingJobData("ProcessBatchSize", processBatchSize))
             .AddTrigger(
                 trigger =>
