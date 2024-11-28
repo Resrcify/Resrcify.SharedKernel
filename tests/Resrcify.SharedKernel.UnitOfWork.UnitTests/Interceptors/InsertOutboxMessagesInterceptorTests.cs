@@ -21,7 +21,7 @@ public class InsertOutboxMessagesInterceptorTests : DbSetupBase
     }
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
-        Converters = { new PolymorphicJsonConverter<IDomainEvent>() }
+        Converters = { new DomainEventConverter() }
     };
     [Fact]
     public async Task SaveChangesAsync_ConvertsDomainEventsToOutboxMessages()
@@ -36,7 +36,7 @@ public class InsertOutboxMessagesInterceptorTests : DbSetupBase
 
         // Assert
         var outboxMessages = await DbContext.OutboxMessages.ToListAsync();
-        var testDomainEventName = typeof(TestDomainEvent).AssemblyQualifiedName!;
+        var testDomainEventName = typeof(TestDomainEvent).FullName;
         outboxMessages.Should().HaveCount(1);
         outboxMessages.First().Type.Should().Be(testDomainEventName);
     }

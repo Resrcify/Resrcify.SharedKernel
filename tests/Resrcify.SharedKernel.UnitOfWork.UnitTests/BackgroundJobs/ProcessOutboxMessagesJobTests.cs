@@ -14,14 +14,15 @@ using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 using System.Text.Json;
 using Resrcify.SharedKernel.UnitOfWork.Converters;
-using Microsoft.Extensions.Logging;
+using System.Reflection;
+
 namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.BackgroundJobs;
 
 public class ProcessOutboxMessagesJobTests
 {
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
-        Converters = { new PolymorphicJsonConverter<IDomainEvent>() }
+        Converters = { new DomainEventConverter() }
     };
 
     [Fact]
@@ -38,7 +39,7 @@ public class ProcessOutboxMessagesJobTests
 
         var dataMap = new JobDataMap
         {
-            { "EventsAssemblyName", typeof(ProcessOutboxMessagesJobTests).Assembly.FullName! },
+            { "EventsAssemblyFullName", Assembly.GetExecutingAssembly().FullName! },
             { "ProcessBatchSize", 2 }
         };
         jobContextMock.MergedJobDataMap.Returns(dataMap);
@@ -51,7 +52,7 @@ public class ProcessOutboxMessagesJobTests
             {
                 Id = Guid.NewGuid(),
                 OccurredOnUtc = DateTime.UtcNow,
-                Type = domainEvent.GetType().AssemblyQualifiedName!,
+                Type = domainEvent.GetType().FullName!,
                 Content = JsonSerializer.Serialize(domainEvent, _jsonOptions)
             })
             .ToList();

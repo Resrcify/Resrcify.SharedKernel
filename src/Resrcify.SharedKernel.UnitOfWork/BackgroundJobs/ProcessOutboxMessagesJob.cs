@@ -5,10 +5,10 @@ using Quartz;
 using Microsoft.EntityFrameworkCore;
 using MediatR;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
-using System.Reflection;
 using System.Text.Json;
 using Resrcify.SharedKernel.UnitOfWork.Converters;
 using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
+using System.Reflection;
 
 namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 
@@ -19,7 +19,7 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>
 {
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
-        Converters = { new PolymorphicJsonConverter<IDomainEvent>() }
+        Converters = { new DomainEventConverter() }
     };
 
     private readonly TDbContext _context;
@@ -37,6 +37,13 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>
     {
         if (!context.MergedJobDataMap.TryGetInt("ProcessBatchSize", out var batchSize))
             batchSize = 20;
+        if (!context.MergedJobDataMap.TryGetString("EventsAssemblyFullName", out var eventAssemblyFullName))
+            eventAssemblyFullName = string.Empty;
+
+        Assembly eventAssembly = Assembly.Load(
+            new AssemblyName(
+                eventAssemblyFullName
+                    ?? string.Empty));
 
         var messages = _context
             .Set<OutboxMessage>()
@@ -47,7 +54,7 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>
 
         await foreach (OutboxMessage outboxMessage in messages.WithCancellation(context.CancellationToken))
         {
-            var messageType = Type.GetType(outboxMessage.Type);
+            var messageType = eventAssembly.GetType(outboxMessage.Type);
             if (messageType is null)
                 continue;
 

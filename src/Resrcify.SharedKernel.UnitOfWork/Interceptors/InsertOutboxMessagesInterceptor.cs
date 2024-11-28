@@ -16,7 +16,7 @@ public sealed class InsertOutboxMessagesInterceptor
 {
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
-        Converters = { new PolymorphicJsonConverter<IDomainEvent>() }
+        Converters = { new DomainEventConverter() }
     };
 
     public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
@@ -46,7 +46,7 @@ public sealed class InsertOutboxMessagesInterceptor
             {
                 Id = Guid.NewGuid(),
                 OccurredOnUtc = DateTime.UtcNow,
-                Type = domainEvent.GetType().AssemblyQualifiedName!,
+                Type = domainEvent.GetType().FullName!,
                 Content = JsonSerializer.Serialize(domainEvent, _jsonOptions)
             })
             .ToList();
