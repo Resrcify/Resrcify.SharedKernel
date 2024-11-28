@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
+using Resrcify.SharedKernel.UnitOfWork.Converters;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Interceptors;
@@ -13,6 +14,11 @@ namespace Resrcify.SharedKernel.UnitOfWork.Interceptors;
 public sealed class InsertOutboxMessagesInterceptor
     : SaveChangesInterceptor
 {
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        Converters = { new PolymorphicJsonConverter<IDomainEvent>() }
+    };
+
     public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
         InterceptionResult<int> result,
@@ -40,8 +46,8 @@ public sealed class InsertOutboxMessagesInterceptor
             {
                 Id = Guid.NewGuid(),
                 OccurredOnUtc = DateTime.UtcNow,
-                Type = domainEvent.GetType().FullName!,
-                Content = JsonSerializer.Serialize(domainEvent)
+                Type = domainEvent.GetType().AssemblyQualifiedName!,
+                Content = JsonSerializer.Serialize(domainEvent, _jsonOptions)
             })
             .ToList();
 
