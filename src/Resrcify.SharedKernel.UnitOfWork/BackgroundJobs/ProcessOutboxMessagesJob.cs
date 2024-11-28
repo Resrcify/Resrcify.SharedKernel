@@ -51,15 +51,13 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>
             if (messageType is null)
                 continue;
 
-            var domainEvent = (IDomainEvent?)JsonSerializer.Deserialize(
+            var domainEvent = JsonSerializer.Deserialize(
                 outboxMessage.Content,
                 messageType,
                 _jsonOptions);
 
-            if (domainEvent is null)
-                continue;
-
-            await _publisher.Publish(domainEvent, context.CancellationToken);
+            if (domainEvent is IDomainEvent specificDomainEvent)
+                await _publisher.Publish(specificDomainEvent, context.CancellationToken);
 
             outboxMessage.ProcessedOnUtc = DateTime.UtcNow;
         }
