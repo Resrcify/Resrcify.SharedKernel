@@ -1,13 +1,11 @@
 using System;
-using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Quartz;
 
 namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 
-public sealed class ProcessOutboxMessagesJobSetup<TDbContext>(
-    Assembly eventsAssembly,
+public sealed class ProcessOutboxMessagesNewtonsoftJobSetup<TDbContext>(
     int processBatchSize = 20,
     int processIntervalInSeconds = 60,
     int delayInSecondsBeforeStart = 60)
@@ -16,13 +14,12 @@ public sealed class ProcessOutboxMessagesJobSetup<TDbContext>(
 {
     public void Configure(QuartzOptions options)
     {
-        var jobKey = new JobKey(nameof(ProcessOutboxMessagesJob<TDbContext>));
+        var jobKey = new JobKey(nameof(ProcessOutboxMessagesNewtonsoftJob<TDbContext>));
 
         options
-            .AddJob<ProcessOutboxMessagesJob<TDbContext>>(jobBuilder =>
+            .AddJob<ProcessOutboxMessagesNewtonsoftJob<TDbContext>>(jobBuilder =>
                 jobBuilder
                     .WithIdentity(jobKey)
-                    .UsingJobData("EventsAssemblyName", eventsAssembly.FullName!)
                     .UsingJobData("ProcessBatchSize", processBatchSize))
             .AddTrigger(
                 trigger =>

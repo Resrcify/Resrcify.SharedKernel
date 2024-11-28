@@ -2,7 +2,6 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Newtonsoft.Json;
 using Quartz;
 using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
 using MediatR;
@@ -13,7 +12,8 @@ using System.Linq;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
-namespace Resrcify.SharedKernel.GenericUnitOfWork.UnitTests.BackgroundJobs;
+using System.Text.Json;
+namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.BackgroundJobs;
 
 public class ProcessOutboxMessagesJobTests
 {
@@ -29,6 +29,14 @@ public class ProcessOutboxMessagesJobTests
         var publisherMock = Substitute.For<IPublisher>();
         var jobContextMock = Substitute.For<IJobExecutionContext>();
 
+        // Simulate job data map values from setup
+        var dataMap = new JobDataMap
+        {
+            { "EventsAssemblyName", typeof(ProcessOutboxMessagesJobTests).Assembly.FullName! },
+            { "ProcessBatchSize", 2 }
+        };
+        jobContextMock.MergedJobDataMap.Returns(dataMap);
+
         var job = new ProcessOutboxMessagesJob<TestDbContext>(dbContext, publisherMock);
 
         var outboxMessages = Enumerable
@@ -37,13 +45,8 @@ public class ProcessOutboxMessagesJobTests
             {
                 Id = Guid.NewGuid(),
                 OccurredOnUtc = DateTime.UtcNow,
-                Type = domainEvent.GetType().Name,
-                Content = JsonConvert.SerializeObject(
-                domainEvent,
-                new JsonSerializerSettings
-                {
-                    TypeNameHandling = TypeNameHandling.All
-                })
+                Type = domainEvent.GetType().FullName!,
+                Content = JsonSerializer.Serialize(domainEvent)
             })
             .ToList();
 

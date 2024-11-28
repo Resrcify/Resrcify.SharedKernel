@@ -1,16 +1,16 @@
 using System;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Newtonsoft.Json;
 using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Interceptors;
 
-public sealed class InsertOutboxMessagesInterceptor
+public sealed class InsertOutboxMessagesNewtonsoftInterceptor
     : SaveChangesInterceptor
 {
     public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
@@ -40,8 +40,13 @@ public sealed class InsertOutboxMessagesInterceptor
             {
                 Id = Guid.NewGuid(),
                 OccurredOnUtc = DateTime.UtcNow,
-                Type = domainEvent.GetType().FullName!,
-                Content = JsonSerializer.Serialize(domainEvent)
+                Type = domainEvent.GetType().Name,
+                Content = JsonConvert.SerializeObject(
+                    domainEvent,
+                    new JsonSerializerSettings
+                    {
+                        TypeNameHandling = TypeNameHandling.All
+                    })
             })
             .ToList();
 

@@ -6,7 +6,7 @@ using Resrcify.SharedKernel.UnitOfWork.Interceptors;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
 using Xunit;
 
-namespace Resrcify.SharedKernel.GenericUnitOfWork.UnitTests.Interceptors;
+namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.Interceptors;
 
 public class UpdateDeletableEntitiesInterceptorTests : DbSetupBase
 {

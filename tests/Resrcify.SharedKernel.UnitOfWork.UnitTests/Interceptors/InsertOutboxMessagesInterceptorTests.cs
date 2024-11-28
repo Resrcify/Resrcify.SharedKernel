@@ -1,6 +1,7 @@
 
 using System;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -9,7 +10,7 @@ using Resrcify.SharedKernel.UnitOfWork.Interceptors;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
 using Xunit;
 
-namespace Resrcify.SharedKernel.GenericUnitOfWork.UnitTests.Interceptors;
+namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.Interceptors;
 
 public class InsertOutboxMessagesInterceptorTests : DbSetupBase
 {
@@ -31,7 +32,7 @@ public class InsertOutboxMessagesInterceptorTests : DbSetupBase
         // Assert
         var outboxMessages = await DbContext.OutboxMessages.ToListAsync();
         outboxMessages.Should().HaveCount(1);
-        outboxMessages.First().Type.Should().Be("TestDomainEvent");
+        outboxMessages.First().Type.Should().Be("Resrcify.SharedKernel.UnitOfWork.UnitTests.Models.TestDomainEvent");
     }
 
     private class TestAggregateRoot : Person

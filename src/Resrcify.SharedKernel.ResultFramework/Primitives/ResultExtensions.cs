@@ -355,4 +355,15 @@ public static class ResultExtensions
             ? onSuccess(result.Value)
             : onFailure(result.Errors);
     }
+
+    public static async Task<TOut> Match<TIn, TOut>(
+        this Task<Result<TIn>> resultTask,
+        Func<TIn, Task<TOut>> onSuccess,
+        Func<Error[], Task<TOut>> onFailure)
+    {
+        var result = await resultTask;
+        return result.IsSuccess
+            ? await onSuccess(result.Value)
+            : await onFailure(result.Errors);
+    }
 }
