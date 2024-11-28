@@ -45,14 +45,14 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>
                 eventAssemblyFullName
                     ?? string.Empty));
 
-        var messages = _context
+        var messages = await _context
             .Set<OutboxMessage>()
             .Where(m => m.ProcessedOnUtc == null)
             .OrderBy(x => x.OccurredOnUtc)
             .Take(batchSize)
-            .AsAsyncEnumerable();
+            .ToListAsync(context.CancellationToken);
 
-        await foreach (OutboxMessage outboxMessage in messages.WithCancellation(context.CancellationToken))
+        foreach (OutboxMessage outboxMessage in messages)
         {
             var messageType = eventAssembly.GetType(outboxMessage.Type);
             if (messageType is null)
