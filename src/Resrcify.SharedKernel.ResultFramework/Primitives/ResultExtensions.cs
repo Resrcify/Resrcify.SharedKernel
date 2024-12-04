@@ -287,7 +287,6 @@ public static class ResultExtensions
         var value = await asyncFunc(result.Value);
         return Result.Success(value);
     }
-
     public static Result<TOut> TryCatch<TIn, TOut>(
         this Result<TIn> result,
         Func<TIn, TOut> func,
@@ -321,7 +320,6 @@ public static class ResultExtensions
             return Result.Failure<TOut>(error);
         }
     }
-
     public static TOut Match<TIn, TOut>(
         this Result<TIn> result,
         Func<TIn, TOut> onSuccess,
@@ -329,7 +327,69 @@ public static class ResultExtensions
         => result.IsSuccess
             ? onSuccess(result.Value)
             : onFailure(result.Errors);
-
+    public static async Task<TOut> Match<TIn, TOut>(
+        this Task<Result<TIn>> resultTask,
+        Func<TIn, TOut> onSuccess,
+        Func<Error[], TOut> onFailure)
+    {
+        var result = await resultTask;
+        return result.IsSuccess
+            ? onSuccess(result.Value)
+            : onFailure(result.Errors);
+    }
+    public static async Task<TOut> Match<TIn, TOut>(
+        this Result<TIn> result,
+        Func<TIn, Task<TOut>> onSuccess,
+        Func<Error[], Task<TOut>> onFailure)
+    {
+        return result.IsSuccess
+            ? await onSuccess(result.Value)
+            : await onFailure(result.Errors);
+    }
+    public static async Task<TOut> Match<TIn, TOut>(
+        this Task<Result<TIn>> resultTask,
+        Func<TIn, Task<TOut>> onSuccess,
+        Func<Error[], Task<TOut>> onFailure)
+    {
+        var result = await resultTask;
+        return result.IsSuccess
+            ? await onSuccess(result.Value)
+            : await onFailure(result.Errors);
+    }
+    public static async Task<TOut> Match<TIn, TOut>(
+        this Result<TIn> result,
+        Func<TIn, Task<TOut>> onSuccess,
+        Func<Error[], TOut> onFailure)
+        => result.IsSuccess
+            ? await onSuccess(result.Value)
+            : onFailure(result.Errors);
+    public static async Task<TOut> Match<TIn, TOut>(
+        this Task<Result<TIn>> resultTask,
+        Func<TIn, Task<TOut>> onSuccess,
+        Func<Error[], TOut> onFailure)
+    {
+        var result = await resultTask;
+        return result.IsSuccess
+            ? await onSuccess(result.Value)
+            : onFailure(result.Errors);
+    }
+    public static async Task<TOut> Match<TIn, TOut>(
+        this Result<TIn> result,
+        Func<TIn, TOut> onSuccess,
+        Func<Error[], Task<TOut>> onFailure)
+        => result.IsSuccess
+            ? onSuccess(result.Value)
+            : await onFailure(result.Errors);
+    public static async Task<TOut> Match<TIn, TOut>(
+        this Task<Result<TIn>> resultTask,
+        Func<TIn, TOut> onSuccess,
+        Func<Error[], Task<TOut>> onFailure)
+    {
+        var result = await resultTask;
+        return result.IsSuccess
+            ? onSuccess(result.Value)
+            : await onFailure(result.Errors);
+    }
     public static Result<TOut> Match<TIn, TOut>(
         this Result<TIn> result,
         Func<TIn, TOut> func,
@@ -343,27 +403,5 @@ public static class ResultExtensions
 
         var value = func(result.Value);
         return Result.Success(value);
-    }
-
-    public static async Task<TOut> Match<TIn, TOut>(
-        this Task<Result<TIn>> resultTask,
-        Func<TIn, TOut> onSuccess,
-        Func<Error[], TOut> onFailure)
-    {
-        var result = await resultTask;
-        return result.IsSuccess
-            ? onSuccess(result.Value)
-            : onFailure(result.Errors);
-    }
-
-    public static async Task<TOut> Match<TIn, TOut>(
-        this Task<Result<TIn>> resultTask,
-        Func<TIn, Task<TOut>> onSuccess,
-        Func<Error[], Task<TOut>> onFailure)
-    {
-        var result = await resultTask;
-        return result.IsSuccess
-            ? await onSuccess(result.Value)
-            : await onFailure(result.Errors);
     }
 }
