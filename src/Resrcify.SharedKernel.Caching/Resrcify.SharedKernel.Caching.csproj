@@ -7,7 +7,6 @@
     <Title>Resrcify.SharedKernel.Caching</Title>
     <Description>Adds interfaces and implements different caching options using the IDistributedCache interfaces.</Description>
     <Summary>Adds interfaces and implements different caching options using the IDistributedCache interfaces.</Summary>
-
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
