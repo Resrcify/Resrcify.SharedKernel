@@ -22,7 +22,11 @@
     </PackageReference>
     <PackageReference Include="FluentAssertions" Version="6.12.2" />
   </ItemGroup>
-
+<ItemGroup>
+    <PackageReference Include="MediatR" Version="12.4.1">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Web\Resrcify.SharedKernel.Web.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.ResultFramework\Resrcify.SharedKernel.ResultFramework.csproj" />
