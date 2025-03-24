@@ -32,7 +32,7 @@ public class InternalControllersExtensionTests
 
         partManager.Should().NotBeNull();
 
-        var providerType = Type.GetType("Resrcify.SharedKernel.Web.Extensions.InternalControllersExtensions+CustomControllerFeatureProvider, Resrcify.SharedKernel.Web");
+        var providerType = Type.GetType("Resrcify.SharedKernel.Web.Extensions.CustomControllerFeatureProvider, Resrcify.SharedKernel.Web");
         providerType.Should().NotBeNull();
 
         var providerInstance = partManager!.FeatureProviders.FirstOrDefault(fp => fp.GetType() == providerType);
@@ -42,7 +42,7 @@ public class InternalControllersExtensionTests
 
     public InternalControllersExtensionTests()
     {
-        var providerType = Type.GetType("Resrcify.SharedKernel.Web.Extensions.InternalControllersExtensions+CustomControllerFeatureProvider, Resrcify.SharedKernel.Web");
+        var providerType = Type.GetType("Resrcify.SharedKernel.Web.Extensions.CustomControllerFeatureProvider, Resrcify.SharedKernel.Web");
         providerType.Should().NotBeNull("CustomControllerFeatureProvider should exist");
 
         _provider = (ControllerFeatureProvider)Activator.CreateInstance(providerType!)!;

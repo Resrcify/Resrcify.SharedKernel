@@ -12,13 +12,12 @@ public static class InternalControllersExtensions
                 manager => manager.FeatureProviders.Add(
                     new CustomControllerFeatureProvider()));
 
-    internal sealed class CustomControllerFeatureProvider : ControllerFeatureProvider
+}
+internal class CustomControllerFeatureProvider : ControllerFeatureProvider
+{
+    protected override bool IsController(TypeInfo typeInfo)
     {
-        protected override bool IsController(TypeInfo typeInfo)
-        {
-            var isCustomController = !typeInfo.IsAbstract && typeof(ApiController).IsAssignableFrom(typeInfo);
-            return isCustomController || base.IsController(typeInfo);
-        }
+        var isCustomController = !typeInfo.IsAbstract && typeof(ApiController).IsAssignableFrom(typeInfo);
+        return isCustomController || base.IsController(typeInfo);
     }
-
 }
