@@ -7,7 +7,6 @@
     <Title>Resrcify.SharedKernel.Messaging</Title>
     <Description>Implements custom messaging abstractions based on MediatR and several different pipeline behaviors.</Description>
     <Summary>Implements custom messaging abstractions based on MediatR and several different pipeline behaviors.</Summary>
-
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
