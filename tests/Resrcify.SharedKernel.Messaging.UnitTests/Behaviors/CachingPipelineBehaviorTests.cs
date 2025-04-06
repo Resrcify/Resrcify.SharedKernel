@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
+using MediatR;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Resrcify.SharedKernel.Caching.Abstractions;
@@ -28,16 +29,17 @@ public class CachingPipelineBehaviorTests
         // Arrange
         var request = new MockCachingQuery("", TimeSpan.FromMinutes(60));
         var response = Result.Success();
-        Task<Result> next() => Task.FromResult(response);
+        var cancellationToken = CancellationToken.None;
+        RequestHandlerDelegate<Result> next = (cancellationToken) => Task.FromResult(response);
 
         _cachingService.GetAsync<Result>(Arg.Any<string>(), Arg.Any<CancellationToken>())!
                         .Returns(Task.FromResult<Result>(null!));
 
         // Act
-        var result = await _behavior.Handle(request, next, CancellationToken.None);
+        var result = await _behavior.Handle(request, next, cancellationToken);
 
         // Assert
-        await _cachingService.DidNotReceiveWithAnyArgs().GetAsync<Result>(null!, CancellationToken.None);
+        await _cachingService.DidNotReceiveWithAnyArgs().GetAsync<Result>(null!, cancellationToken);
 
         _logger
             .ReceivedCalls()
@@ -57,12 +59,12 @@ public class CachingPipelineBehaviorTests
         //Arrange
         var request = new MockCachingQuery("valid-key", TimeSpan.FromMinutes(60));
         var response = Result.Success();
-
-        Task<Result> next() => Task.FromResult(response);
+        var cancellationToken = CancellationToken.None;
+        RequestHandlerDelegate<Result> next = (cancellationToken) => Task.FromResult(response);
         _cachingService.GetAsync<Result>(request.CacheKey!, Arg.Any<CancellationToken>())!.Returns(Task.FromResult(response));
 
         // Act
-        var result = await _behavior.Handle(request, next, CancellationToken.None);
+        var result = await _behavior.Handle(request, next, cancellationToken);
 
         //Assert
         _logger
@@ -83,17 +85,18 @@ public class CachingPipelineBehaviorTests
         //Arrange
         var request = new MockCachingQuery("valid-key", TimeSpan.FromMinutes(60));
         var response = Result.Success();
-        Task<Result> next() => Task.FromResult(response);
+        var cancellationToken = CancellationToken.None;
+        RequestHandlerDelegate<Result> next = (cancellationToken) => Task.FromResult(response);
 
         _cachingService.GetAsync<Result>(request.CacheKey!, Arg.Any<CancellationToken>())!.Returns(Task.FromResult<Result>(null!));
 
         //Act
-        var result = await _behavior.Handle(request, next, CancellationToken.None);
+        var result = await _behavior.Handle(request, next, cancellationToken);
 
         //Assert
         await _cachingService
             .Received(1)
-            .GetAsync<Result>(request.CacheKey!, CancellationToken.None);
+            .GetAsync<Result>(request.CacheKey!, cancellationToken);
 
         await _cachingService
             .Received(1)

@@ -31,7 +31,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.14" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.14" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.14" />
-    <PackageReference Include="MediatR" Version="12.4.1" />
+    <PackageReference Include="MediatR" Version="12.5.0" />
     <PackageReference Include="Quartz" Version="3.14.0" />
     <PackageReference Include="Quartz.Extensions.Hosting" Version="3.14.0" />
   </ItemGroup>

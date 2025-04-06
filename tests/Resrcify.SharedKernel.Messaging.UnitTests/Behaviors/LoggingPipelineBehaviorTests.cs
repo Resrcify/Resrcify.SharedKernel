@@ -30,10 +30,11 @@ public class LoggingPipelineBehaviorTests
         // Arrange
         var request = new MockRequest();
         var response = Result.Success();
-        Task<Result> next() => Task.FromResult(response);
+        var cancellationToken = CancellationToken.None;
+        RequestHandlerDelegate<Result> next = (cancellationToken) => Task.FromResult(response);
 
         // Act
-        var result = await _behavior.Handle(request, next, CancellationToken.None);
+        var result = await _behavior.Handle(request, next, cancellationToken);
 
         // Assert
         _logger
@@ -50,10 +51,11 @@ public class LoggingPipelineBehaviorTests
         // Arrange
         var request = new MockRequest();
         var response = Result.Failure(Error.NullValue);
-        Task<Result> next() => Task.FromResult(response);
+        var cancellationToken = CancellationToken.None;
+        RequestHandlerDelegate<Result> next = (cancellationToken) => Task.FromResult(response);
 
         // Act
-        var result = await _behavior.Handle(request, next, CancellationToken.None);
+        var result = await _behavior.Handle(request, next, cancellationToken);
 
         // Assert
         _logger
