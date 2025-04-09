@@ -32,14 +32,14 @@ public class CachingPipelineBehaviorTests
         var cancellationToken = CancellationToken.None;
         RequestHandlerDelegate<Result> next = (cancellationToken) => Task.FromResult(response);
 
-        _cachingService.GetAsync<Result>(Arg.Any<string>(), Arg.Any<CancellationToken>())!
+        _cachingService.GetAsync<Result>(Arg.Any<string>(), null, Arg.Any<CancellationToken>())!
                         .Returns(Task.FromResult<Result>(null!));
 
         // Act
         var result = await _behavior.Handle(request, next, cancellationToken);
 
         // Assert
-        await _cachingService.DidNotReceiveWithAnyArgs().GetAsync<Result>(null!, cancellationToken);
+        await _cachingService.DidNotReceiveWithAnyArgs().GetAsync<Result>(null!, null, cancellationToken);
 
         _logger
             .ReceivedCalls()
@@ -61,7 +61,7 @@ public class CachingPipelineBehaviorTests
         var response = Result.Success();
         var cancellationToken = CancellationToken.None;
         RequestHandlerDelegate<Result> next = (cancellationToken) => Task.FromResult(response);
-        _cachingService.GetAsync<Result>(request.CacheKey!, Arg.Any<CancellationToken>())!.Returns(Task.FromResult(response));
+        _cachingService.GetAsync<Result>(request.CacheKey!, null, Arg.Any<CancellationToken>())!.Returns(Task.FromResult(response));
 
         // Act
         var result = await _behavior.Handle(request, next, cancellationToken);
@@ -88,7 +88,7 @@ public class CachingPipelineBehaviorTests
         var cancellationToken = CancellationToken.None;
         RequestHandlerDelegate<Result> next = (cancellationToken) => Task.FromResult(response);
 
-        _cachingService.GetAsync<Result>(request.CacheKey!, Arg.Any<CancellationToken>())!.Returns(Task.FromResult<Result>(null!));
+        _cachingService.GetAsync<Result>(request.CacheKey!, null, Arg.Any<CancellationToken>())!.Returns(Task.FromResult<Result>(null!));
 
         //Act
         var result = await _behavior.Handle(request, next, cancellationToken);
@@ -96,11 +96,11 @@ public class CachingPipelineBehaviorTests
         //Assert
         await _cachingService
             .Received(1)
-            .GetAsync<Result>(request.CacheKey!, cancellationToken);
+            .GetAsync<Result>(request.CacheKey!, null, cancellationToken);
 
         await _cachingService
             .Received(1)
-            .SetAsync(request.CacheKey!, response, request.Expiration, Arg.Any<CancellationToken>());
+            .SetAsync(request.CacheKey!, response, request.Expiration, null, Arg.Any<CancellationToken>());
 
         _logger
             .ReceivedCalls()
