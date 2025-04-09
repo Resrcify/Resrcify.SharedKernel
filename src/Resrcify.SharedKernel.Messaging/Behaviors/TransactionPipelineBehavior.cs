@@ -37,9 +37,12 @@ public class TransactionPipelineBehavior<TRequest, TResponse>
             var isolationLevel = request.IsolationLevel
                 ?? System.Data.IsolationLevel.ReadCommitted;
 
-            await _unitOfWork.BeginTransactionAsync(isolationLevel, commandTimeout, cancellationToken);
+            await _unitOfWork.BeginTransactionAsync(
+                isolationLevel,
+                commandTimeout,
+                cancellationToken);
 
-            var response = await next();
+            var response = await next(cancellationToken);
 
             if (response is Result { IsSuccess: true })
             {

@@ -33,11 +33,12 @@ public class CachingPipelineBehavior<TRequest, TResponse>
         if (string.IsNullOrEmpty(request.CacheKey))
         {
             _logger.LogInformation("{RequestName}: Key property not set", requestName);
-            return await next();
+            return await next(cancellationToken);
         }
 
         TResponse? cacheResult = await _cachingService.GetAsync<TResponse>(
             request.CacheKey,
+            null,
             cancellationToken);
 
         if (cacheResult is not null)
@@ -47,7 +48,7 @@ public class CachingPipelineBehavior<TRequest, TResponse>
         }
 
         _logger.LogInformation("{RequestName}: Cache miss", requestName);
-        var result = await next();
+        var result = await next(cancellationToken);
 
         if (result.IsSuccess)
         {
@@ -55,6 +56,7 @@ public class CachingPipelineBehavior<TRequest, TResponse>
                 request.CacheKey,
                 result,
                 request.Expiration,
+                null,
                 cancellationToken);
         }
 

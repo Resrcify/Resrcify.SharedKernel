@@ -25,14 +25,14 @@ public sealed class ValidationPipelineBehavior<TRequest, TResponse>
         CancellationToken cancellationToken)
     {
         if (!_validators.Any())
-            return await next();
+            return await next(cancellationToken);
 
         Error[] errors = await GetValidationErrorsAsync(request);
 
         if (errors.Length != 0)
             return CreateValidationResult<TResponse>(errors);
 
-        return await next();
+        return await next(cancellationToken);
     }
 
     public async Task<Error[]> GetValidationErrorsAsync(TRequest request)

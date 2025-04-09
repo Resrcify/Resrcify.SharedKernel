@@ -26,7 +26,7 @@ public class LoggingPipelineBehavior<TRequest, TResponse>
             typeof(TRequest).Name,
             start);
 
-        var result = await next();
+        var result = await next(cancellationToken);
 
         var end = DateTime.UtcNow;
         var differenceMs = (end - start).TotalMilliseconds;

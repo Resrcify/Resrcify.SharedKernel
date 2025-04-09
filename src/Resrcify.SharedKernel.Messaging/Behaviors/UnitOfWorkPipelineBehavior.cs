@@ -31,7 +31,7 @@ public class UnitOfWorkPipelineBehavior<TRequest, TResponse>
     {
         try
         {
-            var response = await next();
+            var response = await next(cancellationToken);
             if (response is Result { IsSuccess: true })
                 await _unitOfWork.CompleteAsync(cancellationToken);
 
