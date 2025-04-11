@@ -38,7 +38,6 @@ public class CachingPipelineBehavior<TRequest, TResponse>
 
         TResponse? cacheResult = await _cachingService.GetAsync<TResponse>(
             request.CacheKey,
-            null,
             cancellationToken);
 
         if (cacheResult is not null)
@@ -56,7 +55,6 @@ public class CachingPipelineBehavior<TRequest, TResponse>
                 request.CacheKey,
                 result,
                 request.Expiration,
-                null,
                 cancellationToken);
         }
 

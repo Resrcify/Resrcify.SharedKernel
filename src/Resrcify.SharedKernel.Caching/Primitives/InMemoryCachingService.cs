@@ -20,36 +20,80 @@ public sealed class InMemoryCachingService : ICachingService
 
     public async Task<T?> GetAsync<T>(
         string key,
-        JsonSerializerOptions? options = null,
+        CancellationToken cancellationToken = default)
+        where T : class
+        => await GetAsync<T>(
+            key,
+            null,
+            cancellationToken);
+    public async Task<T?> GetAsync<T>(
+        string key,
+        JsonSerializerOptions? serializerOptions,
         CancellationToken cancellationToken = default)
         where T : class
     {
-        byte[]? cachedValue = await _distributedCache.GetAsync(key, cancellationToken);
-        if (cachedValue is null)
-            return null;
-        return JsonSerializer.Deserialize<T>(cachedValue, options);
+        byte[]? cachedValue = await _distributedCache.GetAsync(
+            key,
+            cancellationToken);
+
+        return cachedValue is null
+            ? null
+            : JsonSerializer.Deserialize<T>(
+                cachedValue,
+                serializerOptions);
     }
 
     public async Task SetAsync<T>(
         string key,
         T value,
-        TimeSpan expiration,
-        JsonSerializerOptions? options = null,
+        TimeSpan slidingExpiration,
+        JsonSerializerOptions? serializerOptions,
         CancellationToken cancellationToken = default)
         where T : class
     {
-        byte[] cachedValue = Serialize(value, options);
+        byte[] cachedValue = Serialize(value, serializerOptions);
 
         var cacheEntryOptions = new DistributedCacheEntryOptions()
-            .SetSlidingExpiration(expiration);
+            .SetSlidingExpiration(slidingExpiration);
+
         await _distributedCache.SetAsync(key, cachedValue, cacheEntryOptions, cancellationToken);
     }
-    private static byte[] Serialize<T>(T value, JsonSerializerOptions? options)
+    public async Task SetAsync<T>(
+        string key,
+        T value,
+        TimeSpan slidingExpiration,
+        CancellationToken cancellationToken = default)
+        where T : class
     {
-        var buffer = new ArrayBufferWriter<byte>();
-        using var writer = new Utf8JsonWriter(buffer);
-        JsonSerializer.Serialize(writer, value, options);
-        return buffer.WrittenSpan.ToArray();
+        byte[] cachedValue = Serialize(value, null);
+
+        var cacheEntryOptions = new DistributedCacheEntryOptions()
+            .SetSlidingExpiration(slidingExpiration);
+        await _distributedCache.SetAsync(key, cachedValue, cacheEntryOptions, cancellationToken);
+    }
+    public async Task SetAsync<T>(
+        string key,
+        T value,
+        DistributedCacheEntryOptions cacheOptions,
+        CancellationToken cancellationToken = default)
+        where T : class
+        => await SetAsync(
+            key,
+            value,
+            cacheOptions,
+            null,
+            cancellationToken);
+
+    public async Task SetAsync<T>(
+        string key,
+        T value,
+        DistributedCacheEntryOptions cacheOptions,
+        JsonSerializerOptions? serializerOptions,
+        CancellationToken cancellationToken = default)
+        where T : class
+    {
+        byte[] cachedValue = Serialize(value, serializerOptions);
+        await _distributedCache.SetAsync(key, cachedValue, cacheOptions, cancellationToken);
     }
 
     public async Task RemoveAsync(
@@ -59,12 +103,28 @@ public sealed class InMemoryCachingService : ICachingService
 
     public async Task<IEnumerable<T?>> GetBulkAsync<T>(
         IEnumerable<string> keys,
-        JsonSerializerOptions? options = null,
+        CancellationToken cancellationToken = default)
+        => await GetBulkAsync<T>(
+            keys,
+            null,
+            cancellationToken);
+
+    public async Task<IEnumerable<T?>> GetBulkAsync<T>(
+        IEnumerable<string> keys,
+        JsonSerializerOptions? serializerOptions,
         CancellationToken cancellationToken = default)
     {
         var tasks = keys.Select(key => _distributedCache.GetAsync(key, cancellationToken)).ToList();
         var cachedValues = await Task.WhenAll(tasks);
         return cachedValues
-            .Select(bytes => JsonSerializer.Deserialize<T>(bytes, options));
+            .Select(bytes => JsonSerializer.Deserialize<T>(bytes, serializerOptions));
+    }
+
+    private static byte[] Serialize<T>(T value, JsonSerializerOptions? options)
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+        using var writer = new Utf8JsonWriter(buffer);
+        JsonSerializer.Serialize(writer, value, options);
+        return buffer.WrittenSpan.ToArray();
     }
 }
