@@ -7,7 +7,7 @@
     <Title>Resrcify.SharedKernel.DomainDrivenDesign</Title>
     <Description>Implements the different building blocks used in Domain Driven Desing.</Description>
     <Summary>Implements the different building blocks used in Domain Driven Desing.</Summary>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

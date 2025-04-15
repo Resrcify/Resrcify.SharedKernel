@@ -7,7 +7,7 @@
     <Title>Resrcify.SharedKernel.Repository</Title>
     <Description>Implements a generic repository pattern using EntityFrameworkCore.</Description>
     <Summary>Implements a generic repository pattern using EntityFrameworkCore.</Summary>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <ImplicitUsings>disabled</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -16,10 +16,10 @@
     <ProjectReference Include="..\Resrcify.SharedKernel.DomainDrivenDesign\Resrcify.SharedKernel.DomainDrivenDesign.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.14">
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.4">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.14">
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.4">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
   </ItemGroup>
