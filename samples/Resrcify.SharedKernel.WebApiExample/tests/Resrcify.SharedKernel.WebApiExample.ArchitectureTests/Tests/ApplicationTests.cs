@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using FluentAssertions;
 using NetArchTest.Rules;
 using Resrcify.SharedKernel.Messaging.Abstractions;
 using Resrcify.SharedKernel.ResultFramework.Primitives;
 using Resrcify.SharedKernel.WebApiExample.ArchitectureTests.Extensions;
 using Resrcify.SharedKernel.WebApiExample.ArchitectureTests.Helpers;
+using Shouldly;
 
 namespace Resrcify.SharedKernel.WebApiExample.ArchitectureTests.Tests;
 
@@ -69,8 +69,7 @@ public class ApplicationTests : BaseTest
         }
 
         failureTypes
-            .Should()
-            .BeEmpty();
+            .ShouldBeEmpty();
     }
 
     [Fact]
@@ -109,8 +108,7 @@ public class ApplicationTests : BaseTest
         }
 
         failureTypes
-            .Should()
-                .BeEmpty();
+            .ShouldBeEmpty();
     }
 
     [Fact]
@@ -189,8 +187,7 @@ public class ApplicationTests : BaseTest
         }
 
         failureTypes
-            .Should()
-            .BeEmpty();
+            .ShouldBeEmpty();
     }
 
     [Fact]
@@ -227,8 +224,7 @@ public class ApplicationTests : BaseTest
         }
 
         failureTypes
-            .Should()
-                .BeEmpty();
+            .ShouldBeEmpty();
     }
 
     [Fact]

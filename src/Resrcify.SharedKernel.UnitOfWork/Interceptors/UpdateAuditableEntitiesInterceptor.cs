@@ -12,7 +12,7 @@ namespace Resrcify.SharedKernel.UnitOfWork.Interceptors;
 public sealed class UpdateAuditableEntitiesInterceptor
     : SaveChangesInterceptor
 {
-    public async override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+    public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
         InterceptionResult<int> result,
         CancellationToken cancellationToken = default)

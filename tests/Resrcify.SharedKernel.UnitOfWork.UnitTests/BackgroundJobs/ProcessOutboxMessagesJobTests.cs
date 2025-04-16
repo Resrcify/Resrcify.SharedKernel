@@ -6,7 +6,6 @@ using Quartz;
 using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
 using MediatR;
 using NSubstitute;
-using FluentAssertions;
 using Xunit;
 using System.Linq;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
@@ -15,6 +14,7 @@ using Resrcify.SharedKernel.UnitOfWork.Outbox;
 using System.Text.Json;
 using Resrcify.SharedKernel.UnitOfWork.Converters;
 using System.Reflection;
+using Shouldly;
 
 namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.BackgroundJobs;
 
@@ -66,6 +66,6 @@ public class ProcessOutboxMessagesJobTests
         // Assert
         await publisherMock.Received(outboxMessages.Count).Publish(Arg.Any<IDomainEvent>(), Arg.Any<CancellationToken>());
         await dbContext.SaveChangesAsync();
-        outboxMessages.ForEach(m => m.ProcessedOnUtc.Should().NotBeNull());
+        outboxMessages.ForEach(m => m.ProcessedOnUtc.ShouldNotBeNull());
     }
 }

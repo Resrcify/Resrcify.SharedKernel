@@ -1,7 +1,7 @@
 using System.Linq;
-using FluentAssertions;
 using Resrcify.SharedKernel.WebApiExample.Domain.Features.Companies.ValueObjects;
 using Resrcify.SharedKernel.WebApiExample.Domain.Errors;
+using Shouldly;
 
 namespace Resrcify.SharedKernel.WebApiExample.Domain.UnitTests.Companies;
 
@@ -18,14 +18,11 @@ public class EmailTests
 
         // Assert
         result.IsSuccess
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
         result.Value
-            .Should()
-            .NotBeNull();
+            .ShouldNotBeNull();
         result.Value.Value
-            .Should()
-            .Be(validEmail);
+            .ShouldBe(validEmail);
     }
 
     [Fact]
@@ -39,11 +36,9 @@ public class EmailTests
 
         // Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
         result.Errors
-            .Should()
-            .Contain(DomainErrors.Email.Empty);
+            .ShouldContain(DomainErrors.Email.Empty);
     }
 
     [Fact]
@@ -57,11 +52,9 @@ public class EmailTests
 
         // Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
         result.Errors
-            .Should()
-            .Contain(DomainErrors.Email.TooShort(shortEmail, Email.MinLength));
+            .ShouldContain(DomainErrors.Email.TooShort(shortEmail, Email.MinLength));
     }
 
     [Fact]
@@ -75,11 +68,9 @@ public class EmailTests
 
         // Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
         result.Errors
-            .Should()
-            .Contain(DomainErrors.Email.TooLong(longEmail, Email.MaxLength));
+            .ShouldContain(DomainErrors.Email.TooLong(longEmail, Email.MaxLength));
     }
 
     [Fact]
@@ -93,11 +84,9 @@ public class EmailTests
 
         // Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
         result.Errors
-            .Should()
-            .Contain(DomainErrors.Email.Invalid);
+            .ShouldContain(DomainErrors.Email.Invalid);
     }
 
     [Fact]
@@ -111,11 +100,7 @@ public class EmailTests
         var atomicValues = email.GetAtomicValues().ToArray();
 
         // Assert
-        atomicValues
-            .Should()
-            .ContainSingle()
-                .Which
-                .Should()
-                .Be(validEmail);
+        atomicValues.ShouldHaveSingleItem();
+        atomicValues[0].ShouldBe(validEmail);
     }
 }

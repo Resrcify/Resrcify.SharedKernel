@@ -13,17 +13,17 @@ namespace Resrcify.SharedKernel.UnitOfWork.Interceptors;
 public sealed class InsertOutboxMessagesNewtonsoftInterceptor
     : SaveChangesInterceptor
 {
-    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+    public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
         InterceptionResult<int> result,
         CancellationToken cancellationToken = default)
     {
         if (eventData.Context is not null)
-            ConvertDomainEventsToOutboxMessages(eventData.Context);
-        return base.SavingChangesAsync(eventData, result, cancellationToken);
+            await ConvertDomainEventsToOutboxMessages(eventData.Context);
+        return await base.SavingChangesAsync(eventData, result, cancellationToken);
     }
 
-    private static async void ConvertDomainEventsToOutboxMessages(DbContext context)
+    private static async Task ConvertDomainEventsToOutboxMessages(DbContext context)
     {
         var outboxMessages = context.ChangeTracker
             .Entries<IAggregateRoot>()

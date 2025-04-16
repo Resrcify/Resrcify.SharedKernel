@@ -1,18 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <PackageId>Resrcify.SharedKernel.DomainDrivenDesign</PackageId>
-    <Authors>Rickard Marjanovic (@rmarjanovic)</Authors>
-    <Company>Resrcify AB</Company>
     <Title>Resrcify.SharedKernel.DomainDrivenDesign</Title>
     <Description>Implements the different building blocks used in Domain Driven Desing.</Description>
     <Summary>Implements the different building blocks used in Domain Driven Desing.</Summary>
-    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
-    <ImplicitUsings>disable</ImplicitUsings>
-    <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="MediatR.Contracts" Version="2.0.1">
+    <PackageReference Include="MediatR.Contracts">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
   </ItemGroup>

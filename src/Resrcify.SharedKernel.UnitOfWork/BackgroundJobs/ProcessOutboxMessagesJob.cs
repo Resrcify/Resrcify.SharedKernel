@@ -17,7 +17,7 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>
     : IJob
     where TDbContext : DbContext
 {
-    private static readonly JsonSerializerOptions _jsonOptions = new()
+    private readonly JsonSerializerOptions _jsonOptions = new()
     {
         Converters = { new DomainEventConverter() }
     };
@@ -40,7 +40,7 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>
         if (!context.MergedJobDataMap.TryGetString("EventsAssemblyFullName", out var eventAssemblyFullName))
             eventAssemblyFullName = string.Empty;
 
-        Assembly eventAssembly = Assembly.Load(
+        var eventAssembly = Assembly.Load(
             new AssemblyName(
                 eventAssemblyFullName
                     ?? string.Empty));

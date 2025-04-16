@@ -1,15 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <PackageId>Resrcify.SharedKernel.ResultFramework</PackageId>
-    <Authors>Rickard Marjanovic (@rmarjanovic)</Authors>
-    <Company>Resrcify AB</Company>
     <Title>Resrcify.SharedKernel.ResultFramework</Title>
     <Description>Implements the result pattern.</Description>
     <Summary>Implements the result pattern.</Summary>
-    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
-    <ImplicitUsings>disable</ImplicitUsings>
-    <Nullable>enable</Nullable>
   </PropertyGroup>
-
 </Project>

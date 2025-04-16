@@ -4,7 +4,7 @@ using Resrcify.SharedKernel.Repository.Primitives;
 
 namespace Resrcify.SharedKernel.Repository.UnitTests.Models;
 
-public class PersonSpecification : Specification<Person, SocialSecurityNumber>
+internal sealed class PersonSpecification : Specification<Person, SocialSecurityNumber>
 {
     public PersonSpecification(
         Expression<Func<Person, bool>>? criteria = null,

@@ -1,30 +1,25 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <PackageId>Resrcify.SharedKernel.Messaging</PackageId>
-    <Authors>Rickard Marjanovic (@rmarjanovic)</Authors>
-    <Company>Resrcify AB</Company>
     <Title>Resrcify.SharedKernel.Messaging</Title>
     <Description>Implements custom messaging abstractions based on MediatR and several different pipeline behaviors.</Description>
     <Summary>Implements custom messaging abstractions based on MediatR and several different pipeline behaviors.</Summary>
-    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
-    <ImplicitUsings>disable</ImplicitUsings>
-    <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="FluentValidation" Version="11.11.0">
+    <PackageReference Include="FluentValidation">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="11.11.0">
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="MediatR" Version="12.5.0">
+    <PackageReference Include="MediatR">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.4">
+    <PackageReference Include="Microsoft.Extensions.Logging">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="9.0.4">
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
   </ItemGroup>

@@ -1,6 +1,6 @@
 using System;
-using FluentAssertions;
 using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Shouldly;
 using Xunit;
 
 
@@ -19,10 +19,10 @@ public class ResultTTests
         var result = new TestResult<int>(value, true, error);
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.IsFailure.Should().BeFalse();
-        result.Errors.Should().BeEmpty();
-        result.Value.Should().Be(value);
+        result.IsSuccess.ShouldBeTrue();
+        result.IsFailure.ShouldBeFalse();
+        result.Errors.ShouldBeEmpty();
+        result.Value.ShouldBe(value);
     }
 
     [Fact]
@@ -36,10 +36,10 @@ public class ResultTTests
         var result = new TestResult<int>(value, true, errors);
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.IsFailure.Should().BeFalse();
-        result.Errors.Should().BeEquivalentTo(errors);
-        result.Value.Should().Be(value);
+        result.IsSuccess.ShouldBeTrue();
+        result.IsFailure.ShouldBeFalse();
+        result.Errors.ShouldBeEquivalentTo(errors);
+        result.Value.ShouldBe(value);
     }
 
     [Fact]
@@ -52,10 +52,10 @@ public class ResultTTests
         var result = new TestResult<int>(default, false, error);
 
         // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().BeEquivalentTo(new[] { error });
-        result.Invoking(r => r.Value).Should().Throw<InvalidOperationException>();
+        result.IsSuccess.ShouldBeFalse();
+        result.IsFailure.ShouldBeTrue();
+        result.Errors.ShouldBe([error]);
+        Should.Throw<InvalidOperationException>(() => _ = result.Value);
     }
 
     [Fact]
@@ -68,13 +68,13 @@ public class ResultTTests
         var result = new TestResult<int>(default, false, errors);
 
         // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().BeEquivalentTo(errors);
-        result.Invoking(r => r.Value).Should().Throw<InvalidOperationException>();
+        result.IsSuccess.ShouldBeFalse();
+        result.IsFailure.ShouldBeTrue();
+        result.Errors.ShouldBeEquivalentTo(errors);
+        Should.Throw<InvalidOperationException>(() => _ = result.Value);
     }
 
-    private class TestResult<TValue> : Result<TValue>
+    private sealed class TestResult<TValue> : Result<TValue>
     {
         public TestResult(TValue? value, bool isSuccess, Error error) : base(value, isSuccess, error)
         {

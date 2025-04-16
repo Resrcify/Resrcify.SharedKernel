@@ -6,11 +6,11 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Resrcify.SharedKernel.ResultFramework.Primitives;
 using Resrcify.SharedKernel.Web.Extensions;
+using Shouldly;
 using Xunit;
 
 namespace Resrcify.SharedKernel.Web.UnitTests.Extensions;
@@ -31,8 +31,7 @@ public class ResultExtensionsTests
 
         // Assert
         actual
-            .Should()
-            .BeOfType<Ok>();
+            .ShouldBeOfType<Ok>();
     }
 
     [Fact]
@@ -49,8 +48,7 @@ public class ResultExtensionsTests
 
         // Assert
         actual
-            .Should()
-            .BeOfType<BadRequest>();
+            .ShouldBeOfType<BadRequest>();
     }
     [Fact]
     public void ToProblemDetails_WithSuccessResult_ShouldThrowInvalidOperationException()
@@ -60,10 +58,7 @@ public class ResultExtensionsTests
 
         // Act
         // Assert
-        result
-            .Invoking(r => r.ToProblemDetails())
-            .Should()
-            .Throw<InvalidOperationException>();
+        Should.Throw<InvalidOperationException>(result.ToProblemDetails);
     }
 
     [Theory]
@@ -81,14 +76,15 @@ public class ResultExtensionsTests
         var problemDetails = result.ToProblemDetails() as ProblemHttpResult;
 
         // Assert
-        problemDetails.Should().NotBeNull();
-        problemDetails?.ProblemDetails.Type.Should().Be(expectedType);
-        problemDetails?.ProblemDetails.Title.Should().Be(expectedTitle);
-        problemDetails?.ProblemDetails.Status.Should().Be(expectedStatusCode);
-        problemDetails?.StatusCode.Should().Be(expectedStatusCode);
-        problemDetails?.ProblemDetails.Extensions.Should().ContainKey("errors");
-        problemDetails?.ProblemDetails.Extensions["errors"].Should().BeAssignableTo<IEnumerable<Error>>();
-        ((IEnumerable<Error>)problemDetails?.ProblemDetails.Extensions["errors"]!).Should().ContainEquivalentOf(error, options => options.ExcludingMissingMembers());
+        problemDetails.ShouldNotBeNull();
+        problemDetails?.ProblemDetails.Type.ShouldBe(expectedType);
+        problemDetails?.ProblemDetails.Title.ShouldBe(expectedTitle);
+        problemDetails?.ProblemDetails.Status.ShouldBe(expectedStatusCode);
+        problemDetails?.StatusCode.ShouldBe(expectedStatusCode);
+        problemDetails?.ProblemDetails.Extensions.ShouldContainKey("errors");
+        problemDetails?.ProblemDetails.Extensions["errors"].ShouldBeAssignableTo<IEnumerable<Error>>();
+        ((IEnumerable<Error>)problemDetails?.ProblemDetails.Extensions["errors"]!)
+            .ShouldContain(error);
     }
 
     private static readonly JsonSerializerOptions _options = new()
@@ -105,7 +101,7 @@ public class ResultExtensionsTests
     {
         //Arrange
         string test = "Test";
-        var message = new HttpResponseMessage()
+        using var message = new HttpResponseMessage()
         {
             StatusCode = HttpStatusCode.OK,
             Content = new StringContent(JsonSerializer.Serialize(test, _options), Encoding.UTF8, "application/json")
@@ -116,16 +112,13 @@ public class ResultExtensionsTests
 
         //Assert
         result.IsSuccess
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
 
         result
-            .Should()
-            .BeOfType<Result<string>>();
+            .ShouldBeOfType<Result<string>>();
 
         result.Value
-            .Should()
-            .Be(test);
+            .ShouldBe(test);
     }
 
     [Fact]
@@ -144,7 +137,7 @@ public class ResultExtensionsTests
             },
             ""traceId"": ""00-4627c2f9dd83de593525c82b41f99e92-0f526beb524ba8c1-00""
         }";
-        var message = new HttpResponseMessage()
+        using var message = new HttpResponseMessage()
         {
             StatusCode = HttpStatusCode.BadRequest,
             Content = new StringContent(test, Encoding.UTF8, "application/json")
@@ -156,20 +149,16 @@ public class ResultExtensionsTests
 
         //Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
 
         result
-            .Should()
-            .BeOfType<Result<string>>();
+            .ShouldBeOfType<Result<string>>();
 
         result.Errors
-            .Should()
-            .HaveCount(1);
+            .ShouldHaveSingleItem();
 
-        result.Errors
-            .Should()
-            .ContainEquivalentOf(error, options => options.ExcludingMissingMembers());
+        result.Errors[0]
+            .ShouldBe(error);
     }
 
     [Theory]
@@ -183,7 +172,7 @@ public class ResultExtensionsTests
         var error = new Error("Title", "Message", errorType);
         var resultObject = Result.Failure<string>(error);
         var problemDetails = resultObject.ToProblemDetails() as ProblemHttpResult;
-        var message = new HttpResponseMessage()
+        using var message = new HttpResponseMessage()
         {
             StatusCode = httpStatusCode,
             Content = new StringContent(JsonSerializer.Serialize(problemDetails!.ProblemDetails, _options), Encoding.UTF8, "application/json")
@@ -194,20 +183,16 @@ public class ResultExtensionsTests
 
         //Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
 
         result
-            .Should()
-            .BeOfType<Result<string>>();
+            .ShouldBeOfType<Result<string>>();
 
         result.Errors
-            .Should()
-            .HaveCount(1);
+            .ShouldHaveSingleItem();
 
-        result.Errors
-            .Should()
-            .ContainEquivalentOf(error, options => options.ExcludingMissingMembers());
+        result.Errors[0]
+            .ShouldBe(error);
     }
 
     [Theory]
@@ -224,7 +209,7 @@ public class ResultExtensionsTests
 
         problemDetails!.ProblemDetails.Extensions = new Dictionary<string, object?>();
 
-        var message = new HttpResponseMessage()
+        using var message = new HttpResponseMessage()
         {
             StatusCode = httpStatusCode,
             Content = new StringContent(JsonSerializer.Serialize(problemDetails!.ProblemDetails, _options), Encoding.UTF8, "application/json")
@@ -235,20 +220,16 @@ public class ResultExtensionsTests
 
         //Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
 
         result
-            .Should()
-            .BeOfType<Result<string>>();
+            .ShouldBeOfType<Result<string>>();
 
         result.Errors
-            .Should()
-            .HaveCount(1);
+            .ShouldHaveSingleItem();
 
-        result.Errors
-            .Should()
-            .ContainEquivalentOf(Error.None, options => options.ExcludingMissingMembers());
+        result.Errors[0]
+            .ShouldBe(Error.None);
     }
 
     [Fact]
@@ -256,7 +237,7 @@ public class ResultExtensionsTests
     {
         //Arrange
         string test = "Test";
-        var message = new HttpResponseMessage()
+        using var message = new HttpResponseMessage()
         {
             StatusCode = HttpStatusCode.OK,
             Content = new StringContent(JsonSerializer.Serialize(test, _options), Encoding.UTF8, "application/json")
@@ -267,12 +248,10 @@ public class ResultExtensionsTests
 
         //Assert
         result.IsSuccess
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
 
         result
-            .Should()
-            .BeOfType<Result>();
+            .ShouldBeOfType<Result>();
     }
 
     [Fact]
@@ -291,7 +270,7 @@ public class ResultExtensionsTests
             },
             ""traceId"": ""00-4627c2f9dd83de593525c82b41f99e92-0f526beb524ba8c1-00""
         }";
-        var message = new HttpResponseMessage()
+        using var message = new HttpResponseMessage()
         {
             StatusCode = HttpStatusCode.BadRequest,
             Content = new StringContent(test, Encoding.UTF8, "application/json")
@@ -303,20 +282,16 @@ public class ResultExtensionsTests
 
         //Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
 
         result
-            .Should()
-            .BeOfType<Result>();
+            .ShouldBeOfType<Result>();
 
         result.Errors
-            .Should()
-            .HaveCount(1);
+            .ShouldHaveSingleItem();
 
         result.Errors
-            .Should()
-            .ContainEquivalentOf(error, options => options.ExcludingMissingMembers());
+            .ShouldContain(e => e.Code == error.Code && e.Message == error.Message);
     }
 
     [Theory]
@@ -330,7 +305,7 @@ public class ResultExtensionsTests
         var error = new Error("Title", "Message", errorType);
         var resultObject = Result.Failure<string>(error);
         var problemDetails = resultObject.ToProblemDetails() as ProblemHttpResult;
-        var message = new HttpResponseMessage()
+        using var message = new HttpResponseMessage()
         {
             StatusCode = httpStatusCode,
             Content = new StringContent(JsonSerializer.Serialize(problemDetails!.ProblemDetails, _options), Encoding.UTF8, "application/json")
@@ -341,20 +316,16 @@ public class ResultExtensionsTests
 
         //Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
 
         result
-            .Should()
-            .BeOfType<Result>();
+            .ShouldBeOfType<Result>();
 
         result.Errors
-            .Should()
-            .HaveCount(1);
+            .ShouldHaveSingleItem();
 
         result.Errors
-            .Should()
-            .ContainEquivalentOf(error, options => options.ExcludingMissingMembers());
+            .ShouldContain(e => e.Code == error.Code && e.Message == error.Message && e.Type == error.Type);
     }
 
     [Theory]
@@ -371,7 +342,7 @@ public class ResultExtensionsTests
 
         problemDetails!.ProblemDetails.Extensions = new Dictionary<string, object?>();
 
-        var message = new HttpResponseMessage()
+        using var message = new HttpResponseMessage()
         {
             StatusCode = httpStatusCode,
             Content = new StringContent(JsonSerializer.Serialize(problemDetails!.ProblemDetails, _options), Encoding.UTF8, "application/json")
@@ -382,19 +353,15 @@ public class ResultExtensionsTests
 
         //Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
 
         result
-            .Should()
-            .BeOfType<Result>();
+            .ShouldBeOfType<Result>();
 
         result.Errors
-            .Should()
-            .HaveCount(1);
+            .ShouldHaveSingleItem();
 
-        result.Errors
-            .Should()
-            .ContainEquivalentOf(Error.None, options => options.ExcludingMissingMembers());
+        result.Errors[0]
+            .ShouldBe(Error.None);
     }
 }

@@ -1,20 +1,19 @@
 using System;
-using System.Linq;
-using FluentAssertions;
 using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
+using Shouldly;
 using Xunit;
 
 namespace Resrcify.SharedKernel.DomainDrivenDesign.UnitTests.Primitives;
 
 public class AggregateRootTests
 {
-    private class TestAggregateRoot(int id) : AggregateRoot<int>(id)
+    private sealed class TestAggregateRoot(int id) : AggregateRoot<int>(id)
     {
         public void PublicRaiseDomainEvent(IDomainEvent domainEvent) => RaiseDomainEvent(domainEvent);
     }
 
-    private record TestDomainEvent(Guid Id) : DomainEvent(Id);
+    private sealed record TestDomainEvent(Guid Id) : DomainEvent(Id);
 
     [Fact]
     public void GetDomainEvents_ShouldBeEmpty_WhenNoEventsAreRaised()
@@ -26,7 +25,7 @@ public class AggregateRootTests
         var events = aggregateRoot.GetDomainEvents();
 
         // Assert
-        events.Should().BeEmpty();
+        events.ShouldBeEmpty();
     }
 
     [Fact]
@@ -41,8 +40,8 @@ public class AggregateRootTests
         var events = aggregateRoot.GetDomainEvents();
 
         // Assert
-        events.Should().ContainSingle();
-        events.First().Should().Be(domainEvent);
+        events.ShouldHaveSingleItem();
+        events[0].ShouldBe(domainEvent);
     }
 
     [Fact]
@@ -58,6 +57,6 @@ public class AggregateRootTests
         var events = aggregateRoot.GetDomainEvents();
 
         // Assert
-        events.Should().BeEmpty();
+        events.ShouldBeEmpty();
     }
 }

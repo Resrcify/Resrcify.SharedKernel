@@ -1,14 +1,14 @@
 using System;
 using System.Threading.Tasks;
-using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Resrcify.SharedKernel.UnitOfWork.Interceptors;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
+using Shouldly;
 using Xunit;
 
 namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.Interceptors;
 
-public class UpdateDeletableEntitiesInterceptorTests : DbSetupBase
+public sealed class UpdateDeletableEntitiesInterceptorTests : DbSetupBase
 {
     public UpdateDeletableEntitiesInterceptorTests() : base(new UpdateDeletableEntitiesInterceptor())
     {
@@ -28,12 +28,10 @@ public class UpdateDeletableEntitiesInterceptorTests : DbSetupBase
 
         //Assert
         entity.DeletedOnUtc
-            .Should()
-            .BeCloseTo(now, TimeSpan.FromSeconds(1));
+            .ShouldBe(now, TimeSpan.FromSeconds(1));
 
         entity.IsDeleted
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
     }
 
     [Fact]
@@ -54,16 +52,13 @@ public class UpdateDeletableEntitiesInterceptorTests : DbSetupBase
             .FirstOrDefaultAsync(x => x.Id == entity.Id);
 
         foundEntity
-            .Should()
-            .NotBeNull();
+            .ShouldNotBeNull();
 
         foundEntity!.DeletedOnUtc
-            .Should()
-            .BeCloseTo(now, TimeSpan.FromSeconds(1));
+            .ShouldBe(now, TimeSpan.FromSeconds(1));
 
         foundEntity!.IsDeleted
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
 
     }
 }

@@ -22,16 +22,16 @@ public abstract class ValueObject : IEquatable<ValueObject>
             ValuesAreEqual(other);
     }
 
-    public override int GetHashCode()
-    {
-        return GetAtomicValues()
-            .Aggregate(default(int), HashCode.Combine);
-    }
-
     public bool Equals(ValueObject? other)
     {
         return other is not null &&
             ValuesAreEqual(other);
+    }
+
+    public override int GetHashCode()
+    {
+        return GetAtomicValues()
+            .Aggregate(default(int), HashCode.Combine);
     }
 
     public static bool operator ==(ValueObject? left, ValueObject? right)

@@ -4,6 +4,6 @@ namespace Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
 
 public interface IAggregateRoot
 {
-    IReadOnlyCollection<IDomainEvent> GetDomainEvents();
+    IReadOnlyList<IDomainEvent> GetDomainEvents();
     void ClearDomainEvents();
 }

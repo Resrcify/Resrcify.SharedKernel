@@ -5,9 +5,13 @@ using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 
 namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
 
-public class Person : AggregateRoot<SocialSecurityNumber>, IDeletableEntity, IAuditableEntity
+internal class Person
+    : AggregateRoot<SocialSecurityNumber>, IDeletableEntity, IAuditableEntity
 {
-    public Person(SocialSecurityNumber id, string name = "Test") : base(id)
+    public Person(
+        SocialSecurityNumber id,
+        string name = "Test")
+        : base(id)
     {
         Name = name;
     }

@@ -1,10 +1,10 @@
 using System;
-using FluentAssertions;
 using Resrcify.SharedKernel.WebApiExample.Domain.Features.Companies;
 using Resrcify.SharedKernel.WebApiExample.Domain.Errors;
 using Resrcify.SharedKernel.WebApiExample.Domain.Features.Companies.Events;
 using System.Linq;
 using Resrcify.SharedKernel.WebApiExample.Domain.Features.Companies.ValueObjects;
+using Shouldly;
 
 namespace Resrcify.SharedKernel.WebApiExample.Domain.UnitTests.Companies;
 
@@ -26,17 +26,13 @@ public class CompanyTests
 
         // Assert
         result.IsSuccess
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
         result.Value
-            .Should()
-            .NotBeNull();
+            .ShouldNotBeNull();
         result.Value.Name.Value
-            .Should()
-            .Be(_validName);
+            .ShouldBe(_validName);
         result.Value.OrganizationNumber.Value
-            .Should()
-            .Be(long.Parse(_validOrganizationNumber));
+            .ShouldBe(long.Parse(_validOrganizationNumber));
     }
 
     [Fact]
@@ -50,11 +46,9 @@ public class CompanyTests
 
         // Assert
         result.IsSuccess
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
         company.Name.Value
-            .Should()
-            .Be(_updatedName);
+            .ShouldBe(_updatedName);
     }
 
     [Fact]
@@ -68,14 +62,11 @@ public class CompanyTests
 
         // Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
-        result.Errors
-            .Should()
-            .ContainSingle()
-                .Which
-                    .Should()
-                    .Be(DomainErrors.Name.Identical(_validName));
+            .ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem();
+
+        // Assert that the error is equal to DomainErrors.Name.Identical(_validName)
+        result.Errors[0].ShouldBe(DomainErrors.Name.Identical(_validName));
     }
 
     [Fact]
@@ -89,13 +80,11 @@ public class CompanyTests
 
         // Assert
         result.Errors
-            .Should()
-            .BeEmpty();
+            .ShouldBeEmpty();
         result.IsSuccess
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
 
-        company.Contacts.Should().HaveCount(1);
+        company.Contacts.ShouldHaveSingleItem();
     }
 
     [Fact]
@@ -110,14 +99,9 @@ public class CompanyTests
 
         // Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
-        result.Errors
-            .Should()
-            .ContainSingle()
-                .Which
-                    .Should()
-                    .Be(DomainErrors.Contact.EmailAlreadyExist(_validContactEmail));
+            .ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem();
+        result.Errors[0].ShouldBe(DomainErrors.Contact.EmailAlreadyExist(_validContactEmail));
     }
 
     [Fact]
@@ -132,11 +116,9 @@ public class CompanyTests
 
         // Assert
         result.IsSuccess
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
         company.Contacts
-            .Should()
-            .BeEmpty();
+            .ShouldBeEmpty();
     }
 
     [Fact]
@@ -150,14 +132,9 @@ public class CompanyTests
 
         // Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
-        result.Errors
-            .Should()
-            .ContainSingle()
-                .Which
-                .Should()
-                .Be(DomainErrors.Contact.NotFound(_validContactEmail));
+            .ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem();
+        result.Errors[0].ShouldBe(DomainErrors.Contact.NotFound(_validContactEmail));
     }
 
     [Fact]
@@ -173,18 +150,14 @@ public class CompanyTests
 
         // Assert
         result.IsSuccess
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
         result.Errors
-            .Should()
-            .BeEmpty();
+            .ShouldBeEmpty();
         var updatedContact = company.Contacts[0];
         updatedContact.FirstName
-            .Should()
-            .Be(newFirstName);
+            .ShouldBe(newFirstName);
         updatedContact.LastName
-            .Should()
-            .Be(newLastName);
+            .ShouldBe(newLastName);
     }
 
     [Fact]
@@ -198,14 +171,9 @@ public class CompanyTests
 
         // Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
-        result.Errors
-            .Should()
-            .ContainSingle()
-                .Which
-                .Should()
-                .Be(DomainErrors.Contact.NotFound(_validContactEmail));
+            .ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem();
+        result.Errors[0].ShouldBe(DomainErrors.Contact.NotFound(_validContactEmail));
     }
 
     [Fact]
@@ -216,26 +184,22 @@ public class CompanyTests
 
         // Assert
         result.IsSuccess
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
         var company = result.Value;
 
+        company.GetDomainEvents().ShouldHaveSingleItem();
         var domainEvent = company.GetDomainEvents()
-            .Should()
-            .ContainSingle()
-                .Which
-                    .Should()
-                    .BeOfType<CompanyCreatedEvent>().Subject;
+                    .FirstOrDefault(e => e is CompanyCreatedEvent) as CompanyCreatedEvent;
 
         domainEvent
-            .Should()
-            .NotBeNull();
+            .ShouldBeOfType<CompanyCreatedEvent>();
+
+        domainEvent
+            .ShouldNotBeNull();
         domainEvent.CompanyId
-            .Should()
-            .Be(company.Id.Value);
+            .ShouldBe(company.Id.Value);
         domainEvent.Id
-            .Should()
-            .NotBeEmpty();
+            .ShouldNotBe(Guid.Empty);
     }
 
     [Fact]
@@ -243,34 +207,28 @@ public class CompanyTests
     {
         // Arrange
         var company = Company.Create(_validCompanyId, _validName, _validOrganizationNumber);
-        company.Errors.Should().BeEmpty();
+        company.Errors.ShouldBeEmpty();
 
         // Act
         var result = company.Value.UpdateName(_updatedName);
 
         // Assert
         result.IsSuccess
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
 
         var domainEvents = company.Value.GetDomainEvents();
-        domainEvents.Should().Contain(e => e is CompanyNameUpdatedEvent);
+        domainEvents.ShouldContain(e => e is CompanyNameUpdatedEvent);
         var domainEvent = domainEvents.OfType<CompanyNameUpdatedEvent>().SingleOrDefault();
 
         domainEvent
-            .Should()
-            .NotBeNull();
+            .ShouldNotBeNull();
         domainEvent?.CompanyId
-            .Should()
-            .Be(company.Value.Id.Value);
+            .ShouldBe(company.Value.Id.Value);
         domainEvent?.OldName
-            .Should()
-            .Be(_validName);
+            .ShouldBe(_validName);
         domainEvent?.NewName
-            .Should()
-            .Be(_updatedName);
+            .ShouldBe(_updatedName);
         domainEvent?.Id
-            .Should()
-            .NotBeEmpty();
+            .ShouldNotBe(Guid.Empty);
     }
 }

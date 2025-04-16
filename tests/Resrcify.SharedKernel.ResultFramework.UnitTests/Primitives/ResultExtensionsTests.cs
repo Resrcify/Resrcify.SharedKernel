@@ -1,8 +1,8 @@
 using System;
-using System.Linq;
+using System.Globalization;
 using System.Threading.Tasks;
-using FluentAssertions;
 using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Shouldly;
 using Xunit;
 
 
@@ -20,7 +20,7 @@ public class ResultExtensionsTests
         var ensuredResult = result.Ensure(x => x > 0, Error.None);
 
         // Assert
-        ensuredResult.Should().Be(result);
+        ensuredResult.ShouldBe(result);
     }
 
     [Fact]
@@ -33,8 +33,8 @@ public class ResultExtensionsTests
         var ensuredResult = result.Ensure(x => x < 0, Error.NullValue);
 
         // Assert
-        ensuredResult.IsSuccess.Should().BeFalse();
-        ensuredResult.Errors.Should().Contain(Error.NullValue);
+        ensuredResult.IsSuccess.ShouldBeFalse();
+        ensuredResult.Errors.ShouldContain(Error.NullValue);
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class ResultExtensionsTests
         var ensuredResult = result.Ensure(x => x > 0, Error.NullValue);
 
         // Assert
-        ensuredResult.Should().Be(result);
+        ensuredResult.ShouldBe(result);
     }
 
     [Fact]
@@ -57,11 +57,11 @@ public class ResultExtensionsTests
         var result = Result.Success(42);
 
         // Act
-        var mappedResult = result.Map(x => x.ToString());
+        var mappedResult = result.Map(x => x.ToString(CultureInfo.InvariantCulture));
 
         // Assert
-        mappedResult.IsSuccess.Should().BeTrue();
-        mappedResult.Value.Should().Be("42");
+        mappedResult.IsSuccess.ShouldBeTrue();
+        mappedResult.Value.ShouldBe("42");
     }
 
     [Fact]
@@ -71,11 +71,11 @@ public class ResultExtensionsTests
         var result = Result.Failure<int>(Error.NullValue);
 
         // Act
-        var mappedResult = result.Map(x => x.ToString());
+        var mappedResult = result.Map(x => x.ToString(CultureInfo.InvariantCulture));
 
         // Assert
-        mappedResult.IsSuccess.Should().BeFalse();
-        mappedResult.Errors.Should().Contain(Error.NullValue);
+        mappedResult.IsSuccess.ShouldBeFalse();
+        mappedResult.Errors.ShouldContain(Error.NullValue);
     }
 
     [Fact]
@@ -89,8 +89,8 @@ public class ResultExtensionsTests
         var boundResult = await result.Bind(AsyncFunc);
 
         // Assert
-        boundResult.IsSuccess.Should().BeTrue();
-        boundResult.Value.Should().Be(84);
+        boundResult.IsSuccess.ShouldBeTrue();
+        boundResult.Value.ShouldBe(84);
     }
 
     [Fact]
@@ -105,8 +105,8 @@ public class ResultExtensionsTests
         var boundResult = await result.Bind(AsyncFunc);
 
         // Assert
-        boundResult.IsSuccess.Should().BeFalse();
-        boundResult.Errors.Should().Contain(Error.NullValue);
+        boundResult.IsSuccess.ShouldBeFalse();
+        boundResult.Errors.ShouldContain(Error.NullValue);
     }
 
     [Fact]
@@ -121,9 +121,9 @@ public class ResultExtensionsTests
         var boundResult = await originalResult.Bind(AsyncFunc);
 
         // Assert
-        boundResult.IsSuccess.Should().BeFalse();
-        boundResult.IsFailure.Should().BeTrue();
-        boundResult.Errors.Should().BeEquivalentTo(originalResult.Errors);
+        boundResult.IsSuccess.ShouldBeFalse();
+        boundResult.IsFailure.ShouldBeTrue();
+        boundResult.Errors.ShouldBeEquivalentTo(originalResult.Errors);
     }
 
     [Fact]
@@ -137,8 +137,8 @@ public class ResultExtensionsTests
         var tappedResult = result.Tap(x => actionInvoked = true);
 
         // Assert
-        actionInvoked.Should().BeTrue();
-        tappedResult.Should().Be(result);
+        actionInvoked.ShouldBeTrue();
+        tappedResult.ShouldBe(result);
     }
 
     [Fact]
@@ -152,8 +152,8 @@ public class ResultExtensionsTests
         var tappedResult = result.Tap(x => actionInvoked = true);
 
         // Assert
-        actionInvoked.Should().BeFalse();
-        tappedResult.Should().Be(result);
+        actionInvoked.ShouldBeFalse();
+        tappedResult.ShouldBe(result);
     }
 
     [Fact]
@@ -161,14 +161,14 @@ public class ResultExtensionsTests
     {
         // Arrange
         var resultTask = Task.FromResult(Result.Success(42));
-        static string func(int i) => (i * 2).ToString();
+        static string func(int i) => (i * 2).ToString(CultureInfo.InvariantCulture);
 
         // Act
         var createdResult = await resultTask.Create(func);
 
         // Assert
-        createdResult.IsSuccess.Should().BeTrue();
-        createdResult.Value.Should().Be("84");
+        createdResult.IsSuccess.ShouldBeTrue();
+        createdResult.Value.ShouldBe("84");
     }
 
     [Fact]
@@ -176,14 +176,14 @@ public class ResultExtensionsTests
     {
         // Arrange
         var resultTask = Task.FromResult(Result.Failure<int>(Error.NullValue));
-        static string func(int i) => (i * 2).ToString();
+        static string func(int i) => (i * 2).ToString(CultureInfo.InvariantCulture);
 
         // Act
         var createdResult = await resultTask.Create(func);
 
         // Assert
-        createdResult.IsSuccess.Should().BeFalse();
-        createdResult.Errors.Should().Contain(Error.NullValue);
+        createdResult.IsSuccess.ShouldBeFalse();
+        createdResult.Errors.ShouldContain(Error.NullValue);
     }
 
     [Fact]
@@ -191,14 +191,14 @@ public class ResultExtensionsTests
     {
         // Arrange
         var result = Result.Success(42);
-        static string func(int i) => (i * 2).ToString();
+        static string func(int i) => (i * 2).ToString(CultureInfo.InvariantCulture);
 
         // Act
         var tryCatchResult = result.TryCatch(func, Error.NullValue);
 
         // Assert
-        tryCatchResult.IsSuccess.Should().BeTrue();
-        tryCatchResult.Value.Should().Be("84");
+        tryCatchResult.IsSuccess.ShouldBeTrue();
+        tryCatchResult.Value.ShouldBe("84");
     }
 
     [Fact]
@@ -212,8 +212,8 @@ public class ResultExtensionsTests
         var tryCatchResult = result.TryCatch(func, Error.NullValue);
 
         // Assert
-        tryCatchResult.IsSuccess.Should().BeFalse();
-        tryCatchResult.Errors.Should().Contain(Error.NullValue);
+        tryCatchResult.IsSuccess.ShouldBeFalse();
+        tryCatchResult.Errors.ShouldContain(Error.NullValue);
     }
 
     [Fact]
@@ -221,14 +221,14 @@ public class ResultExtensionsTests
     {
         // Arrange
         var result = Result.Failure<int>(Error.NullValue);
-        static string func(int i) => (i * 2).ToString();
+        static string func(int i) => (i * 2).ToString(CultureInfo.InvariantCulture);
 
         // Act
         var tryCatchResult = result.TryCatch(func, Error.None);
 
         // Assert
-        tryCatchResult.IsSuccess.Should().BeFalse();
-        tryCatchResult.Errors.Should().Contain(Error.NullValue);
+        tryCatchResult.IsSuccess.ShouldBeFalse();
+        tryCatchResult.Errors.ShouldContain(Error.NullValue);
     }
 
     [Fact]
@@ -236,14 +236,14 @@ public class ResultExtensionsTests
     {
         // Arrange
         var resultTask = Task.FromResult(Result.Success(42));
-        static string func(int i) => (i * 2).ToString();
+        static string func(int i) => (i * 2).ToString(CultureInfo.InvariantCulture);
 
         // Act
         var tryCatchResult = await resultTask.TryCatch(func, Error.NullValue);
 
         // Assert
-        tryCatchResult.IsSuccess.Should().BeTrue();
-        tryCatchResult.Value.Should().Be("84");
+        tryCatchResult.IsSuccess.ShouldBeTrue();
+        tryCatchResult.Value.ShouldBe("84");
     }
 
     [Fact]
@@ -257,8 +257,8 @@ public class ResultExtensionsTests
         var tryCatchResult = await resultTask.TryCatch(func, Error.NullValue);
 
         // Assert
-        tryCatchResult.IsSuccess.Should().BeFalse();
-        tryCatchResult.Errors.Should().Contain(Error.NullValue);
+        tryCatchResult.IsSuccess.ShouldBeFalse();
+        tryCatchResult.Errors.ShouldContain(Error.NullValue);
     }
 
     [Fact]
@@ -266,14 +266,14 @@ public class ResultExtensionsTests
     {
         // Arrange
         var resultTask = Task.FromResult(Result.Failure<int>(Error.NullValue));
-        static string func(int i) => (i * 2).ToString();
+        static string func(int i) => (i * 2).ToString(CultureInfo.InvariantCulture);
 
         // Act
         var tryCatchResult = await resultTask.TryCatch(func, Error.None);
 
         // Assert
-        tryCatchResult.IsSuccess.Should().BeFalse();
-        tryCatchResult.Errors.Should().Contain(Error.NullValue);
+        tryCatchResult.IsSuccess.ShouldBeFalse();
+        tryCatchResult.Errors.ShouldContain(Error.NullValue);
     }
 
     [Fact]
@@ -281,14 +281,14 @@ public class ResultExtensionsTests
     {
         // Arrange
         var resultTask = Task.FromResult(Result.Success(42));
-        static Task<Result<string>> func(int i) => Task.FromResult(Result.Success(i.ToString()));
+        static Task<Result<string>> func(int i) => Task.FromResult(Result.Success(i.ToString(CultureInfo.InvariantCulture)));
 
         // Act
         var boundResult = await resultTask.Bind(func);
 
         // Assert
-        boundResult.IsSuccess.Should().BeTrue();
-        boundResult.Value.Should().Be("42");
+        boundResult.IsSuccess.ShouldBeTrue();
+        boundResult.Value.ShouldBe("42");
     }
 
     [Fact]
@@ -302,8 +302,8 @@ public class ResultExtensionsTests
         var boundResult = await resultTask.Bind(func);
 
         // Assert
-        boundResult.IsSuccess.Should().BeFalse();
-        boundResult.Errors.Should().Contain(Error.NullValue);
+        boundResult.IsSuccess.ShouldBeFalse();
+        boundResult.Errors.ShouldContain(Error.NullValue);
     }
 
     [Fact]
@@ -311,14 +311,14 @@ public class ResultExtensionsTests
     {
         // Arrange
         var resultTask = Task.FromResult(Result.Failure<int>(Error.NullValue));
-        static Task<Result<string>> func(int i) => Task.FromResult(Result.Success(i.ToString()));
+        static Task<Result<string>> func(int i) => Task.FromResult(Result.Success(i.ToString(CultureInfo.InvariantCulture)));
 
         // Act
         var boundResult = await resultTask.Bind(func);
 
         // Assert
-        boundResult.IsSuccess.Should().BeFalse();
-        boundResult.Errors.Should().Contain(Error.NullValue);
+        boundResult.IsSuccess.ShouldBeFalse();
+        boundResult.Errors.ShouldContain(Error.NullValue);
     }
 
     [Fact]
@@ -326,14 +326,14 @@ public class ResultExtensionsTests
     {
         // Arrange
         var result = Result.Success(42);
-        Func<int, string> onSuccess = x => $"Success: {x}";
-        Func<Error[], string> onFailure = errors => "Failure";
+        static string onSuccess(int x) => $"Success: {x}";
+        static string onFailure(Error[] errors) => "Failure";
 
         // Act
         var matchResult = result.Match(onSuccess, onFailure);
 
         // Assert
-        matchResult.Should().Be("Success: 42");
+        matchResult.ShouldBe("Success: 42");
     }
 
     [Fact]
@@ -341,14 +341,14 @@ public class ResultExtensionsTests
     {
         // Arrange
         var result = Result.Failure<int>(Error.NullValue);
-        Func<int, string> onSuccess = x => $"Success: {x}";
-        Func<Error[], string> onFailure = errors => $"Failure: {errors.First().Code}";
+        static string onSuccess(int x) => $"Success: {x}";
+        static string onFailure(Error[] errors) => $"Failure: {errors[0].Code}";
 
         // Act
         var matchResult = result.Match(onSuccess, onFailure);
 
         // Assert
-        matchResult.Should().Be($"Failure: {Error.NullValue.Code}");
+        matchResult.ShouldBe($"Failure: {Error.NullValue.Code}");
     }
 
     [Fact]
@@ -363,7 +363,7 @@ public class ResultExtensionsTests
         var matchResult = await resultTask.Match(onSuccess, onFailure);
 
         // Assert
-        matchResult.Should().Be("Success: 42");
+        matchResult.ShouldBe("Success: 42");
     }
 
     [Fact]
@@ -372,13 +372,13 @@ public class ResultExtensionsTests
         // Arrange
         var resultTask = Task.FromResult(Result.Failure<int>(Error.NullValue));
         static string onSuccess(int x) => $"Success: {x}";
-        static string onFailure(Error[] errors) => $"Failure: {errors.First().Code}";
+        static string onFailure(Error[] errors) => $"Failure: {errors[0].Code}";
 
         // Act
         var matchResult = await resultTask.Match(onSuccess, onFailure);
 
         // Assert
-        matchResult.Should().Be($"Failure: {Error.NullValue.Code}");
+        matchResult.ShouldBe($"Failure: {Error.NullValue.Code}");
     }
 
 }

@@ -1,8 +1,8 @@
 using System;
 using System.Linq;
-using FluentAssertions;
 using Resrcify.SharedKernel.WebApiExample.Domain.Features.Companies.ValueObjects;
 using Resrcify.SharedKernel.WebApiExample.Domain.Errors;
+using Shouldly;
 
 namespace Resrcify.SharedKernel.WebApiExample.Domain.UnitTests.Companies;
 
@@ -19,14 +19,11 @@ public class CompanyIdTests
 
         // Assert
         result.IsSuccess
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
         result.Value
-            .Should()
-            .NotBeNull();
+            .ShouldNotBeNull();
         result.Value.Value
-            .Should()
-            .Be(validGuid);
+            .ShouldBe(validGuid);
     }
 
     [Fact]
@@ -40,14 +37,11 @@ public class CompanyIdTests
 
         // Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
-        result.Errors
-            .Should()
-            .ContainSingle()
-                .Which
-                    .Should()
-                    .Be(DomainErrors.CompanyId.Empty);
+            .ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem();
+
+        // Assert that the error is equal to DomainErrors.CompanyId.Empty
+        result.Errors[0].ShouldBe(DomainErrors.CompanyId.Empty);
     }
 
     [Fact]
@@ -61,11 +55,7 @@ public class CompanyIdTests
         var atomicValues = companyId.GetAtomicValues().ToArray();
 
         // Assert
-        atomicValues
-            .Should()
-            .ContainSingle()
-                .Which
-                    .Should()
-                    .Be(validGuid);
+        atomicValues.ShouldHaveSingleItem();
+        atomicValues[0].ShouldBe(validGuid);
     }
 }

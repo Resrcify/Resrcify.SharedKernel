@@ -1,7 +1,6 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using FluentAssertions;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
@@ -10,6 +9,8 @@ using Resrcify.SharedKernel.Messaging.Abstractions;
 using Resrcify.SharedKernel.Messaging.Behaviors;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.ResultFramework.Primitives;
+using System.Diagnostics.CodeAnalysis;
+using Shouldly;
 
 namespace Resrcify.SharedKernel.Messaging.UnitTests.Behaviors;
 
@@ -36,8 +37,7 @@ public class UnitOfWorkPipelineBehaviorTests
 
         // Assert
         response
-            .Should()
-            .Be(result);
+            .ShouldBe(result);
 
         await _unitOfWork
             .Received(1)
@@ -58,8 +58,7 @@ public class UnitOfWorkPipelineBehaviorTests
 
         // Assert
         response
-            .Should()
-            .Be(result);
+            .ShouldBe(result);
 
         await _unitOfWork
             .DidNotReceive()
@@ -67,21 +66,23 @@ public class UnitOfWorkPipelineBehaviorTests
     }
 
     [Fact]
+    [SuppressMessage(
+        "Usage",
+        "CA2201:Do not raise reserved exception types",
+        Justification = "Exception type is not important in this context")]
     public async Task Handle_ThrowsException_AndLogsError()
     {
         // Arrange
-        var exception = new Exception("Test exception");
+        var exception = new Exception();
         _next.When(n => n.Invoke()).Do(x => throw exception);
 
         // Act
-        Func<Task> act = async () => await _behavior.Handle(_command, _next, CancellationToken.None);
+        async Task act() => await _behavior.Handle(_command, _next, CancellationToken.None);
 
-        // Assert
-        await act
-            .Should()
-            .ThrowAsync<Exception>()
-            .WithMessage("Test exception");
+        // Assert,
+        var assertedException = await Should.ThrowAsync<Exception>(act);
+        assertedException.Message.ShouldBe("An error occurred while processing the UnitOfWorkPipelineBehavior.");
 
-        _logger.Received(1);
+        _logger.ReceivedCalls().Equals(1);
     }
 }

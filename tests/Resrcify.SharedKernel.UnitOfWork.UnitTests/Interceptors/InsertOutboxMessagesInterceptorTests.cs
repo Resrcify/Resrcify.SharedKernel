@@ -1,20 +1,18 @@
 
 using System;
-using System.Linq;
-using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
-using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.Converters;
 using Resrcify.SharedKernel.UnitOfWork.Interceptors;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
+using Shouldly;
 using Xunit;
 
 namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.Interceptors;
 
-public class InsertOutboxMessagesInterceptorTests : DbSetupBase
+public sealed class InsertOutboxMessagesInterceptorTests : DbSetupBase
 {
     public InsertOutboxMessagesInterceptorTests() : base(new InsertOutboxMessagesInterceptor())
     {
@@ -37,8 +35,8 @@ public class InsertOutboxMessagesInterceptorTests : DbSetupBase
         // Assert
         var outboxMessages = await DbContext.OutboxMessages.ToListAsync();
         var testDomainEventName = typeof(TestDomainEvent).FullName;
-        outboxMessages.Should().HaveCount(1);
-        outboxMessages.First().Type.Should().Be(testDomainEventName);
+        outboxMessages.Count.ShouldBe(1);
+        outboxMessages[0].Type.ShouldBe(testDomainEventName);
     }
 
     [Fact]
@@ -54,15 +52,15 @@ public class InsertOutboxMessagesInterceptorTests : DbSetupBase
 
         // Assert
         var outboxMessages = await DbContext.OutboxMessages.ToListAsync();
-        outboxMessages.Should().HaveCount(1);
-        var message = outboxMessages.First();
-        var deserializedMessage = (TestDomainEvent?)JsonSerializer.Deserialize(message.Content, typeof(IDomainEvent), _jsonOptions);
-        deserializedMessage.Should().NotBeNull();
-        deserializedMessage!.Id.Should().NotBe(Guid.Empty);
-        deserializedMessage!.Message.Should().Be("Test message");
+        outboxMessages.ShouldHaveSingleItem();
+        var message = outboxMessages[0];
+        var deserializedMessage = (TestDomainEvent?)JsonSerializer.Deserialize<IDomainEvent>(message.Content, _jsonOptions);
+        deserializedMessage.ShouldNotBeNull();
+        deserializedMessage!.Id.ShouldNotBe(Guid.Empty);
+        deserializedMessage!.Message.ShouldBe("Test message");
     }
 
-    private class TestAggregateRoot : Person
+    private sealed class TestAggregateRoot : Person
     {
         public TestAggregateRoot(SocialSecurityNumber id, string name) : base(id, name)
         {

@@ -14,7 +14,7 @@ public abstract class Specification<TEntity, TId>
     public Expression<Func<TEntity, bool>>? Criteria { get; }
     public bool IsSplitQuery { get; protected set; }
     public bool IsNoTrackingQuery { get; protected set; }
-    public List<Expression<Func<TEntity, object>>> IncludeExpressions { get; } = [];
+    public ICollection<Expression<Func<TEntity, object>>> IncludeExpressions { get; } = [];
     public Expression<Func<TEntity, object>>? OrderByExpression { get; private set; }
     public Expression<Func<TEntity, object>>? OrderByDescendingExpression { get; private set; }
     protected void AddInclude(Expression<Func<TEntity, object>> includeExpression)

@@ -1,13 +1,14 @@
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
-using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using MediatR;
 using NSubstitute;
 using Resrcify.SharedKernel.Messaging.Behaviors;
 using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Shouldly;
 using Xunit;
 using ValidationResult = FluentValidation.Results.ValidationResult;
 
@@ -40,8 +41,7 @@ public class ValidationPipelineBehaviorTests
             .Invoke();
 
         actualResponse
-            .Should()
-            .BeEquivalentTo(expectedResponse);
+            .ShouldBeEquivalentTo(expectedResponse);
     }
 
     [Fact]
@@ -63,8 +63,7 @@ public class ValidationPipelineBehaviorTests
             .Invoke();
 
         actualResponse
-            .Should()
-            .BeEquivalentTo(expectedResponse);
+            .ShouldBeEquivalentTo(expectedResponse);
     }
 
     [Fact]
@@ -86,8 +85,7 @@ public class ValidationPipelineBehaviorTests
             .Invoke();
 
         actualResponse
-            .Should()
-            .BeEquivalentTo(expectedResponse);
+            .ShouldBeEquivalentTo(expectedResponse);
     }
 
     [Fact]
@@ -112,15 +110,14 @@ public class ValidationPipelineBehaviorTests
 
         // Assert
         actualResponse.IsSuccess
-            .Should()
-            .BeFalse();
+            .ShouldBeFalse();
 
-        actualResponse.Errors
-            .Should()
-            .ContainSingle()
-                .Which
-                    .Should()
-                    .Match<Error>(e => e.Code == "Property" && e.Message == "Error message" && e.Type == ErrorType.Validation);
+        actualResponse.Errors.Length.ShouldBe(1);
+
+        var error = actualResponse.Errors[0];
+        error.Code.ShouldBe("Property");
+        error.Message.ShouldBe("Error message");
+        error.Type.ShouldBe(ErrorType.Validation);
     }
 
     [Fact]
@@ -145,15 +142,14 @@ public class ValidationPipelineBehaviorTests
 
         // Assert
         actualResponse.IsSuccess
-            .Should()
-            .BeFalse();
+            .ShouldBeFalse();
 
-        actualResponse.Errors
-            .Should()
-            .ContainSingle()
-                .Which
-                    .Should()
-                    .Match<Error>(e => e.Code == "Property" && e.Message == "Error message" && e.Type == ErrorType.Validation);
+        actualResponse.Errors.Length.ShouldBe(1);
+
+        var error = actualResponse.Errors[0];
+        error.Code.ShouldBe("Property");
+        error.Message.ShouldBe("Error message");
+        error.Type.ShouldBe(ErrorType.Validation);
     }
 
     [Fact]
@@ -178,15 +174,14 @@ public class ValidationPipelineBehaviorTests
 
         // Assert
         actualResponse.IsSuccess
-            .Should()
-            .BeFalse();
+            .ShouldBeFalse();
 
-        actualResponse.Errors
-            .Should()
-            .ContainSingle()
-                .Which
-                    .Should()
-                    .Match<Error>(e => e.Code == "Property" && e.Message == "Error message" && e.Type == ErrorType.Validation);
+        actualResponse.Errors.Length.ShouldBe(1);
+
+        var error = actualResponse.Errors[0];
+        error.Code.ShouldBe("Property");
+        error.Message.ShouldBe("Error message");
+        error.Type.ShouldBe(ErrorType.Validation);
     }
 
     [Fact]
@@ -220,28 +215,22 @@ public class ValidationPipelineBehaviorTests
 
         // Assert
         actualResponse.IsSuccess
-            .Should()
-            .BeFalse();
+            .ShouldBeFalse();
+
+        actualResponse.Errors.Length
+            .ShouldBe(4);
 
         actualResponse.Errors
-            .Should()
-            .HaveCount(4);
+            .ShouldContain(e => e.Code == "Property1" && e.Message == "Error message1" && e.Type == ErrorType.Validation);
 
         actualResponse.Errors
-            .Should()
-            .Contain(e => e.Code == "Property1" && e.Message == "Error message1" && e.Type == ErrorType.Validation);
+            .ShouldContain(e => e.Code == "Property2" && e.Message == "Error message2" && e.Type == ErrorType.Validation);
 
         actualResponse.Errors
-            .Should()
-            .Contain(e => e.Code == "Property2" && e.Message == "Error message2" && e.Type == ErrorType.Validation);
+            .ShouldContain(e => e.Code == "Property3" && e.Message == "Error message3" && e.Type == ErrorType.Validation);
 
         actualResponse.Errors
-            .Should()
-            .Contain(e => e.Code == "Property3" && e.Message == "Error message3" && e.Type == ErrorType.Validation);
-
-        actualResponse.Errors
-            .Should()
-            .Contain(e => e.Code == "Property4" && e.Message == "Error message4" && e.Type == ErrorType.Validation);
+            .ShouldContain(e => e.Code == "Property4" && e.Message == "Error message4" && e.Type == ErrorType.Validation);
     }
 
     [Fact]
@@ -275,28 +264,22 @@ public class ValidationPipelineBehaviorTests
 
         // Assert
         actualResponse.IsSuccess
-            .Should()
-            .BeFalse();
+            .ShouldBeFalse();
+
+        actualResponse.Errors.Length
+            .ShouldBe(4);
 
         actualResponse.Errors
-            .Should()
-            .HaveCount(4);
+            .ShouldContain(e => e.Code == "Property1" && e.Message == "Error message1" && e.Type == ErrorType.Validation);
 
         actualResponse.Errors
-            .Should()
-            .Contain(e => e.Code == "Property1" && e.Message == "Error message1" && e.Type == ErrorType.Validation);
+            .ShouldContain(e => e.Code == "Property2" && e.Message == "Error message2" && e.Type == ErrorType.Validation);
 
         actualResponse.Errors
-            .Should()
-            .Contain(e => e.Code == "Property2" && e.Message == "Error message2" && e.Type == ErrorType.Validation);
+            .ShouldContain(e => e.Code == "Property3" && e.Message == "Error message3" && e.Type == ErrorType.Validation);
 
         actualResponse.Errors
-            .Should()
-            .Contain(e => e.Code == "Property3" && e.Message == "Error message3" && e.Type == ErrorType.Validation);
-
-        actualResponse.Errors
-            .Should()
-            .Contain(e => e.Code == "Property4" && e.Message == "Error message4" && e.Type == ErrorType.Validation);
+            .ShouldContain(e => e.Code == "Property4" && e.Message == "Error message4" && e.Type == ErrorType.Validation);
     }
 
     [Fact]
@@ -330,28 +313,22 @@ public class ValidationPipelineBehaviorTests
 
         // Assert
         actualResponse.IsSuccess
-            .Should()
-            .BeFalse();
+            .ShouldBeFalse();
+
+        actualResponse.Errors.Length
+            .ShouldBe(4);
 
         actualResponse.Errors
-            .Should()
-            .HaveCount(4);
+            .ShouldContain(e => e.Code == "Property1" && e.Message == "Error message1" && e.Type == ErrorType.Validation);
 
         actualResponse.Errors
-            .Should()
-            .Contain(e => e.Code == "Property1" && e.Message == "Error message1" && e.Type == ErrorType.Validation);
+            .ShouldContain(e => e.Code == "Property2" && e.Message == "Error message2" && e.Type == ErrorType.Validation);
 
         actualResponse.Errors
-            .Should()
-            .Contain(e => e.Code == "Property2" && e.Message == "Error message2" && e.Type == ErrorType.Validation);
+            .ShouldContain(e => e.Code == "Property3" && e.Message == "Error message3" && e.Type == ErrorType.Validation);
 
         actualResponse.Errors
-            .Should()
-            .Contain(e => e.Code == "Property3" && e.Message == "Error message3" && e.Type == ErrorType.Validation);
-
-        actualResponse.Errors
-            .Should()
-            .Contain(e => e.Code == "Property4" && e.Message == "Error message4" && e.Type == ErrorType.Validation);
+            .ShouldContain(e => e.Code == "Property4" && e.Message == "Error message4" && e.Type == ErrorType.Validation);
     }
 
 
@@ -378,8 +355,7 @@ public class ValidationPipelineBehaviorTests
             .Invoke();
 
         actualResponse
-            .Should()
-            .BeEquivalentTo(expectedResponse);
+            .ShouldBeEquivalentTo(expectedResponse);
     }
 
     [Fact]
@@ -405,8 +381,7 @@ public class ValidationPipelineBehaviorTests
             .Invoke();
 
         actualResponse
-            .Should()
-            .BeEquivalentTo(expectedResponse);
+            .ShouldBeEquivalentTo(expectedResponse);
     }
     [Fact]
     public async Task Handle_ResultReference_ShouldPassThrough_WhenValidationSucceeds()
@@ -431,15 +406,26 @@ public class ValidationPipelineBehaviorTests
             .Invoke();
 
         actualResponse
-            .Should()
-            .BeEquivalentTo(expectedResponse);
+            .ShouldBeEquivalentTo(expectedResponse);
     }
 }
-
-public class MockResultRequest : IRequest<Result> { }
-
-public class MockResultPrimitiveRequest : IRequest<Result<int>> { }
-
-public class MockResultReferenceRequest : IRequest<Result<Response>> { }
-
-public record Response(string Name);
+[SuppressMessage(
+    "Maintainability",
+    "CA1515:Consider making public types internal",
+    Justification = "NSubstitute (which uses Castle DynamicProxy) cannot generate a mock of a type containing inaccessible generic parameters")]
+public sealed class MockResultRequest : IRequest<Result> { }
+[SuppressMessage(
+    "Maintainability",
+    "CA1515:Consider making public types internal",
+    Justification = "NSubstitute (which uses Castle DynamicProxy) cannot generate a mock of a type containing inaccessible generic parameters")]
+public sealed class MockResultPrimitiveRequest : IRequest<Result<int>> { }
+[SuppressMessage(
+    "Maintainability",
+    "CA1515:Consider making public types internal",
+    Justification = "NSubstitute (which uses Castle DynamicProxy) cannot generate a mock of a type containing inaccessible generic parameters")]
+public sealed class MockResultReferenceRequest : IRequest<Result<Response>> { }
+[SuppressMessage(
+    "Maintainability",
+    "CA1515:Consider making public types internal",
+    Justification = "NSubstitute (which uses Castle DynamicProxy) cannot generate a mock of a type containing inaccessible generic parameters")]
+public sealed record Response(string Name);

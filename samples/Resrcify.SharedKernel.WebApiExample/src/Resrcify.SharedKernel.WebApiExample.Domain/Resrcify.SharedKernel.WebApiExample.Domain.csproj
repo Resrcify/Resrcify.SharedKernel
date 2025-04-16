@@ -1,14 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <Nullable>enable</Nullable>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
   </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="MediatR.Contracts" Version="2.0.1" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Resrcify.SharedKernel.ResultFramework" Version = "1.8.5"/>
-    <PackageReference Include="Resrcify.SharedKernel.DomainDrivenDesign" Version = "1.8.5"/>
+    <PackageReference Include="Resrcify.SharedKernel.ResultFramework" Version = "1.11.0"/>
+    <PackageReference Include="Resrcify.SharedKernel.DomainDrivenDesign" Version = "1.11.0"/>
   </ItemGroup>
 </Project>

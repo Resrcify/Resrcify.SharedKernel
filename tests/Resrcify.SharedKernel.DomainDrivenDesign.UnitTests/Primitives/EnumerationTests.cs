@@ -1,8 +1,8 @@
 
 
 using Xunit;
-using FluentAssertions;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
+using Shouldly;
 
 namespace Resrcify.SharedKernel.DomainDrivenDesign.UnitTests.Primitives;
 public class EnumerationTests
@@ -12,8 +12,8 @@ public class EnumerationTests
     {
         var result = ExampleEnumeration.FromValue(1);
 
-        result.Should().NotBeNull();
-        result.Should().BeEquivalentTo(ExampleEnumeration.Example1);
+        result.ShouldNotBeNull();
+        result.ShouldBeEquivalentTo(ExampleEnumeration.Example1);
     }
 
     [Fact]
@@ -21,7 +21,7 @@ public class EnumerationTests
     {
         var result = ExampleEnumeration.FromValue(999);
 
-        result.Should().BeNull();
+        result.ShouldBeNull();
     }
 
     [Fact]
@@ -29,8 +29,8 @@ public class EnumerationTests
     {
         var result = ExampleEnumeration.FromName("Example1");
 
-        result.Should().NotBeNull();
-        result.Should().BeEquivalentTo(ExampleEnumeration.Example1);
+        result.ShouldNotBeNull();
+        result.ShouldBeEquivalentTo(ExampleEnumeration.Example1);
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public class EnumerationTests
     {
         var result = ExampleEnumeration.FromName("NonExistent");
 
-        result.Should().BeNull();
+        result.ShouldBeNull();
     }
 
     [Fact]
@@ -46,7 +46,7 @@ public class EnumerationTests
     {
         var instance = ExampleEnumeration.Example1;
 
-        instance.Equals(instance).Should().BeTrue();
+        instance.Equals(instance).ShouldBeTrue();
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public class EnumerationTests
         var instance1 = ExampleEnumeration.Example1;
         var instance2 = ExampleEnumeration.Example1;
 
-        instance1.Equals(instance2).Should().BeTrue();
+        instance1.Equals(instance2).ShouldBeTrue();
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public class EnumerationTests
         var instance1 = ExampleEnumeration.Example1;
         var instance2 = ExampleEnumeration.Example2;
 
-        instance1.Equals(instance2).Should().BeFalse();
+        instance1.Equals(instance2).ShouldBeFalse();
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public class EnumerationTests
         var instance = ExampleEnumeration.Example1;
         var expectedHashCode = instance.Value.GetHashCode();
 
-        instance.GetHashCode().Should().Be(expectedHashCode);
+        instance.GetHashCode().ShouldBe(expectedHashCode);
     }
 
     [Fact]
@@ -81,10 +81,10 @@ public class EnumerationTests
     {
         var instance = ExampleEnumeration.Example1;
 
-        instance.ToString().Should().Be("Example1");
+        instance.ToString().ShouldBe("Example1");
     }
 
-    public class ExampleEnumeration : Enumeration<ExampleEnumeration>
+    internal sealed class ExampleEnumeration : Enumeration<ExampleEnumeration>
     {
         public static ExampleEnumeration Example1 = new(1, "Example1");
         public static ExampleEnumeration Example2 = new(2, "Example2");

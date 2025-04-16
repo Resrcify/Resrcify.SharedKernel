@@ -69,7 +69,7 @@ public sealed class ValidationPipelineBehavior<TRequest, TResponse>
             .GetMethods()
             .First(m =>
                 m is { IsGenericMethod: true, Name: nameof(Result.Failure) } &&
-                m.GetParameters().First().ParameterType == typeof(Error[]))!
+                m.GetParameters()[0].ParameterType == typeof(Error[]))!
             .MakeGenericMethod(typeof(TResult).GenericTypeArguments[0])
             .Invoke(null, [errors])!;
 

@@ -1,15 +1,14 @@
 using System;
-using System.Linq;
 using System.Threading.Tasks;
-using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Resrcify.SharedKernel.UnitOfWork.Interceptors;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
+using Shouldly;
 using Xunit;
 
 namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.Interceptors;
 
-public class UpdateAuditableEntitiesInterceptorTests : DbSetupBase
+public sealed class UpdateAuditableEntitiesInterceptorTests : DbSetupBase
 {
     public UpdateAuditableEntitiesInterceptorTests() : base(new UpdateAuditableEntitiesInterceptor())
     {
@@ -28,12 +27,10 @@ public class UpdateAuditableEntitiesInterceptorTests : DbSetupBase
 
         //ASsert
         entity.CreatedOnUtc
-            .Should()
-            .BeCloseTo(now, TimeSpan.FromSeconds(1));
+            .ShouldBe(now, TimeSpan.FromSeconds(1));
 
         entity.ModifiedOnUtc
-            .Should()
-            .BeCloseTo(now, TimeSpan.FromSeconds(1));
+            .ShouldBe(now, TimeSpan.FromSeconds(1));
     }
     [Fact]
     public async Task SaveChangesAsync_ShouldUpdateModifiedOn_ForAuditableEntities()
@@ -50,8 +47,7 @@ public class UpdateAuditableEntitiesInterceptorTests : DbSetupBase
 
         //ASsert
         entity.ModifiedOnUtc
-            .Should()
-            .BeCloseTo(now, TimeSpan.FromSeconds(1));
+            .ShouldBe(now, TimeSpan.FromSeconds(1));
     }
 
     [Fact]
@@ -69,15 +65,13 @@ public class UpdateAuditableEntitiesInterceptorTests : DbSetupBase
         var foundEntity = await DbContext.Persons
             .FirstOrDefaultAsync(x => x.Id == entity.Id);
 
-        foundEntity.Should().NotBeNull();
+        foundEntity.ShouldNotBeNull();
 
         foundEntity!.CreatedOnUtc
-            .Should()
-            .BeCloseTo(now, TimeSpan.FromSeconds(1));
+            .ShouldBe(now, TimeSpan.FromSeconds(1));
 
         foundEntity!.ModifiedOnUtc
-            .Should()
-            .BeCloseTo(now, TimeSpan.FromSeconds(1));
+            .ShouldBe(now, TimeSpan.FromSeconds(1));
     }
     [Fact]
     public async Task SaveChangesAsync_ShouldUpdateModifiedOn_InDatabase()
@@ -96,10 +90,9 @@ public class UpdateAuditableEntitiesInterceptorTests : DbSetupBase
         var foundEntity = await DbContext.Persons
             .FirstOrDefaultAsync(x => x.Id == entity.Id);
 
-        foundEntity.Should().NotBeNull();
+        foundEntity.ShouldNotBeNull();
 
         foundEntity!.ModifiedOnUtc
-            .Should()
-            .BeCloseTo(now, TimeSpan.FromSeconds(1));
+            .ShouldBe(now, TimeSpan.FromSeconds(1));
     }
 }

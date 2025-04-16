@@ -3,8 +3,8 @@ using Resrcify.SharedKernel.Repository.UnitTests.Models;
 using Xunit;
 using Resrcify.SharedKernel.Repository.Extensions;
 using System.Threading.Tasks;
-using FluentAssertions;
 using System.Linq;
+using Shouldly;
 
 namespace Resrcify.SharedKernel.Repository.UnitTests.Extensions;
 
@@ -29,16 +29,12 @@ public class ResultExtensionsTests : DbSetupBase
 
         // Assert
         result
-            .Should()
-            .NotBeNull();
+            .ShouldNotBeNull();
 
         result
-            .Should()
-            .Contain(entity2);
+            .ShouldContain(entity2);
 
-        result
-            .Should()
-            .HaveCount(1);
+        result.ShouldHaveSingleItem();
     }
 
     [Fact]
@@ -60,20 +56,16 @@ public class ResultExtensionsTests : DbSetupBase
 
         // Assert
         result
-            .Should()
-            .NotBeNull();
+            .ShouldNotBeNull();
 
         result
-            .Should()
-            .Contain(entity1);
+            .ShouldContain(entity1);
 
         result
-            .Should()
-            .Contain(entity2);
+            .ShouldContain(entity2);
 
-        result
-            .Should()
-            .HaveCount(2);
+        result.Count
+            .ShouldBe(2);
     }
 
     [Fact]
@@ -97,16 +89,12 @@ public class ResultExtensionsTests : DbSetupBase
 
         // Assert
         result
-            .Should()
-            .NotBeNull();
+            .ShouldNotBeNull();
 
-        result.First().Children
-            .Should()
-            .Contain(entity2);
+        result[0].Children
+            .ShouldContain(entity2);
 
-        result.First().Children
-            .Should()
-            .HaveCount(1);
+        result[0].Children.ShouldHaveSingleItem();
     }
     [Fact]
     public async Task IncludeIf_ShouldNotApplyPredicate_WhenConditionIsNotMet()
@@ -129,11 +117,9 @@ public class ResultExtensionsTests : DbSetupBase
 
         // Assert
         result
-            .Should()
-            .NotBeNull();
+            .ShouldNotBeNull();
 
-        result.First().Children
-           .Should()
-           .HaveCount(0);
+        result[0].Children
+           .ShouldBeEmpty();
     }
 }

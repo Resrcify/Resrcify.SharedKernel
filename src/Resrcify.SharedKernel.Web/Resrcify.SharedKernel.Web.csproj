@@ -1,15 +1,10 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <PackageId>Resrcify.SharedKernel.Web</PackageId>
-    <Authors>Rickard Marjanovic (@rmarjanovic)</Authors>
-    <Company>Resrcify AB</Company>
     <Title>Resrcify.SharedKernel.Web</Title>
     <Description>Maps errors from the result patterns to a problem details response.</Description>
     <Summary>Maps errors from the result patterns to a problem details response.</Summary>
-    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
-    <ImplicitUsings>disable</ImplicitUsings>
-    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,7 +14,7 @@
     <ProjectReference Include="..\Resrcify.SharedKernel.ResultFramework\Resrcify.SharedKernel.ResultFramework.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="MediatR" Version="12.5.0">
+    <PackageReference Include="MediatR">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
   </ItemGroup>

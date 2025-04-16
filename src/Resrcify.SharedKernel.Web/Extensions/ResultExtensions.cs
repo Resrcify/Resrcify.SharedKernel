@@ -39,6 +39,7 @@ public static class ResultExtensions
             ErrorType.Validation => "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.1",
             ErrorType.NotFound => "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4",
             ErrorType.Conflict => "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.8",
+            ErrorType.Failure => "https://datatracker.ietf.org/doc/html/rfc7231#section-6.6.1",
             _ => "https://datatracker.ietf.org/doc/html/rfc7231#section-6.6.1"
         };
 
@@ -48,6 +49,7 @@ public static class ResultExtensions
             ErrorType.Validation => "Bad Request",
             ErrorType.NotFound => "Not Found",
             ErrorType.Conflict => "Conflict",
+            ErrorType.Failure => "Internal Server Error",
             _ => "Internal Server Error"
         };
     internal static int GetStatusCode(ErrorType errorType)
@@ -56,6 +58,7 @@ public static class ResultExtensions
             ErrorType.Validation => StatusCodes.Status400BadRequest,
             ErrorType.NotFound => StatusCodes.Status404NotFound,
             ErrorType.Conflict => StatusCodes.Status409Conflict,
+            ErrorType.Failure => StatusCodes.Status500InternalServerError,
             _ => StatusCodes.Status500InternalServerError
         };
 

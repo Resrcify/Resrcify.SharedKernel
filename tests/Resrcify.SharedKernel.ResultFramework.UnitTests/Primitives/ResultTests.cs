@@ -1,6 +1,6 @@
 using System;
-using FluentAssertions;
 using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Shouldly;
 using Xunit;
 
 
@@ -19,9 +19,9 @@ public class ResultTests
         var result = new TestResult(isSuccess, error);
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.IsFailure.Should().BeFalse();
-        result.Errors.Should().BeEmpty();
+        result.IsSuccess.ShouldBeTrue();
+        result.IsFailure.ShouldBeFalse();
+        result.Errors.ShouldBeEmpty();
     }
 
     [Fact]
@@ -35,9 +35,9 @@ public class ResultTests
         var result = new TestResult(isSuccess, errors);
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.IsFailure.Should().BeFalse();
-        result.Errors.Should().BeEquivalentTo(errors);
+        result.IsSuccess.ShouldBeTrue();
+        result.IsFailure.ShouldBeFalse();
+        result.Errors.ShouldBeEquivalentTo(errors);
     }
 
     [Fact]
@@ -51,9 +51,9 @@ public class ResultTests
         var result = new TestResult(isSuccess, error);
 
         // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().BeEquivalentTo(new[] { error });
+        result.IsSuccess.ShouldBeFalse();
+        result.IsFailure.ShouldBeTrue();
+        result.Errors.ShouldBe([error]);
     }
 
     [Fact]
@@ -67,9 +67,9 @@ public class ResultTests
         var result = new TestResult(isSuccess, errors);
 
         // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().BeEquivalentTo(errors);
+        result.IsSuccess.ShouldBeFalse();
+        result.IsFailure.ShouldBeTrue();
+        result.Errors.ShouldBeEquivalentTo(errors);
     }
 
     [Fact]
@@ -80,8 +80,7 @@ public class ResultTests
         Error error = Error.NullValue;
 
         // Act & Assert
-        FluentActions.Invoking(() => new TestResult(isSuccess, error))
-            .Should().Throw<InvalidOperationException>();
+        Should.Throw<InvalidOperationException>(() => new TestResult(isSuccess, error));
     }
 
     [Fact]
@@ -92,8 +91,7 @@ public class ResultTests
         Error error = Error.None;
 
         // Act & Assert
-        FluentActions.Invoking(() => new TestResult(isSuccess, error))
-            .Should().Throw<InvalidOperationException>();
+        Should.Throw<InvalidOperationException>(() => new TestResult(isSuccess, error));
     }
 
     [Fact]
@@ -104,8 +102,7 @@ public class ResultTests
         Error[] errors = [Error.NullValue];
 
         // Act & Assert
-        FluentActions.Invoking(() => new TestResult(isSuccess, errors))
-            .Should().NotThrow();
+        Should.NotThrow(() => new TestResult(isSuccess, errors));
     }
 
     [Fact]
@@ -116,8 +113,7 @@ public class ResultTests
         Error[] errors = [];
 
         // Act & Assert
-        FluentActions.Invoking(() => new TestResult(isSuccess, errors))
-            .Should().NotThrow();
+        Should.NotThrow(() => new TestResult(isSuccess, errors));
     }
 
     [Fact]
@@ -127,9 +123,9 @@ public class ResultTests
         var result = Result.Success();
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.IsFailure.Should().BeFalse();
-        result.Errors.Should().BeEmpty();
+        result.IsSuccess.ShouldBeTrue();
+        result.IsFailure.ShouldBeFalse();
+        result.Errors.ShouldBeEmpty();
     }
 
     [Fact]
@@ -142,10 +138,10 @@ public class ResultTests
         var result = Result.Success(value);
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.IsFailure.Should().BeFalse();
-        result.Errors.Should().BeEmpty();
-        result.Value.Should().Be(value);
+        result.IsSuccess.ShouldBeTrue();
+        result.IsFailure.ShouldBeFalse();
+        result.Errors.ShouldBeEmpty();
+        result.Value.ShouldBe(value);
     }
 
     [Fact]
@@ -158,9 +154,9 @@ public class ResultTests
         var result = Result.Failure(error);
 
         // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().BeEquivalentTo(new[] { error });
+        result.IsSuccess.ShouldBeFalse();
+        result.IsFailure.ShouldBeTrue();
+        result.Errors.ShouldBe([error]);
     }
 
     [Fact]
@@ -173,9 +169,9 @@ public class ResultTests
         var result = Result.Failure(errors);
 
         // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().BeEquivalentTo(errors);
+        result.IsSuccess.ShouldBeFalse();
+        result.IsFailure.ShouldBeTrue();
+        result.Errors.ShouldBeEquivalentTo(errors);
     }
 
     [Fact]
@@ -188,10 +184,10 @@ public class ResultTests
         var result = Result.Create(value);
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.IsFailure.Should().BeFalse();
-        result.Errors.Should().BeEmpty();
-        result.Value.Should().Be(value);
+        result.IsSuccess.ShouldBeTrue();
+        result.IsFailure.ShouldBeFalse();
+        result.Errors.ShouldBeEmpty();
+        result.Value.ShouldBe(value);
     }
 
     [Fact]
@@ -201,10 +197,10 @@ public class ResultTests
         var result = Result.Create<int?>(null);
 
         // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().BeEquivalentTo(new[] { Error.NullValue });
-        result.Invoking(r => r.Value).Should().Throw<InvalidOperationException>();
+        result.IsSuccess.ShouldBeFalse();
+        result.IsFailure.ShouldBeTrue();
+        result.Errors.ShouldBe([Error.NullValue]);
+        Should.Throw<InvalidOperationException>(() => _ = result.Value);
     }
 
     [Fact]
@@ -219,10 +215,10 @@ public class ResultTests
         var result = Result.Ensure(value, predicate, error);
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.IsFailure.Should().BeFalse();
-        result.Errors.Should().BeEmpty();
-        result.Value.Should().Be(value);
+        result.IsSuccess.ShouldBeTrue();
+        result.IsFailure.ShouldBeFalse();
+        result.Errors.ShouldBeEmpty();
+        result.Value.ShouldBe(value);
     }
 
     [Fact]
@@ -237,10 +233,10 @@ public class ResultTests
         var result = Result.Ensure(value, predicate, error);
 
         // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().BeEquivalentTo(new[] { error });
-        result.Invoking(r => r.Value).Should().Throw<InvalidOperationException>();
+        result.IsSuccess.ShouldBeFalse();
+        result.IsFailure.ShouldBeTrue();
+        result.Errors.ShouldBe([error]);
+        Should.Throw<InvalidOperationException>(() => _ = result.Value);
     }
 
     [Fact]
@@ -250,8 +246,8 @@ public class ResultTests
         int value = 42;
         var functions = new[]
         {
-            ((Func<int, bool>) (v => v == 42), Error.NullValue),
-            ((Func<int, bool>) (v => v > 0), Error.NullValue),
+            ( v => v == 42, Error.NullValue),
+            ( v => v > 0, Error.NullValue),
             ((Func<int, bool>) (v => v % 2 == 0), Error.NullValue)
         };
 
@@ -259,10 +255,10 @@ public class ResultTests
         var result = Result.Ensure(value, functions);
 
         // Assert
-        result.IsSuccess.Should().BeTrue();
-        result.IsFailure.Should().BeFalse();
-        result.Errors.Should().BeEmpty();
-        result.Value.Should().Be(value);
+        result.IsSuccess.ShouldBeTrue();
+        result.IsFailure.ShouldBeFalse();
+        result.Errors.ShouldBeEmpty();
+        result.Value.ShouldBe(value);
     }
 
     [Fact]
@@ -272,8 +268,8 @@ public class ResultTests
         int value = 42;
         var functions = new[]
         {
-            ((Func<int, bool>) (v => v == 42), Error.NullValue),
-            ((Func<int, bool>) (v => v < 0), Error.NullValue),
+            ( v => v == 42, Error.NullValue),
+            ( v => v < 0, Error.NullValue),
             ((Func<int, bool>) (v => v % 2 == 0), Error.NullValue)
         };
 
@@ -281,10 +277,10 @@ public class ResultTests
         var result = Result.Ensure(value, functions);
 
         // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.IsFailure.Should().BeTrue();
-        result.Errors.Should().BeEquivalentTo(new[] { Error.NullValue });
-        result.Invoking(r => r.Value).Should().Throw<InvalidOperationException>();
+        result.IsSuccess.ShouldBeFalse();
+        result.IsFailure.ShouldBeTrue();
+        result.Errors.ShouldBe([Error.NullValue]);
+        Should.Throw<InvalidOperationException>(() => _ = result.Value);
     }
 
     [Fact]
@@ -297,8 +293,8 @@ public class ResultTests
         var combinedResult = Result.Combine(result1);
 
         // Assert
-        combinedResult.IsSuccess.Should().BeTrue();
-        combinedResult.Value.Should().Be(42);
+        combinedResult.IsSuccess.ShouldBeTrue();
+        combinedResult.Value.ShouldBe(42);
     }
 
     [Fact]
@@ -312,8 +308,8 @@ public class ResultTests
         var combinedResult = Result.Combine(result1, result2);
 
         // Assert
-        combinedResult.IsSuccess.Should().BeTrue();
-        combinedResult.Value.Should().Be((42, "hello"));
+        combinedResult.IsSuccess.ShouldBeTrue();
+        combinedResult.Value.ShouldBe((42, "hello"));
     }
 
     [Fact]
@@ -328,8 +324,8 @@ public class ResultTests
         var combinedResult = Result.Combine(result1, result2, result3);
 
         // Assert
-        combinedResult.IsSuccess.Should().BeTrue();
-        combinedResult.Value.Should().Be((42, "hello", true));
+        combinedResult.IsSuccess.ShouldBeTrue();
+        combinedResult.Value.ShouldBe((42, "hello", true));
     }
 
     [Fact]
@@ -345,8 +341,8 @@ public class ResultTests
         var combinedResult = Result.Combine(result1, result2, result3, result4);
 
         // Assert
-        combinedResult.IsSuccess.Should().BeTrue();
-        combinedResult.Value.Should().Be((42, "hello", true, 3.14));
+        combinedResult.IsSuccess.ShouldBeTrue();
+        combinedResult.Value.ShouldBe((42, "hello", true, 3.14));
     }
 
     [Fact]
@@ -357,15 +353,15 @@ public class ResultTests
         var result2 = Result.Success("hello");
         var result3 = Result.Success(true);
         var result4 = Result.Success(3.14);
-        var fixedDate = new DateTime(2022, 1, 1);
+        var fixedDate = new DateTime(2022, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var result5 = Result.Success(fixedDate);
 
         // Act
         var combinedResult = Result.Combine(result1, result2, result3, result4, result5);
 
         // Assert
-        combinedResult.IsSuccess.Should().BeTrue();
-        combinedResult.Value.Should().Be((42, "hello", true, 3.14, fixedDate));
+        combinedResult.IsSuccess.ShouldBeTrue();
+        combinedResult.Value.ShouldBe((42, "hello", true, 3.14, fixedDate));
     }
 
     [Fact]
@@ -376,7 +372,7 @@ public class ResultTests
         var result2 = Result.Success("hello");
         var result3 = Result.Success(true);
         var result4 = Result.Success(3.14);
-        var fixedDate = new DateTime(2022, 1, 1);
+        var fixedDate = new DateTime(2022, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var result5 = Result.Success(fixedDate);
         var result6 = Result.Success(Guid.NewGuid());
 
@@ -384,8 +380,8 @@ public class ResultTests
         var combinedResult = Result.Combine(result1, result2, result3, result4, result5, result6);
 
         // Assert
-        combinedResult.IsSuccess.Should().BeTrue();
-        combinedResult.Value.Should().Be((42, "hello", true, 3.14, fixedDate, result6.Value));
+        combinedResult.IsSuccess.ShouldBeTrue();
+        combinedResult.Value.ShouldBe((42, "hello", true, 3.14, fixedDate, result6.Value));
     }
 
     [Fact]
@@ -398,9 +394,9 @@ public class ResultTests
         var combinedResult = Result.Combine(result1);
 
         // Assert
-        combinedResult.IsSuccess.Should().BeFalse();
-        combinedResult.Errors.Should().Contain(Error.NullValue);
-        combinedResult.Errors.Should().HaveCount(1);
+        combinedResult.IsSuccess.ShouldBeFalse();
+        combinedResult.Errors.ShouldContain(Error.NullValue);
+        combinedResult.Errors.ShouldHaveSingleItem();
     }
     [Fact]
     public void Combine_TwoResults_WithAnyFailure_ShouldReturnFailureResult()
@@ -413,9 +409,9 @@ public class ResultTests
         var combinedResult = Result.Combine(result1, result2);
 
         // Assert
-        combinedResult.IsSuccess.Should().BeFalse();
-        combinedResult.Errors.Should().Contain(Error.NullValue);
-        combinedResult.Errors.Should().HaveCount(1);
+        combinedResult.IsSuccess.ShouldBeFalse();
+        combinedResult.Errors.ShouldContain(Error.NullValue);
+        combinedResult.Errors.ShouldHaveSingleItem();
     }
     [Fact]
     public void Combine_ThreeResults_WithAnyFailure_ShouldReturnFailureResult()
@@ -429,9 +425,9 @@ public class ResultTests
         var combinedResult = Result.Combine(result1, result2, result3);
 
         // Assert
-        combinedResult.IsSuccess.Should().BeFalse();
-        combinedResult.Errors.Should().Contain(Error.NullValue);
-        combinedResult.Errors.Should().HaveCount(1);
+        combinedResult.IsSuccess.ShouldBeFalse();
+        combinedResult.Errors.ShouldContain(Error.NullValue);
+        combinedResult.Errors.ShouldHaveSingleItem();
     }
     [Fact]
     public void Combine_FourResults_WithAnyFailure_ShouldReturnFailureResult()
@@ -446,9 +442,9 @@ public class ResultTests
         var combinedResult = Result.Combine(result1, result2, result3, result4);
 
         // Assert
-        combinedResult.IsSuccess.Should().BeFalse();
-        combinedResult.Errors.Should().Contain(Error.NullValue);
-        combinedResult.Errors.Should().HaveCount(1);
+        combinedResult.IsSuccess.ShouldBeFalse();
+        combinedResult.Errors.ShouldContain(Error.NullValue);
+        combinedResult.Errors.ShouldHaveSingleItem();
     }
 
     [Fact]
@@ -459,16 +455,16 @@ public class ResultTests
         var result2 = Result.Success("hello");
         var result3 = Result.Failure<bool>(Error.NullValue);
         var result4 = Result.Success(3.14);
-        var fixedDate = new DateTime(2022, 1, 1);
+        var fixedDate = new DateTime(2022, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var result5 = Result.Success(fixedDate);
 
         // Act
         var combinedResult = Result.Combine(result1, result2, result3, result4, result5);
 
         // Assert
-        combinedResult.IsSuccess.Should().BeFalse();
-        combinedResult.Errors.Should().Contain(Error.NullValue);
-        combinedResult.Errors.Should().HaveCount(1);
+        combinedResult.IsSuccess.ShouldBeFalse();
+        combinedResult.Errors.ShouldContain(Error.NullValue);
+        combinedResult.Errors.ShouldHaveSingleItem();
     }
 
     [Fact]
@@ -479,7 +475,7 @@ public class ResultTests
         var result2 = Result.Success("hello");
         var result3 = Result.Failure<bool>(Error.NullValue);
         var result4 = Result.Success(3.14);
-        var fixedDate = new DateTime(2022, 1, 1);
+        var fixedDate = new DateTime(2022, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var result5 = Result.Success(fixedDate);
         var result6 = Result.Failure<Guid>(Error.NullValue);
 
@@ -487,12 +483,12 @@ public class ResultTests
         var combinedResult = Result.Combine(result1, result2, result3, result4, result5, result6);
 
         // Assert
-        combinedResult.IsSuccess.Should().BeFalse();
-        combinedResult.Errors.Should().Contain(Error.NullValue);
-        combinedResult.Errors.Should().HaveCount(1);
+        combinedResult.IsSuccess.ShouldBeFalse();
+        combinedResult.Errors.ShouldContain(Error.NullValue);
+        combinedResult.Errors.ShouldHaveSingleItem();
     }
 
-    private class TestResult : Result
+    private sealed class TestResult : Result
     {
         public TestResult(bool isSuccess, Error error) : base(isSuccess, error)
         {

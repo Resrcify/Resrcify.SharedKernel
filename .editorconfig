@@ -290,3 +290,41 @@ dotnet_diagnostic.CA2327.severity = none
 
 # IDE0046: Convert to conditional expression
 dotnet_diagnostic.IDE0046.severity = none
+
+# Static analysis rules and custom edits
+
+# CA1712: Do not prefix enum values with type name
+dotnet_diagnostic.CA1712.severity = none
+
+# IDE0021: Use block body for methods
+dotnet_diagnostic.IDE0021.severity = none
+
+# IDE0022: Use expression body for accessors
+dotnet_diagnostic.IDE0022.severity = none
+
+# IDE0008: Use explicit type
+dotnet_diagnostic.IDE0008.severity = none
+
+# CA1034: Nested types should not be visible
+dotnet_diagnostic.CA1034.severity = none
+
+# IDE0058: Value assigned is never used
+dotnet_diagnostic.IDE0058.severity = none
+
+# S3241: Loop condition should not be constant
+dotnet_diagnostic.S3241.severity = none
+
+# CA1707: Identifiers should not contain underscores
+dotnet_diagnostic.CA1707.severity = none
+
+# IDE0305: Simplify collection initialization
+dotnet_diagnostic.IDE0305.severity = none
+
+# S1135: Track TODO comments
+dotnet_diagnostic.S1135.severity = none
+
+# IDE0290: Use primary constructor
+dotnet_diagnostic.IDE0290.severity = none
+
+# Suppress the "Seal or implement IEqualityComparer<T>" rule
+dotnet_diagnostic.S4035.severity = none

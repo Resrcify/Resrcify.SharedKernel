@@ -15,8 +15,8 @@ public abstract class Repository<TDbContext, TEntity, TId> : IRepository<TEntity
     where TEntity : AggregateRoot<TId>
     where TId : notnull
 {
-    protected readonly TDbContext Context;
-    public Repository(TDbContext context)
+    protected TDbContext Context { get; }
+    protected Repository(TDbContext context)
         => Context = context;
 
     public virtual async Task<TEntity?> GetByIdAsync(
@@ -42,10 +42,6 @@ public abstract class Repository<TDbContext, TEntity, TId> : IRepository<TEntity
         => Context
             .Set<TEntity>()
             .AsAsyncEnumerable();
-    public virtual async Task<IEnumerable<TEntity>> GetAllAsync(CancellationToken cancellationToken = default)
-        => await Context
-            .Set<TEntity>()
-            .ToListAsync(cancellationToken: cancellationToken);
     public virtual IAsyncEnumerable<TEntity> FindAsync(Expression<Func<TEntity, bool>> predicate)
         => Context
             .Set<TEntity>()
@@ -54,20 +50,6 @@ public abstract class Repository<TDbContext, TEntity, TId> : IRepository<TEntity
     public IAsyncEnumerable<TEntity> FindAsync(Specification<TEntity, TId> specification)
         => ApplySpecification(specification)
             .AsAsyncEnumerable();
-    public virtual async Task<IEnumerable<TEntity>> FindAsync(
-        Expression<Func<TEntity, bool>> predicate,
-        CancellationToken cancellationToken = default)
-        => await Context
-            .Set<TEntity>()
-            .Where(predicate)
-            .ToListAsync(cancellationToken: cancellationToken);
-    public async Task<IEnumerable<TEntity>> FindAsync(
-        Specification<TEntity, TId> specification,
-        CancellationToken cancellationToken = default)
-        => await ApplySpecification(specification)
-            .ToListAsync(cancellationToken: cancellationToken);
-
-
     public async Task AddAsync(
         TEntity entity,
         CancellationToken cancellationToken = default)

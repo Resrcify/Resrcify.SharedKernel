@@ -8,7 +8,7 @@ public abstract class AggregateRoot<TId>(TId id) : Entity<TId>(id), IAggregateRo
 {
     private readonly List<IDomainEvent> _domainEvents = [];
 
-    public IReadOnlyCollection<IDomainEvent> GetDomainEvents() => [.. _domainEvents];
+    public IReadOnlyList<IDomainEvent> GetDomainEvents() => [.. _domainEvents];
 
     public void ClearDomainEvents() => _domainEvents.Clear();
 

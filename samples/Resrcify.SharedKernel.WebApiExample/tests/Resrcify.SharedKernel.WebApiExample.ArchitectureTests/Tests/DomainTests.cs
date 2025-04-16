@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using FluentAssertions;
 using NetArchTest.Rules;
 using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 using Resrcify.SharedKernel.WebApiExample.ArchitectureTests.Extensions;
 using Resrcify.SharedKernel.WebApiExample.ArchitectureTests.Helpers;
+using Shouldly;
 using Xunit.Abstractions;
 
 namespace Resrcify.SharedKernel.WebApiExample.ArchitectureTests.Tests;
@@ -64,8 +64,7 @@ public class DomainTests : BaseTest
         }
 
         failingTypes
-            .Should()
-            .BeEmpty();
+            .ShouldBeEmpty();
 
     }
 }

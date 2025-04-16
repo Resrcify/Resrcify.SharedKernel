@@ -1,13 +1,13 @@
 using System.Collections.Generic;
-using FluentAssertions;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
+using Shouldly;
 using Xunit;
 
 namespace Resrcify.SharedKernel.DomainDrivenDesign.UnitTests.Primitives;
 
 public class ValueObjectTests
 {
-    private class Address : ValueObject
+    private sealed class Address : ValueObject
     {
         public string Street { get; }
         public string City { get; }
@@ -36,7 +36,7 @@ public class ValueObjectTests
         var address2 = new Address("123 Elm St", "Somewhere", "12345");
 
         // Act & Assert
-        address1.Equals(address2).Should().BeTrue();
+        address1.Equals(address2).ShouldBeTrue();
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class ValueObjectTests
         var address2 = new Address("124 Elm St", "Somewhere", "12345");
 
         // Act & Assert
-        address1.Equals(address2).Should().BeFalse();
+        address1.Equals(address2).ShouldBeFalse();
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public class ValueObjectTests
         var address2 = new Address("123 Elm St", "Somewhere", "12345");
 
         // Act & Assert
-        address1.GetHashCode().Should().Be(address2.GetHashCode());
+        address1.GetHashCode().ShouldBe(address2.GetHashCode());
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public class ValueObjectTests
         var address2 = new Address("124 Elm St", "Somewhere", "12345");
 
         // Act & Assert
-        address1.GetHashCode().Should().NotBe(address2.GetHashCode());
+        address1.GetHashCode().ShouldNotBe(address2.GetHashCode());
     }
 
     [Fact]
@@ -80,7 +80,7 @@ public class ValueObjectTests
         var address2 = new Address("123 Elm St", "Somewhere", "12345");
 
         // Act & Assert
-        (address1 == address2).Should().BeTrue();
+        (address1 == address2).ShouldBeTrue();
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public class ValueObjectTests
         var address2 = new Address("124 Elm St", "Somewhere", "12345");
 
         // Act & Assert
-        (address1 == address2).Should().BeFalse();
+        (address1 == address2).ShouldBeFalse();
     }
 
     [Fact]
@@ -102,7 +102,7 @@ public class ValueObjectTests
         var address2 = new Address("124 Elm St", "Somewhere", "12345");
 
         // Act & Assert
-        (address1 != address2).Should().BeTrue();
+        (address1 != address2).ShouldBeTrue();
     }
 
     [Fact]
@@ -113,6 +113,6 @@ public class ValueObjectTests
         var address2 = new Address("123 Elm St", "Somewhere", "12345");
 
         // Act & Assert
-        (address1 != address2).Should().BeFalse();
+        (address1 != address2).ShouldBeFalse();
     }
 }

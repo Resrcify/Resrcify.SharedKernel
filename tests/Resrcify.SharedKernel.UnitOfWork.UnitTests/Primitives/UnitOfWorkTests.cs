@@ -1,8 +1,8 @@
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
-using FluentAssertions;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
+using Shouldly;
 
 namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.Primitives;
 
@@ -20,8 +20,8 @@ public class UnitOfWorkTests : DbSetupBase
 
         // Assert
         var fetchedPerson = await DbContext.Persons.SingleOrDefaultAsync();
-        fetchedPerson!.Should().NotBeNull();
-        fetchedPerson!.Name.Should().Be("John Doe");
+        fetchedPerson!.ShouldNotBeNull();
+        fetchedPerson!.Name.ShouldBe("John Doe");
     }
 
 
@@ -40,8 +40,8 @@ public class UnitOfWorkTests : DbSetupBase
 
         // Assert
         var fetchedPerson = await DbContext.Persons.SingleOrDefaultAsync();
-        fetchedPerson.Should().NotBeNull();
-        fetchedPerson!.Name.Should().Be("Jane Doe");
+        fetchedPerson.ShouldNotBeNull();
+        fetchedPerson!.Name.ShouldBe("Jane Doe");
     }
 
     [Fact]
@@ -58,6 +58,6 @@ public class UnitOfWorkTests : DbSetupBase
 
         // Assert
         var fetchedPerson = await DbContext.Persons.SingleOrDefaultAsync();
-        fetchedPerson.Should().BeNull();
+        fetchedPerson.ShouldBeNull();
     }
 }

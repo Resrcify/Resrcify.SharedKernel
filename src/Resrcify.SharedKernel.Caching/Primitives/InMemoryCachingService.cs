@@ -11,11 +11,11 @@ using Resrcify.SharedKernel.Caching.Abstractions;
 namespace Resrcify.SharedKernel.Caching.Primitives;
 
 
-public sealed class InMemoryCachingService : ICachingService
+public sealed class DistributedCachingService : ICachingService
 {
     private readonly IDistributedCache _distributedCache;
 
-    public InMemoryCachingService(IDistributedCache distributedCache)
+    public DistributedCachingService(IDistributedCache distributedCache)
         => _distributedCache = distributedCache;
 
     public async Task<T?> GetAsync<T>(

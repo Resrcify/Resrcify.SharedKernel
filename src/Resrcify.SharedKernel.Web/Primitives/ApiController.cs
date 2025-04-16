@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using MediatR;
 using Microsoft.AspNetCore.Http;
@@ -12,11 +13,15 @@ namespace Resrcify.SharedKernel.Web.Primitives;
 [ApiController]
 public abstract class ApiController : ControllerBase
 {
-    protected readonly ISender Sender;
+    protected ISender Sender { get; }
 
     protected ApiController(ISender sender)
         => Sender = sender;
 
+    [SuppressMessage(
+    "Globalization",
+    "CA1308:Normalize strings to uppercase",
+    Justification = "Lowercase needed for consistent JSON keys")]
     public static IResult ToProblemDetails(Result result)
     {
         if (result.IsSuccess)
@@ -31,7 +36,7 @@ public abstract class ApiController : ControllerBase
             type: ResultExtensions.GetType(errorType),
             extensions: new Dictionary<string, object?>
             {
-                { nameof(result.Errors).ToLower(), result.Errors }
+                { nameof(result.Errors).ToLowerInvariant(), result.Errors }
             });
     }
 }

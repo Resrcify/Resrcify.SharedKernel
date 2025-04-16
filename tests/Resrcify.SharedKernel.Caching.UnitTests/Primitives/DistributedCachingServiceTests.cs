@@ -1,26 +1,24 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using FluentAssertions;
 using Microsoft.Extensions.Caching.Distributed;
 using NSubstitute;
 using Resrcify.SharedKernel.Caching.Primitives;
+using Shouldly;
 using Xunit;
 
 namespace Resrcify.SharedKernel.Caching.UnitTests.Primitives;
 
-public class InMemoryCachingServiceTests
+public class DistributedCachingServiceTests
 {
-    private record Adress(string Name, int PostNumber);
+    private sealed record Adress(string Name, int PostNumber);
     private readonly IDistributedCache _mockCache = Substitute.For<IDistributedCache>();
-    private readonly InMemoryCachingService _cachingService;
+    private readonly DistributedCachingService _cachingService;
 
-    public InMemoryCachingServiceTests()
-        => _cachingService = new InMemoryCachingService(_mockCache);
+    public DistributedCachingServiceTests()
+        => _cachingService = new DistributedCachingService(_mockCache);
 
     [Fact]
     public async Task GetAsync_ShouldReturnDeserializedObject_WhenDataExists()
@@ -36,11 +34,9 @@ public class InMemoryCachingServiceTests
 
         // Assert
         result?
-            .Should()
-            .NotBeNull();
+            .ShouldNotBeNull();
         result
-            .Should()
-            .Be(expectedObject);
+            .ShouldBe(expectedObject);
     }
 
     [Fact]
@@ -70,13 +66,11 @@ public class InMemoryCachingServiceTests
         // Deserialize the captured byte[] to dynamic and compare the Name property using FluentAssertions
         var deserializedObject = JsonSerializer.Deserialize<Adress>(capturedBytes);
         deserializedObject
-            .Should()
-            .Be(obj);
+            .ShouldBe(obj);
 
         // Check SlidingExpiration using FluentAssertions
         capturedOptions!.SlidingExpiration
-            .Should()
-            .Be(expiration);
+            .ShouldBe(expiration);
     }
 
     [Fact]
@@ -117,13 +111,10 @@ public class InMemoryCachingServiceTests
 
         // Assert
         adressList
-            .Should()
-            .Contain(expectedObjects[0]);
+            .ShouldContain(expectedObjects[0]);
         adressList
-            .Should()
-            .Contain(expectedObjects[1]);
-        adressList
-            .Should()
-            .HaveCount(2);
+            .ShouldContain(expectedObjects[1]);
+        adressList.Count
+            .ShouldBe(2);
     }
 }

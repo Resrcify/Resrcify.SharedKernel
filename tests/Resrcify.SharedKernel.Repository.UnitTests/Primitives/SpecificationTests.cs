@@ -1,7 +1,7 @@
 using System;
 using System.Linq.Expressions;
-using FluentAssertions;
 using Resrcify.SharedKernel.Repository.UnitTests.Models;
+using Shouldly;
 using Xunit;
 
 namespace Resrcify.SharedKernel.Repository.UnitTests.Primitives;
@@ -18,7 +18,7 @@ public class SpecificationTests
         var specification = new PersonSpecification(criteria);
 
         // Assert
-        specification.Criteria.Should().Be(criteria);
+        specification.Criteria.ShouldBe(criteria);
     }
 
     [Fact]
@@ -29,8 +29,8 @@ public class SpecificationTests
         var specification = new PersonSpecification(addInclude: x => x.Children);
 
         // Assert
-        specification.IncludeExpressions.Should().ContainSingle()
-            .Which.Should().BeEquivalentTo((Expression<Func<Person, object>>)(x => x.Children));
+        var include = specification.IncludeExpressions.ShouldHaveSingleItem();
+        include.ToString().ShouldBe(((Expression<Func<Person, object>>)(x => x.Children)).ToString());
     }
 
     [Fact]
@@ -41,8 +41,8 @@ public class SpecificationTests
         var specification = new PersonSpecification(criteria: null, x => x.Id);
 
         // Assert
-        specification.OrderByExpression.Should().NotBeNull()
-            .And.BeEquivalentTo((Expression<Func<Person, object>>)(x => x.Id));
+        specification.OrderByExpression.ShouldNotBeNull();
+        specification.OrderByExpression.ToString().ShouldBe(((Expression<Func<Person, object>>)(x => x.Id)).ToString());
     }
 
     [Fact]
@@ -53,8 +53,9 @@ public class SpecificationTests
         var specification = new PersonSpecification(criteria: null, orderBy: null, orderByDecending: x => x.Id);
 
         // Assert
-        specification.OrderByDescendingExpression.Should().NotBeNull()
-            .And.BeEquivalentTo((Expression<Func<Person, object>>)(x => x.Id));
+        specification.OrderByDescendingExpression.ShouldNotBeNull();
+        specification.OrderByDescendingExpression.ToString()
+            .ShouldBe(((Expression<Func<Person, object>>)(x => x.Id)).ToString());
     }
     [Fact]
     public void Constructor_IsSplitQuery_IsFalseByDefault()
@@ -63,7 +64,7 @@ public class SpecificationTests
         var specification = new PersonSpecification();
 
         // Assert
-        specification.IsSplitQuery.Should().BeFalse();
+        specification.IsSplitQuery.ShouldBeFalse();
     }
 
     [Fact]
@@ -73,7 +74,7 @@ public class SpecificationTests
         var specification = new PersonSpecification(isSplitQuery: true);
 
         // Assert
-        specification.IsSplitQuery.Should().BeTrue();
+        specification.IsSplitQuery.ShouldBeTrue();
     }
 
     [Fact]
@@ -83,7 +84,7 @@ public class SpecificationTests
         var specification = new PersonSpecification();
 
         // Assert
-        specification.IsNoTrackingQuery.Should().BeFalse();
+        specification.IsNoTrackingQuery.ShouldBeFalse();
     }
     [Fact]
     public void Constructor_IsNoTrackingQuery_CorrectlySetsProperty()
@@ -92,6 +93,6 @@ public class SpecificationTests
         var specification = new PersonSpecification(isNoTrackingQuery: true);
 
         // Assert
-        specification.IsNoTrackingQuery.Should().BeTrue();
+        specification.IsNoTrackingQuery.ShouldBeTrue();
     }
 }

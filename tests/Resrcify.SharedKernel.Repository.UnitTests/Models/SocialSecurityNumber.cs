@@ -3,7 +3,7 @@ using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 
 namespace Resrcify.SharedKernel.Repository.UnitTests.Models;
 
-public class SocialSecurityNumber : ValueObject
+internal sealed class SocialSecurityNumber : ValueObject
 {
     public int Value { get; private set; }
     private SocialSecurityNumber(int value)

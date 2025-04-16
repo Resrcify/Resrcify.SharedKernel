@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Resrcify.SharedKernel.ResultFramework.Primitives;
 using Resrcify.SharedKernel.Web.Primitives;
+using Shouldly;
 using Xunit;
 
 namespace Resrcify.SharedKernel.Web.UnitTests.Primitives;
@@ -20,8 +20,8 @@ public class ApiControllerTests
         var act = () => ApiController.ToProblemDetails(result);
 
         // Verify that an exception is thrown
-        act.Should().Throw<InvalidOperationException>()
-            .WithMessage("Successful result should not be converted to problem details.");
+        var exception = act.ShouldThrow<InvalidOperationException>();
+        exception.Message.ShouldBe("Successful result should not be converted to problem details.");
     }
 
     [Theory]
@@ -39,13 +39,13 @@ public class ApiControllerTests
         var problemDetails = ApiController.ToProblemDetails(result) as ProblemHttpResult;
 
         // Assert
-        problemDetails.Should().NotBeNull();
-        problemDetails?.ProblemDetails.Type.Should().Be(expectedType);
-        problemDetails?.ProblemDetails.Title.Should().Be(expectedTitle);
-        problemDetails?.ProblemDetails.Status.Should().Be(expectedStatusCode);
-        problemDetails?.StatusCode.Should().Be(expectedStatusCode);
-        problemDetails?.ProblemDetails.Extensions.Should().ContainKey("errors");
-        problemDetails?.ProblemDetails.Extensions["errors"].Should().BeAssignableTo<IEnumerable<Error>>();
-        ((IEnumerable<Error>)problemDetails?.ProblemDetails.Extensions["errors"]!).Should().ContainEquivalentOf(error, options => options.ExcludingMissingMembers());
+        problemDetails.ShouldNotBeNull();
+        problemDetails?.ProblemDetails.Type.ShouldBe(expectedType);
+        problemDetails?.ProblemDetails.Title.ShouldBe(expectedTitle);
+        problemDetails?.ProblemDetails.Status.ShouldBe(expectedStatusCode);
+        problemDetails?.StatusCode.ShouldBe(expectedStatusCode);
+        problemDetails?.ProblemDetails.Extensions.ShouldContainKey("errors");
+        problemDetails?.ProblemDetails.Extensions["errors"].ShouldBeAssignableTo<IEnumerable<Error>>();
+        ((IEnumerable<Error>)problemDetails?.ProblemDetails.Extensions["errors"]!).ShouldContain(error);
     }
 }

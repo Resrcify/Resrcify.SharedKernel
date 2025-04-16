@@ -4,10 +4,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ApplicationParts;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using FluentAssertions;
 using Resrcify.SharedKernel.Web.Extensions;
 using Resrcify.SharedKernel.Web.Primitives;
 using System.Reflection;
+using Shouldly;
 
 namespace Resrcify.SharedKernel.Web.UnitTests.Extensions;
 
@@ -28,12 +28,11 @@ public class InternalControllersExtensionTests
             .FirstOrDefault(s => s.ServiceType == typeof(ApplicationPartManager))?
             .ImplementationInstance as ApplicationPartManager;
 
-        partManager.Should().NotBeNull();
+        partManager.ShouldNotBeNull();
 
-        partManager!.FeatureProviders
+        partManager.FeatureProviders
             .OfType<CustomControllerFeatureProvider>()
-            .Should()
-            .ContainSingle(fp => fp.ControllerType == null);
+            .ShouldContain(fp => fp.ControllerType == null, "Expected a single provider with a null ControllerType");
     }
 
     [Fact]
@@ -47,7 +46,7 @@ public class InternalControllersExtensionTests
         var result = provider.IsController(typeInfo);
 
         // Assert
-        result.Should().BeTrue();
+        result.ShouldBeTrue();
     }
 
     [Fact]
@@ -61,7 +60,7 @@ public class InternalControllersExtensionTests
         var result = provider.IsController(typeInfo);
 
         // Assert
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
     }
 
     [Fact]
@@ -75,35 +74,35 @@ public class InternalControllersExtensionTests
         var result = provider.IsController(typeInfo);
 
         // Assert
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
     }
 
     [Fact]
     public void IsController_ShouldReturnTrue_ForCustomBaseController_WhenSpecified()
     {
         // Arrange
-        var provider = new TestCustomControllerFeatureProvider(typeof(CustomBaseController));
+        var provider = new TestCustomControllerFeatureProvider(typeof(ICustomBaseController));
         var typeInfo = typeof(CustomDerivedController).GetTypeInfo();
 
         // Act
         var result = provider.IsController(typeInfo);
 
         // Assert
-        result.Should().BeTrue();
+        result.ShouldBeTrue();
     }
 
     [Fact]
     public void IsController_ShouldReturnFalse_ForApiController_WhenCustomTypeSpecified()
     {
         // Arrange
-        var provider = new TestCustomControllerFeatureProvider(typeof(CustomBaseController));
+        var provider = new TestCustomControllerFeatureProvider(typeof(ICustomBaseController));
         var typeInfo = typeof(TestController).GetTypeInfo();
 
         // Act
         var result = provider.IsController(typeInfo);
 
         // Assert
-        result.Should().BeFalse();
+        result.ShouldBeFalse();
     }
 
     [Fact]
@@ -112,24 +111,23 @@ public class InternalControllersExtensionTests
         // Arrange
         var services = new ServiceCollection();
         var builder = services.AddMvc();
-        var customType = typeof(CustomBaseController);
+        var customType = typeof(ICustomBaseController);
 
         // Act
         builder.EnableInternalControllers(customType);
 
         // Assert
         var partManager = builder.PartManager;
-        partManager.Should().NotBeNull();
+        partManager.ShouldNotBeNull();
 
-        partManager!.FeatureProviders
+        partManager.FeatureProviders
             .OfType<CustomControllerFeatureProvider>()
-            .Should()
-            .ContainSingle(fp => fp.ControllerType == customType);
+            .ShouldContain(fp => fp.ControllerType == customType, "Expected a single provider with the specified ControllerType");
     }
 
     // ---------- Test Controller Types ----------
 
-    private class TestController : ApiController
+    private sealed class TestController : ApiController
     {
         public TestController() : base(null!) { }
     }
@@ -139,14 +137,14 @@ public class InternalControllersExtensionTests
         protected AbstractController() : base(null!) { }
     }
 
-    private class MvcController : Controller { }
+    private sealed class MvcController : Controller { }
 
-    private abstract class CustomBaseController { }
+    internal interface ICustomBaseController { }
 
-    private class CustomDerivedController : CustomBaseController { }
+    private sealed class CustomDerivedController : ICustomBaseController { }
 
     // ---------- Subclass to expose IsController ----------
-    internal class TestCustomControllerFeatureProvider : CustomControllerFeatureProvider
+    internal sealed class TestCustomControllerFeatureProvider : CustomControllerFeatureProvider
     {
         public TestCustomControllerFeatureProvider(Type? controllerType)
             : base(controllerType)

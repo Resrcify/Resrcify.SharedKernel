@@ -2,14 +2,13 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using FluentAssertions;
-using MediatR;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Resrcify.SharedKernel.Caching.Abstractions;
 using Resrcify.SharedKernel.Messaging.Abstractions;
 using Resrcify.SharedKernel.Messaging.Behaviors;
 using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Shouldly;
 using Xunit;
 
 namespace Resrcify.SharedKernel.Messaging.UnitTests.Behaviors;
@@ -45,12 +44,10 @@ public class CachingPipelineBehaviorTests
             .ReceivedCalls()
             .Select(call => call.GetArguments())
             .Count(callArguments => callArguments[0]!.Equals(LogLevel.Information))
-            .Should()
-            .Be(1);
+            .ShouldBe(1);
 
         result
-            .Should()
-            .BeSameAs(response);
+            .ShouldBeSameAs(response);
     }
 
     [Fact]
@@ -72,12 +69,10 @@ public class CachingPipelineBehaviorTests
             .ReceivedCalls()
             .Select(call => call.GetArguments())
             .Count(callArguments => callArguments[0]!.Equals(LogLevel.Information))
-            .Should()
-            .Be(1);
+            .ShouldBe(1);
 
         result
-            .Should()
-            .BeEquivalentTo(response, options => options.ComparingByMembers<Result>());
+            .ShouldBe(response);
     }
 
     [Fact]
@@ -108,15 +103,17 @@ public class CachingPipelineBehaviorTests
             .ReceivedCalls()
             .Select(call => call.GetArguments())
             .Count(callArguments => callArguments[0]!.Equals(LogLevel.Information))
-            .Should()
-            .Be(1);
+            .ShouldBe(1);
 
         result
-            .Should()
-            .Be(response);
+            .ShouldBe(response);
     }
 
-    public class MockCachingQuery(string? CacheKey, TimeSpan Expiration) : ICachingQuery<MockCachingQuery>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Maintainability",
+        "CA1515:Consider making public types internal",
+        Justification = "NSubstitute (which uses Castle DynamicProxy) cannot generate a mock of a type containing inaccessible generic parameters")]
+    public sealed class MockCachingQuery(string? CacheKey, TimeSpan Expiration) : ICachingQuery<MockCachingQuery>
     {
         public string? CacheKey { get; set; } = CacheKey;
         public TimeSpan Expiration { get; set; } = Expiration;

@@ -55,9 +55,9 @@ public class TransactionPipelineBehavior<TRequest, TResponse>
         }
         catch (Exception ex)
         {
-            _logger.LogError("Exception caught in UnitOfWorkPipelineBehavior: @{exception}", ex);
+            _logger.LogError(ex, "Exception caught in TransactionPipelineBehavior");
             await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-            throw;
+            throw new InvalidOperationException("An error occurred while processing the TransactionPipelineBehavior.", ex);
         }
     }
 }

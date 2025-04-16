@@ -13,7 +13,7 @@ namespace Resrcify.SharedKernel.UnitOfWork.Interceptors;
 public sealed class UpdateDeletableEntitiesInterceptor
     : SaveChangesInterceptor
 {
-    public async override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+    public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
         InterceptionResult<int> result,
         CancellationToken cancellationToken = default)
@@ -24,7 +24,6 @@ public sealed class UpdateDeletableEntitiesInterceptor
     }
     private static void UpdateDeletableEntities(DbContext context)
     {
-        DateTime utcNow = DateTime.UtcNow;
         IEnumerable<EntityEntry<IDeletableEntity>> entries =
             context
                 .ChangeTracker

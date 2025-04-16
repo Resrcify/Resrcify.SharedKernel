@@ -1,12 +1,13 @@
-using FluentAssertions;
+using System.Diagnostics.CodeAnalysis;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
+using Shouldly;
 using Xunit;
 
 namespace Resrcify.SharedKernel.DomainDrivenDesign.UnitTests.Primitives;
 
 public class EntityTests
 {
-    private class ConcreteEntity(int id) : Entity<int>(id)
+    private sealed class ConcreteEntity(int id) : Entity<int>(id)
     {
     }
 
@@ -20,7 +21,7 @@ public class EntityTests
         var entity = new ConcreteEntity(id);
 
         // Assert
-        entity.Id.Should().Be(id);
+        entity.Id.ShouldBe(id);
     }
 
     [Fact]
@@ -31,7 +32,7 @@ public class EntityTests
         var entity2 = new ConcreteEntity(1);
 
         // Act & Assert
-        entity1.Equals(entity2).Should().BeTrue();
+        entity1.Equals(entity2).ShouldBeTrue();
     }
 
     [Fact]
@@ -42,9 +43,12 @@ public class EntityTests
         var entity2 = new ConcreteEntity(2);
 
         // Act & Assert
-        entity1.Equals(entity2).Should().BeFalse();
+        entity1.Equals(entity2).ShouldBeFalse();
     }
-
+    [SuppressMessage(
+    "Maintainability",
+    "CA1508:Avoid dead conditional code",
+    Justification = "Its correctly testing if method returns false for null.")]
     [Fact]
     public void Equals_ShouldReturnFalseForNull()
     {
@@ -53,7 +57,7 @@ public class EntityTests
         Entity<int>? nullEntity = null;
 
         // Act & Assert
-        entity.Equals(nullEntity).Should().BeFalse();
+        entity.Equals(nullEntity).ShouldBeFalse();
     }
 
     [Fact]
@@ -64,7 +68,7 @@ public class EntityTests
         var entity2 = new ConcreteEntity(1);
 
         // Act & Assert
-        (entity1 == entity2).Should().BeTrue();
+        (entity1 == entity2).ShouldBeTrue();
     }
 
     [Fact]
@@ -75,7 +79,7 @@ public class EntityTests
         var entity2 = new ConcreteEntity(2);
 
         // Act & Assert
-        (entity1 != entity2).Should().BeTrue();
+        (entity1 != entity2).ShouldBeTrue();
     }
 
     [Fact]
@@ -87,7 +91,7 @@ public class EntityTests
         var expectedHashCode = id.GetHashCode() * 41;
 
         // Act & Assert
-        entity.GetHashCode().Should().Be(expectedHashCode);
+        entity.GetHashCode().ShouldBe(expectedHashCode);
     }
 
     [Fact]
@@ -98,7 +102,7 @@ public class EntityTests
         var entity2 = new ConcreteEntity(2);
 
         // Act & Assert
-        (entity1 == entity2).Should().BeFalse();
+        (entity1 == entity2).ShouldBeFalse();
     }
 
 
@@ -110,6 +114,6 @@ public class EntityTests
         var entity2 = new ConcreteEntity(1);
 
         // Act & Assert
-        (entity1 != entity2).Should().BeFalse();
+        (entity1 != entity2).ShouldBeFalse();
     }
 }

@@ -1,7 +1,7 @@
 using System.Linq;
-using FluentAssertions;
 using Resrcify.SharedKernel.WebApiExample.Domain.Features.Companies.ValueObjects;
 using Resrcify.SharedKernel.WebApiExample.Domain.Errors;
+using Shouldly;
 
 namespace Resrcify.SharedKernel.WebApiExample.Domain.UnitTests.Companies;
 
@@ -18,14 +18,11 @@ public class OrganizationNumberTests
 
         // Assert
         result.IsSuccess
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
         result.Value
-            .Should()
-            .NotBeNull();
+            .ShouldNotBeNull();
         result.Value.Value
-            .Should()
-            .Be(long.Parse(validOrganizationNumber));
+            .ShouldBe(long.Parse(validOrganizationNumber));
     }
 
     [Fact]
@@ -39,11 +36,9 @@ public class OrganizationNumberTests
 
         // Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
         result.Errors
-            .Should()
-            .Contain(DomainErrors.OrganizationNumber.Empty);
+            .ShouldContain(DomainErrors.OrganizationNumber.Empty);
     }
 
     [Fact]
@@ -57,11 +52,9 @@ public class OrganizationNumberTests
 
         // Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
         result.Errors
-            .Should()
-            .Contain(DomainErrors.OrganizationNumber.InvalidLength);
+            .ShouldContain(DomainErrors.OrganizationNumber.InvalidLength);
     }
 
     [Fact]
@@ -75,11 +68,9 @@ public class OrganizationNumberTests
 
         // Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
         result.Errors
-            .Should()
-            .Contain(DomainErrors.OrganizationNumber.InvalidStartingDigit);
+            .ShouldContain(DomainErrors.OrganizationNumber.InvalidStartingDigit);
     }
 
     [Fact]
@@ -93,11 +84,9 @@ public class OrganizationNumberTests
 
         // Assert
         result.IsFailure
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
         result.Errors
-            .Should()
-            .Contain(DomainErrors.OrganizationNumber.InvalidChecksum);
+            .ShouldContain(DomainErrors.OrganizationNumber.InvalidChecksum);
     }
 
     [Fact]
@@ -111,11 +100,7 @@ public class OrganizationNumberTests
         var atomicValues = organizationNumber.GetAtomicValues().ToArray();
 
         // Assert
-        atomicValues
-            .Should()
-            .ContainSingle()
-                .Which
-                .Should()
-                .Be(long.Parse(validOrganizationNumber));
+        atomicValues.ShouldHaveSingleItem();
+        atomicValues[0].ShouldBe(long.Parse(validOrganizationNumber));
     }
 }

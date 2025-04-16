@@ -54,7 +54,7 @@ using Microsoft.Extensions.DependencyInjection;
 public void AddInfrastructureServices(this IServiceCollection services)
 {
     services.AddDistributedMemoryCache();
-    services.AddSingleton<ICachingService, InMemoryCachingService>();
+    services.AddSingleton<ICachingService, DistributedCachingService>();
 }
 ```
 

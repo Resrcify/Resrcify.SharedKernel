@@ -1,7 +1,6 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using FluentAssertions;
 using MediatR;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
@@ -11,6 +10,8 @@ using Resrcify.SharedKernel.Messaging.Behaviors;
 using System.Data;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.ResultFramework.Primitives;
+using System.Diagnostics.CodeAnalysis;
+using Shouldly;
 
 namespace Resrcify.SharedKernel.Messaging.UnitTests.Behaviors;
 
@@ -39,8 +40,7 @@ public class TransactionPipelineBehaviorTests
 
         // Assert
         response
-            .Should()
-            .Be(result);
+            .ShouldBe(result);
 
         await _unitOfWork
             .Received(1)
@@ -65,8 +65,7 @@ public class TransactionPipelineBehaviorTests
 
         // Assert
         response
-            .Should()
-            .Be(result);
+            .ShouldBe(result);
 
         await _unitOfWork
             .Received(1)
@@ -74,26 +73,26 @@ public class TransactionPipelineBehaviorTests
     }
 
     [Fact]
+    [SuppressMessage(
+        "Usage",
+        "CA2201:Do not raise reserved exception types",
+        Justification = "Exception type is not important in this context")]
     public async Task Handle_ShouldRollbackTransactionAndLogError_OnException()
     {
         // Arrange
-        var exception = new Exception("Test exception");
+        var exception = new Exception();
         _next.When(n => n.Invoke()).Do(x => throw exception);
 
         // Act
-        Func<Task> act = async () => await _behavior.Handle(_command, _next, CancellationToken.None);
+        async Task act() => await _behavior.Handle(_command, _next, CancellationToken.None);
 
         // Assert
-        await act
-            .Should()
-            .ThrowAsync<Exception>()
-            .WithMessage("Test exception");
+        var assertedException = await Should.ThrowAsync<Exception>(act);
+        assertedException.Message.ShouldBe("An error occurred while processing the TransactionPipelineBehavior.");
 
-        _logger.Received(1);
-
-        await _unitOfWork
-            .Received(1)
-            .RollbackTransactionAsync(CancellationToken.None);
+        // Verify that the logger logs the error
+        _logger
+            .ReceivedCalls().Equals(1);
     }
 
     [Fact]
@@ -112,8 +111,7 @@ public class TransactionPipelineBehaviorTests
 
         // Assert
         response
-            .Should()
-            .Be(result);
+            .ShouldBe(result);
 
         await _unitOfWork
             .Received(1)

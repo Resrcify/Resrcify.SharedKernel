@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
-using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Resrcify.SharedKernel.Repository.UnitTests.Models;
+using Shouldly;
 using Xunit;
 
 namespace Resrcify.SharedKernel.Repository.UnitTests.Primitives;
@@ -37,12 +37,10 @@ public class RepositoryTests
 
         // Assert
         result
-            .Should()
-            .NotBeNull();
+            .ShouldNotBeNull();
 
         result
-            .Should()
-            .BeEquivalentTo(entity);
+            .ShouldBeEquivalentTo(entity);
     }
 
     [Fact]
@@ -57,8 +55,7 @@ public class RepositoryTests
 
         // Assert
         result
-            .Should()
-            .BeNull();
+            .ShouldBeNull();
     }
 
     [Fact]
@@ -76,8 +73,8 @@ public class RepositoryTests
         var result = await repository.FirstOrDefaultAsync(x => x.Id == entityId);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Should().BeEquivalentTo(entity, options => options.ComparingByMembers<Person>());
+        result.ShouldNotBeNull();
+        result.ShouldBe(entity);
     }
 
     [Fact]
@@ -92,7 +89,7 @@ public class RepositoryTests
         var result = await repository.FirstOrDefaultAsync(x => x.Id == entityId);
 
         // Assert
-        result.Should().BeNull();
+        result.ShouldBeNull();
     }
 
     [Fact]
@@ -114,8 +111,8 @@ public class RepositoryTests
         var result = await repository.FirstOrDefaultAsync(x => x.Name == uniqueName);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Should().BeEquivalentTo(firstEntity, options => options.ComparingByMembers<Person>());
+        result.ShouldNotBeNull();
+        result.ShouldBe(firstEntity);
     }
 
     [Fact]
@@ -135,8 +132,8 @@ public class RepositoryTests
         var result = await repository.FirstOrDefaultAsync(spec);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Should().BeEquivalentTo(entity, options => options.ComparingByMembers<Person>());
+        result.ShouldNotBeNull();
+        result.ShouldBe(entity);
     }
 
     [Fact]
@@ -151,7 +148,7 @@ public class RepositoryTests
         var result = await repository.FirstOrDefaultAsync(spec);
 
         // Assert
-        result.Should().BeNull();
+        result.ShouldBeNull();
     }
 
     [Fact]
@@ -175,8 +172,8 @@ public class RepositoryTests
 
         // Assert
         var resultList = await results.ToListAsync();
-        resultList.Should().HaveCount(entities.Count);
-        resultList.Should().BeEquivalentTo(entities, options => options.ComparingByMembers<Person>());
+        resultList.Count.ShouldBe(entities.Count);
+        resultList.ShouldBe(entities);
     }
 
     [Fact]
@@ -191,45 +188,7 @@ public class RepositoryTests
 
         // Assert
         var resultList = await results.ToListAsync();
-        resultList.Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task GetAllAsync_ReturnsAllEntitiesAsEnumerable()
-    {
-        // Arrange
-        using var dbContext = CreateDbContext();
-        var repository = new TestRepository(dbContext);
-
-        var entities = new List<Person>
-        {
-            new(SocialSecurityNumber.Create(123), "Alice"),
-            new(SocialSecurityNumber.Create(456), "Bob")
-        };
-
-        dbContext.Persons.AddRange(entities);
-        await dbContext.SaveChangesAsync();
-
-        // Act
-        var results = await repository.GetAllAsync(CancellationToken.None);
-
-        // Assert
-        results.Should().HaveCount(entities.Count);
-        results.Should().BeEquivalentTo(entities, options => options.ComparingByMembers<Person>());
-    }
-
-    [Fact]
-    public async Task GetAllAsync_ReturnsNoEntitiesAsEnumerable_WhenDatabaseIsEmpty()
-    {
-        // Arrange
-        using var dbContext = CreateDbContext();
-        var repository = new TestRepository(dbContext);
-
-        // Act
-        var results = await repository.GetAllAsync(CancellationToken.None);
-
-        // Assert
-        results.Should().BeEmpty(); // Ensure the list is empty
+        resultList.ShouldBeEmpty();
     }
 
 
@@ -251,8 +210,8 @@ public class RepositoryTests
 
         // Assert
         var resultList = await results.ToListAsync();
-        resultList.Should().ContainSingle();
-        resultList.Should().Contain(matchingEntity);
+        resultList.ShouldHaveSingleItem();
+        resultList.ShouldContain(matchingEntity);
     }
     [Fact]
     public async Task FindAsync_ReturnsNoEntitiesAsAsyncEnumberable_WhenNoDataMatchesPredicate()
@@ -275,7 +234,7 @@ public class RepositoryTests
 
         // Assert
         var resultList = await results.ToListAsync();
-        resultList.Should().BeEmpty();
+        resultList.ShouldBeEmpty();
     }
 
     [Fact]
@@ -298,8 +257,8 @@ public class RepositoryTests
 
         // Assert
         var resultList = await results.ToListAsync();
-        resultList.Should().ContainSingle();
-        resultList.Should().Contain(matchingEntity);
+        resultList.ShouldHaveSingleItem();
+        resultList.ShouldContain(matchingEntity);
     }
 
     [Fact]
@@ -319,83 +278,7 @@ public class RepositoryTests
 
         // Assert
         var resultList = await results.ToListAsync();
-        resultList.Should().BeEmpty();
-    }
-
-    [Fact]
-    public async Task FindAsync_ReturnsFilteredEntitiesAsEnumerable_WhenPredicateMatches()
-    {
-        // Arrange
-        using var dbContext = CreateDbContext();
-        var repository = new TestRepository(dbContext);
-
-        var matchingEntity = new Person(SocialSecurityNumber.Create(123), "Alice");
-        var nonMatchingEntity = new Person(SocialSecurityNumber.Create(456), "Bob");
-
-        dbContext.Persons.AddRange(matchingEntity, nonMatchingEntity);
-        await dbContext.SaveChangesAsync();
-
-        // Act
-        var results = await repository.FindAsync(p => p.Name == "Alice", CancellationToken.None);
-
-        // Assert
-        results.Should().ContainSingle();
-        results.Should().Contain(matchingEntity);
-    }
-    [Fact]
-    public async Task FindAsync_ReturnsNoEntitiesAsEnumerable_WhenNoDataMatchesPredicate()
-    {
-        // Arrange
-        using var dbContext = CreateDbContext();
-        var repository = new TestRepository(dbContext);
-
-        dbContext.Persons.Add(new Person(SocialSecurityNumber.Create(123), "Alice"));
-        await dbContext.SaveChangesAsync();
-
-        // Act
-        var results = await repository.FindAsync(p => p.Name == "Charlie", CancellationToken.None);
-
-        // Assert
-        results.Should().BeEmpty();
-    }
-
-
-    [Fact]
-    public async Task FindAsync_WithSpecification_ReturnsFilteredEntitiesAsEnumerable()
-    {
-        // Arrange
-        using var dbContext = CreateDbContext();
-        var repository = new TestRepository(dbContext);
-
-        var matchingEntity = new Person(SocialSecurityNumber.Create(123), "Alice");
-        var nonMatchingEntity = new Person(SocialSecurityNumber.Create(456), "Bob");
-
-        dbContext.Persons.AddRange(matchingEntity, nonMatchingEntity);
-        await dbContext.SaveChangesAsync();
-
-        var spec = new PersonSpecification(x => x.Name == "Alice");
-
-        // Act
-        var results = await repository.FindAsync(spec, CancellationToken.None);
-
-        // Assert
-        results.Should().ContainSingle();
-        results.Should().Contain(matchingEntity);
-    }
-    [Fact]
-    public async Task FindAsync_WithSpecification_ReturnsNoEntitiesAsEnumerable_WhenNoDataMatches()
-    {
-        // Arrange
-        using var dbContext = CreateDbContext();
-        var repository = new TestRepository(dbContext);
-
-        var spec = new PersonSpecification(x => x.Name == "Charlie");
-
-        // Act
-        var results = await repository.FindAsync(spec, CancellationToken.None);
-
-        // Assert
-        results.Should().BeEmpty();
+        resultList.ShouldBeEmpty();
     }
 
     [Fact]
@@ -411,8 +294,8 @@ public class RepositoryTests
         var changes = await dbContext.SaveChangesAsync();
 
         // Assert
-        changes.Should().Be(1);
-        dbContext.Persons.Should().Contain(entity);
+        changes.ShouldBe(1);
+        dbContext.Persons.ShouldContain(entity);
     }
 
     [Fact]
@@ -432,8 +315,8 @@ public class RepositoryTests
         var changes = await dbContext.SaveChangesAsync();
 
         // Assert
-        changes.Should().Be(2);
-        dbContext.Persons.Should().Contain(entities);
+        changes.ShouldBe(2);
+        entities.All(e => dbContext.Persons.Contains(e)).ShouldBeTrue();
     }
 
     [Fact]
@@ -452,7 +335,7 @@ public class RepositoryTests
         var exists = await repository.ExistsAsync(entityId);
 
         // Assert
-        exists.Should().BeTrue();
+        exists.ShouldBeTrue();
     }
     [Fact]
     public async Task ExistsAsync_ReturnsFalse_WhenEntityDoesNotExistById()
@@ -466,7 +349,7 @@ public class RepositoryTests
         var exists = await repository.ExistsAsync(entityId);
 
         // Assert
-        exists.Should().BeFalse();
+        exists.ShouldBeFalse();
     }
     [Fact]
     public async Task ExistsAsync_ReturnsTrue_WhenEntityExistsByPredicate()
@@ -483,7 +366,7 @@ public class RepositoryTests
         var exists = await repository.ExistsAsync(e => e.Name == "Alice");
 
         // Assert
-        exists.Should().BeTrue();
+        exists.ShouldBeTrue();
     }
     [Fact]
     public async Task ExistsAsync_ReturnsFalse_WhenNoEntityMatchesPredicate()
@@ -496,7 +379,7 @@ public class RepositoryTests
         var exists = await repository.ExistsAsync(e => e.Name == "Charlie");
 
         // Assert
-        exists.Should().BeFalse();
+        exists.ShouldBeFalse();
     }
 
     [Fact]
@@ -516,10 +399,15 @@ public class RepositoryTests
 
         // Assert
         var foundEntity = await dbContext.Persons.FindAsync(entity.Id);
-        foundEntity.Should().BeNull();
+        foundEntity.ShouldBeNull();
     }
 
+
     [Fact]
+    [SuppressMessage(
+        "Major Code Smell",
+        "S6966:Awaitable method should be used",
+        Justification = "No async overload for remove")]
     public async Task RemoveRange_DeletesMultipleEntitiesFromContext()
     {
         // Arrange
@@ -540,6 +428,6 @@ public class RepositoryTests
 
         // Assert
         var foundEntities = dbContext.Persons.Where(p => entities.Select(e => e.Id).Contains(p.Id)).ToList();
-        foundEntities.Should().BeEmpty();
+        foundEntities.ShouldBeEmpty();
     }
 }

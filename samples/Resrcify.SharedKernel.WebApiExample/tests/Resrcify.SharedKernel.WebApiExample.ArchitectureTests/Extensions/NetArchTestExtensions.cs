@@ -1,6 +1,5 @@
-using System;
-using FluentAssertions;
 using NetArchTest.Rules;
+using Shouldly;
 
 namespace Resrcify.SharedKernel.WebApiExample.ArchitectureTests.Extensions;
 
@@ -12,7 +11,6 @@ public static class NetArchTestExtensions
             .GetResult().FailingTypeNames
             ?? [];
         failingTypeNames
-            .Should()
-            .BeEmpty();
+            .ShouldBeEmpty();
     }
 }

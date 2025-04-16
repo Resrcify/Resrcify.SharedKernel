@@ -1,6 +1,6 @@
 using Xunit;
-using FluentAssertions;
 using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Shouldly;
 
 namespace Resrcify.SharedKernel.ResultFramework.UnitTests.Primitives;
 
@@ -14,16 +14,13 @@ public class ErrorTests
 
         // Assert
         error.Code
-            .Should()
-            .BeEmpty();
+            .ShouldBeEmpty();
 
         error.Message
-            .Should()
-            .BeEmpty();
+            .ShouldBeEmpty();
 
         error.Type
-            .Should()
-            .Be(ErrorType.Failure);
+            .ShouldBe(ErrorType.Failure);
     }
 
     [Fact]
@@ -34,16 +31,13 @@ public class ErrorTests
 
         // Assert
         error.Code
-            .Should()
-            .Be("Error.NullValue");
+            .ShouldBe("Error.NullValue");
 
         error.Message
-            .Should()
-            .Be("The specified result value is null.");
+            .ShouldBe("The specified result value is null.");
 
         error.Type
-            .Should()
-            .Be(ErrorType.Failure);
+            .ShouldBe(ErrorType.Failure);
     }
 
     [Fact]
@@ -57,8 +51,7 @@ public class ErrorTests
 
         // Assert
         errorCode
-            .Should()
-            .Be("Code");
+            .ShouldBe("Code");
     }
 
     [Fact]
@@ -72,12 +65,10 @@ public class ErrorTests
 
         // Assert
         result.IsSuccess
-            .Should()
-            .BeFalse();
+            .ShouldBeFalse();
 
         result.Errors
-            .Should()
-            .Contain(error);
+            .ShouldContain(error);
     }
 
     [Theory]
@@ -96,12 +87,10 @@ public class ErrorTests
         // Act & Assert
         error1
             .Equals(error2)
-            .Should()
-            .BeTrue();
+            .ShouldBeTrue();
 
         error1
-            .Should()
-            .Be(error2);
+            .ShouldBe(error2);
     }
 
     [Theory]
@@ -123,12 +112,10 @@ public class ErrorTests
         // Act & Assert
         error1
             .Equals(error2)
-            .Should()
-            .BeFalse();
+            .ShouldBeFalse();
 
         error1
-            .Should()
-            .NotBe(error2);
+            .ShouldNotBe(error2);
     }
 
     [Theory]
@@ -147,8 +134,7 @@ public class ErrorTests
         // Act & Assert
         error1
             .GetHashCode()
-            .Should()
-            .Be(error2.GetHashCode());
+            .ShouldBe(error2.GetHashCode());
     }
 
     [Theory]
@@ -170,8 +156,7 @@ public class ErrorTests
         // Act & Assert
         error1
             .GetHashCode()
-            .Should()
-            .NotBe(error2.GetHashCode());
+            .ShouldNotBe(error2.GetHashCode());
     }
 
     [Fact]
@@ -185,7 +170,6 @@ public class ErrorTests
 
         // Assert
         errorCode
-            .Should()
-            .Be("Code");
+            .ShouldBe("Code");
     }
 }

@@ -5,11 +5,11 @@ using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using System.Threading;
 using MediatR;
-using FluentAssertions;
 using System;
 using Resrcify.SharedKernel.Messaging.Behaviors;
 using System.Linq;
 using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Shouldly;
 
 namespace Resrcify.SharedKernel.Messaging.UnitTests.Behaviors;
 
@@ -31,18 +31,17 @@ public class LoggingPipelineBehaviorTests
         var request = new MockRequest();
         var response = Result.Success();
         var cancellationToken = CancellationToken.None;
-        RequestHandlerDelegate<Result> next = (cancellationToken) => Task.FromResult(response);
+        Task<Result> next(CancellationToken cancellationToken = default) => Task.FromResult(response);
 
         // Act
-        var result = await _behavior.Handle(request, next, cancellationToken);
+        await _behavior.Handle(request, next, cancellationToken);
 
         // Assert
         _logger
             .ReceivedCalls()
             .Select(call => call.GetArguments())
             .Count(callArguments => callArguments[0]!.Equals(LogLevel.Information))
-            .Should()
-            .Be(2);
+            .ShouldBe(2);
     }
 
     [Fact]
@@ -52,19 +51,22 @@ public class LoggingPipelineBehaviorTests
         var request = new MockRequest();
         var response = Result.Failure(Error.NullValue);
         var cancellationToken = CancellationToken.None;
-        RequestHandlerDelegate<Result> next = (cancellationToken) => Task.FromResult(response);
+        Task<Result> next(CancellationToken cancellationToken = default) => Task.FromResult(response);
 
         // Act
-        var result = await _behavior.Handle(request, next, cancellationToken);
+        await _behavior.Handle(request, next, cancellationToken);
 
         // Assert
         _logger
             .ReceivedCalls()
             .Select(call => call.GetArguments())
             .Count(callArguments => callArguments[0]!.Equals(LogLevel.Information))
-            .Should()
-            .Be(3);
+            .ShouldBe(3);
     }
 
-    public class MockRequest : IRequest<Result> { }
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Maintainability",
+        "CA1515:Consider making public types internal",
+        Justification = "NSubstitute (which uses Castle DynamicProxy) cannot generate a mock of a type containing inaccessible generic parameters")]
+    public sealed class MockRequest : IRequest<Result> { }
 }

@@ -11,7 +11,7 @@ public abstract class Enumeration<TEnum> : IEquatable<Enumeration<TEnum>>
     private static readonly Dictionary<int, TEnum> Enumerations = CreateEnumeration();
 
     public int Value { get; protected init; }
-    public string Name { get; protected init; } = string.Empty;
+    public string Name { get; protected init; }
     protected Enumeration(int value, string name)
     {
         Value = value;

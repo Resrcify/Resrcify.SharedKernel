@@ -1,13 +1,13 @@
 using System;
-using FluentAssertions;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
+using Shouldly;
 using Xunit;
 
 namespace Resrcify.SharedKernel.DomainDrivenDesign.UnitTests.Primitives;
 
 public class DomainEventTests
 {
-    private record TestDomainEvent(Guid Id) : DomainEvent(Id);
+    private sealed record TestDomainEvent(Guid Id) : DomainEvent(Id);
     [Fact]
     public void DomainEvent_ShouldInitialize_WithGivenId()
     {
@@ -18,7 +18,7 @@ public class DomainEventTests
         var domainEvent = new TestDomainEvent(expectedGuid);
 
         // Assert
-        domainEvent.Id.Should().Be(expectedGuid);
+        domainEvent.Id.ShouldBe(expectedGuid);
     }
 
     [Fact]
@@ -30,8 +30,8 @@ public class DomainEventTests
         var event2 = new TestDomainEvent(guid);
 
         // Act & Assert
-        event1.Should().Be(event2);
-        (event1 == event2).Should().BeTrue();
+        event1.ShouldBe(event2);
+        (event1 == event2).ShouldBeTrue();
     }
 
     [Fact]
@@ -42,8 +42,8 @@ public class DomainEventTests
         var event2 = new TestDomainEvent(Guid.NewGuid());
 
         // Act & Assert
-        event1.Should().NotBe(event2);
-        (event1 != event2).Should().BeTrue();
+        event1.ShouldNotBe(event2);
+        (event1 != event2).ShouldBeTrue();
     }
 
     [Fact]
@@ -55,6 +55,6 @@ public class DomainEventTests
         var event2 = new TestDomainEvent(guid);
 
         // Act & Assert
-        event1.GetHashCode().Should().Be(event2.GetHashCode());
+        event1.GetHashCode().ShouldBe(event2.GetHashCode());
     }
 }

@@ -39,8 +39,8 @@ public class UnitOfWorkPipelineBehavior<TRequest, TResponse>
         }
         catch (Exception ex)
         {
-            _logger.LogError("Exception caught in UnitOfWorkPipelineBehavior: @{exception}", ex);
-            throw;
+            _logger.LogError(ex, "Exception caught in UnitOfWorkPipelineBehavior");
+            throw new InvalidOperationException("An error occurred while processing the UnitOfWorkPipelineBehavior.", ex);
         }
     }
 }

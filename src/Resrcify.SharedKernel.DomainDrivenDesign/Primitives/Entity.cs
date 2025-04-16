@@ -30,12 +30,6 @@ public abstract class Entity<TId> : IEquatable<Entity<TId>>
         return Id.Equals(entity.Id);
     }
 
-    public override string ToString()
-        => Id?.ToString() ?? string.Empty;
-
-    public override int GetHashCode()
-        => Id.GetHashCode() * 41;
-
     public bool Equals(Entity<TId>? other)
     {
         if (other is null)
@@ -44,4 +38,10 @@ public abstract class Entity<TId> : IEquatable<Entity<TId>>
             return false;
         return Id.Equals(other.Id);
     }
+
+    public override string ToString()
+        => Id?.ToString() ?? string.Empty;
+
+    public override int GetHashCode()
+        => Id.GetHashCode() * 41;
 }

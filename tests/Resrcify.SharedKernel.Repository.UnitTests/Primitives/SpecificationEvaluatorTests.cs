@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
-using FluentAssertions;
 using Resrcify.SharedKernel.Repository.Primitives;
 using Resrcify.SharedKernel.Repository.UnitTests.Models;
+using Shouldly;
 using Xunit;
 
 namespace Resrcify.SharedKernel.Repository.UnitTests.Primitives;
@@ -28,10 +28,10 @@ public class SpecificationEvaluatorTests
         var result = SpecificationEvaluator.GetQuery(data, specification);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Should().BeAssignableTo<IQueryable<Person>>();
-        result.Should().HaveCount(1);
-        result.Should().ContainSingle(p => p.Name == "Bob");
+        result.ShouldNotBeNull();
+        result.ShouldBeAssignableTo<IQueryable<Person>>();
+        result.ShouldHaveSingleItem();
+        result.Count(p => p.Name == "Bob").ShouldBe(1);
     }
 
     [Fact]
@@ -46,9 +46,10 @@ public class SpecificationEvaluatorTests
         var result = SpecificationEvaluator.GetQuery(data, specification);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Should().BeAssignableTo<IQueryable<Person>>();
-        result.Should().BeInAscendingOrder(x => x.Id.Value);
+        result.ShouldNotBeNull();
+        result.ShouldBeAssignableTo<IQueryable<Person>>();
+        result.Select(x => x.Id.Value).ToList()
+            .ShouldBe(result.Select(x => x.Id.Value).OrderBy(x => x).ToList());
     }
     [Fact]
     public void GetQuery_OrderByDescending_ReturnsCorrectQueryable()
@@ -62,9 +63,10 @@ public class SpecificationEvaluatorTests
         var result = SpecificationEvaluator.GetQuery(data, specification);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Should().BeAssignableTo<IQueryable<Person>>();
-        result.Should().BeInDescendingOrder(x => x.Id.Value);
+        result.ShouldNotBeNull();
+        result.ShouldBeAssignableTo<IQueryable<Person>>();
+        result.Select(x => x.Id.Value).ToList()
+            .ShouldBe(result.Select(x => x.Id.Value).OrderByDescending(_ => _).ToList());
     }
     [Fact]
     public void GetQuery_Include_ReturnsCorrectQueryable()
@@ -79,8 +81,8 @@ public class SpecificationEvaluatorTests
         var result = SpecificationEvaluator.GetQuery(data, specification);
 
         // Assert
-        result.Should().NotBeNull();
-        result.Should().BeAssignableTo<IQueryable<Person>>();
-        result.SelectMany(x => x.Children).Should().HaveCount(1);
+        result.ShouldNotBeNull();
+        result.ShouldBeAssignableTo<IQueryable<Person>>();
+        result.SelectMany(x => x.Children).ShouldHaveSingleItem();
     }
 }
