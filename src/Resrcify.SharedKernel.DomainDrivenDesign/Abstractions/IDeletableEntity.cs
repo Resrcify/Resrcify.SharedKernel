@@ -4,6 +4,6 @@ namespace Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
 
 public interface IDeletableEntity
 {
-    bool IsDeleted { get; }
-    DateTime DeletedOnUtc { get; }
+    public bool IsDeleted { get; }
+    public DateTime DeletedOnUtc { get; }
 }

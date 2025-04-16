@@ -328,3 +328,6 @@ dotnet_diagnostic.IDE0290.severity = none
 
 # Suppress the "Seal or implement IEqualityComparer<T>" rule
 dotnet_diagnostic.S4035.severity = none
+
+# Accessibility modifiers unnecessary
+dotnet_diagnostic.IDE0040.severity = none

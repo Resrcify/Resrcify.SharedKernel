@@ -4,6 +4,6 @@ namespace Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
 
 public interface IAuditableEntity
 {
-    DateTime CreatedOnUtc { get; }
-    DateTime ModifiedOnUtc { get; }
+    public DateTime CreatedOnUtc { get; }
+    public DateTime ModifiedOnUtc { get; }
 }
