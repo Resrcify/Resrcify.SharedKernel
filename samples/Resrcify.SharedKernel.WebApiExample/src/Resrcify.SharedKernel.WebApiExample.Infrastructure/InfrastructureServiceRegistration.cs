@@ -12,7 +12,7 @@ public static class InfrastructureServiceRegistration
     public static IServiceCollection AddInfrastructureServices(this IServiceCollection services)
     {
         services.AddDistributedMemoryCache();
-        services.AddSingleton<ICachingService, InMemoryCachingService>();
+        services.AddSingleton<ICachingService, DistributedCachingService>();
         services.AddSwaggerGen(options =>
             options.CustomSchemaIds(type => type.ToString()));
         services.AddQuartz();

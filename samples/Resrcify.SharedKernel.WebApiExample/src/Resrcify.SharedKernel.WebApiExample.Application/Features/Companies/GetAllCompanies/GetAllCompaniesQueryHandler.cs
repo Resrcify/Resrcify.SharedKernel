@@ -15,8 +15,9 @@ internal sealed class GetAllCompaniesQueryHandler(
         GetAllCompaniesQuery request,
         CancellationToken cancellationToken)
     {
-        var allCompanies = await _companyRepository.GetAllAsync(cancellationToken);
-        var companyDtos = allCompanies.Select(company => new CompanyDto(
+        var allCompanies = _companyRepository.GetAllAsync();
+        var allCompaniesMaterialized = await allCompanies.ToListAsync(cancellationToken);
+        var companyDtos = allCompaniesMaterialized.Select(company => new CompanyDto(
             company.Id.Value,
             company.Name.Value,
             company.OrganizationNumber.Value.ToString()));

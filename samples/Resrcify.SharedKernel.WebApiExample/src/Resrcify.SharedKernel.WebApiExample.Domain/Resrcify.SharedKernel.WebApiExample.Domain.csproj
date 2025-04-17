@@ -7,7 +7,7 @@
     <PackageReference Include="MediatR.Contracts" Version="2.0.1" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Resrcify.SharedKernel.ResultFramework" Version = "1.11.0"/>
-    <PackageReference Include="Resrcify.SharedKernel.DomainDrivenDesign" Version = "1.11.0"/>
+    <PackageReference Include="Resrcify.SharedKernel.ResultFramework" Version = "1.12.0"/>
+    <PackageReference Include="Resrcify.SharedKernel.DomainDrivenDesign" Version = "1.12.0"/>
   </ItemGroup>
 </Project>
