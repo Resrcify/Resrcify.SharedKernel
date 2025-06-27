@@ -7,6 +7,7 @@
     <Description>Implements the different building blocks used in Domain Driven Desing.</Description>
     <Summary>Implements the different building blocks used in Domain Driven Desing.</Summary>
   </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="MediatR.Contracts">
       <PrivateAssets>all</PrivateAssets>

@@ -11,7 +11,7 @@ using Shouldly;
 
 namespace Resrcify.SharedKernel.Web.UnitTests.Extensions;
 
-public class InternalControllersExtensionTests
+public class InternalControllersExtensionsTests
 {
     [Fact]
     public void EnableInternalControllers_ShouldAddCustomFeatureProvider()
@@ -24,10 +24,12 @@ public class InternalControllersExtensionTests
         builder.EnableInternalControllers();
 
         // Assert
-        var partManager = builder.Services
-            .FirstOrDefault(s => s.ServiceType == typeof(ApplicationPartManager))?
-            .ImplementationInstance as ApplicationPartManager;
+        var descriptor = builder.Services
+            .FirstOrDefault(s => s.ServiceType == typeof(ApplicationPartManager));
 
+        descriptor.ShouldNotBeNull();
+
+        var partManager = descriptor.ImplementationInstance as ApplicationPartManager;
         partManager.ShouldNotBeNull();
 
         partManager.FeatureProviders

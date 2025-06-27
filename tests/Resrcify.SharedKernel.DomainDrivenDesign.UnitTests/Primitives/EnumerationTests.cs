@@ -5,6 +5,7 @@ using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 using Shouldly;
 
 namespace Resrcify.SharedKernel.DomainDrivenDesign.UnitTests.Primitives;
+
 public class EnumerationTests
 {
     [Fact]
@@ -86,10 +87,10 @@ public class EnumerationTests
 
     internal sealed class ExampleEnumeration : Enumeration<ExampleEnumeration>
     {
-        public static ExampleEnumeration Example1 = new(1, "Example1");
-        public static ExampleEnumeration Example2 = new(2, "Example2");
+        public static readonly ExampleEnumeration Example1 = new(1, "Example1");
+        public static readonly ExampleEnumeration Example2 = new(2, "Example2");
 
-        private ExampleEnumeration(int value, string name) : base(value, name)
+        internal ExampleEnumeration(int value, string name) : base(value, name)
         {
         }
     }

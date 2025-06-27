@@ -7,6 +7,7 @@ using Resrcify.SharedKernel.UnitOfWork.Primitives;
 using Xunit;
 
 namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
+
 [SuppressMessage(
     "Maintainability",
     "CA1515:Because an application's API isn't typically referenced from outside the assembly, types can be made internal",

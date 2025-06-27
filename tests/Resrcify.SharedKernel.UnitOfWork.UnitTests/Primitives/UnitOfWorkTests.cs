@@ -29,7 +29,7 @@ public class UnitOfWorkTests : DbSetupBase
     public async Task CommitTransactionAsync_ShouldPersistChanges()
     {
         // Arrange
-        using var transaction = await DbContext.Database.BeginTransactionAsync();
+        await DbContext.Database.BeginTransactionAsync();
         var person = new Person(SocialSecurityNumber.Create(987654321), "Jane Doe");
         DbContext.Persons.Add(person);
 
@@ -48,7 +48,7 @@ public class UnitOfWorkTests : DbSetupBase
     public async Task RollbackTransactionAsync_ShouldNotPersistChanges()
     {
         // Arrange
-        using var transaction = await DbContext.Database.BeginTransactionAsync();
+        await DbContext.Database.BeginTransactionAsync();
         var person = new Person(SocialSecurityNumber.Create(112233445), "Alice");
         DbContext.Persons.Add(person);
 

@@ -12,18 +12,6 @@ public interface IRepository<TEntity, TId>
     where TEntity : AggregateRoot<TId>
     where TId : notnull
 {
-    Task<TEntity?> GetByIdAsync(
-        TId id,
-        CancellationToken cancellationToken = default);
-
-    Task<TEntity?> FirstOrDefaultAsync(
-        Expression<Func<TEntity, bool>> predicate,
-        CancellationToken cancellationToken = default);
-
-    Task<TEntity?> FirstOrDefaultAsync(
-        Specification<TEntity, TId> specification,
-        CancellationToken cancellationToken = default);
-
     IAsyncEnumerable<TEntity> GetAllAsync();
     IAsyncEnumerable<TEntity> FindAsync(Expression<Func<TEntity, bool>> predicate);
     IAsyncEnumerable<TEntity> FindAsync(Specification<TEntity, TId> specification);

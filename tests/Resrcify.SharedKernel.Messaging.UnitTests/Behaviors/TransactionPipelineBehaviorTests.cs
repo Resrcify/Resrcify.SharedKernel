@@ -77,6 +77,10 @@ public class TransactionPipelineBehaviorTests
         "Usage",
         "CA2201:Do not raise reserved exception types",
         Justification = "Exception type is not important in this context")]
+    [SuppressMessage(
+        "Sonar Bug",
+        "S112:General exceptions should never be thrown",
+        Justification = "Exception type is not important in this context")]
     public async Task Handle_ShouldRollbackTransactionAndLogError_OnException()
     {
         // Arrange
@@ -87,12 +91,12 @@ public class TransactionPipelineBehaviorTests
         async Task act() => await _behavior.Handle(_command, _next, CancellationToken.None);
 
         // Assert
-        var assertedException = await Should.ThrowAsync<Exception>(act);
-        assertedException.Message.ShouldBe("An error occurred while processing the TransactionPipelineBehavior.");
+        await Should.ThrowAsync<Exception>(act);
 
         // Verify that the logger logs the error
-        _logger
-            .ReceivedCalls().Equals(1);
+        _logger.Received(1).LogError(
+            exception,
+            "Exception caught in TransactionPipelineBehavior");
     }
 
     [Fact]

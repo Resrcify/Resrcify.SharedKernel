@@ -70,19 +70,25 @@ public class UnitOfWorkPipelineBehaviorTests
         "Usage",
         "CA2201:Do not raise reserved exception types",
         Justification = "Exception type is not important in this context")]
+    [SuppressMessage(
+        "Sonar Bug",
+        "S112:General exceptions should never be thrown",
+        Justification = "Exception type is not important in this context")]
     public async Task Handle_ThrowsException_AndLogsError()
     {
         // Arrange
         var exception = new Exception();
-        _next.When(n => n.Invoke()).Do(x => throw exception);
+        _next.When(n => n.Invoke()).Do(_ => throw exception);
 
         // Act
         async Task act() => await _behavior.Handle(_command, _next, CancellationToken.None);
 
-        // Assert,
-        var assertedException = await Should.ThrowAsync<Exception>(act);
-        assertedException.Message.ShouldBe("An error occurred while processing the UnitOfWorkPipelineBehavior.");
+        // Assert
+        await Should.ThrowAsync<Exception>(act);
 
-        _logger.ReceivedCalls().Equals(1);
+        // Verify that the logger logs the error
+        _logger.Received(1).LogError(
+            exception,
+            "Exception caught in UnitOfWorkPipelineBehavior");
     }
 }

@@ -5,11 +5,13 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Resrcify.SharedKernel.Repository.Abstractions;
 
 namespace Resrcify.SharedKernel.Repository.Primitives;
 
 public abstract class ResultRepository<TDbContext, TEntity, TId>(TDbContext context)
-    : Repository<TDbContext, TEntity, TId>(context)
+    : Repository<TDbContext, TEntity, TId>(context),
+    IResultFetchRepository<TEntity, TId>
     where TDbContext : DbContext
     where TEntity : AggregateRoot<TId>
     where TId : notnull

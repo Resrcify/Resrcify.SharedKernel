@@ -6,6 +6,7 @@
     <Description>Implements a unit of work pattern, including interceptors using EntityFrameworkCore.</Description>
     <Summary>Implements a unit of work pattern, includin interceptors using EntityFrameworkCore.</Summary>
   </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational">
       <PrivateAssets>all</PrivateAssets>

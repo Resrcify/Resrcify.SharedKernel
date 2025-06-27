@@ -10,7 +10,9 @@ using Resrcify.SharedKernel.Repository.Abstractions;
 
 namespace Resrcify.SharedKernel.Repository.Primitives;
 
-public abstract class Repository<TDbContext, TEntity, TId> : IRepository<TEntity, TId>
+public abstract class Repository<TDbContext, TEntity, TId>
+    : IRepository<TEntity, TId>,
+    INullableFetchRepository<TEntity, TId>
     where TDbContext : DbContext
     where TEntity : AggregateRoot<TId>
     where TId : notnull

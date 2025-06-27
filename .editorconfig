@@ -53,6 +53,9 @@ dotnet_style_prefer_inferred_anonymous_type_member_names = true:error
 dotnet_style_prefer_inferred_tuple_names = true:error
 dotnet_style_prefer_is_null_check_over_reference_equality_method = true:error
 
+# S3453: Classes should not have only "private" constructors
+dotnet_diagnostic.S3453.severity = none
+
 [*.{cs,vb}]
 dotnet_style_prefer_simplified_boolean_expressions = true:suggestion
 dotnet_style_prefer_simplified_interpolation = true:suggestion
@@ -331,3 +334,10 @@ dotnet_diagnostic.S4035.severity = none
 
 # Accessibility modifiers unnecessary
 dotnet_diagnostic.IDE0040.severity = none
+
+# Suppress Sonar rule S3655 - class not instantiable (false positive for factory pattern)
+dotnet_diagnostic.S3655.severity = none
+
+dotnet_diagnostic.S3453.severity = none
+
+dotnet_diagnostic.S1144.severity = none

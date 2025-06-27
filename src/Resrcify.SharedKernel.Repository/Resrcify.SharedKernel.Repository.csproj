@@ -6,6 +6,7 @@
     <Description>Implements a generic repository pattern using EntityFrameworkCore.</Description>
     <Summary>Implements a generic repository pattern using EntityFrameworkCore.</Summary>
   </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Resrcify.SharedKernel.ResultFramework\Resrcify.SharedKernel.ResultFramework.csproj" />
     <ProjectReference Include="..\Resrcify.SharedKernel.DomainDrivenDesign\Resrcify.SharedKernel.DomainDrivenDesign.csproj" />

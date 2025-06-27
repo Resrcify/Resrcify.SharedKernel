@@ -6,6 +6,7 @@
     <Description>Implements custom messaging abstractions based on MediatR and several different pipeline behaviors.</Description>
     <Summary>Implements custom messaging abstractions based on MediatR and several different pipeline behaviors.</Summary>
   </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="FluentValidation">
       <PrivateAssets>all</PrivateAssets>

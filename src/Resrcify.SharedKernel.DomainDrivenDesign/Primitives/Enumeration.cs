@@ -8,7 +8,7 @@ namespace Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 public abstract class Enumeration<TEnum> : IEquatable<Enumeration<TEnum>>
     where TEnum : Enumeration<TEnum>
 {
-    private static readonly Dictionary<int, TEnum> Enumerations = CreateEnumeration();
+    public static readonly Dictionary<int, TEnum> Enumerations = CreateEnumeration();
 
     public int Value { get; protected init; }
     public string Name { get; protected init; }
