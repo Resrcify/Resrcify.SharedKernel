@@ -6,14 +6,19 @@ namespace Resrcify.SharedKernel.Web.Extensions;
 
 public static class ClaimsPrincipalExtensions
 {
-    public static Result<Guid> GetUserId(this ClaimsPrincipal user)
+    public static Result<Guid> GetUserId(
+        this ClaimsPrincipal user)
     {
-        var userIdClaim = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        var userIdClaim = user.FindFirstValue(
+            ClaimTypes.NameIdentifier);
 
-        if (Guid.TryParse(userIdClaim, out Guid userId))
+        if (Guid.TryParse(
+            userIdClaim,
+            out Guid userId))
             return userId;
 
-        return Result.Failure<Guid>(MissingUserIdClaim);
+        return Result.Failure<Guid>(
+            MissingUserIdClaim);
     }
 
     internal static readonly Error MissingUserIdClaim = Error.Validation(

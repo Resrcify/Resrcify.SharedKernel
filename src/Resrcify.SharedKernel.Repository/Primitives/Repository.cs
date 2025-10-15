@@ -44,12 +44,14 @@ public abstract class Repository<TDbContext, TEntity, TId>
         => Context
             .Set<TEntity>()
             .AsAsyncEnumerable();
-    public virtual IAsyncEnumerable<TEntity> FindAsync(Expression<Func<TEntity, bool>> predicate)
+    public virtual IAsyncEnumerable<TEntity> FindAsync(
+        Expression<Func<TEntity, bool>> predicate)
         => Context
             .Set<TEntity>()
             .Where(predicate)
             .AsAsyncEnumerable();
-    public IAsyncEnumerable<TEntity> FindAsync(Specification<TEntity, TId> specification)
+    public IAsyncEnumerable<TEntity> FindAsync(
+        Specification<TEntity, TId> specification)
         => ApplySpecification(specification)
             .AsAsyncEnumerable();
     public async Task AddAsync(
@@ -92,7 +94,8 @@ public abstract class Repository<TDbContext, TEntity, TId>
             .RemoveRange(entities);
 
 
-    protected IQueryable<TEntity> ApplySpecification(Specification<TEntity, TId> specification)
+    protected IQueryable<TEntity> ApplySpecification(
+        Specification<TEntity, TId> specification)
         => SpecificationEvaluator
             .GetQuery(
                 Context.Set<TEntity>(),

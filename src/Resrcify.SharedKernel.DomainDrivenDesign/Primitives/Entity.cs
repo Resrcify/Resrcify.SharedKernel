@@ -1,7 +1,9 @@
 using System;
 
 namespace Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
-public abstract class Entity<TId> : IEquatable<Entity<TId>>
+
+public abstract class Entity<TId>
+    : IEquatable<Entity<TId>>
     where TId : notnull
 {
     public TId Id { get; private init; }
@@ -11,15 +13,20 @@ public abstract class Entity<TId> : IEquatable<Entity<TId>>
         Id = id;
     }
 
-    public static bool operator ==(Entity<TId> first, Entity<TId> second)
+    public static bool operator ==(
+        Entity<TId> first,
+        Entity<TId> second)
         => first is not null &&
             second is not null &&
             first.Equals(second);
 
-    public static bool operator !=(Entity<TId> first, Entity<TId> second)
+    public static bool operator !=(
+        Entity<TId> first,
+        Entity<TId> second)
         => !(first == second);
 
-    public override bool Equals(object? obj)
+    public override bool Equals(
+        object? obj)
     {
         if (obj is null)
             return false;
@@ -30,7 +37,8 @@ public abstract class Entity<TId> : IEquatable<Entity<TId>>
         return Id.Equals(entity.Id);
     }
 
-    public bool Equals(Entity<TId>? other)
+    public bool Equals(
+        Entity<TId>? other)
     {
         if (other is null)
             return false;

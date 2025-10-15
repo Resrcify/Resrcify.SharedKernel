@@ -9,7 +9,8 @@ public abstract class Specification<TEntity, TId>
     where TEntity : AggregateRoot<TId>
     where TId : notnull
 {
-    protected Specification(Expression<Func<TEntity, bool>>? criteria)
+    protected Specification(
+        Expression<Func<TEntity, bool>>? criteria)
         => Criteria = criteria;
     public Expression<Func<TEntity, bool>>? Criteria { get; }
     public bool IsSplitQuery { get; protected set; }
@@ -17,11 +18,14 @@ public abstract class Specification<TEntity, TId>
     public ICollection<Expression<Func<TEntity, object>>> IncludeExpressions { get; } = [];
     public Expression<Func<TEntity, object>>? OrderByExpression { get; private set; }
     public Expression<Func<TEntity, object>>? OrderByDescendingExpression { get; private set; }
-    protected void AddInclude(Expression<Func<TEntity, object>> includeExpression)
+    protected void AddInclude(
+        Expression<Func<TEntity, object>> includeExpression)
         => IncludeExpressions.Add(includeExpression);
-    protected void AddOrderBy(Expression<Func<TEntity, object>> ordertByExpression)
+    protected void AddOrderBy(
+        Expression<Func<TEntity, object>> ordertByExpression)
         => OrderByExpression = ordertByExpression;
-    protected void AddOrderByDescending(Expression<Func<TEntity, object>> ordertByDescendingExpression)
+    protected void AddOrderByDescending(
+        Expression<Func<TEntity, object>> ordertByDescendingExpression)
         => OrderByDescendingExpression = ordertByDescendingExpression;
 
 }

@@ -16,10 +16,11 @@ public sealed class UnitOfWork<TDbContext> : IUnitOfWork
     public UnitOfWork(TDbContext context)
         => _context = context;
 
-    public async Task CompleteAsync(CancellationToken cancellationToken = default)
-    {
-        await _context.SaveChangesAsync(cancellationToken);
-    }
+    public async Task CompleteAsync(
+        CancellationToken cancellationToken = default)
+        => await _context.SaveChangesAsync(
+            cancellationToken);
+
 
     public void Dispose()
     {
@@ -27,21 +28,29 @@ public sealed class UnitOfWork<TDbContext> : IUnitOfWork
         GC.SuppressFinalize(this);
     }
 
-    public async Task BeginTransactionAsync(IsolationLevel isolationLevel = IsolationLevel.ReadCommitted, TimeSpan? commandLifetime = null, CancellationToken cancellationToken = default)
+    public async Task BeginTransactionAsync(
+        IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
+        TimeSpan? commandLifetime = null,
+        CancellationToken cancellationToken = default)
     {
         if (commandLifetime is not null)
-            _context.Database.SetCommandTimeout((int)commandLifetime.Value.TotalSeconds);
+            _context.Database.SetCommandTimeout(
+                (int)commandLifetime.Value.TotalSeconds);
 
-        await _context.Database.BeginTransactionAsync(isolationLevel, cancellationToken);
+        await _context.Database.BeginTransactionAsync(
+            isolationLevel,
+            cancellationToken);
     }
 
-    public async Task CommitTransactionAsync(CancellationToken cancellationToken = default)
+    public async Task CommitTransactionAsync(
+        CancellationToken cancellationToken = default)
     {
         var currentTransaction = _context.Database.CurrentTransaction;
         if (currentTransaction == null)
             return;
 
-        await currentTransaction.CommitAsync(cancellationToken);
+        await currentTransaction.CommitAsync(
+            cancellationToken);
     }
 
     public async Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
@@ -50,6 +59,7 @@ public sealed class UnitOfWork<TDbContext> : IUnitOfWork
         if (currentTransaction == null)
             return;
 
-        await currentTransaction.RollbackAsync(cancellationToken);
+        await currentTransaction.RollbackAsync(
+            cancellationToken);
     }
 }

@@ -29,7 +29,9 @@ public sealed class ProcessOutboxMessagesNewtonsoftJob<TDbContext>
 
     public async Task Execute(IJobExecutionContext context)
     {
-        if (!context.MergedJobDataMap.TryGetInt("ProcessBatchSize", out var batchSize))
+        if (!context.MergedJobDataMap.TryGetInt(
+            "ProcessBatchSize",
+            out var batchSize))
             batchSize = 20;
 
         List<OutboxMessage> messages = await _context
@@ -52,7 +54,9 @@ public sealed class ProcessOutboxMessagesNewtonsoftJob<TDbContext>
             if (domainEvent is null)
                 continue;
 
-            await _publisher.Publish(domainEvent, context.CancellationToken);
+            await _publisher.Publish(
+                domainEvent,
+                context.CancellationToken);
 
             outboxMessage.ProcessedOnUtc = DateTime.UtcNow;
         }

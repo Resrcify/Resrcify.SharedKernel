@@ -5,7 +5,8 @@ namespace Resrcify.SharedKernel.UnitOfWork.Extensions;
 
 public static class MigrationsExtensions
 {
-    public static void ApplyMigrations<T>(this IServiceCollection services)
+    public static void ApplyMigrations<T>(
+        this IServiceCollection services)
         where T : DbContext
     {
         using IServiceScope scope = services

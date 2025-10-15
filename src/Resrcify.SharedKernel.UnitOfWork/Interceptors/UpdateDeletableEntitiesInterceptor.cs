@@ -19,8 +19,12 @@ public sealed class UpdateDeletableEntitiesInterceptor
         CancellationToken cancellationToken = default)
     {
         if (eventData.Context is not null)
-            UpdateDeletableEntities(eventData.Context);
-        return await base.SavingChangesAsync(eventData, result, cancellationToken);
+            UpdateDeletableEntities(
+                eventData.Context);
+        return await base.SavingChangesAsync(
+            eventData,
+            result,
+            cancellationToken);
     }
     private static void UpdateDeletableEntities(DbContext context)
     {

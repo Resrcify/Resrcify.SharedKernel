@@ -32,7 +32,9 @@ public abstract class ResultRepository<TDbContext, TEntity, TId>(TDbContext cont
         Expression<Func<TEntity, bool>> predicate,
         CancellationToken cancellationToken = default)
         => Result
-            .Create(await base.FirstOrDefaultAsync(predicate, cancellationToken))
+            .Create(await base.FirstOrDefaultAsync(
+                predicate,
+                cancellationToken))
             .Match(
                 entity => entity,
                 new Error(

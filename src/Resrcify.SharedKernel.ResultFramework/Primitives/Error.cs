@@ -2,7 +2,8 @@
 
 namespace Resrcify.SharedKernel.ResultFramework.Primitives;
 
-public class Error : IEquatable<Error>
+public class Error
+    : IEquatable<Error>
 {
     public static readonly Error None = new(
         string.Empty,
@@ -12,27 +13,81 @@ public class Error : IEquatable<Error>
         "Error.NullValue",
         "The specified result value is null.",
         ErrorType.Failure);
-    public static Error NotFound(string code, string message)
+    public static Error Validation(
+        string code,
+        string message)
+        => new(
+        code,
+        message,
+        ErrorType.Validation);
+
+    public static Error NotFound(
+        string code,
+        string message)
         => new(
             code,
             message,
             ErrorType.NotFound);
-    public static Error Validation(string code, string message)
-        => new(
-            code,
-            message,
-            ErrorType.Validation);
-    public static Error Conflict(string code, string message)
+
+    public static Error Conflict(
+        string code,
+        string message)
         => new(
             code,
             message,
             ErrorType.Conflict);
-    public static Error Failure(string code, string message)
+
+    public static Error Unauthorized(
+        string code,
+        string message)
+        => new(
+            code,
+            message,
+            ErrorType.Unauthorized);
+
+    public static Error Forbidden(
+        string code,
+        string message)
+        => new(
+            code,
+            message,
+            ErrorType.Forbidden);
+
+    public static Error Timeout(
+        string code,
+        string message)
+        => new(
+            code,
+            message,
+            ErrorType.Timeout);
+
+    public static Error RateLimit(
+        string code,
+        string message)
+        => new(
+            code,
+            message,
+            ErrorType.RateLimit);
+
+    public static Error ExternalFailure(
+        string code,
+        string message)
+        => new(
+            code,
+            message,
+            ErrorType.ExternalFailure);
+
+    public static Error Failure(
+        string code,
+        string message)
         => new(
             code,
             message,
             ErrorType.Failure);
-    public Error(string code, string message, ErrorType type)
+    public Error(
+        string code,
+        string message,
+        ErrorType type)
     {
         Code = code;
         Message = message;
@@ -43,12 +98,16 @@ public class Error : IEquatable<Error>
     public string Message { get; init; }
     public ErrorType Type { get; init; }
 
-    public static implicit operator string(Error error)
+    public static implicit operator string(
+        Error error)
         => error.Code;
-    public static implicit operator Result(Error error)
+    public static implicit operator Result(
+        Error error)
         => Result.Failure(error);
 
-    public static bool operator ==(Error? a, Error? b)
+    public static bool operator ==(
+        Error? a,
+        Error? b)
     {
         if (a is null && b is null)
             return true;
@@ -59,20 +118,28 @@ public class Error : IEquatable<Error>
         return a.Equals(b);
     }
 
-    public static bool operator !=(Error? a, Error? b)
+    public static bool operator !=(
+    Error? a,
+    Error? b)
         => !(a == b);
 
-    public virtual bool Equals(Error? other)
+    public virtual bool Equals(
+        Error? other)
         => other is not null &&
             Code == other.Code &&
             Message == other.Message &&
             Type == other.Type;
 
-    public override bool Equals(object? obj)
-        => obj is Error error && Equals(error);
+    public override bool Equals(
+        object? obj)
+        => obj is Error error &&
+            Equals(error);
 
     public override int GetHashCode()
-        => HashCode.Combine(Code, Message, Type);
+        => HashCode.Combine(
+            Code,
+            Message,
+            Type);
 
     public override string ToString()
         => Code;

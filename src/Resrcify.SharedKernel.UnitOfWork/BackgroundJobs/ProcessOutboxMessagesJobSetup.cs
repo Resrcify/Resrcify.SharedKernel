@@ -22,15 +22,21 @@ public sealed class ProcessOutboxMessagesJobSetup<TDbContext>(
             .AddJob<ProcessOutboxMessagesJob<TDbContext>>(jobBuilder =>
                 jobBuilder
                     .WithIdentity(jobKey)
-                    .UsingJobData("ProcessBatchSize", processBatchSize)
-                    .UsingJobData("EventsAssemblyFullName", eventsAssembly.FullName))
+                    .UsingJobData(
+                        "ProcessBatchSize",
+                        processBatchSize)
+                    .UsingJobData(
+                        "EventsAssemblyFullName",
+                        eventsAssembly.FullName))
             .AddTrigger(
                 trigger =>
                     trigger.ForJob(jobKey)
-                        .StartAt(DateTime.UtcNow.AddSeconds(delayInSecondsBeforeStart))
+                        .StartAt(DateTime.UtcNow.AddSeconds(
+                            delayInSecondsBeforeStart))
                         .WithSimpleSchedule(
                             schedule =>
-                                schedule.WithIntervalInSeconds(processIntervalInSeconds)
+                                schedule.WithIntervalInSeconds(
+                                    processIntervalInSeconds)
                                     .RepeatForever()));
     }
 }

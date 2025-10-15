@@ -13,8 +13,10 @@ public interface IRepository<TEntity, TId>
     where TId : notnull
 {
     IAsyncEnumerable<TEntity> GetAllAsync();
-    IAsyncEnumerable<TEntity> FindAsync(Expression<Func<TEntity, bool>> predicate);
-    IAsyncEnumerable<TEntity> FindAsync(Specification<TEntity, TId> specification);
+    IAsyncEnumerable<TEntity> FindAsync(
+        Expression<Func<TEntity, bool>> predicate);
+    IAsyncEnumerable<TEntity> FindAsync(
+        Specification<TEntity, TId> specification);
 
     Task<bool> ExistsAsync(
         TId id,
@@ -32,6 +34,8 @@ public interface IRepository<TEntity, TId>
         IEnumerable<TEntity> entities,
         CancellationToken cancellationToken = default);
 
-    void Remove(TEntity entity);
-    void RemoveRange(IEnumerable<TEntity> entities);
+    void Remove(
+        TEntity entity);
+    void RemoveRange(
+        IEnumerable<TEntity> entities);
 }

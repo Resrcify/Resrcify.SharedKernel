@@ -3,11 +3,14 @@ using System;
 using System.Collections.Generic;
 
 namespace Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
-public abstract class ValueObject : IEquatable<ValueObject>
+
+public abstract class ValueObject
+    : IEquatable<ValueObject>
 {
     public abstract IEnumerable<object> GetAtomicValues();
 
-    private bool ValuesAreEqual(ValueObject other)
+    private bool ValuesAreEqual(
+        ValueObject other)
     {
         return GetAtomicValues()
             .SequenceEqual(other.GetAtomicValues());
@@ -16,13 +19,15 @@ public abstract class ValueObject : IEquatable<ValueObject>
     public override string ToString()
         => string.Join(", ", GetAtomicValues());
 
-    public override bool Equals(object? obj)
+    public override bool Equals(
+        object? obj)
     {
         return obj is ValueObject other &&
             ValuesAreEqual(other);
     }
 
-    public bool Equals(ValueObject? other)
+    public bool Equals(
+        ValueObject? other)
     {
         return other is not null &&
             ValuesAreEqual(other);
@@ -31,12 +36,17 @@ public abstract class ValueObject : IEquatable<ValueObject>
     public override int GetHashCode()
     {
         return GetAtomicValues()
-            .Aggregate(default(int), HashCode.Combine);
+            .Aggregate(
+                default(int),
+                HashCode.Combine);
     }
 
-    public static bool operator ==(ValueObject? left, ValueObject? right)
+    public static bool operator ==(
+        ValueObject? left,
+        ValueObject? right)
     {
-        if (left is null || right is null)
+        if (left is null ||
+            right is null)
             return false;
 
         if (ReferenceEquals(left, right))
@@ -45,6 +55,8 @@ public abstract class ValueObject : IEquatable<ValueObject>
         return left.Equals(right);
     }
 
-    public static bool operator !=(ValueObject? left, ValueObject? right)
+    public static bool operator !=(
+        ValueObject? left,
+        ValueObject? right)
         => !(left == right);
 }

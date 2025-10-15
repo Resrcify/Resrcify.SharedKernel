@@ -20,14 +20,18 @@ public sealed class ProcessOutboxMessagesNewtonsoftJobSetup<TDbContext>(
             .AddJob<ProcessOutboxMessagesNewtonsoftJob<TDbContext>>(jobBuilder =>
                 jobBuilder
                     .WithIdentity(jobKey)
-                    .UsingJobData("ProcessBatchSize", processBatchSize))
+                    .UsingJobData(
+                        "ProcessBatchSize",
+                        processBatchSize))
             .AddTrigger(
                 trigger =>
                     trigger.ForJob(jobKey)
-                        .StartAt(DateTime.UtcNow.AddSeconds(delayInSecondsBeforeStart))
+                        .StartAt(DateTime.UtcNow.AddSeconds(
+                            delayInSecondsBeforeStart))
                         .WithSimpleSchedule(
                             schedule =>
-                                schedule.WithIntervalInSeconds(processIntervalInSeconds)
+                                schedule.WithIntervalInSeconds(
+                                    processIntervalInSeconds)
                                     .RepeatForever()));
     }
 }

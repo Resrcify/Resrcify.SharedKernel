@@ -19,11 +19,18 @@ public sealed class InsertOutboxMessagesNewtonsoftInterceptor
         CancellationToken cancellationToken = default)
     {
         if (eventData.Context is not null)
-            await ConvertDomainEventsToOutboxMessages(eventData.Context);
-        return await base.SavingChangesAsync(eventData, result, cancellationToken);
+            await ConvertDomainEventsToOutboxMessages(
+                eventData.Context,
+                cancellationToken);
+        return await base.SavingChangesAsync(
+            eventData,
+            result,
+            cancellationToken);
     }
 
-    private static async Task ConvertDomainEventsToOutboxMessages(DbContext context)
+    private static async Task ConvertDomainEventsToOutboxMessages(
+        DbContext context,
+        CancellationToken cancellationToken)
     {
         var outboxMessages = context.ChangeTracker
             .Entries<IAggregateRoot>()
@@ -50,6 +57,10 @@ public sealed class InsertOutboxMessagesNewtonsoftInterceptor
             })
             .ToList();
 
-        await context.Set<OutboxMessage>().AddRangeAsync(outboxMessages);
+        await context
+            .Set<OutboxMessage>()
+            .AddRangeAsync(
+                outboxMessages,
+                cancellationToken);
     }
 }

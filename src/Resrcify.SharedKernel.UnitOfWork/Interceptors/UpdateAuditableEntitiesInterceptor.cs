@@ -18,8 +18,12 @@ public sealed class UpdateAuditableEntitiesInterceptor
         CancellationToken cancellationToken = default)
     {
         if (eventData.Context is not null)
-            UpdateAuditableEntities(eventData.Context);
-        return await base.SavingChangesAsync(eventData, result, cancellationToken);
+            UpdateAuditableEntities(
+                eventData.Context);
+        return await base.SavingChangesAsync(
+            eventData,
+            result,
+            cancellationToken);
     }
     private static void UpdateAuditableEntities(DbContext context)
     {
@@ -34,15 +38,21 @@ public sealed class UpdateAuditableEntitiesInterceptor
             if (entityEntry.State == EntityState.Added)
             {
                 SetCurrentPropertyValue(
-                    entityEntry, nameof(IAuditableEntity.CreatedOnUtc), utcNow);
+                    entityEntry,
+                    nameof(IAuditableEntity.CreatedOnUtc),
+                    utcNow);
                 SetCurrentPropertyValue(
-                    entityEntry, nameof(IAuditableEntity.ModifiedOnUtc), utcNow);
+                    entityEntry,
+                    nameof(IAuditableEntity.ModifiedOnUtc),
+                    utcNow);
             }
 
             if (entityEntry.State == EntityState.Modified)
             {
                 SetCurrentPropertyValue(
-                    entityEntry, nameof(IAuditableEntity.ModifiedOnUtc), utcNow);
+                    entityEntry,
+                    nameof(IAuditableEntity.ModifiedOnUtc),
+                    utcNow);
             }
         }
     }

@@ -35,9 +35,13 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>
 
     public async Task Execute(IJobExecutionContext context)
     {
-        if (!context.MergedJobDataMap.TryGetInt("ProcessBatchSize", out var batchSize))
+        if (!context.MergedJobDataMap.TryGetInt(
+            "ProcessBatchSize",
+            out var batchSize))
             batchSize = 20;
-        if (!context.MergedJobDataMap.TryGetString("EventsAssemblyFullName", out var eventAssemblyFullName))
+        if (!context.MergedJobDataMap.TryGetString(
+            "EventsAssemblyFullName",
+            out var eventAssemblyFullName))
             eventAssemblyFullName = string.Empty;
 
         var eventAssembly = Assembly.Load(
@@ -54,7 +58,8 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>
 
         foreach (OutboxMessage outboxMessage in messages)
         {
-            var messageType = eventAssembly.GetType(outboxMessage.Type);
+            var messageType = eventAssembly.GetType(
+                outboxMessage.Type);
             if (messageType is null)
                 continue;
 

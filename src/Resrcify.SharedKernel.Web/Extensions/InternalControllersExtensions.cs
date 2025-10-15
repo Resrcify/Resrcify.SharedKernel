@@ -16,7 +16,8 @@ public static class InternalControllersExtensions
                     new CustomControllerFeatureProvider(controllerType)));
 
 }
-internal class CustomControllerFeatureProvider(Type? controllerType) : ControllerFeatureProvider
+internal class CustomControllerFeatureProvider(Type? controllerType)
+    : ControllerFeatureProvider
 {
     public Type? ControllerType { get; } = controllerType;
     protected override bool IsController(TypeInfo typeInfo)
