@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+    <TargetFrameworks>net10.0</TargetFrameworks>
     <PackageId>Resrcify.SharedKernel.UnitOfWork</PackageId>
     <Title>Resrcify.SharedKernel.UnitOfWork</Title>
     <Description>Implements a unit of work pattern, including interceptors using EntityFrameworkCore.</Description>

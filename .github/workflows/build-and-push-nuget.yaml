@@ -10,7 +10,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
 
       - name: Verify commit exists in origin/master
         run: |
@@ -20,15 +20,14 @@ jobs:
       - name: Set VERSION variable from tag
         run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_ENV
       - name: Setup .NET
-        uses: actions/setup-dotnet@v3
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: |
-            8.x.x
-            9.x.x
+            10.x.x
       - name: Build
-        run: dotnet build --configuration Release /p:Version=${VERSION}
+        run: dotnet build Resrcify.SharedKernel.slnx --configuration Release /p:Version=${VERSION} -m:1
       - name: Pack
-        run: dotnet pack --configuration Release /p:Version=${VERSION} --no-build --output .
+        run: dotnet pack Resrcify.SharedKernel.slnx --configuration Release /p:Version=${VERSION} --no-build --output . -m:1
       - name: List generated packages
         run: ls *.nupkg
       - name: Push Packages to NuGet

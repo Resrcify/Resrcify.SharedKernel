@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+    <TargetFrameworks>net10.0</TargetFrameworks>
     <PackageId>Resrcify.SharedKernel.Repository</PackageId>
     <Title>Resrcify.SharedKernel.Repository</Title>
     <Description>Implements a generic repository pattern using EntityFrameworkCore.</Description>

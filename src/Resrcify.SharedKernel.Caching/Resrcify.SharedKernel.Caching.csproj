@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+    <TargetFrameworks>net10.0</TargetFrameworks>
     <PackageId>Resrcify.SharedKernel.Caching</PackageId>
     <Title>Resrcify.SharedKernel.Caching</Title>
     <Description>Adds interfaces and implements different caching options using the IDistributedCache interfaces.</Description>

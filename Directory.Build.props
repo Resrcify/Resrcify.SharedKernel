@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+    <TargetFrameworks>net10.0</TargetFrameworks>
     <Authors>Rickard Marjanovic (@rmarjanovic)</Authors>
     <Company>Resrcify AB</Company>
     <Nullable>enable</Nullable>
