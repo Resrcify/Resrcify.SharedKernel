@@ -23,25 +23,36 @@ public class LoggingPipelineBehavior<TRequest, TResponse>
         CancellationToken cancellationToken)
     {
         var start = DateTime.UtcNow;
-        _logger.LogInformation("Starting request {@RequestName}, {@DateTimeUtc}",
-            typeof(TRequest).Name,
-            start);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Starting request {@RequestName}, {@DateTimeUtc}",
+                typeof(TRequest).Name,
+                start);
+        }
 
         var result = await next(cancellationToken);
 
         var end = DateTime.UtcNow;
         var differenceMs = (end - start).TotalMilliseconds;
-        if (result.IsFailure)
-            _logger.LogInformation("Request failure {@RequestName}, {@Error}, {@DateTimeUtc} ({@DifferenceMs} ms)",
+        if (result.IsFailure && _logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Request failure {@RequestName}, {@Error}, {@DateTimeUtc} ({@DifferenceMs} ms)",
                 typeof(TRequest).Name,
                 result.Errors,
                 end,
                 differenceMs);
+        }
 
-        _logger.LogInformation("Completed request {@RequestName}, {@DateTimeUtc} ({@DifferenceMs} ms)",
-            typeof(TRequest).Name,
-            end,
-            differenceMs);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Completed request {@RequestName}, {@DateTimeUtc} ({@DifferenceMs} ms)",
+                typeof(TRequest).Name,
+                end,
+                differenceMs);
+        }
         return result;
     }
 }

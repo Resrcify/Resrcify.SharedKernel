@@ -27,11 +27,15 @@ public class CachingPipelineBehavior<TRequest, TResponse>
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
-        string requestName = typeof(TRequest).Name;
-
         if (string.IsNullOrEmpty(request.CacheKey))
         {
-            _logger.LogInformation("{RequestName}: Key property not set", requestName);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation(
+                    "{RequestName}: Key property not set",
+                    typeof(TRequest).Name);
+            }
+
             return await next(cancellationToken);
         }
 
@@ -41,11 +45,23 @@ public class CachingPipelineBehavior<TRequest, TResponse>
 
         if (cacheResult is not null)
         {
-            _logger.LogInformation("{RequestName}: Cache hit", requestName);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation(
+                    "{RequestName}: Cache hit",
+                    typeof(TRequest).Name);
+            }
+
             return cacheResult;
         }
 
-        _logger.LogInformation("{RequestName}: Cache miss", requestName);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "{RequestName}: Cache miss",
+                typeof(TRequest).Name);
+        }
+
         var result = await next(cancellationToken);
 
         if (result.IsSuccess)
