@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>Resrcify.SharedKernel.PerformanceTests.Messaging.MediatorComparisonBenchmarks-20260417-165605</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.14.0, Windows 11 (10.0.26200.8246)
+Unknown processor
+.NET SDK 10.0.102
+  [Host]     : .NET 10.0.2 (10.0.225.61305), X64 RyuJIT AVX-512F+CD+BW+DQ+VL+VBMI
+  DefaultJob : .NET 10.0.2 (10.0.225.61305), X64 RyuJIT AVX-512F+CD+BW+DQ+VL+VBMI
+</code></pre>
+<pre><code></code></pre>
+
+<table>
+<thead><tr><th>Method                      </th><th>Mean </th><th>Error</th><th>StdDev</th><th>Ratio</th><th>RatioSD</th><th>Rank</th><th>Gen0</th><th>Allocated</th><th>Alloc Ratio</th>
+</tr>
+</thead><tbody><tr><td>Custom_Send_Typed_Task</td><td>33.48 ns</td><td>0.186 ns</td><td>0.145 ns</td><td>1.00</td><td>0.01</td><td>3</td><td>0.0043</td><td>72 B</td><td>1.00</td>
+</tr><tr><td>Custom_Send_Typed_ValueTask</td><td>28.79 ns</td><td>0.176 ns</td><td>0.156 ns</td><td>0.86</td><td>0.01</td><td>1</td><td>0.0043</td><td>72 B</td><td>1.00</td>
+</tr><tr><td>MediatR_Send_Typed</td><td>55.01 ns</td><td>0.677 ns</td><td>0.565 ns</td><td>1.64</td><td>0.02</td><td>5</td><td>0.0263</td><td>440 B</td><td>6.11</td>
+</tr><tr><td>Custom_Send_Object_Task</td><td>37.35 ns</td><td>0.253 ns</td><td>0.225 ns</td><td>1.12</td><td>0.01</td><td>4</td><td>0.0100</td><td>168 B</td><td>2.33</td>
+</tr><tr><td>Custom_Send_Object_ValueTask</td><td>31.49 ns</td><td>0.557 ns</td><td>0.521 ns</td><td>0.94</td><td>0.02</td><td>2</td><td>0.0057</td><td>96 B</td><td>1.33</td>
+</tr><tr><td>MediatR_Send_Object</td><td>62.13 ns</td><td>0.579 ns</td><td>0.513 ns</td><td>1.86</td><td>0.02</td><td>6</td><td>0.0319</td><td>536 B</td><td>7.44</td>
+</tr><tr><td>Custom_Send_With_PrePost_Task</td><td>38.34 ns</td><td>0.333 ns</td><td>0.278 ns</td><td>1.15</td><td>0.01</td><td>4</td><td>0.0086</td><td>144 B</td><td>2.00</td>
+</tr><tr><td>Custom_Send_With_PrePost_ValueTask</td><td>29.79 ns</td><td>0.317 ns</td><td>0.296 ns</td><td>0.89</td><td>0.01</td><td>1</td><td>0.0043</td><td>72 B</td><td>1.00</td>
+</tr><tr><td>MediatR_Send_With_PrePost</td><td>55.47 ns</td><td>0.274 ns</td><td>0.229 ns</td><td>1.66</td><td>0.01</td><td>5</td><td>0.0263</td><td>440 B</td><td>6.11</td>
+</tr><tr><td>Custom_Publish</td><td>28.26 ns</td><td>0.219 ns</td><td>0.183 ns</td><td>0.84</td><td>0.01</td><td>1</td><td>0.0019</td><td>32 B</td><td>0.44</td>
+</tr><tr><td>MediatR_Publish</td><td>65.07 ns</td><td>0.581 ns</td><td>0.543 ns</td><td>1.94</td><td>0.02</td><td>7</td><td>0.0353</td><td>592 B</td><td>8.22</td>
+</tr><tr><td>Custom_Stream_ConsumeAll</td><td>5,521.45 ns</td><td>108.053 ns</td><td>101.073 ns</td><td>164.94</td><td>3.00</td><td>8</td><td>0.0305</td><td>560 B</td><td>7.78</td>
+</tr><tr><td>MediatR_Stream_ConsumeAll</td><td>7,623.08 ns</td><td>105.045 ns</td><td>98.259 ns</td><td>227.71</td><td>3.00</td><td>9</td><td>0.0763</td><td>1410 B</td><td>19.58</td>
+</tr></tbody></table>
+</body>
+</html>

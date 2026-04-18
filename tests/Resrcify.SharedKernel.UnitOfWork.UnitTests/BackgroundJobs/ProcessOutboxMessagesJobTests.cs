@@ -1,10 +1,11 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Quartz;
-using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
-using MediatR;
+using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
+using Resrcify.SharedKernel.Abstractions.Messaging;
 using NSubstitute;
 using Xunit;
 using System.Linq;
@@ -18,6 +19,10 @@ using Shouldly;
 
 namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.BackgroundJobs;
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class ProcessOutboxMessagesJobTests
 {
     private static readonly JsonSerializerOptions _jsonOptions = new()

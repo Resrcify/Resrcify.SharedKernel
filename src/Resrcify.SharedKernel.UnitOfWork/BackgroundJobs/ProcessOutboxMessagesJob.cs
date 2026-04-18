@@ -3,11 +3,11 @@ using System.Linq;
 using System.Threading.Tasks;
 using Quartz;
 using Microsoft.EntityFrameworkCore;
-using MediatR;
+using Resrcify.SharedKernel.Abstractions.Messaging;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 using System.Text.Json;
 using Resrcify.SharedKernel.UnitOfWork.Converters;
-using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
+using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using System.Reflection;
 
 namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;

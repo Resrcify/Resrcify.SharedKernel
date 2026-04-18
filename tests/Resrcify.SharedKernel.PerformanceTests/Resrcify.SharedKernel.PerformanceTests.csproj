@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <NoWarn>$(NoWarn);CA1515</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="MediatR" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Abstractions\Resrcify.SharedKernel.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Caching\Resrcify.SharedKernel.Caching.csproj" />
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.DomainDrivenDesign\Resrcify.SharedKernel.DomainDrivenDesign.csproj" />
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Messaging\Resrcify.SharedKernel.Messaging.csproj" />
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Repository\Resrcify.SharedKernel.Repository.csproj" />
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Results\Resrcify.SharedKernel.Results.csproj" />
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.UnitOfWork\Resrcify.SharedKernel.UnitOfWork.csproj" />
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Web\Resrcify.SharedKernel.Web.csproj" />
+  </ItemGroup>
+</Project>

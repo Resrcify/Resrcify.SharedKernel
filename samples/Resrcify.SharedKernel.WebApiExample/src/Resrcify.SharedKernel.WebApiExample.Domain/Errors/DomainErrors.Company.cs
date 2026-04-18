@@ -1,5 +1,5 @@
-using System;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
+﻿using System;
+using Resrcify.SharedKernel.Results.Primitives;
 
 namespace Resrcify.SharedKernel.WebApiExample.Domain.Errors;
 

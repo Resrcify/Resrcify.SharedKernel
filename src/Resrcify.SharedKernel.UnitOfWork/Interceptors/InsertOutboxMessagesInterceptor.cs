@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
+using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using Resrcify.SharedKernel.UnitOfWork.Converters;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 

@@ -1,38 +1,62 @@
 # Resrcify.SharedKernel
 
-Shared building blocks used across Resrcify services and samples.
+`Resrcify.SharedKernel` contains reusable building blocks used across Resrcify services:
+messaging, results, domain-driven design primitives, repository support, caching, unit-of-work, and web helpers.
 
-## What’s inside
+## Table of Contents
 
-- `Resrcify.SharedKernel.Caching` for cache abstractions and cache helpers.
-- `Resrcify.SharedKernel.DomainDrivenDesign` for entities, value objects, and domain primitives.
-- `Resrcify.SharedKernel.Messaging` for MediatR pipeline behaviors and messaging abstractions.
-- `Resrcify.SharedKernel.Repository` for repository abstractions and query helpers.
-- `Resrcify.SharedKernel.ResultFramework` for result types and error handling.
-- `Resrcify.SharedKernel.UnitOfWork` for unit-of-work helpers, outbox support, and background jobs.
-- `Resrcify.SharedKernel.Web` for web extensions and request/response helpers.
-- `samples/Resrcify.SharedKernel.WebApiExample` for a runnable example application.
+- [Resrcify.SharedKernel](#resrcifysharedkernel)
+  - [Table of Contents](#table-of-contents)
+  - [What you get](#what-you-get)
+  - [Prerequisites](#prerequisites)
+  - [Repository layout](#repository-layout)
+  - [Build and test](#build-and-test)
+  - [Development conventions](#development-conventions)
+  - [Sample project](#sample-project)
 
-## Solution layout
+## What you get
 
-- Use `Resrcify.SharedKernel.slnx` as the primary solution file.
-- Keep one unit-test project per source project.
-- Mirror source folders in tests where it improves discoverability.
+- Modular shared packages under `src/`:
+    - `Resrcify.SharedKernel.Abstractions`
+    - `Resrcify.SharedKernel.Caching`
+    - `Resrcify.SharedKernel.DomainDrivenDesign`
+    - `Resrcify.SharedKernel.Messaging`
+    - `Resrcify.SharedKernel.Repository`
+    - `Resrcify.SharedKernel.Results`
+    - `Resrcify.SharedKernel.UnitOfWork`
+    - `Resrcify.SharedKernel.Web`
+- Unit-test projects under `tests/` for each source module.
+- Benchmark suite in `tests/Resrcify.SharedKernel.PerformanceTests`.
+- Runnable sample in `samples/Resrcify.SharedKernel.WebApiExample`.
 
-## Runtime support
+## Prerequisites
 
-- Targets `net8.0`, `net9.0`, and `net10.0`.
-- Shared packages are published separately by module.
-- CI builds should restore and test against the `.slnx` solution file.
+- .NET 10 SDK.
+- Optional Docker tooling for the sample application.
 
-## Contributing
+## Repository layout
 
-1. Create a branch for your change.
-2. Keep the change focused in the owning module.
-3. Add or update unit tests for each new feature or behavior.
-4. Prefer vertically readable, "tall" code with small methods and explicit flow.
-5. Run the relevant tests before opening a PR.
+- Main solution file: `Resrcify.SharedKernel.slnx`.
+- Source modules: `src/`.
+- Tests and benchmarks: `tests/`.
+- Sample host: `samples/Resrcify.SharedKernel.WebApiExample`.
 
-## Credits
+## Build and test
 
-Inspired by [Milan Jovanovic](https://www.youtube.com/@MilanJovanovicTech)'s Clean Architecture series.
+```powershell
+Set-Location "d:\Google Drive\Projects\Titan404\Resrcify.SharedKernel"
+dotnet restore .\Resrcify.SharedKernel.slnx
+dotnet build .\Resrcify.SharedKernel.slnx
+dotnet test .\Resrcify.SharedKernel.slnx
+```
+
+## Development conventions
+
+- Keep changes focused in the owning module.
+- Add or update matching unit tests for new behaviors.
+- Keep code vertically readable (“tall” style).
+- Keep namespaces aligned to folder structure.
+
+## Sample project
+
+See `samples/Resrcify.SharedKernel.WebApiExample` for end-to-end usage across modules.

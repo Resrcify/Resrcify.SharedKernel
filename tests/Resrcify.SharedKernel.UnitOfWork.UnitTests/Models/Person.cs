@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
+using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 
 namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;

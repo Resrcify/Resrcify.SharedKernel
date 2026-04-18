@@ -1,7 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Resrcify.SharedKernel.Messaging.Abstractions;
+using Resrcify.SharedKernel.Abstractions.Messaging;
 using Resrcify.SharedKernel.WebApiExample.Domain.Features.Companies.Events;
 
 namespace Resrcify.SharedKernel.WebApiExample.Application.Features.Companies.CompanyCreated;

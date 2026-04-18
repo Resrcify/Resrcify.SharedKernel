@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using NetArchTest.Rules;
-using Resrcify.SharedKernel.Messaging.Abstractions;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Resrcify.SharedKernel.Abstractions.Messaging;
+using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.WebApiExample.ArchitectureTests.Extensions;
 using Resrcify.SharedKernel.WebApiExample.ArchitectureTests.Helpers;
 using Shouldly;
@@ -247,3 +247,4 @@ public class ApplicationTests : BaseTest
             .HaveNameEndingWith("Query")
             .Evaluate();
 }
+

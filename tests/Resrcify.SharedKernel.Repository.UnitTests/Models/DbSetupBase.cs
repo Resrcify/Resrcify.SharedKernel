@@ -9,6 +9,10 @@ namespace Resrcify.SharedKernel.Repository.UnitTests.Models;
     "Maintainability",
     "CA1515:Because an application's API isn't typically referenced from outside the assembly, types can be made internal",
     Justification = "Needed to be public due to being abstract and test classes needs to be public.")]
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public abstract class DbSetupBase : IAsyncLifetime, IDisposable
 {
     internal TestDbContext DbContext { get; }

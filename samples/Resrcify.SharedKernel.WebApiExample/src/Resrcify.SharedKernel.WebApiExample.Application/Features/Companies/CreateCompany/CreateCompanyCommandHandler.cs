@@ -1,8 +1,8 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Resrcify.SharedKernel.Messaging.Abstractions;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Resrcify.SharedKernel.Abstractions.Messaging;
+using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.WebApiExample.Domain.Features.Companies;
 using Resrcify.SharedKernel.WebApiExample.Application.Abstractions.Repositories;
 using Resrcify.SharedKernel.WebApiExample.Domain.Errors;
@@ -25,8 +25,8 @@ internal sealed class CreateCompanyCommandHandler(
         if (newCompany.IsFailure)
             return newCompany;
 
-        var oldCompany = await _companyRepository.FirstOrDefaultAsync(
-            company => company.OrganizationNumber == newCompany.Value.OrganizationNumber,
+        var oldCompany = await FindByOrganizationNumberAsync(
+            newCompany.Value.OrganizationNumber,
             cancellationToken);
 
         if (oldCompany is not null)
@@ -35,5 +35,20 @@ internal sealed class CreateCompanyCommandHandler(
         await _companyRepository.AddAsync(newCompany.Value, cancellationToken);
 
         return Result.Success();
+    }
+
+    private async Task<Company?> FindByOrganizationNumberAsync(
+        Resrcify.SharedKernel.WebApiExample.Domain.Features.Companies.ValueObjects.OrganizationNumber organizationNumber,
+        CancellationToken cancellationToken)
+    {
+        await foreach (var company in _companyRepository.GetAllAsync())
+        {
+            if (company.OrganizationNumber == organizationNumber)
+            {
+                return company;
+            }
+        }
+
+        return null;
     }
 }

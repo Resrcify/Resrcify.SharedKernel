@@ -1,15 +1,16 @@
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
-using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
+using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
+using Resrcify.SharedKernel.Abstractions.Repository;
 
 namespace Resrcify.SharedKernel.Repository.Primitives;
 
 public static class SpecificationEvaluator
 {
-    public static IQueryable<TEntity> GetQuery<TEntity, TId>(
-        IQueryable<TEntity> inputQueryable, Specification<TEntity, TId> specification)
-        where TEntity : AggregateRoot<TId>
-        where TId : notnull
+    public static IQueryable<TEntity> GetQuery<TEntity>(
+        IQueryable<TEntity> inputQueryable,
+        ISpecification<TEntity> specification)
+        where TEntity : class, IAggregateRoot
     {
         IQueryable<TEntity> queryable = inputQueryable;
 

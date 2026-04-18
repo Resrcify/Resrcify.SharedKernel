@@ -1,10 +1,15 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 using Shouldly;
 using Xunit;
 
 namespace Resrcify.SharedKernel.DomainDrivenDesign.UnitTests.Primitives;
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class DomainEventTests
 {
     private sealed record TestDomainEvent(Guid Id) : DomainEvent(Id);

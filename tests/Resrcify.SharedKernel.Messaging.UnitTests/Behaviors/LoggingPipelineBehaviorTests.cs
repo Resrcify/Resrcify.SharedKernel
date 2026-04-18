@@ -1,18 +1,23 @@
 
 using Xunit;
+using System.Diagnostics.CodeAnalysis;
 using NSubstitute;
 using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using System.Threading;
-using MediatR;
 using System;
+using Resrcify.SharedKernel.Abstractions.Messaging;
 using Resrcify.SharedKernel.Messaging.Behaviors;
 using System.Linq;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Resrcify.SharedKernel.Results.Primitives;
 using Shouldly;
 
 namespace Resrcify.SharedKernel.Messaging.UnitTests.Behaviors;
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class LoggingPipelineBehaviorTests
 {
     private readonly ILogger<LoggingPipelineBehavior<MockRequest, Result>> _logger;
@@ -64,9 +69,13 @@ public class LoggingPipelineBehaviorTests
             .ShouldBe(3);
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+    [SuppressMessage(
         "Maintainability",
         "CA1515:Consider making public types internal",
         Justification = "NSubstitute (which uses Castle DynamicProxy) cannot generate a mock of a type containing inaccessible generic parameters")]
+    [SuppressMessage(
+        "Performance",
+        "CA1515:Consider making public types internal",
+        Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
     public sealed class MockRequest : IRequest<Result> { }
 }

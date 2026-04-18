@@ -1,18 +1,23 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
-using Resrcify.SharedKernel.Caching.Abstractions;
-using Resrcify.SharedKernel.Messaging.Abstractions;
+using Resrcify.SharedKernel.Abstractions.Caching;
+using Resrcify.SharedKernel.Abstractions.Messaging;
 using Resrcify.SharedKernel.Messaging.Behaviors;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Resrcify.SharedKernel.Results.Primitives;
 using Shouldly;
 using Xunit;
 
 namespace Resrcify.SharedKernel.Messaging.UnitTests.Behaviors;
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class CachingPipelineBehaviorTests
 {
     private readonly ICachingService _cachingService = Substitute.For<ICachingService>();
@@ -38,7 +43,7 @@ public class CachingPipelineBehaviorTests
         var result = await _behavior.Handle(request, next, cancellationToken);
 
         // Assert
-        await _cachingService.DidNotReceiveWithAnyArgs().GetAsync<Result>(null!, null, cancellationToken);
+        await _cachingService.DidNotReceiveWithAnyArgs().GetAsync<Result>(null!, cancellationToken);
 
         _logger
             .ReceivedCalls()
@@ -97,7 +102,11 @@ public class CachingPipelineBehaviorTests
 
         await _cachingService
             .Received(1)
-            .SetAsync(request.CacheKey!, response, request.Expiration, Arg.Any<CancellationToken>());
+            .SetAsync(
+                request.CacheKey!,
+                response,
+                request.Expiration,
+                Arg.Any<CancellationToken>());
 
         _logger
             .ReceivedCalls()
@@ -109,10 +118,14 @@ public class CachingPipelineBehaviorTests
             .ShouldBe(response);
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+    [SuppressMessage(
         "Maintainability",
         "CA1515:Consider making public types internal",
         Justification = "NSubstitute (which uses Castle DynamicProxy) cannot generate a mock of a type containing inaccessible generic parameters")]
+    [SuppressMessage(
+        "Performance",
+        "CA1515:Consider making public types internal",
+        Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
     public sealed class MockCachingQuery(string? CacheKey, TimeSpan Expiration) : ICachingQuery<MockCachingQuery>
     {
         public string? CacheKey { get; set; } = CacheKey;

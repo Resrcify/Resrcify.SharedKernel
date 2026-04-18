@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Diagnostics.CodeAnalysis;
 using Resrcify.SharedKernel.Repository.UnitTests.Models;
 using Xunit;
 using Resrcify.SharedKernel.Repository.Extensions;
@@ -8,6 +9,10 @@ using Shouldly;
 
 namespace Resrcify.SharedKernel.Repository.UnitTests.Extensions;
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class ResultExtensionsTests : DbSetupBase
 {
     [Fact]

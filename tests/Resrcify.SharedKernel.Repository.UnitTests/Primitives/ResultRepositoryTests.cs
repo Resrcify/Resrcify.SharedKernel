@@ -1,14 +1,19 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Resrcify.SharedKernel.Repository.Primitives;
 using Resrcify.SharedKernel.Repository.UnitTests.Models;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Resrcify.SharedKernel.Results.Primitives;
 using Shouldly;
 using Xunit;
 
 namespace Resrcify.SharedKernel.Repository.UnitTests.Primitives;
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class ResultRepositoryTests
 {
     private static TestDbContext CreateDbContext()

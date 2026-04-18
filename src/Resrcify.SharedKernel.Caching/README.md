@@ -1,91 +1,128 @@
 # Resrcify.SharedKernel.Caching
 
-## Description
-This repository, **Resrcify.SharedKernel.Caching**, was created to simplify caching operations in our distributed applications. By leveraging the ``IDistributedCache`` interface, this library makes it easier to implement effective caching strategies that enhance performance and minimize unnecessary database queries.
+`Resrcify.SharedKernel.Caching` provides an `IDistributedCache`-based caching service with typed serialization helpers and simple expiration APIs.
+
+## Table of Contents
+
+- [Resrcify.SharedKernel.Caching](#resrcifysharedkernelcaching)
+  - [Table of Contents](#table-of-contents)
+  - [What you get](#what-you-get)
+  - [Prerequisites](#prerequisites)
+  - [Install](#install)
+    - [Option A: Project reference](#option-a-project-reference)
+    - [Option B: NuGet package](#option-b-nuget-package)
+  - [Quick Start](#quick-start)
+  - [Usage guide](#usage-guide)
+    - [Set cache values](#set-cache-values)
+    - [Get cache values](#get-cache-values)
+    - [Remove values and bulk get](#remove-values-and-bulk-get)
+  - [Common issues](#common-issues)
+  - [Related modules](#related-modules)
+
+## What you get
+
+- `ICachingService` abstraction in `Resrcify.SharedKernel.Abstractions.Caching`.
+- `DistributedCachingService` implementation in `Primitives/`.
+- Typed JSON serialization via `System.Text.Json`.
+- Support for:
+    - Sliding expiration (`TimeSpan`)
+    - Absolute expiration (`DateTimeOffset`)
+    - Bulk retrieval by keys (`GetBulkAsync<T>`)
 
 ## Prerequisites
-Before using **Resrcify.SharedKernel.Caching**, ensure that your project meets the following requirements:
 
-- .NET 8.0 is installed.
-- Installing the nuget of a distributed cache provider, such as:
-    - In-Memory Cache: ``Microsoft.Extensions.Hosting``
+- .NET 10 SDK.
+- A configured `IDistributedCache` provider (memory, Redis, SQL Server, etc.).
 
-    As of now other providers are not supported.
-- Please note that all external package references in this repository are private, meaning that you are forced add them to your own project if you need/wish to use them. This is to maintain correct dependency references in accordance with Clean Architecture.
+## Install
 
-## Installation
-To integrate **Resrcify.SharedKernel.Caching** into your project, you can either clone the source code or install the NuGet package, depending on your preference.
+### Option A: Project reference
 
-### Download and reference the project files
-1. Clone this repository
-```bash
-git clone https://github.com/Resrcify/Resrcify.SharedKernel.git
+```xml
+<ProjectReference Include="..\path\to\Resrcify.SharedKernel.Caching.csproj" />
 ```
-2. Add the **Resrcify.SharedKernel.Caching** project to your solution/project.
 
-- By referencing the project in your ``.csproj`` file
-    ```xml
-    <ProjectReference Include="../path/to/Resrcify.SharedKernel.Caching.csproj" />
-    ```
-- Or by using the command line to reference the project
-    ```bash
-    dotnet add reference path/to/Resrcify.SharedKernel.Caching.csproj
-    ```
+### Option B: NuGet package
 
-### Download and reference Nuget package
-1. Add the package from NuGet:
-- By referencing in your ``.csproj`` file
-    ```xml
-    <PackageReference Include="Resrcify.SharedKernel.Caching" Version="1.8.5" />
-    ```
-- Or by using the command line
-    ```bash
-    dotnet add package Resrcify.SharedKernel.Caching
-    ```
+```xml
+<PackageReference Include="Resrcify.SharedKernel.Caching" Version="<latest>" />
+```
 
-## Configuration
-To use this library, configure it in your application's startup code or dependency injection setup.
+CLI:
+
+```powershell
+dotnet add package Resrcify.SharedKernel.Caching
+```
+
+## Quick Start
 
 ```csharp
-using Resrcify.SharedKernel.Caching.Abstractions;
-using Resrcify.SharedKernel.Caching.Primitives;
 using Microsoft.Extensions.DependencyInjection;
+using Resrcify.SharedKernel.Abstractions.Caching;
+using Resrcify.SharedKernel.Caching.Primitives;
 
-public void AddInfrastructureServices(this IServiceCollection services)
+public static class CachingRegistration
 {
-    services.AddDistributedMemoryCache();
-    services.AddSingleton<ICachingService, DistributedCachingService>();
+    public static IServiceCollection AddCaching(
+        this IServiceCollection services)
+    {
+        services.AddDistributedMemoryCache();
+        services.AddSingleton<ICachingService, DistributedCachingService>();
+        return services;
+    }
 }
 ```
 
-## Usage
-Some of the more commonly used methods can be used as follows:
-### Add to cache
+## Usage guide
+
+### Set cache values
+
+Sliding expiration:
+
 ```csharp
-MyClass value = new MyClass("test");
-var validFor = TimeSpan.FromMinutes(30);
 await cachingService.SetAsync(
-    "cacheKey",
-    value,
-    validFor,
-    cancellationToken);
+    key: "users:42",
+    value: userDto,
+    slidingExpiration: TimeSpan.FromMinutes(10),
+    cancellationToken: cancellationToken);
 ```
-### Retreive from cache
+
+Absolute expiration:
+
 ```csharp
-MyClass? cacheResult = await _cachingService.GetAsync<MyClass>(
-    "cacheKey",,
-    cancellationToken);
+await cachingService.SetAsync(
+    key: "users:42",
+    value: userDto,
+    absoluteExpiration: DateTimeOffset.UtcNow.AddMinutes(30),
+    cancellationToken: cancellationToken);
 ```
-## Sample projects
-Caching is used within the sister project **Resrcify.SharedKernel.Messaging** in one of the MediatR Pipeline behaviors. Please see [CachingPipelineBehavior.cs](../Resrcify.SharedKernel.Messaging/Behaviors/CachingPipelineBehavior.cs) for further documentation on how caching can be used in your project(s).
 
-## Suggestions for further development
+### Get cache values
 
-Here are a few ideas for extending this library in the future:
+```csharp
+UserDto? cachedUser = await cachingService.GetAsync<UserDto>(
+    key: "users:42",
+    cancellationToken: cancellationToken);
+```
 
-- **Custom Cache Invalidation Strategies:** Implementing additional or custom cache invalidation policies, such as sliding window expiration or similar.
-- **Additional Distributed Cache Providers:** Adding support for other custom distributed cache providers, i.e for Redis Cache or SQL Server.
-- **Monitoring and Metrics:** Add instrumentation to monitor cache hits, misses, and other metrics using telemetry or logging frameworks.
-- **Serialization Customization:** Allow customization of serialization (e.g., adding support for Newtonsoft.Json, BSON or other custom formats).
-- **Support for Compression:** Adding optional compression for cached data to reduce memory usage.
-- **Integration tests using TestContainers:** Adding integration tests using TestContainers to be able to run the test in pipelines. This will further strengthen comfort especially if external dependencies are used.
+### Remove values and bulk get
+
+```csharp
+await cachingService.RemoveAsync(
+    key: "users:42",
+    cancellationToken: cancellationToken);
+
+IEnumerable<UserDto?> cachedUsers = await cachingService.GetBulkAsync<UserDto>(
+    keys: ["users:1", "users:2", "users:3"],
+    cancellationToken: cancellationToken);
+```
+
+## Common issues
+
+- If cache entries never expire, verify the provider supports requested expiration settings.
+- If deserialization fails, ensure cached payload schema matches the expected type.
+- If performance degrades on bulk operations, review provider latency and key count per request.
+
+## Related modules
+
+- `Resrcify.SharedKernel.Messaging` includes `CachingPipelineBehavior<TRequest, TResponse>` for cache-aside query handling.

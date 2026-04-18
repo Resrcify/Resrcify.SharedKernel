@@ -8,13 +8,13 @@ namespace Resrcify.SharedKernel.WebApiExample.ArchitectureTests.Tests;
 public class PresentationTests : BaseTest
 {
     [Fact]
-    public void Controllers_Should_HaveDependecyOnMediatR()
+    public void Controllers_Should_HaveDependecyOnMessagingAbstractions()
         => Types
             .InAssembly(PresentationAssembly)
             .That()
             .HaveNameEndingWith("Controller")
             .Should()
-            .HaveDependencyOn("MediatR")
+            .HaveDependencyOn("Resrcify.SharedKernel.Abstractions.Messaging")
             .Evaluate();
 
 

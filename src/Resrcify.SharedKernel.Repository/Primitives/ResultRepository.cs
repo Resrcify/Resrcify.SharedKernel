@@ -3,9 +3,9 @@ using System;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
-using Resrcify.SharedKernel.Repository.Abstractions;
+using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
+using Resrcify.SharedKernel.Results.Primitives;
+using Resrcify.SharedKernel.Abstractions.Repository;
 
 namespace Resrcify.SharedKernel.Repository.Primitives;
 
@@ -13,7 +13,7 @@ public abstract class ResultRepository<TDbContext, TEntity, TId>(TDbContext cont
     : Repository<TDbContext, TEntity, TId>(context),
     IResultFetchRepository<TEntity, TId>
     where TDbContext : DbContext
-    where TEntity : AggregateRoot<TId>
+    where TEntity : class, IAggregateRoot<TId>
     where TId : notnull
 {
     public new virtual async Task<Result<TEntity>> GetByIdAsync(
@@ -42,7 +42,7 @@ public abstract class ResultRepository<TDbContext, TEntity, TId>(TDbContext cont
                     $"{typeof(TEntity).Name} matching the specified criteria was not found.",
                     ErrorType.NotFound));
     public new async Task<Result<TEntity>> FirstOrDefaultAsync(
-        Specification<TEntity, TId> specification,
+        ISpecification<TEntity> specification,
         CancellationToken cancellationToken = default)
         => Result
             .Create(await base.FirstOrDefaultAsync(

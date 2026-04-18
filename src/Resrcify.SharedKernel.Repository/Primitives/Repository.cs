@@ -5,8 +5,8 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
-using Resrcify.SharedKernel.Repository.Abstractions;
+using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
+using Resrcify.SharedKernel.Abstractions.Repository;
 
 namespace Resrcify.SharedKernel.Repository.Primitives;
 
@@ -14,7 +14,7 @@ public abstract class Repository<TDbContext, TEntity, TId>
     : IRepository<TEntity, TId>,
     INullableFetchRepository<TEntity, TId>
     where TDbContext : DbContext
-    where TEntity : AggregateRoot<TId>
+    where TEntity : class, IAggregateRoot<TId>
     where TId : notnull
 {
     protected TDbContext Context { get; }
@@ -34,7 +34,7 @@ public abstract class Repository<TDbContext, TEntity, TId>
             .Set<TEntity>()
             .FirstOrDefaultAsync(predicate, cancellationToken: cancellationToken);
     public virtual async Task<TEntity?> FirstOrDefaultAsync(
-        Specification<TEntity, TId> specification,
+        ISpecification<TEntity> specification,
         CancellationToken cancellationToken = default)
         => await ApplySpecification(specification)
             .FirstOrDefaultAsync(cancellationToken: cancellationToken);
@@ -51,7 +51,7 @@ public abstract class Repository<TDbContext, TEntity, TId>
             .Where(predicate)
             .AsAsyncEnumerable();
     public IAsyncEnumerable<TEntity> FindAsync(
-        Specification<TEntity, TId> specification)
+        ISpecification<TEntity> specification)
         => ApplySpecification(specification)
             .AsAsyncEnumerable();
     public async Task AddAsync(
@@ -95,7 +95,7 @@ public abstract class Repository<TDbContext, TEntity, TId>
 
 
     protected IQueryable<TEntity> ApplySpecification(
-        Specification<TEntity, TId> specification)
+        ISpecification<TEntity> specification)
         => SpecificationEvaluator
             .GetQuery(
                 Context.Set<TEntity>(),

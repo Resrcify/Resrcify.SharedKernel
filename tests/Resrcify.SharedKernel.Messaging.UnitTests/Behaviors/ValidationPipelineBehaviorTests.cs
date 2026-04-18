@@ -4,16 +4,20 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentValidation;
 using FluentValidation.Results;
-using MediatR;
 using NSubstitute;
+using Resrcify.SharedKernel.Abstractions.Messaging;
 using Resrcify.SharedKernel.Messaging.Behaviors;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Resrcify.SharedKernel.Results.Primitives;
 using Shouldly;
 using Xunit;
 using ValidationResult = FluentValidation.Results.ValidationResult;
 
 namespace Resrcify.SharedKernel.Messaging.UnitTests.Behaviors;
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class ValidationPipelineBehaviorTests
 {
     private static ValidationPipelineBehavior<MockResultRequest, Result> CreateResultBehavior(IEnumerable<IValidator<MockResultRequest>> validators)
@@ -413,16 +417,28 @@ public class ValidationPipelineBehaviorTests
     "Maintainability",
     "CA1515:Consider making public types internal",
     Justification = "NSubstitute (which uses Castle DynamicProxy) cannot generate a mock of a type containing inaccessible generic parameters")]
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public sealed class MockResultRequest : IRequest<Result> { }
 [SuppressMessage(
     "Maintainability",
     "CA1515:Consider making public types internal",
     Justification = "NSubstitute (which uses Castle DynamicProxy) cannot generate a mock of a type containing inaccessible generic parameters")]
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public sealed class MockResultPrimitiveRequest : IRequest<Result<int>> { }
 [SuppressMessage(
     "Maintainability",
     "CA1515:Consider making public types internal",
     Justification = "NSubstitute (which uses Castle DynamicProxy) cannot generate a mock of a type containing inaccessible generic parameters")]
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public sealed class MockResultReferenceRequest : IRequest<Result<Response>> { }
 [SuppressMessage(
     "Maintainability",

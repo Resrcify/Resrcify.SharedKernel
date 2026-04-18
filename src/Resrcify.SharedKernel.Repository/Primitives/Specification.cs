@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
-using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
+using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
+using Resrcify.SharedKernel.Abstractions.Repository;
 
 namespace Resrcify.SharedKernel.Repository.Primitives;
 
 public abstract class Specification<TEntity, TId>
-    where TEntity : AggregateRoot<TId>
+    : ISpecification<TEntity>
+    where TEntity : class, IAggregateRoot<TId>
     where TId : notnull
 {
     protected Specification(

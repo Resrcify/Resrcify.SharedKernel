@@ -2,6 +2,7 @@ using System.Reflection;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Resrcify.SharedKernel.Messaging.Behaviors;
+using Resrcify.SharedKernel.Messaging.Extensions;
 
 namespace Resrcify.SharedKernel.WebApiExample.Application;
 
@@ -9,7 +10,7 @@ public static class ApplicationServiceRegistration
 {
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
-        services.AddMediatR(config =>
+        services.AddMediator(config =>
         {
             config.RegisterServicesFromAssemblies(Assembly.GetExecutingAssembly());
             config.AddOpenBehavior(typeof(LoggingPipelineBehavior<,>));

@@ -19,12 +19,12 @@
     <PackageReference Include="Shouldly" />
     <PackageReference Include="NSubstitute"/>
     <PackageReference Include="Microsoft.Extensions.Caching.Abstractions"/>
-    <PackageReference Include="MediatR"/>
     <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="FluentValidation"/>
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Abstractions\Resrcify.SharedKernel.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Messaging\Resrcify.SharedKernel.Messaging.csproj" />
   </ItemGroup>
 

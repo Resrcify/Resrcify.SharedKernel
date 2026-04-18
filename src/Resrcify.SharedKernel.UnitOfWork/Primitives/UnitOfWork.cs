@@ -3,14 +3,13 @@ using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Resrcify.SharedKernel.UnitOfWork.Abstractions;
+using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Primitives;
 
 public sealed class UnitOfWork<TDbContext> : IUnitOfWork
     where TDbContext : DbContext
 {
-
     private readonly TDbContext _context;
 
     public UnitOfWork(TDbContext context)
@@ -20,7 +19,6 @@ public sealed class UnitOfWork<TDbContext> : IUnitOfWork
         CancellationToken cancellationToken = default)
         => await _context.SaveChangesAsync(
             cancellationToken);
-
 
     public void Dispose()
     {

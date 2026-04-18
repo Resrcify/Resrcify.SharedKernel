@@ -1,11 +1,16 @@
 using System;
-using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
+using System.Diagnostics.CodeAnalysis;
+using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 using Shouldly;
 using Xunit;
 
 namespace Resrcify.SharedKernel.DomainDrivenDesign.UnitTests.Primitives;
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class AggregateRootTests
 {
     private sealed class TestAggregateRoot(int id) : AggregateRoot<int>(id)

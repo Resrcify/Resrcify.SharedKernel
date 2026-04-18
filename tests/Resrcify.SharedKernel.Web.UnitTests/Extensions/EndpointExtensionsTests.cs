@@ -1,10 +1,11 @@
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
-using Resrcify.SharedKernel.Web.Abstractions;
+using Resrcify.SharedKernel.Abstractions.Web;
 using Resrcify.SharedKernel.Web.Extensions;
 using Xunit;
 
@@ -21,6 +22,10 @@ internal sealed class FakeEndpoint : IEndpoint
     }
 }
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class EndpointExtensionsTests
 {
     [Fact]

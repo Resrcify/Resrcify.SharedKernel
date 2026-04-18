@@ -5,11 +5,12 @@
     <Platform Name="x86" />
   </Configurations>
   <Folder Name="/src/">
+    <Project Path="src/Resrcify.SharedKernel.Abstractions/Resrcify.SharedKernel.Abstractions.csproj" />
     <Project Path="src/Resrcify.SharedKernel.Caching/Resrcify.SharedKernel.Caching.csproj" />
     <Project Path="src/Resrcify.SharedKernel.DomainDrivenDesign/Resrcify.SharedKernel.DomainDrivenDesign.csproj" />
     <Project Path="src/Resrcify.SharedKernel.Messaging/Resrcify.SharedKernel.Messaging.csproj" />
     <Project Path="src/Resrcify.SharedKernel.Repository/Resrcify.SharedKernel.Repository.csproj" />
-    <Project Path="src/Resrcify.SharedKernel.ResultFramework/Resrcify.SharedKernel.ResultFramework.csproj" />
+    <Project Path="src/Resrcify.SharedKernel.Results/Resrcify.SharedKernel.Results.csproj" />
     <Project Path="src/Resrcify.SharedKernel.UnitOfWork/Resrcify.SharedKernel.UnitOfWork.csproj" />
     <Project Path="src/Resrcify.SharedKernel.Web/Resrcify.SharedKernel.Web.csproj" />
   </Folder>
@@ -17,8 +18,9 @@
     <Project Path="tests/Resrcify.SharedKernel.Caching.UnitTests/Resrcify.SharedKernel.Caching.UnitTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.DomainDrivenDesign.UnitTests/Resrcify.SharedKernel.DomainDrivenDesign.UnitTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.Messaging.UnitTests/Resrcify.SharedKernel.Messaging.UnitTests.csproj" />
+    <Project Path="tests/Resrcify.SharedKernel.PerformanceTests/Resrcify.SharedKernel.PerformanceTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.Repository.UnitTests/Resrcify.SharedKernel.Repository.UnitTests.csproj" />
-    <Project Path="tests/Resrcify.SharedKernel.ResultFramework.UnitTests/Resrcify.SharedKernel.ResultFramework.UnitTests.csproj" />
+    <Project Path="tests/Resrcify.SharedKernel.Results.UnitTests/Resrcify.SharedKernel.Results.UnitTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.UnitOfWork.UnitTests/Resrcify.SharedKernel.UnitOfWork.UnitTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.Web.UnitTests/Resrcify.SharedKernel.Web.UnitTests.csproj" />
   </Folder>

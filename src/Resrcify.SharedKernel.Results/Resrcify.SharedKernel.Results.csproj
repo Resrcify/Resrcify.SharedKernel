@@ -1,0 +1,10 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <PackageId>Resrcify.SharedKernel.Results</PackageId>
+    <Title>Resrcify.SharedKernel.Results</Title>
+    <Description>Implements the result pattern.</Description>
+    <Summary>Implements the result pattern.</Summary>
+  </PropertyGroup>
+
+</Project>

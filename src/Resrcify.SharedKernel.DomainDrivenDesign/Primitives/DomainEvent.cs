@@ -1,5 +1,5 @@
 using System;
-using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
+using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 
 namespace Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 

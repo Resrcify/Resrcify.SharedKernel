@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -10,7 +11,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.Web.Extensions;
 using Shouldly;
 using Xunit;
@@ -18,6 +19,10 @@ using ResultExtensions = Resrcify.SharedKernel.Web.Extensions.ResultExtensions;
 
 namespace Resrcify.SharedKernel.Web.UnitTests.Extensions;
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class ResultExtensionsTests
 {
     [Fact]
@@ -28,8 +33,8 @@ public class ResultExtensionsTests
 
         // Act
         var actual = await resultTask.Match(
-            onSuccess: () => Results.Ok(),
-            onFailure: _ => Results.BadRequest());
+            onSuccess: () => Microsoft.AspNetCore.Http.Results.Ok(),
+            onFailure: _ => Microsoft.AspNetCore.Http.Results.BadRequest());
 
         // Assert
         actual
@@ -45,8 +50,8 @@ public class ResultExtensionsTests
 
         // Act
         var actual = await resultTask.Match(
-            onSuccess: () => Results.Ok(),
-            onFailure: result => Results.BadRequest());
+            onSuccess: () => Microsoft.AspNetCore.Http.Results.Ok(),
+            onFailure: result => Microsoft.AspNetCore.Http.Results.BadRequest());
 
         // Assert
         actual

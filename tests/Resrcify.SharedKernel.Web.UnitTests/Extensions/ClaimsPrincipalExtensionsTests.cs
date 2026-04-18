@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
 using Resrcify.SharedKernel.Web.Extensions;
 using Shouldly;
@@ -6,6 +7,10 @@ using Xunit;
 
 namespace Resrcify.SharedKernel.Web.UnitTests.Extensions;
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class ClaimsPrincipalExtensionsTests
 {
     [Fact]

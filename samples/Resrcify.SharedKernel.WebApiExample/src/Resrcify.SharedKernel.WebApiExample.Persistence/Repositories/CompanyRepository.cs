@@ -1,9 +1,9 @@
-using System.Linq;
+﻿using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Resrcify.SharedKernel.Repository.Primitives;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.WebApiExample.Application.Abstractions.Repositories;
 using Resrcify.SharedKernel.WebApiExample.Domain.Features.Companies;
 using Resrcify.SharedKernel.WebApiExample.Domain.Features.Companies.ValueObjects;
@@ -27,3 +27,4 @@ internal sealed class CompanyRepository(AppDbContext context)
             company => company,
             DomainErrors.Company.NotFound(companyId.Value));
 }
+

@@ -1,10 +1,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using MediatR;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Resrcify.SharedKernel.Abstractions.Messaging;
+using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.Web.Extensions;
 using Resrcify.SharedKernel.Web.Primitives;
 using Resrcify.SharedKernel.WebApiExample.Application.Features.Companies.AddContact;
@@ -29,7 +29,7 @@ public class CompanyController(ISender sender) : ApiController(sender)
                 request.Name,
                 request.OrganizationNumber))
             .Bind(request => Sender.Send(request, cancellationToken))
-            .Match(Results.NoContent, ToProblemDetails);
+            .Match(TypedResults.NoContent, result => result.ToProblemDetails());
 
     [HttpGet()]
     public async Task<IResult> GetAllCompanies(
@@ -37,7 +37,7 @@ public class CompanyController(ISender sender) : ApiController(sender)
         => await Result
             .Create(new GetAllCompaniesQuery())
             .Bind(request => Sender.Send(request, cancellationToken))
-            .Match(Results.Ok, ToProblemDetails);
+            .Match(TypedResults.Ok, result => result.ToProblemDetails());
 
     [HttpGet("{companyId}")]
     public async Task<IResult> GetCompanyById(
@@ -46,7 +46,7 @@ public class CompanyController(ISender sender) : ApiController(sender)
         => await Result
             .Create(new GetCompanyByIdQuery(companyId))
             .Bind(request => Sender.Send(request, cancellationToken))
-            .Match(Results.Ok, ToProblemDetails);
+            .Match(TypedResults.Ok, result => result.ToProblemDetails());
 
     [HttpPatch("{companyId}")]
     public async Task<IResult> UpdateCompanyName(
@@ -56,7 +56,7 @@ public class CompanyController(ISender sender) : ApiController(sender)
         => await Result
             .Create(new UpdateCompanyNameCommand(companyId, request.Name))
             .Bind(request => Sender.Send(request, cancellationToken))
-            .Match(Results.NoContent, ToProblemDetails);
+            .Match(TypedResults.NoContent, result => result.ToProblemDetails());
 
     [HttpPost("{companyId}/contacts")]
     public async Task<IResult> AddContact(
@@ -70,7 +70,7 @@ public class CompanyController(ISender sender) : ApiController(sender)
                 request.LastName,
                 request.Email))
             .Bind(request => Sender.Send(request, cancellationToken))
-            .Match(Results.NoContent, ToProblemDetails);
+            .Match(TypedResults.NoContent, result => result.ToProblemDetails());
 
     [HttpDelete("{companyId}/contacts")]
     public async Task<IResult> RemoveContact(
@@ -82,7 +82,7 @@ public class CompanyController(ISender sender) : ApiController(sender)
                 companyId,
                 request.Email))
             .Bind(request => Sender.Send(request, cancellationToken))
-            .Match(Results.NoContent, ToProblemDetails);
+            .Match(TypedResults.NoContent, result => result.ToProblemDetails());
 
     [HttpPatch("{companyId}/contacts")]
     public async Task<IResult> RemoveContact(
@@ -96,5 +96,5 @@ public class CompanyController(ISender sender) : ApiController(sender)
                 request.NewLastName,
                 request.Email))
             .Bind(request => Sender.Send(request, cancellationToken))
-            .Match(Results.NoContent, ToProblemDetails);
+            .Match(TypedResults.NoContent, result => result.ToProblemDetails());
 }

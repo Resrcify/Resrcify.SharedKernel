@@ -1,7 +1,7 @@
 using System;
-using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
+using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.WebApiExample.Domain.Features.Companies.ValueObjects;
 
 namespace Resrcify.SharedKernel.WebApiExample.Domain.Features.Companies.Entities;
@@ -35,27 +35,39 @@ public sealed class Contact
         string firstName,
         string lastName,
         string email)
-        => Result
-            .Combine(
-                ContactId.Create(Guid.NewGuid()),
-                Name.Create(firstName),
-                Name.Create(lastName),
-                Email.Create(email))
-            .Map(c => new Contact(
-                c.Item1,
+    {
+        var contactIdResult = ContactId.Create(Guid.NewGuid());
+        var firstNameResult = Name.Create(firstName);
+        var lastNameResult = Name.Create(lastName);
+        var emailResult = Email.Create(email);
+
+        return Result.Combine(
+            () => new Contact(
+                contactIdResult.Value,
                 companyId,
-                c.Item2,
-                c.Item3,
-                c.Item4));
+                firstNameResult.Value,
+                lastNameResult.Value,
+                emailResult.Value),
+            contactIdResult,
+            firstNameResult,
+            lastNameResult,
+            emailResult);
+    }
+
     public Result Update(
         string firstName,
         string lastName)
-        => Result
-            .Combine(
-                Name.Create(firstName),
-                Name.Create(lastName))
-            .Tap(c => FirstName = c.Item1)
-            .Tap(c => LastName = c.Item2);
+    {
+        var firstNameResult = Name.Create(firstName);
+        var lastNameResult = Name.Create(lastName);
+
+        return Result.Combine(
+                () => Result.Success(),
+                firstNameResult,
+                lastNameResult)
+            .Tap(_ => FirstName = firstNameResult.Value)
+            .Tap(_ => LastName = lastNameResult.Value);
+    }
 
 
 }

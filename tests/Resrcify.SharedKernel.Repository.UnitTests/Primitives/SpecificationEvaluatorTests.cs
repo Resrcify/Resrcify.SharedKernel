@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Resrcify.SharedKernel.Repository.Primitives;
 using Resrcify.SharedKernel.Repository.UnitTests.Models;
@@ -7,6 +8,10 @@ using Xunit;
 
 namespace Resrcify.SharedKernel.Repository.UnitTests.Primitives;
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class SpecificationEvaluatorTests
 {
     private readonly List<Person> persons =

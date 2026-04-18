@@ -1,20 +1,23 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using MediatR;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Xunit;
-using Resrcify.SharedKernel.Messaging.Abstractions;
+using Resrcify.SharedKernel.Abstractions.UnitOfWork;
+using Resrcify.SharedKernel.Abstractions.Messaging;
 using Resrcify.SharedKernel.Messaging.Behaviors;
 using System.Data;
-using Resrcify.SharedKernel.UnitOfWork.Abstractions;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Resrcify.SharedKernel.Results.Primitives;
 using System.Diagnostics.CodeAnalysis;
 using Shouldly;
 
 namespace Resrcify.SharedKernel.Messaging.UnitTests.Behaviors;
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class TransactionPipelineBehaviorTests
 {
     private readonly TransactionPipelineBehavior<ITransactionCommand, Result> _behavior;

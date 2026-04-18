@@ -1,5 +1,5 @@
-using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Resrcify.SharedKernel.Abstractions.Messaging;
 
 namespace Resrcify.SharedKernel.Web.Primitives;
 

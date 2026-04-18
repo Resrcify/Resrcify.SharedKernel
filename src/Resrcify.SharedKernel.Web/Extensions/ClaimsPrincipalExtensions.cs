@@ -1,6 +1,6 @@
-using System;
+﻿using System;
 using System.Security.Claims;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Resrcify.SharedKernel.Results.Primitives;
 
 namespace Resrcify.SharedKernel.Web.Extensions;
 

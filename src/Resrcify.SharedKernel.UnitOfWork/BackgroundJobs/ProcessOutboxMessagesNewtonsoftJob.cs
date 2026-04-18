@@ -5,8 +5,8 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Quartz;
 using Microsoft.EntityFrameworkCore;
-using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
-using MediatR;
+using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
+using Resrcify.SharedKernel.Abstractions.Messaging;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 
 namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;

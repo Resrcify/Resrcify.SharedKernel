@@ -1,7 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
-using Resrcify.SharedKernel.Messaging.Abstractions;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Resrcify.SharedKernel.Abstractions.Messaging;
+using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.WebApiExample.Application.Abstractions.Repositories;
 using Resrcify.SharedKernel.WebApiExample.Domain.Features.Companies.ValueObjects;
 using System.Linq;

@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
+using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.WebApiExample.Domain.Errors;
 using Resrcify.SharedKernel.WebApiExample.Domain.Features.Companies.Entities;
 using Resrcify.SharedKernel.WebApiExample.Domain.Features.Companies.Enums;

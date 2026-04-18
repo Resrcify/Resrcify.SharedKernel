@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -9,7 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Resrcify.SharedKernel.Results.Primitives;
 
 namespace Resrcify.SharedKernel.Web.Extensions;
 
@@ -34,7 +34,7 @@ public static class ResultExtensions
         {
             { IsSuccess: true } => throw new InvalidOperationException(
                 "Successful result should not be converted to problem details."),
-            _ => Results.Problem(
+            _ => Microsoft.AspNetCore.Http.Results.Problem(
                 statusCode: GetStatusCode(dominantType),
                 title: GetTitle(dominantType),
                 type: GetType(dominantType),

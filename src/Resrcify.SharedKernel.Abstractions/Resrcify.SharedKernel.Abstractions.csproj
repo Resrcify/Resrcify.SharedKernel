@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <PackageId>Resrcify.SharedKernel.Abstractions</PackageId>
+    <Title>Resrcify.SharedKernel.Abstractions</Title>
+    <Description>Shared cross-cutting abstractions used by multiple SharedKernel projects.</Description>
+    <Summary>Shared cross-cutting abstractions used by multiple SharedKernel projects.</Summary>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Resrcify.SharedKernel.Results\Resrcify.SharedKernel.Results.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+</Project>

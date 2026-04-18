@@ -1,60 +1,73 @@
 # Resrcify.SharedKernel.Repository
 
-## Description
-This repository, **Resrcify.SharedKernel.Repository**, provides a rflexible implementation of the repository pattern for managing aggregates in domain-driven design applications. It facilitates the separation of concerns by abstracting data access logic and offering an easy-to-use interface for interacting with aggregate roots. The library leverages Entity Framework Core and encourages clean architecture principles.
+`Resrcify.SharedKernel.Repository` provides repository primitives and specification-based query support for aggregate roots.
+
+## Table of Contents
+
+- [Resrcify.SharedKernel.Repository](#resrcifysharedkernelrepository)
+  - [Table of Contents](#table-of-contents)
+  - [What you get](#what-you-get)
+  - [Prerequisites](#prerequisites)
+  - [Install](#install)
+    - [Option A: Project reference](#option-a-project-reference)
+    - [Option B: NuGet package](#option-b-nuget-package)
+  - [Quick Start](#quick-start)
+  - [Usage guide](#usage-guide)
+    - [Repository contract](#repository-contract)
+    - [Repository implementation](#repository-implementation)
+    - [Specification usage](#specification-usage)
+  - [Common issues](#common-issues)
+  - [Sample project](#sample-project)
+
+## What you get
+
+- Repository abstractions in `Resrcify.SharedKernel.Abstractions.Repository`.
+- Base repository primitives in `Primitives/`.
+- Specification pattern support through:
+    - `Specification<TEntity, TId>`
+    - `SpecificationEvaluator`
 
 ## Prerequisites
-Before using **Resrcify.SharedKernel.Repository**, ensure that your project meets the following requirements:
 
-- .NET 8.0 is installed.
-- The Entity Framework Core package is installed:
-  - Entity Framework Core: ``Microsoft.EntityFrameworkCore``
-- Please note that all external package references in this repository are private, meaning that you are forced add them to your own project if you need/wish to use them. This is to maintain correct dependency references in accordance with Clean Architecture.
+- .NET 10 SDK.
+- Entity Framework Core in your consuming project.
 
-## Installation
-To integrate **Resrcify.SharedKernel.Repository** into your project, you can either clone the source code or install the NuGet package, depending on your preference.
+## Install
 
-### Download and reference the project files
-1. Clone this repository
-```bash
-git clone https://github.com/Resrcify/Resrcify.SharedKernel.git
+### Option A: Project reference
+
+```xml
+<ProjectReference Include="..\path\to\Resrcify.SharedKernel.Repository.csproj" />
 ```
-2. Add the **Resrcify.SharedKernel.Repository** project to your solution/project.
 
-- By referencing the project in your ``.csproj`` file
-    ```xml
-    <ProjectReference Include="../path/to/Resrcify.SharedKernel.Repository.csproj" />
-    ```
-- Or by using the command line to reference the project
-    ```bash
-    dotnet add reference path/to/Resrcify.SharedKernel.Repository.csproj
-    ```
+### Option B: NuGet package
 
-### Download and reference Nuget package
-1. Add the package from NuGet:
-- By referencing in your ``.csproj`` file
-    ```xml
-    <PackageReference Include="Resrcify.SharedKernel.Repository" Version="1.8.5" />
-    ```
-- Or by using the command line
-    ```bash
-    dotnet add package Resrcify.SharedKernel.Repository
-    ```
-
-## Configuration
-To use this library, configure it in your application's startup code or dependency injection setup.
-```csharp
-using Microsoft.Extensions.DependencyInjection;
-using Resrcify.SharedKernel.Repository.Abstractions;
-
-public void AddPersistanceServices(this IServiceCollection services)
-{
-    services.AddScoped<ICompanyRepository, CompanyRepository>();
-}
+```xml
+<PackageReference Include="Resrcify.SharedKernel.Repository" Version="<latest>" />
 ```
-Each specific repository needs to inherent from the IRepository interface.
+
+CLI:
+
+```powershell
+dotnet add package Resrcify.SharedKernel.Repository
+```
+
+## Quick Start
+
+Register your concrete repository type in DI:
 
 ```csharp
+services.AddScoped<ICompanyRepository, CompanyRepository>();
+```
+
+## Usage guide
+
+### Repository contract
+
+```csharp
+using Resrcify.SharedKernel.Abstractions.Repository;
+using Resrcify.SharedKernel.Results.Primitives;
+
 public interface ICompanyRepository
     : IRepository<Company, CompanyId>
 {
@@ -63,73 +76,46 @@ public interface ICompanyRepository
         CancellationToken cancellationToken = default);
 }
 ```
-Which in turn inherents from the predefined abstract Repository class.
+
+### Repository implementation
+
 ```csharp
-internal sealed class CompanyRepository(AppDbContext context)
-     : Repository<AppDbContext, Company, CompanyId>(context),
-        ICompanyRepository
+internal sealed class CompanyRepository(
+    AppDbContext context)
+    : Repository<AppDbContext, Company, CompanyId>(context), ICompanyRepository
 {
-   public async Task<Result<Company>> GetCompanyAggregateByIdAsync(
-      CompanyId companyId,
-      CancellationToken cancellationToken = default)
-      => Result
-         .Create(
-            await Context.Companies
-               .Include(x => x.Contacts)
-               .FirstOrDefaultAsync(x => x.Id == companyId, cancellationToken))
-         .Match(
-            company => company,
-            DomainErrors.Company.NotFound(companyId.Value));
+    public async Task<Result<Company>> GetCompanyAggregateByIdAsync(
+        CompanyId companyId,
+        CancellationToken cancellationToken = default)
+    {
+        var company = await Context.Companies
+            .Include(x => x.Contacts)
+            .FirstOrDefaultAsync(x => x.Id == companyId, cancellationToken);
+
+        return Result.Create(company)
+            .Match(
+                onSuccess: value => value,
+                onFailure: DomainErrors.Company.NotFound(companyId.Value));
+    }
 }
 ```
 
-## Usage
-### Retrieving an Entity by Id
-```csharp
-var entity = await repository.GetByIdAsync(entityId, cancellationToken);
-```
-### Retrieving the First Entity Matching a Predicate
-```csharp
-var entity = await repository.FirstOrDefaultAsync(e => e.Property == value, cancellationToken);
-```
-### Retrieving All Entities
-```csharp
-var allEntities = await repository.GetAllAsync(cancellationToken);
-```
-### Finding Entities Based on a Specification
-```csharp
-var specification = new MySpecification();
-var entities = await repository.FindAsync(specification, cancellationToken);
-```
-### Adding a New Entity
-```csharp
-await repository.AddAsync(newEntity, cancellationToken);
-```
-### Removing an Entity
-```csharp
-repository.Remove(existingEntity);
-```
-### Bulk Operations
-```csharp
-await repository.AddRangeAsync(new List<TEntity> { entity1, entity2 }, cancellationToken);
-repository.RemoveRange(new List<TEntity> { entity1, entity2 });
-```
-For a complete set of methods, please see the repository.
-### Specifications
-Specifications in **Resrcify.SharedKernel.Repository** provide a way to encapsulate query logic, allowing for cleaner and more maintainable code. They enable complex querying by combining various criteria, includes, and sorting options.
+### Specification usage
 
-- Specification<TEntity, TId>: Base class for defining specifications that can be used to filter and include related entities in queries.
-- SpecificationEvaluator: Responsible for applying the specifications to the queryable data source, handling includes, ordering, and other query parameters.
+```csharp
+var specification = new ActiveCompaniesSpecification();
 
-By using specifications, developers can easily create reusable query definitions, improving the maintainability of their data access logic.
+IEnumerable<Company> companies = await repository.FindAsync(
+    specification,
+    cancellationToken);
+```
 
-## Sample projects
-Use of the repository library has been showcased in the sample project [**Resrcify.SharedKernel.WebApiExample**](../../samples/Resrcify.SharedKernel.WebApiExample).
+## Common issues
 
-## Suggestions for further development
+- If includes/order clauses are ignored, verify they are defined on the specification and passed through evaluator.
+- If generic constraints fail, ensure entity types implement the expected aggregate-root contracts.
+- If queries are slow, evaluate specification complexity and EF tracking settings.
 
-Here are a few ideas for extending this library in the future:
+## Sample project
 
-- **Expand the specification:** Implementing additional logic in the Specification.
-- **Implement optional type safety:** Use type constraint to optionally make the Repository pattern tie into Domain-Driven Design by forcing a ValueObject as an Id.
-- **Integration tests using TestContainers:** Adding integration tests using TestContainers to be able to run the test in pipelines. This will further strengthen comfort especially if external dependencies are used.
+See `samples/Resrcify.SharedKernel.WebApiExample` for repository and specification usage in an application flow.

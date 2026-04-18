@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
@@ -6,6 +7,10 @@ using Shouldly;
 
 namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.Primitives;
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class UnitOfWorkTests : DbSetupBase
 {
     [Fact]
@@ -23,7 +28,6 @@ public class UnitOfWorkTests : DbSetupBase
         fetchedPerson!.ShouldNotBeNull();
         fetchedPerson!.Name.ShouldBe("John Doe");
     }
-
 
     [Fact]
     public async Task CommitTransactionAsync_ShouldPersistChanges()

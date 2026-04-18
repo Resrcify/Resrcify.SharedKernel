@@ -5,6 +5,10 @@ using Xunit;
 
 namespace Resrcify.SharedKernel.DomainDrivenDesign.UnitTests.Primitives;
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class EntityTests
 {
     private sealed class ConcreteEntity(int id) : Entity<int>(id)

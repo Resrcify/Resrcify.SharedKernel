@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Resrcify.SharedKernel.UnitOfWork.Interceptors;
@@ -8,6 +9,10 @@ using Xunit;
 
 namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.Interceptors;
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public sealed class UpdateDeletableEntitiesInterceptorTests : DbSetupBase
 {
     public UpdateDeletableEntitiesInterceptorTests() : base(new UpdateDeletableEntitiesInterceptor())

@@ -1,10 +1,9 @@
 using System.Threading;
 using System.Threading.Tasks;
-using MediatR;
 using Microsoft.Extensions.Logging;
-using Resrcify.SharedKernel.Caching.Abstractions;
-using Resrcify.SharedKernel.Messaging.Abstractions;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Resrcify.SharedKernel.Abstractions.Caching;
+using Resrcify.SharedKernel.Abstractions.Messaging;
+using Resrcify.SharedKernel.Results.Primitives;
 
 namespace Resrcify.SharedKernel.Messaging.Behaviors;
 
@@ -38,7 +37,7 @@ public class CachingPipelineBehavior<TRequest, TResponse>
 
         TResponse? cacheResult = await _cachingService.GetAsync<TResponse>(
             request.CacheKey,
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         if (cacheResult is not null)
         {
@@ -55,7 +54,7 @@ public class CachingPipelineBehavior<TRequest, TResponse>
                 request.CacheKey,
                 result,
                 request.Expiration,
-                cancellationToken);
+                cancellationToken: cancellationToken);
         }
 
         return result;

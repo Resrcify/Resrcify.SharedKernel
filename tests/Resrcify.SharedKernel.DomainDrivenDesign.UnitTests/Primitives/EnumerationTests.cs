@@ -1,11 +1,16 @@
 
 
 using Xunit;
+using System.Diagnostics.CodeAnalysis;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 using Shouldly;
 
 namespace Resrcify.SharedKernel.DomainDrivenDesign.UnitTests.Primitives;
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class EnumerationTests
 {
     [Fact]

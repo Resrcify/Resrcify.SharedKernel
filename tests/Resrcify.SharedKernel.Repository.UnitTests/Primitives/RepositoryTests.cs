@@ -10,6 +10,10 @@ using Xunit;
 
 namespace Resrcify.SharedKernel.Repository.UnitTests.Primitives;
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class RepositoryTests
 {
     private static TestDbContext CreateDbContext()

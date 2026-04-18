@@ -1,4 +1,4 @@
-using Resrcify.SharedKernel.Messaging.Abstractions;
+using Resrcify.SharedKernel.Abstractions.Messaging;
 
 namespace Resrcify.SharedKernel.WebApiExample.Application.Features.Companies.CreateCompany;
 

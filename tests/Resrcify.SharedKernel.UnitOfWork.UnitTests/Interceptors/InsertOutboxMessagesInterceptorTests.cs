@@ -1,9 +1,10 @@
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
+using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using Resrcify.SharedKernel.UnitOfWork.Converters;
 using Resrcify.SharedKernel.UnitOfWork.Interceptors;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
@@ -12,6 +13,10 @@ using Xunit;
 
 namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.Interceptors;
 
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public sealed class InsertOutboxMessagesInterceptorTests : DbSetupBase
 {
     public InsertOutboxMessagesInterceptorTests() : base(new InsertOutboxMessagesInterceptor())

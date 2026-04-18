@@ -1,21 +1,21 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
-using MediatR;
-using System;
 using Microsoft.Extensions.Logging;
-using Resrcify.SharedKernel.Messaging.Abstractions;
-using Resrcify.SharedKernel.UnitOfWork.Abstractions;
-using Resrcify.SharedKernel.ResultFramework.Primitives;
+using Resrcify.SharedKernel.Abstractions.UnitOfWork;
+using Resrcify.SharedKernel.Abstractions.Messaging;
+using Resrcify.SharedKernel.Results.Primitives;
 
 namespace Resrcify.SharedKernel.Messaging.Behaviors;
 
 public class TransactionPipelineBehavior<TRequest, TResponse>
     : IPipelineBehavior<TRequest, TResponse>
-    where TRequest : ITransactionalCommand
+    where TRequest : IRequest<TResponse>, ITransactionalCommand
     where TResponse : Result
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger _logger;
+
     public TransactionPipelineBehavior(
         IUnitOfWork unitOfWork,
         ILogger<TransactionPipelineBehavior<TRequest, TResponse>> logger)

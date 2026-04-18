@@ -1,11 +1,11 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Resrcify.SharedKernel.Web.Abstractions;
+using Resrcify.SharedKernel.Abstractions.Web;
 
 namespace Resrcify.SharedKernel.Web.Extensions;
 

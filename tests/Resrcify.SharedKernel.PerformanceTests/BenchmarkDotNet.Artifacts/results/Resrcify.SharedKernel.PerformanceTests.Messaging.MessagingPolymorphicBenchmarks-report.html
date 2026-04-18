@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>Resrcify.SharedKernel.PerformanceTests.Messaging.MessagingPolymorphicBenchmarks-20260417-120036</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.14.0, Windows 11 (10.0.26200.8246)
+Unknown processor
+.NET SDK 10.0.102
+  [Host]     : .NET 10.0.2 (10.0.225.61305), X64 RyuJIT AVX-512F+CD+BW+DQ+VL+VBMI
+  DefaultJob : .NET 10.0.2 (10.0.225.61305), X64 RyuJIT AVX-512F+CD+BW+DQ+VL+VBMI
+</code></pre>
+<pre><code></code></pre>
+
+<table>
+<thead><tr><th>Method                   </th><th>RequestTypeCount</th><th>Distribution</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Ratio</th><th>RatioSD</th><th>Rank</th><th>Gen0</th><th>Allocated</th><th>Alloc Ratio</th>
+</tr>
+</thead><tbody><tr><td>Custom_Send_Object_Polymorphic</td><td>10</td><td>Uniform</td><td>52.93 ns</td><td>0.883 ns</td><td>0.826 ns</td><td>1.00</td><td>0.02</td><td>1</td><td>0.0157</td><td>264 B</td><td>1.00</td>
+</tr><tr><td>MediatR_Send_Object_Polymorphic</td><td>10</td><td>Uniform</td><td>119.51 ns</td><td>0.629 ns</td><td>0.588 ns</td><td>2.26</td><td>0.04</td><td>2</td><td>0.0353</td><td>594 B</td><td>2.25</td>
+</tr><tr><td>Custom_Send_Object_Polymorphic</td><td>10</td><td>Hotset80_20</td><td>32.09 ns</td><td>0.242 ns</td><td>0.226 ns</td><td>1.00</td><td>0.01</td><td>1</td><td>0.0157</td><td>264 B</td><td>1.00</td>
+</tr><tr><td>MediatR_Send_Object_Polymorphic</td><td>10</td><td>Hotset80_20</td><td>72.84 ns</td><td>0.385 ns</td><td>0.360 ns</td><td>2.27</td><td>0.02</td><td>2</td><td>0.0328</td><td>549 B</td><td>2.08</td>
+</tr><tr><td>Custom_Send_Object_Polymorphic</td><td>50</td><td>Uniform</td><td>81.04 ns</td><td>0.602 ns</td><td>0.470 ns</td><td>1.00</td><td>0.01</td><td>1</td><td>0.0157</td><td>264 B</td><td>1.00</td>
+</tr><tr><td>MediatR_Send_Object_Polymorphic</td><td>50</td><td>Uniform</td><td>203.43 ns</td><td>0.854 ns</td><td>0.757 ns</td><td>2.51</td><td>0.02</td><td>2</td><td>0.0358</td><td>599 B</td><td>2.27</td>
+</tr><tr><td>Custom_Send_Object_Polymorphic</td><td>50</td><td>Hotset80_20</td><td>55.02 ns</td><td>0.561 ns</td><td>0.525 ns</td><td>1.00</td><td>0.01</td><td>1</td><td>0.0157</td><td>264 B</td><td>1.00</td>
+</tr><tr><td>MediatR_Send_Object_Polymorphic</td><td>50</td><td>Hotset80_20</td><td>124.86 ns</td><td>1.281 ns</td><td>1.000 ns</td><td>2.27</td><td>0.03</td><td>2</td><td>0.0350</td><td>590 B</td><td>2.23</td>
+</tr><tr><td>Custom_Send_Object_Polymorphic</td><td>100</td><td>Uniform</td><td>99.68 ns</td><td>0.397 ns</td><td>0.310 ns</td><td>1.00</td><td>0.00</td><td>1</td><td>0.0157</td><td>264 B</td><td>1.00</td>
+</tr><tr><td>MediatR_Send_Object_Polymorphic</td><td>100</td><td>Uniform</td><td>238.44 ns</td><td>2.714 ns</td><td>2.119 ns</td><td>2.39</td><td>0.02</td><td>2</td><td>0.0358</td><td>599 B</td><td>2.27</td>
+</tr><tr><td>Custom_Send_Object_Polymorphic</td><td>100</td><td>Hotset80_20</td><td>73.28 ns</td><td>1.463 ns</td><td>1.502 ns</td><td>1.00</td><td>0.03</td><td>1</td><td>0.0157</td><td>264 B</td><td>1.00</td>
+</tr><tr><td>MediatR_Send_Object_Polymorphic</td><td>100</td><td>Hotset80_20</td><td>153.17 ns</td><td>1.464 ns</td><td>2.146 ns</td><td>2.09</td><td>0.05</td><td>2</td><td>0.0355</td><td>595 B</td><td>2.25</td>
+</tr></tbody></table>
+</body>
+</html>

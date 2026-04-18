@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using NetArchTest.Rules;
-using Resrcify.SharedKernel.DomainDrivenDesign.Abstractions;
+using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 using Resrcify.SharedKernel.WebApiExample.ArchitectureTests.Extensions;
 using Resrcify.SharedKernel.WebApiExample.ArchitectureTests.Helpers;
