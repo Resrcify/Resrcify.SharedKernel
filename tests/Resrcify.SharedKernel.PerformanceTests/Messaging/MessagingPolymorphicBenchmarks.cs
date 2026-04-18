@@ -162,7 +162,7 @@ public class MessagingPolymorphicBenchmarks : IDisposable
 
     private static int NextInt(ref uint state, int maxExclusive)
     {
-        state = (1664525 * state) + 1013904223;
+        state = 1664525 * state + 1013904223;
         return (int)(state % (uint)maxExclusive);
     }
 
