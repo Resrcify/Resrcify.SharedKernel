@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <PackageId>Resrcify.SharedKernel.IntegrationTesting</PackageId>
+    <Title>Resrcify.SharedKernel.IntegrationTesting</Title>
+    <Description>Composable integration-test fixtures (Testcontainers Postgres / RabbitMQ + WebApplicationFactory) for downstream services.</Description>
+    <Summary>Composable integration-test fixtures (Testcontainers Postgres / RabbitMQ + WebApplicationFactory) for downstream services.</Summary>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Testcontainers.RabbitMq" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="xunit" />
+  </ItemGroup>
+</Project>

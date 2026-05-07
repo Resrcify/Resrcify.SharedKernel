@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Quartz;
-using Resrcify.SharedKernel.Caching.Abstractions;
+using Resrcify.SharedKernel.Abstractions.Caching;
 using Resrcify.SharedKernel.Caching.Primitives;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.WebApiExample.Persistence;

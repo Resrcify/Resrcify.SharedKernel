@@ -1,31 +1,10 @@
-using NetArchTest.Rules;
-using Resrcify.SharedKernel.Web.Primitives;
-using Resrcify.SharedKernel.WebApiExample.ArchitectureTests.Extensions;
-using Resrcify.SharedKernel.WebApiExample.ArchitectureTests.Helpers;
+using System.Diagnostics.CodeAnalysis;
+using Resrcify.SharedKernel.ArchitectureTesting.Tests;
 
 namespace Resrcify.SharedKernel.WebApiExample.ArchitectureTests.Tests;
 
-public class PresentationTests : BaseTest
-{
-    [Fact]
-    public void Controllers_Should_HaveDependecyOnMessagingAbstractions()
-        => Types
-            .InAssembly(PresentationAssembly)
-            .That()
-            .HaveNameEndingWith("Controller")
-            .Should()
-            .HaveDependencyOn("Resrcify.SharedKernel.Abstractions.Messaging")
-            .Evaluate();
-
-
-    [Fact]
-    public void Controllers_Should_ImplementApiController()
-        => Types
-            .InAssembly(PresentationAssembly)
-            .That()
-            .HaveNameEndingWith("Controller")
-            .And()
-            .AreNotAbstract()
-            .Should().Inherit(typeof(ApiController))
-            .Evaluate();
-}
+[SuppressMessage(
+    "Performance",
+    "CA1515:Consider making public types internal",
+    Justification = "xUnit requires public test classes for discovery.")]
+public sealed class PresentationTests : ConventionalPresentationTests;

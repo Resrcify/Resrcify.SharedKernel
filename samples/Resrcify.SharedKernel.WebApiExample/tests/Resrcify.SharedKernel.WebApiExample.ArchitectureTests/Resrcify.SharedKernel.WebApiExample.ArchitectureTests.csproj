@@ -10,17 +10,15 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.0.2" />
+    <PackageReference Include="Xunit.SkippableFact" Version="1.5.61" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="NetArchTest.Rules" Version="1.3.2" />
-     <PackageReference Include="Shouldly" Version="4.3.0" />
-  </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.ArchitectureTesting\Resrcify.SharedKernel.ArchitectureTesting.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.WebApiExample.Domain\Resrcify.SharedKernel.WebApiExample.Domain.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.WebApiExample.Application\Resrcify.SharedKernel.WebApiExample.Application.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.WebApiExample.Infrastructure\Resrcify.SharedKernel.WebApiExample.Infrastructure.csproj" />

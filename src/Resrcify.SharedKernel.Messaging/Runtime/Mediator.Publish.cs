@@ -33,6 +33,15 @@ internal sealed partial class Mediator
         where TNotification : notnull
     {
         ArgumentNullException.ThrowIfNull(notification);
+
+        // When the runtime type differs from the compile-time type (e.g. caller holds
+        // a base-interface variable like IDomainEvent), dispatch via runtime type so
+        // the correct INotificationHandler<TConcrete> instances are resolved. Without
+        // this, GetServices<INotificationHandler<TBase>>() returns [] and the publish
+        // silently no-ops.
+        if (typeof(TNotification) != notification.GetType())
+            return Publish((object)notification, cancellationToken);
+
         return PublishTyped(notification, cancellationToken);
     }
 

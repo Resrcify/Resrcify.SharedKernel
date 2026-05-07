@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <PackageId>Resrcify.SharedKernel.ArchitectureTesting</PackageId>
+    <Title>Resrcify.SharedKernel.ArchitectureTesting</Title>
+    <Description>Reusable abstract architecture-test base classes built on NetArchTest. Each consumer subclasses the conventional test bases; xUnit picks up the inherited [SkippableFact] / [SkippableTheory] methods. Naming-convention auto-discovery resolves layer assemblies from the consumer's test assembly.</Description>
+    <Summary>Reusable architecture-test base classes for downstream services.</Summary>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NetArchTest.Rules" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="Xunit.SkippableFact" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Resrcify.SharedKernel.Abstractions\Resrcify.SharedKernel.Abstractions.csproj" />
+    <ProjectReference Include="..\Resrcify.SharedKernel.DomainDrivenDesign\Resrcify.SharedKernel.DomainDrivenDesign.csproj" />
+    <ProjectReference Include="..\Resrcify.SharedKernel.Results\Resrcify.SharedKernel.Results.csproj" />
+  </ItemGroup>
+</Project>

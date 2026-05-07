@@ -70,6 +70,24 @@ public sealed class MediatorRuntimeTests
     }
 
     [Fact]
+    public async Task Publish_DispatchesByRuntimeType_WhenCallerHoldsBaseInterfaceVariable()
+    {
+        // Regression: outbox-style flow holds events as IPingMarker (a base interface).
+        // The generic Publish<T> overload must not bind T = IPingMarker and skip
+        // dispatch — it must route via the runtime concrete type so registered
+        // INotificationHandler<PingNotification> instances are invoked.
+        using var serviceProvider = BuildServiceProvider();
+
+        var publisher = serviceProvider.GetRequiredService<IPublisher>();
+        var notifications = serviceProvider.GetRequiredService<NotificationTracker>();
+
+        IPingMarker boxed = new PingNotification();
+        await publisher.Publish(boxed, CancellationToken.None);
+
+        notifications.HandledBy.Count.ShouldBe(2);
+    }
+
+    [Fact]
     public async Task Publish_WithSequentialStrategy_ExecutesHandlersSequentially()
     {
         using var serviceProvider = BuildServiceProvider(NotificationPublishStrategy.Sequential);
@@ -242,7 +260,9 @@ public sealed class MediatorRuntimeTests
         }
     }
 
-    private sealed class PingNotification : INotification;
+    private interface IPingMarker : INotification;
+
+    private sealed class PingNotification : IPingMarker;
 
     private sealed class ParallelPingNotification : INotification;
 
