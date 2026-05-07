@@ -5,6 +5,7 @@
     <Title>Resrcify.SharedKernel.IntegrationTesting</Title>
     <Description>Composable integration-test fixtures (Testcontainers Postgres / RabbitMQ + WebApplicationFactory) for downstream services.</Description>
     <Summary>Composable integration-test fixtures (Testcontainers Postgres / RabbitMQ + WebApplicationFactory) for downstream services.</Summary>
+    <IsTestProject>false</IsTestProject>
   </PropertyGroup>
 
   <ItemGroup>

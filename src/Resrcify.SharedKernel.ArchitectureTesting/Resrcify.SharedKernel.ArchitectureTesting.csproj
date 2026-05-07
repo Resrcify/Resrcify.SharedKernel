@@ -5,6 +5,7 @@
     <Title>Resrcify.SharedKernel.ArchitectureTesting</Title>
     <Description>Reusable abstract architecture-test base classes built on NetArchTest. Each consumer subclasses the conventional test bases; xUnit picks up the inherited [SkippableFact] / [SkippableTheory] methods. Naming-convention auto-discovery resolves layer assemblies from the consumer's test assembly.</Description>
     <Summary>Reusable architecture-test base classes for downstream services.</Summary>
+    <IsTestProject>false</IsTestProject>
   </PropertyGroup>
 
   <ItemGroup>
