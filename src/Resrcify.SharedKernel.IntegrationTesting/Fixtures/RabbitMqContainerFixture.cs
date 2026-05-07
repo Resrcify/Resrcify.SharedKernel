@@ -15,6 +15,11 @@ namespace Resrcify.SharedKernel.IntegrationTesting.Fixtures;
 /// credentials, and any other builder options. Adds a polling helper that
 /// asserts a named exchange has received at least one publish via the RMQ
 /// management HTTP API.
+///
+/// The management port (15672) is exposed automatically so
+/// <see cref="WaitForExchangePublish"/> works without consumers having to
+/// add <c>.WithPortBinding(15672, true)</c> in their <see cref="Configure"/>
+/// override.
 /// </summary>
 public class RabbitMqContainerFixture
     : ContainerFixture<RabbitMqContainer>
@@ -25,7 +30,9 @@ public class RabbitMqContainerFixture
         => builder;
 
     protected override RabbitMqContainer Build()
-        => Configure(new RabbitMqBuilder()).Build();
+        => Configure(new RabbitMqBuilder())
+            .WithPortBinding(ManagementPort, assignRandomHostPort: true)
+            .Build();
 
     public Uri ManagementUrl
         => new($"http://{Container.Hostname}:{Container.GetMappedPublicPort(ManagementPort)}");

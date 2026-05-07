@@ -45,17 +45,45 @@ domain-driven design primitives, result handling, messaging behaviors, repositor
 
 ## Validation
 
-- Build or test the affected projects after changing shared abstractions, behaviors, or helpers.
-- Check that new shared behaviors are covered by focused unit tests.
-- Confirm the repo continues to build on .NET 10 in addition to the existing target frameworks.
+Climb in order — stop at the rung that proves or disproves the hypothesis. Don't skip rungs and don't iterate on production.
 
-## Debugging dispatch / outbox issues
+### 1. Read the code
 
-If a downstream service reports that outbox rows are getting marked `ProcessedOnUtc` but no MassTransit message reaches the broker, the problem is almost certainly a silent zero-handler dispatch in `IPublisher.Publish` rather than a transport issue. The smell:
+Trace the suspect path by hand. Most bugs in well-typed C# are visible if read carefully. If the symptom doesn't match anything in the visible code, escalate.
 
-- `OutboxMessages.ProcessedOnUtc` is set
-- `OutboxMessages.Error` is empty
-- No exception in app logs
-- No `publish_in` increment on the corresponding RabbitMQ exchange
+### 2. Unit test — `*.UnitTests` projects
 
-`ProcessOutboxMessagesJob` does `if (domainEvent is IDomainEvent specificDomainEvent) await _publisher.Publish(specificDomainEvent, ct)` — `specificDomainEvent` has compile-time type `IDomainEvent`. C# overload resolution can pick `Publish<TNotification>(TNotification)` over `Publish(object)` and bind `TNotification = IDomainEvent`, which then resolves `INotificationHandler<IDomainEvent>` (always empty) instead of the concrete handler. **In Messaging 1.15.1+ this is fixed at the mediator** — the generic overload reroutes to the object overload when `typeof(TNotification) != notification.GetType()`. The regression test lives at `tests/Resrcify.SharedKernel.Messaging.UnitTests/Runtime/MediatorRuntimeTests.cs` (`Publish_DispatchesByRuntimeType_WhenCallerHoldsBaseInterfaceVariable`). If a similar symptom shows up under a different shape, write the smallest-possible unit test in that file mirroring the call site — don't reach for a docker stack first.
+Write a focused test that exercises the actual call shape — for dispatch / overload-resolution issues this means passing the argument typed exactly like the production call site (often a base interface like `IDomainEvent`, not a concrete type). No DB, no MQ, no docker. See `tests/Resrcify.SharedKernel.Messaging.UnitTests/Runtime/MediatorRuntimeTests.cs#Publish_DispatchesByRuntimeType_WhenCallerHoldsBaseInterfaceVariable` for a template.
+
+```sh
+dotnet test Resrcify.SharedKernel.slnx --no-build
+```
+
+### 3. Integration test — `Resrcify.SharedKernel.IntegrationTesting`
+
+Use the shipped fixtures (`PostgresContainerFixture`, `RabbitMqContainerFixture`, `IntegrationFactoryBase<TProgram>`) when the symptom requires real infra (transaction interleaving, exchange routing, migration application against a fresh DB, end-to-end outbox dispatch). Each fixture spins up its own real Postgres / RabbitMQ in docker and tears down on dispose — no manual orchestration. Reference cover for the outbox dispatch path lives at `tests/Resrcify.SharedKernel.UnitOfWork.IntegrationTests/OutboxDispatchTests.cs`. Pattern + per-service rollout in `INTEGRATION_TESTING.md`.
+
+```sh
+dotnet test tests/Resrcify.SharedKernel.UnitOfWork.IntegrationTests
+```
+
+Requires Docker on the runner. CI (`build-and-test.yml`) has it on `ubuntu-latest`.
+
+### 4. Architecture test — `Resrcify.SharedKernel.ArchitectureTesting`
+
+Inherit `ConventionalLayerDependencyTests`, `ConventionalDomainTests`, `ConventionalApplicationTests`, `ConventionalPresentationTests` from a service's `*.ArchitectureTests` project. Layer assemblies are auto-discovered via naming convention. Validate that a change doesn't quietly violate the dependency direction or the naming conventions. See the migrated sample at `samples/Resrcify.SharedKernel.WebApiExample/tests/Resrcify.SharedKernel.WebApiExample.ArchitectureTests/`.
+
+### 5. Manual docker-compose + `dotnet run`
+
+Last resort before prod. Reserved for symptoms that only emerge under full process startup and only after rungs 1–4 have been ruled out. Treat this as a sign rungs 2–4 are missing coverage and add a Testcontainers test once the bug is understood.
+
+### 6. Production
+
+Never as a debug step. If you don't have a passing test at rungs 2–4, you don't have a fix.
+
+### Solution-wide checks before pushing a release tag
+
+- `dotnet build Resrcify.SharedKernel.slnx --no-restore` — clean, 0 warnings, 0 errors.
+- `dotnet test Resrcify.SharedKernel.slnx --no-build` — all test projects pass, no `Test Run Aborted`.
+- New library packages need `<IsTestProject>false</IsTestProject>` in the csproj — `dotnet test` otherwise treats any project that references `xunit` as a test project and aborts when it finds no tests, blocking the CI publish step.
+- Confirm the repo still builds on .NET 10.
