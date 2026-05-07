@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -24,18 +25,28 @@ namespace Resrcify.SharedKernel.IntegrationTesting.Fixtures;
 public class RabbitMqContainerFixture
     : ContainerFixture<RabbitMqContainer>
 {
-    private const ushort ManagementPort = 15672;
+    private const ushort AmqpContainerPort = 5672;
+    private const ushort ManagementContainerPort = 15672;
 
     protected virtual RabbitMqBuilder Configure(RabbitMqBuilder builder)
         => builder;
 
     protected override RabbitMqContainer Build()
         => Configure(new RabbitMqBuilder())
-            .WithPortBinding(ManagementPort, assignRandomHostPort: true)
+            .WithPortBinding(ManagementContainerPort, assignRandomHostPort: true)
             .Build();
 
+    public string Host
+        => Container.Hostname;
+
+    public string AmqpPort
+        => Container.GetMappedPublicPort(AmqpContainerPort).ToString(CultureInfo.InvariantCulture);
+
+    public string ManagementPort
+        => Container.GetMappedPublicPort(ManagementContainerPort).ToString(CultureInfo.InvariantCulture);
+
     public Uri ManagementUrl
-        => new($"http://{Container.Hostname}:{Container.GetMappedPublicPort(ManagementPort)}");
+        => new($"http://{Host}:{ManagementPort}");
 
     /// <summary>
     /// Polls the RMQ management API for the named exchange and returns true
