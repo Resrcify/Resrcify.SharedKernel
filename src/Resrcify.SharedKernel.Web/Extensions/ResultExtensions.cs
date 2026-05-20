@@ -163,6 +163,9 @@ public static class ResultExtensions
 
         if (response.IsSuccessStatusCode)
         {
+            if (response.Content.Headers.ContentLength == 0)
+                return Error.None;
+
             var result = await JsonSerializer.DeserializeAsync<T>(
                 content,
                 options ?? _options,
