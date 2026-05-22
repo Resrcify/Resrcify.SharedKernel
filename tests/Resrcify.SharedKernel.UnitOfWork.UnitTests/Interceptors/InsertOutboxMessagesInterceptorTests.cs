@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using Resrcify.SharedKernel.UnitOfWork.Converters;
 using Resrcify.SharedKernel.UnitOfWork.Interceptors;
+using Resrcify.SharedKernel.UnitOfWork.Outbox;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
 using Shouldly;
 using Xunit;
@@ -19,7 +20,8 @@ namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.Interceptors;
     Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public sealed class InsertOutboxMessagesInterceptorTests : DbSetupBase
 {
-    public InsertOutboxMessagesInterceptorTests() : base(new InsertOutboxMessagesInterceptor())
+    public InsertOutboxMessagesInterceptorTests()
+        : base(new InsertOutboxMessagesInterceptor(new SystemTextJsonOutboxSerializer()))
     {
     }
     private static readonly JsonSerializerOptions _jsonOptions = new()

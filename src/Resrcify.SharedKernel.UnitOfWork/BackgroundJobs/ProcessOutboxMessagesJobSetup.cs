@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Quartz;
@@ -7,10 +6,10 @@ using Quartz;
 namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 
 public sealed class ProcessOutboxMessagesJobSetup<TDbContext>(
-    Assembly eventsAssembly,
     int processBatchSize = 20,
     int processIntervalInSeconds = 60,
-    int delayInSecondsBeforeStart = 60)
+    int delayInSecondsBeforeStart = 60,
+    int processMaxRetryCount = 3)
     : IConfigureOptions<QuartzOptions>
     where TDbContext : DbContext
 {
@@ -26,8 +25,8 @@ public sealed class ProcessOutboxMessagesJobSetup<TDbContext>(
                         "ProcessBatchSize",
                         processBatchSize)
                     .UsingJobData(
-                        "EventsAssemblyFullName",
-                        eventsAssembly.FullName))
+                        "ProcessMaxRetryCount",
+                        processMaxRetryCount))
             .AddTrigger(
                 trigger =>
                     trigger.ForJob(jobKey)

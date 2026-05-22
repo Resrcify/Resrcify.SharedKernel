@@ -1,24 +1,23 @@
 using System;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
-using Resrcify.SharedKernel.UnitOfWork.Converters;
+using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Interceptors;
 
-public sealed class InsertOutboxMessagesInterceptor
+/// <summary>
+/// Captures domain events raised by aggregate roots and writes them to the outbox
+/// in the same transaction as the business change. The JSON strategy is supplied
+/// by the injected <see cref="IOutboxSerializer"/>.
+/// </summary>
+public sealed class InsertOutboxMessagesInterceptor(IOutboxSerializer serializer)
     : SaveChangesInterceptor
 {
-    private static readonly JsonSerializerOptions _jsonOptions = new()
-    {
-        Converters = { new DomainEventConverter() }
-    };
-
     public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
         InterceptionResult<int> result,
@@ -34,7 +33,7 @@ public sealed class InsertOutboxMessagesInterceptor
             cancellationToken);
     }
 
-    private static async Task ConvertDomainEventsToOutboxMessages(
+    private async Task ConvertDomainEventsToOutboxMessages(
         DbContext context,
         CancellationToken cancellationToken)
     {
@@ -54,7 +53,7 @@ public sealed class InsertOutboxMessagesInterceptor
                 Id = Guid.NewGuid(),
                 OccurredOnUtc = DateTime.UtcNow,
                 Type = domainEvent.GetType().FullName!,
-                Content = JsonSerializer.Serialize(domainEvent, _jsonOptions)
+                Content = serializer.Serialize(domainEvent)
             })
             .ToList();
 

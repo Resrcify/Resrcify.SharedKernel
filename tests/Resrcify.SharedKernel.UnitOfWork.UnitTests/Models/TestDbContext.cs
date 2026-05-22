@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Resrcify.SharedKernel.UnitOfWork.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 
 namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
@@ -7,6 +8,8 @@ internal sealed class TestDbContext(DbContextOptions options) : DbContext(option
 {
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.ApplyOutboxMessageConfiguration();
+
         modelBuilder.Entity<Person>().HasKey(x => x.Id);
         modelBuilder.Entity<Person>().Property(x => x.Name).HasMaxLength(10);
         modelBuilder.Entity<Person>().Property(x => x.Id).HasConversion(x => x.Value, v => SocialSecurityNumber.Create(v));

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
+using Resrcify.SharedKernel.Results.Primitives;
 
 namespace Resrcify.SharedKernel.PerformanceTests.Abstractions;
 
@@ -65,6 +66,21 @@ public class AbstractionsBenchmarks : IDisposable
 
         public Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
             => Task.CompletedTask;
+
+        public Task ExecuteInTransactionAsync(
+            Func<CancellationToken, Task> operation,
+            IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
+            TimeSpan? commandTimeout = null,
+            CancellationToken cancellationToken = default)
+            => operation(cancellationToken);
+
+        public Task<TResponse> ExecuteInTransactionAsync<TResponse>(
+            Func<CancellationToken, Task<TResponse>> operation,
+            IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
+            TimeSpan? commandTimeout = null,
+            CancellationToken cancellationToken = default)
+            where TResponse : Result
+            => operation(cancellationToken);
 
         public void Dispose()
         {

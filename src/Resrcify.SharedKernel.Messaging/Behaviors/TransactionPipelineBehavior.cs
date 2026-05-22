@@ -31,32 +31,18 @@ public class TransactionPipelineBehavior<TRequest, TResponse>
     {
         try
         {
-            var commandTimeout = request.CommandTimeout
-                ?? TimeSpan.FromSeconds(30);
-
-            var isolationLevel = request.IsolationLevel
-                ?? System.Data.IsolationLevel.ReadCommitted;
-
-            await _unitOfWork.BeginTransactionAsync(
-                isolationLevel,
-                commandTimeout,
+            // ExecuteInTransactionAsync commits only on a successful Result, rolls
+            // back on a failure Result or an exception, and always disposes the
+            // transaction.
+            return await _unitOfWork.ExecuteInTransactionAsync(
+                token => next(token),
+                request.IsolationLevel ?? System.Data.IsolationLevel.ReadCommitted,
+                request.CommandTimeout ?? TimeSpan.FromSeconds(30),
                 cancellationToken);
-
-            var response = await next(cancellationToken);
-
-            if (response is Result { IsSuccess: true })
-            {
-                await _unitOfWork.CommitTransactionAsync(cancellationToken);
-                return response;
-            }
-
-            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
-            return response;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception caught in TransactionPipelineBehavior");
-            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             throw new InvalidOperationException("An error occurred while processing the TransactionPipelineBehavior.", ex);
         }
     }

@@ -17,10 +17,18 @@ public abstract class ContainerFixture<TContainer>
 
     protected abstract TContainer Build();
 
+    /// <summary>
+    /// Runs after <c>StartAsync</c>. Override to verify the container is genuinely
+    /// ready to serve before tests run, closing cold-start readiness races.
+    /// </summary>
+    protected virtual Task OnStartedAsync()
+        => Task.CompletedTask;
+
     public async Task InitializeAsync()
     {
         Container = Build();
         await Container.StartAsync();
+        await OnStartedAsync();
     }
 
     public async Task DisposeAsync()
