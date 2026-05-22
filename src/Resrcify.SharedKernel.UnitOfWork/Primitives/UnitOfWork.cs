@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
+using Resrcify.SharedKernel.Results.Primitives;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Primitives;
 
@@ -59,5 +60,78 @@ public sealed class UnitOfWork<TDbContext> : IUnitOfWork
 
         await currentTransaction.RollbackAsync(
             cancellationToken);
+    }
+
+    public async Task ExecuteInTransactionAsync(
+        Func<CancellationToken, Task> operation,
+        IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
+        TimeSpan? commandTimeout = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (commandTimeout is not null)
+            _context.Database.SetCommandTimeout(
+                (int)commandTimeout.Value.TotalSeconds);
+
+        var transaction = await _context.Database.BeginTransactionAsync(
+            isolationLevel,
+            cancellationToken);
+        try
+        {
+            await operation(cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+        finally
+        {
+            await transaction.DisposeAsync();
+        }
+    }
+
+    public async Task<TResponse> ExecuteInTransactionAsync<TResponse>(
+        Func<CancellationToken, Task<TResponse>> operation,
+        IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
+        TimeSpan? commandTimeout = null,
+        CancellationToken cancellationToken = default)
+        where TResponse : Result
+    {
+        if (commandTimeout is not null)
+            _context.Database.SetCommandTimeout(
+                (int)commandTimeout.Value.TotalSeconds);
+
+        var transaction = await _context.Database.BeginTransactionAsync(
+            isolationLevel,
+            cancellationToken);
+        try
+        {
+            var response = await operation(cancellationToken);
+
+            // Commit only on a successful result; a failure rolls back the work
+            // the operation did and is handed back to the caller as-is.
+            if (response.IsSuccess)
+            {
+                await _context.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+            }
+            else
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+
+            return response;
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+        finally
+        {
+            await transaction.DisposeAsync();
+        }
     }
 }

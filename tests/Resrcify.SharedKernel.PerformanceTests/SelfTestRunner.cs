@@ -20,6 +20,7 @@ internal static class SelfTestRunner
         ResultsBenchmarks.SelfTest();
         RepositoryBenchmarks.SelfTest();
         UnitOfWorkBenchmarks.SelfTest();
+        OutboxSerializerBenchmarks.SelfTest();
         WebBenchmarks.SelfTest();
 
         using var messagingBenchmarks = new MediatorComparisonBenchmarks();

@@ -15,6 +15,9 @@
   - [Usage guide](#usage-guide)
     - [Complete unit of work](#complete-unit-of-work)
     - [Transactional scope](#transactional-scope)
+    - [Outbox table mapping](#outbox-table-mapping)
+    - [Outbox serializer](#outbox-serializer)
+    - [Wiring it up](#wiring-it-up)
     - [Outbox processing job](#outbox-processing-job)
   - [Related modules](#related-modules)
 
@@ -97,18 +100,97 @@ catch
 }
 ```
 
-### Outbox processing job
+Or let `ExecuteInTransactionAsync` own the begin / save / commit / rollback / dispose
+cycle — the operation, its `SaveChanges`, and the commit all succeed together or the
+whole transaction is rolled back:
 
 ```csharp
-using Quartz;
-using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
-
-services.AddQuartz();
-services.AddQuartzHostedService(options =>
-    options.WaitForJobsToComplete = true);
-
-services.ConfigureOptions<ProcessOutboxMessagesJobSetup<AppDbContext>>();
+await unitOfWork.ExecuteInTransactionAsync(
+    async token =>
+    {
+        // mutate tracked entities; everything here commits atomically
+    },
+    cancellationToken: cancellationToken);
 ```
+
+### Outbox table mapping
+
+Map the `OutboxMessage` table from `OnModelCreating`. The configuration adds a
+composite index on `(ProcessedOnUtc, OccurredOnUtc)` that backs the polling query
+(`WHERE ProcessedOnUtc IS NULL ORDER BY OccurredOnUtc`) on every relational provider:
+
+```csharp
+protected override void OnModelCreating(ModelBuilder modelBuilder)
+{
+    modelBuilder.ApplyOutboxMessageConfiguration();
+}
+```
+
+Pass `schema` to place the table outside the provider's default schema (the schema
+is created automatically by migrations / `EnsureCreated`):
+
+```csharp
+modelBuilder.ApplyOutboxMessageConfiguration(schema: "messaging");
+```
+
+On providers that support them, use the index hook to add covering columns and a
+partial filter so the query is served entirely from a compact index. For PostgreSQL:
+
+```csharp
+modelBuilder.ApplyOutboxMessageConfiguration(
+    tableName: "OutboxMessages",
+    schema: "messaging",
+    configureUnprocessedIndex: index => index
+        .IncludeProperties("Type", "Content")
+        .HasFilter("\"ProcessedOnUtc\" IS NULL"));
+```
+
+### Outbox serializer
+
+One `IOutboxSerializer` strategy serializes events on the write side (interceptor)
+and deserializes them on the read side (job). Two are built in —
+`SystemTextJsonOutboxSerializer` and `NewtonsoftJsonOutboxSerializer` — and both
+embed the concrete type in the payload. Create one instance and share it so the two
+sides cannot drift apart.
+
+### Wiring it up
+
+`AddOutboxProcessing` registers the read side (unit of work, serializer, Quartz job).
+Add the `InsertOutboxMessagesInterceptor` to the `DbContext` yourself, passing the
+**same** serializer instance:
+
+```csharp
+using Resrcify.SharedKernel.UnitOfWork.Extensions;
+using Resrcify.SharedKernel.UnitOfWork.Interceptors;
+using Resrcify.SharedKernel.UnitOfWork.Outbox;
+
+var outboxSerializer = new SystemTextJsonOutboxSerializer();
+
+services.AddDbContext<AppDbContext>(options => options
+    .UseNpgsql(connectionString)
+    .AddInterceptors(new InsertOutboxMessagesInterceptor(outboxSerializer)));
+
+services.AddOutboxProcessing<AppDbContext>(
+    outboxSerializer,
+    options => options.MaxRetryCount = 3);
+
+// Quartz hosts the registered job.
+services.AddQuartz();
+services.AddQuartzHostedService(options => options.WaitForJobsToComplete = true);
+```
+
+### Outbox processing job
+
+The job reads a batch with a no-tracking projection (served by the covering index).
+Each message is then handled in its **own DI scope and transaction** (via
+`IUnitOfWork.ExecuteInTransactionAsync`): publishing the event and marking the
+message processed commit together, so the message is only marked done if everything
+its handlers persisted commits as well. Because every message gets a fresh scope, the
+job never shares (or clears) a `DbContext` change tracker with other work. A handler
+that throws does not abort the batch — the failure is written to the `Error` column
+and `RetryCount` is incremented; once `RetryCount` reaches the configured maximum the
+message is treated as poison and the polling query skips it (it stays in the table,
+unprocessed, for inspection).
 
 ## Related modules
 

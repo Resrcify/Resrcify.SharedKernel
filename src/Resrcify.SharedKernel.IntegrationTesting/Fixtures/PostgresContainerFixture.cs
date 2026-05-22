@@ -1,4 +1,8 @@
+using System;
+using System.Data.Common;
 using System.Globalization;
+using System.Threading.Tasks;
+using Npgsql;
 using Testcontainers.PostgreSql;
 
 namespace Resrcify.SharedKernel.IntegrationTesting.Fixtures;
@@ -31,4 +35,49 @@ public class PostgresContainerFixture
 
     public string Port
         => Container.GetMappedPublicPort(ContainerPort).ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The postgres image boots twice (init scripts on a temporary server, then the
+    /// real server), so a passing wait strategy can still race the real listener on
+    /// a cold or busy host. This probes a real <c>SELECT 1</c> until it succeeds.
+    /// </summary>
+    protected override async Task OnStartedAsync()
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        while (true)
+        {
+            try
+            {
+                await using var connection = new NpgsqlConnection(
+                    Container.GetConnectionString());
+                await connection.OpenAsync();
+
+                await using var command = connection.CreateCommand();
+                command.CommandText = "SELECT 1";
+                await command.ExecuteScalarAsync();
+                return;
+            }
+            catch (NpgsqlException) when (DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(250));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns a connection string for the container that targets a fresh,
+    /// uniquely-named database. The database does not exist yet — EF Core creates
+    /// it (and its schema) on the first <c>EnsureCreated</c> / <c>Migrate</c> call.
+    /// Use one per test class (or per test) to get full isolation without sharing
+    /// state or truncating tables between runs.
+    /// </summary>
+    public string CreateIsolatedConnectionString()
+    {
+        var builder = new DbConnectionStringBuilder
+        {
+            ConnectionString = Container.GetConnectionString(),
+        };
+        builder["Database"] = $"test_{Guid.NewGuid():N}";
+        return builder.ConnectionString;
+    }
 }

@@ -31,6 +31,7 @@ domain-driven design primitives, result handling, messaging behaviors, repositor
 - Keep inheritance and interface implementation tall: place `:` and each inherited type on separate lines.
 - Keep `SuppressMessage` attributes tall and always include an explicit `Justification` reason.
 - Keep public APIs consistent with the existing shared-kernel naming and module boundaries.
+- Place interfaces by reach: an interface used only within one project goes in that project's own `Abstractions/` folder (namespace `Resrcify.SharedKernel.<Module>.Abstractions`); an interface shared across projects goes in the `Resrcify.SharedKernel.Abstractions` project, in the sub-folder matching its concern.
 - Keep namespace declarations aligned to folder structure from `src/` and `tests/` roots.
 - Ensure the namespace root reflects the owning module path (for example, `Abstractions/Messaging` maps to `Resrcify.SharedKernel.Abstractions.Messaging`).
 - When moving files between folders, update namespace declarations and related `using` directives in the same change.
@@ -39,6 +40,7 @@ domain-driven design primitives, result handling, messaging behaviors, repositor
 ## Naming and solution conventions
 
 - Use `Resrcify.SharedKernel.slnx` as the main solution file.
+- Version every project together: a release applies the same version tag/number to all projects in the solution — never version packages independently.
 - Prefer one unit-test project per source project.
 - Keep unit-test project names aligned to source modules, such as `Resrcify.SharedKernel.<Module>.UnitTests`.
 - Mirror source folder structure inside test projects where practical.
