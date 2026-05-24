@@ -22,13 +22,18 @@ internal sealed class TestDbContext(DbContextOptions<TestDbContext> options)
             b.Property(x => x.Name).HasMaxLength(64).IsRequired();
         });
 
-        // Outbox table placed in a dedicated (non-public) schema, with a
-        // PostgreSQL-tuned index: covering INCLUDE columns plus a partial filter
-        // so only unprocessed rows are indexed.
+        // Outbox table placed in a dedicated (non-public) schema, with PostgreSQL
+        // tuning supplied by the prebuilt helpers: covering INCLUDE columns plus
+        // a partial filter on the unprocessed index, and a strict partial UNIQUE
+        // dedup index so PostgresOnConflictOutboxInsertStrategy can be exercised
+        // against a real race-proof constraint.
         modelBuilder.ApplyOutboxMessageConfiguration(
             schema: OutboxSchema,
-            configureUnprocessedIndex: index => index
-                .IncludeProperties("Type", "Content")
-                .HasFilter("\"ProcessedOnUtc\" IS NULL"));
+            configureUnprocessedIndex: index =>
+            {
+                index.IncludeProperties("Type", "Content");
+                PostgresOutboxIndexes.Instance.PartialUnprocessed(index);
+            },
+            configureDedupIndex: PostgresOutboxIndexes.Instance.PartialUniqueDedup);
     }
 }

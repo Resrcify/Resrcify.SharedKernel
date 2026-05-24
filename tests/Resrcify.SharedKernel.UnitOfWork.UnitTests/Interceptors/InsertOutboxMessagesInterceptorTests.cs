@@ -204,6 +204,30 @@ public sealed class InsertOutboxMessagesInterceptorTests : DbSetupBase
     }
 
     [Fact]
+    public async Task SaveChangesAsync_DelegatesPersistence_ToInjectedInsertStrategy()
+    {
+        // Arrange — a probe strategy that records what gets handed to it
+        var probe = new RecordingInsertStrategy();
+        await using var harness = new InterceptorHarness(new InsertOutboxMessagesInterceptor(new SystemTextJsonOutboxSerializer(), probe));
+        await harness.InitializeAsync();
+
+        var entity = new TestAggregateRoot(SocialSecurityNumber.Create(123456789), "John Doe");
+        entity.PublicRaiseDomainEvent(new TestDomainEvent(Guid.NewGuid(), "msg"));
+        await harness.DbContext.Persons.AddAsync(entity);
+
+        // Act
+        await harness.DbContext.SaveChangesAsync();
+
+        // Assert — strategy received the messages instead of the default AddRangeAsync path
+        probe.InvocationCount.ShouldBe(1);
+        probe.LastBatchCount.ShouldBe(1);
+
+        // And because the probe didn't actually persist, no rows landed in the table.
+        var rows = await harness.DbContext.OutboxMessages.ToListAsync();
+        rows.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task SaveChangesAsync_NonDedupableEventsAreUnaffectedByPreCheck()
     {
         // Arrange — mix dedupable (with a pre-existing pending row) and non-dedupable in one batch
@@ -233,5 +257,30 @@ public sealed class InsertOutboxMessagesInterceptorTests : DbSetupBase
         {
         }
         public void PublicRaiseDomainEvent(IDomainEvent domainEvent) => RaiseDomainEvent(domainEvent);
+    }
+
+    // Records every call and short-circuits persistence so the test can prove the
+    // interceptor delegated to the strategy rather than the default change-tracker path.
+    private sealed class RecordingInsertStrategy : Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxInsertStrategy
+    {
+        public int InvocationCount { get; private set; }
+        public int LastBatchCount { get; private set; }
+
+        public Task InsertAsync(
+            Microsoft.EntityFrameworkCore.DbContext context,
+            System.Collections.Generic.IReadOnlyList<OutboxMessage> messages,
+            System.Threading.CancellationToken cancellationToken)
+        {
+            InvocationCount++;
+            LastBatchCount = messages.Count;
+            return Task.CompletedTask;
+        }
+    }
+
+    // Small harness lets a single test swap in a custom interceptor without touching
+    // DbSetupBase's protected ctor flow.
+    private sealed class InterceptorHarness(InsertOutboxMessagesInterceptor interceptor)
+        : DbSetupBase(interceptor)
+    {
     }
 }

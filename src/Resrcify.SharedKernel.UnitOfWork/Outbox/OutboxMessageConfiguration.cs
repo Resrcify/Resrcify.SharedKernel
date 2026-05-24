@@ -25,27 +25,29 @@ public sealed class OutboxMessageConfiguration
     /// Server). The schema is created automatically by EF migrations / EnsureCreated.
     /// </param>
     /// <param name="configureUnprocessedIndex">
-    /// Optional hook to apply provider-specific tuning to the unprocessed-messages index.
-    /// Use it to add a covering <c>INCLUDE</c> or a partial filter on providers that
-    /// support them, e.g. PostgreSQL:
+    /// Optional hook to apply provider-specific tuning to the unprocessed-messages
+    /// index. For PostgreSQL, combine the prebuilt
+    /// <see cref="PostgresOutboxIndexes.PartialUnprocessed"/> filter with your own
+    /// <c>IncludeProperties(...)</c> call:
     /// <code>
-    /// configureUnprocessedIndex: index => index
-    ///     .IncludeProperties(m => new { m.Type, m.Content })
-    ///     .HasFilter("\"ProcessedOnUtc\" IS NULL");
+    /// configureUnprocessedIndex: index =>
+    /// {
+    ///     index.IncludeProperties("Type", "Content");
+    ///     PostgresOutboxIndexes.Instance.PartialUnprocessed(index);
+    /// }
     /// </code>
     /// </param>
     /// <param name="configureDedupIndex">
-    /// Optional hook to apply provider-specific tuning to the dedup index. Defaults to a
-    /// non-unique composite index on <c>(DedupKey, ProcessedOnUtc)</c> that backs the
-    /// outbox writer's pre-check query. Use this hook to make it a partial unique index
-    /// for strict race-proofing — but note that a unique-constraint violation inside the
-    /// SaveChanges pipeline will fail the entire user transaction, so callers must catch
-    /// and retry. Example (PostgreSQL):
+    /// Optional hook to apply provider-specific tuning to the dedup index. Defaults
+    /// to a non-unique single-column index on <c>DedupKey</c> that backs the
+    /// outbox writer's pre-check query. To upgrade to a strict partial unique
+    /// index on PostgreSQL (pairs with
+    /// <see cref="PostgresOnConflictOutboxInsertStrategy"/>):
     /// <code>
-    /// configureDedupIndex: index => index
-    ///     .IsUnique()
-    ///     .HasFilter("\"DedupKey\" IS NOT NULL AND \"ProcessedOnUtc\" IS NULL");
+    /// configureDedupIndex: PostgresOutboxIndexes.Instance.PartialUniqueDedup
     /// </code>
+    /// Without that strategy in place, a unique-constraint violation inside the
+    /// SaveChanges pipeline will fail the entire user transaction.
     /// </param>
     public OutboxMessageConfiguration(
         string tableName = "OutboxMessages",
@@ -80,10 +82,12 @@ public sealed class OutboxMessageConfiguration
         _configureUnprocessedIndex?.Invoke(unprocessedIndex);
 
         // Backs the outbox writer's pre-check: "is there already a pending row
-        // for this dedup key?". Non-unique by default — pre-check is best-effort.
-        // Apps that need strict race-proofing can promote it via the optional hook.
+        // for this dedup key?". Single-column DedupKey index so it matches the
+        // ON CONFLICT ("DedupKey") inference clause used by
+        // PostgresOnConflictOutboxInsertStrategy. Non-unique by default — apps
+        // that need strict race-proofing can promote it via the optional hook.
         var dedupIndex = builder
-            .HasIndex(x => new { x.DedupKey, x.ProcessedOnUtc })
+            .HasIndex(x => x.DedupKey)
             .HasDatabaseName("IX_OutboxMessages_Dedup");
 
         _configureDedupIndex?.Invoke(dedupIndex);

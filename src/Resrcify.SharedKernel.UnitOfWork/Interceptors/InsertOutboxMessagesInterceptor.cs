@@ -23,12 +23,18 @@ namespace Resrcify.SharedKernel.UnitOfWork.Interceptors;
 /// unprocessed. The pre-check is race-tolerant but not race-proof: concurrent
 /// transactions from different <see cref="DbContext"/> instances can each pass the
 /// pre-check and both insert. See <see cref="OutboxMessageConfiguration"/> for how
-/// to add a strict partial unique index at the application level.
+/// to add a strict partial unique index at the application level, and
+/// <see cref="PostgresOnConflictOutboxInsertStrategy"/> for an opt-in insert
+/// strategy that pairs with that index without breaking the user transaction.
 /// </para>
 /// </summary>
-public sealed class InsertOutboxMessagesInterceptor(IOutboxSerializer serializer)
+public sealed class InsertOutboxMessagesInterceptor(
+    IOutboxSerializer serializer,
+    IOutboxInsertStrategy? insertStrategy = null)
     : SaveChangesInterceptor
 {
+    private readonly IOutboxInsertStrategy _insertStrategy = insertStrategy ?? new DefaultOutboxInsertStrategy();
+
     public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
         InterceptionResult<int> result,
@@ -117,8 +123,8 @@ public sealed class InsertOutboxMessagesInterceptor(IOutboxSerializer serializer
         if (outboxMessages.Count == 0)
             return;
 
-        await context
-            .Set<OutboxMessage>()
-            .AddRangeAsync(outboxMessages, cancellationToken);
+        await _insertStrategy
+            .InsertAsync(context, outboxMessages, cancellationToken)
+            .ConfigureAwait(false);
     }
 }

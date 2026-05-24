@@ -23,17 +23,26 @@ public static class OutboxModelBuilderExtensions
     /// <param name="configureUnprocessedIndex">
     /// Optional hook for provider-specific index tuning (covering columns, partial filter).
     /// </param>
+    /// <param name="configureDedupIndex">
+    /// Optional hook for tuning the dedup index. Defaults to a non-unique
+    /// composite on <c>(DedupKey, ProcessedOnUtc)</c>. Promote to a strict
+    /// partial UNIQUE on PostgreSQL via
+    /// <see cref="Outbox.PostgresOutboxIndexes.PartialUniqueDedup"/> when wiring
+    /// <see cref="Outbox.PostgresOnConflictOutboxInsertStrategy"/>.
+    /// </param>
     public static ModelBuilder ApplyOutboxMessageConfiguration(
         this ModelBuilder modelBuilder,
         string tableName = "OutboxMessages",
         string? schema = null,
-        Action<IndexBuilder<OutboxMessage>>? configureUnprocessedIndex = null)
+        Action<IndexBuilder<OutboxMessage>>? configureUnprocessedIndex = null,
+        Action<IndexBuilder<OutboxMessage>>? configureDedupIndex = null)
     {
         modelBuilder.ApplyConfiguration(
             new OutboxMessageConfiguration(
                 tableName,
                 schema,
-                configureUnprocessedIndex));
+                configureUnprocessedIndex,
+                configureDedupIndex));
 
         return modelBuilder;
     }

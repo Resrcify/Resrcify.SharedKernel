@@ -19,6 +19,9 @@ internal sealed class TestAggregate
         Name = newName;
         RaiseDomainEvent(new TestNameChangedEvent(Guid.NewGuid(), Id, newName));
     }
+
+    public void RaiseDedupableEvent(string shardKey)
+        => RaiseDomainEvent(new TestDedupableEvent(Guid.NewGuid(), shardKey));
 }
 
 internal sealed record TestNameChangedEvent(
