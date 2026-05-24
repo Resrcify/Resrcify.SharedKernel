@@ -11,9 +11,12 @@ namespace Resrcify.SharedKernel.UnitOfWork.Outbox;
 public sealed class OutboxMessageConfiguration
     : IEntityTypeConfiguration<OutboxMessage>
 {
+    private const int DedupKeyMaxLength = 512;
+
     private readonly string _tableName;
     private readonly string? _schema;
     private readonly Action<IndexBuilder<OutboxMessage>>? _configureUnprocessedIndex;
+    private readonly Action<IndexBuilder<OutboxMessage>>? _configureDedupIndex;
 
     /// <param name="tableName">Table name for the outbox messages.</param>
     /// <param name="schema">
@@ -31,14 +34,29 @@ public sealed class OutboxMessageConfiguration
     ///     .HasFilter("\"ProcessedOnUtc\" IS NULL");
     /// </code>
     /// </param>
+    /// <param name="configureDedupIndex">
+    /// Optional hook to apply provider-specific tuning to the dedup index. Defaults to a
+    /// non-unique composite index on <c>(DedupKey, ProcessedOnUtc)</c> that backs the
+    /// outbox writer's pre-check query. Use this hook to make it a partial unique index
+    /// for strict race-proofing — but note that a unique-constraint violation inside the
+    /// SaveChanges pipeline will fail the entire user transaction, so callers must catch
+    /// and retry. Example (PostgreSQL):
+    /// <code>
+    /// configureDedupIndex: index => index
+    ///     .IsUnique()
+    ///     .HasFilter("\"DedupKey\" IS NOT NULL AND \"ProcessedOnUtc\" IS NULL");
+    /// </code>
+    /// </param>
     public OutboxMessageConfiguration(
         string tableName = "OutboxMessages",
         string? schema = null,
-        Action<IndexBuilder<OutboxMessage>>? configureUnprocessedIndex = null)
+        Action<IndexBuilder<OutboxMessage>>? configureUnprocessedIndex = null,
+        Action<IndexBuilder<OutboxMessage>>? configureDedupIndex = null)
     {
         _tableName = tableName;
         _schema = schema;
         _configureUnprocessedIndex = configureUnprocessedIndex;
+        _configureDedupIndex = configureDedupIndex;
     }
 
     public void Configure(EntityTypeBuilder<OutboxMessage> builder)
@@ -49,15 +67,25 @@ public sealed class OutboxMessageConfiguration
 
         builder.Property(x => x.Type).IsRequired();
         builder.Property(x => x.Content).IsRequired();
+        builder.Property(x => x.DedupKey).HasMaxLength(DedupKeyMaxLength);
 
         // Composite index supports the seek (ProcessedOnUtc IS NULL) and the
         // ordered scan (ORDER BY OccurredOnUtc) of the polling query on every
         // relational provider. Covering columns / partial filters are added per
         // provider via the optional hook.
-        var index = builder
+        var unprocessedIndex = builder
             .HasIndex(x => new { x.ProcessedOnUtc, x.OccurredOnUtc })
             .HasDatabaseName("IX_OutboxMessages_Unprocessed");
 
-        _configureUnprocessedIndex?.Invoke(index);
+        _configureUnprocessedIndex?.Invoke(unprocessedIndex);
+
+        // Backs the outbox writer's pre-check: "is there already a pending row
+        // for this dedup key?". Non-unique by default — pre-check is best-effort.
+        // Apps that need strict race-proofing can promote it via the optional hook.
+        var dedupIndex = builder
+            .HasIndex(x => new { x.DedupKey, x.ProcessedOnUtc })
+            .HasDatabaseName("IX_OutboxMessages_Dedup");
+
+        _configureDedupIndex?.Invoke(dedupIndex);
     }
 }

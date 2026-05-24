@@ -17,4 +17,12 @@ public sealed class OutboxMessage
     public string? Error { get; set; }
 
     public int RetryCount { get; set; }
+
+    /// <summary>
+    /// Composed dedup key for events implementing
+    /// <see cref="Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDedupable"/>.
+    /// NULL when the source event is not dedupable. Format:
+    /// <c>{event.GetType().FullName}:{IDedupable.DedupKey}</c>.
+    /// </summary>
+    public string? DedupKey { get; set; }
 }
