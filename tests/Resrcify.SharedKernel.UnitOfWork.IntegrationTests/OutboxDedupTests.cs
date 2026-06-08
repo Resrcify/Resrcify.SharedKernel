@@ -201,4 +201,77 @@ public sealed class OutboxDedupTests
         }
     }
 
+    [Fact]
+    public async Task PostgresStrategy_SaveChangesIsAtomic_WithUserOwnedTransaction_OnRollback()
+    {
+        // Arrange
+        var aggregate = new TestAggregate(Guid.NewGuid(), "rollback-victim");
+        aggregate.RaiseDedupableEvent("shard-rollback");
+
+        // Act — save inside a caller-owned transaction, then roll it back
+        await using (var scope = _services.CreateAsyncScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+            await using var userTx = await ctx.Database.BeginTransactionAsync();
+
+            ctx.Aggregates.Add(aggregate);
+            await ctx.SaveChangesAsync();
+
+            (await ctx.Aggregates.AsNoTracking().CountAsync()).ShouldBe(1);
+            (await ctx.OutboxMessages.AsNoTracking().CountAsync()).ShouldBe(1);
+
+            await userTx.RollbackAsync();
+        }
+
+        // Assert — both rows vanish; interceptor honored the caller's rollback
+        await using (var scope = _services.CreateAsyncScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+            (await ctx.Aggregates.AsNoTracking().CountAsync()).ShouldBe(0);
+            (await ctx.OutboxMessages.AsNoTracking().CountAsync()).ShouldBe(0);
+        }
+    }
+
+    [Fact]
+    public async Task PostgresStrategy_SaveChangesIsAtomic_WhenNoCallerTransaction_OnFailure()
+    {
+        // Arrange — seed an aggregate so a colliding PK insert will fail
+        var existingId = Guid.NewGuid();
+        var seed = new TestAggregate(existingId, "seed");
+
+        await using (var scope = _services.CreateAsyncScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+            ctx.Aggregates.Add(seed);
+            await ctx.SaveChangesAsync();
+        }
+
+        await using (var scope = _services.CreateAsyncScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+            ctx.OutboxMessages.RemoveRange(await ctx.OutboxMessages.ToListAsync());
+            await ctx.SaveChangesAsync();
+        }
+
+        // Act — SaveChanges with a PK collision and no caller transaction
+        var colliding = new TestAggregate(existingId, "collision");
+        colliding.RaiseDedupableEvent("shard-collision");
+
+        await using (var scope = _services.CreateAsyncScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+            ctx.Aggregates.Add(colliding);
+
+            var act = async () => await ctx.SaveChangesAsync();
+            await act.ShouldThrowAsync<DbUpdateException>();
+        }
+
+        // Assert — interceptor's failure-path rollback wiped the outbox row
+        await using (var scope = _services.CreateAsyncScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+            (await ctx.OutboxMessages.AsNoTracking().CountAsync()).ShouldBe(0);
+            (await ctx.Aggregates.AsNoTracking().CountAsync()).ShouldBe(1);
+        }
+    }
 }
