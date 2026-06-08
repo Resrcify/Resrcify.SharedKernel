@@ -37,10 +37,11 @@ public sealed class PostgresOnConflictOutboxInsertStrategy : IOutboxInsertStrate
 
         var qualifiedTable = ResolveQualifiedTableName(context);
 
-        // The table name comes from EF metadata (trusted). Values are passed via
-        // FormattableString placeholders so EF parameterizes them — no SQL injection
-        // surface from the serialized payload or arbitrary DedupKey content.
-        var sqlFormat = string.Format(
+        // Two SQL paths: passing a null DedupKey through FormattableString boxes to
+        // object and loses the static type EF/Npgsql needs to map the parameter.
+        // Non-dedupable rows take a plain INSERT (DedupKey defaults to NULL at the
+        // column level) and skip ON CONFLICT, which has nothing to conflict on.
+        var dedupSqlFormat = string.Format(
             CultureInfo.InvariantCulture,
             """
             INSERT INTO {0} ("Id", "Type", "Content", "OccurredOnUtc", "ProcessedOnUtc", "Error", "RetryCount", "DedupKey")
@@ -50,15 +51,30 @@ public sealed class PostgresOnConflictOutboxInsertStrategy : IOutboxInsertStrate
             """,
             qualifiedTable);
 
+        var plainSqlFormat = string.Format(
+            CultureInfo.InvariantCulture,
+            """
+            INSERT INTO {0} ("Id", "Type", "Content", "OccurredOnUtc", "ProcessedOnUtc", "Error", "RetryCount")
+            VALUES ({{0}}, {{1}}, {{2}}, {{3}}, NULL, NULL, 0);
+            """,
+            qualifiedTable);
+
         foreach (var message in messages)
         {
-            var sql = FormattableStringFactory.Create(
-                sqlFormat,
-                message.Id,
-                message.Type,
-                message.Content,
-                message.OccurredOnUtc,
-                (object?)message.DedupKey ?? DBNull.Value);
+            FormattableString sql = message.DedupKey is null
+                ? FormattableStringFactory.Create(
+                    plainSqlFormat,
+                    message.Id,
+                    message.Type,
+                    message.Content,
+                    message.OccurredOnUtc)
+                : FormattableStringFactory.Create(
+                    dedupSqlFormat,
+                    message.Id,
+                    message.Type,
+                    message.Content,
+                    message.OccurredOnUtc,
+                    message.DedupKey);
 
             await context.Database
                 .ExecuteSqlAsync(sql, cancellationToken)
