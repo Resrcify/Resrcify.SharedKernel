@@ -89,3 +89,7 @@ Never as a debug step. If you don't have a passing test at rungs 2–4, you don'
 - `dotnet test Resrcify.SharedKernel.slnx --no-build` — all test projects pass, no `Test Run Aborted`.
 - New library packages need `<IsTestProject>false</IsTestProject>` in the csproj — `dotnet test` otherwise treats any project that references `xunit` as a test project and aborts when it finds no tests, blocking the CI publish step.
 - Confirm the repo still builds on .NET 10.
+## Operations & runbook
+
+- Production/deployment incident findings for this project live in [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — read it before debugging a prod issue, and add a section (Symptom -> Root cause -> Fix -> Verification) whenever you resolve one.
+- Project-local Claude config/memory lives in [`.claude/`](.claude/); keep durable knowledge in this repo's `docs/`, not in the shared workspace memory bucket.
