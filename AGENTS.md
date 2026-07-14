@@ -93,3 +93,24 @@ Never as a debug step. If you don't have a passing test at rungs 2–4, you don'
 
 - Production/deployment incident findings for this project live in [`docs/OPERATIONS.md`](docs/OPERATIONS.md) — read it before debugging a prod issue, and add a section (Symptom -> Root cause -> Fix -> Verification) whenever you resolve one.
 - Project-local Claude config/memory lives in [`.claude/`](.claude/); keep durable knowledge in this repo's `docs/`, not in the shared workspace memory bucket.
+
+## Working in this environment (agent quirks)
+
+Things that have bitten past agents and don't surface in an error message until you hit them.
+
+### Pull requests
+- **`gh` CLI is installed at `C:\Program Files\GitHub CLI\gh.exe`** but is frequently *not on `PATH`* in shells Claude Code spawns (the session env forks before installer PATH updates apply). Fallbacks: call the full path via PowerShell (`& "C:\Program Files\GitHub CLI\gh.exe" pr create ...`) or extend PATH per-call (`$env:PATH = "$env:PATH;C:\Program Files\GitHub CLI"; gh ...`). Check first: `Get-Command gh -ErrorAction SilentlyContinue`.
+- **`gh auth login` is interactive — agents can't run it.** Run `gh auth status` first; if not logged in, push the branch and surface the compare URL `https://github.com/Resrcify/Resrcify.SharedKernel/compare/master...<branch>?expand=1` with the title + markdown body inline so the user can paste both.
+- The user pushes directly to `master` (single-maintainer). The harness blocks default-branch pushes by default; expect a permission prompt.
+
+### Build is the lint step
+- `TreatWarningsAsErrors` + `AnalysisMode=all` + SonarAnalyzer.CSharp are on globally (`Directory.Build.props`). **Resolve warnings, don't suppress.** CA1873 (potentially-expensive log args) is an error in .NET 10 — wrap chained `.Value`/`?.X` log calls in `if (_logger.IsEnabled(LogLevel.X))` guards.
+- Prefer **tall code**: small methods, explicit vertical flow, one parameter per line for multi-param methods — over dense one-liners.
+- After touching the mediator pipeline, repository contracts, or EF configuration, build the full solution and run the domain tests.
+
+### EF Core migrations (if this repo has a Persistence project)
+- Needs `Microsoft.EntityFrameworkCore.Tools` + an explicit `Microsoft.EntityFrameworkCore.Design 10.0.7` `PackageReference` in the Persistence csproj (**not** transitive — a transitive `Design 8.0.0` breaks the tool with `MissingMethodException: AbstractionsStrings.ArgumentIsEmpty`) + the global `dotnet-ef` at `10.0.7`.
+- Run from the Persistence project (it owns its `IDesignTimeDbContextFactory`); point both `--project` and `--startup-project` at it.
+- The tool re-runs `dotnet build` internally and ignores outer `-p:NoWarn`; pass MSBuild props after `--`: `dotnet ef migrations add <Name> --project ... --startup-project ... -- --property:NoWarn=<rule>`.
+- Scaffolded drop-table migrations **do not preserve data** — hand-edit to backfill before dropping. Don't touch `.Designer.cs` or the model snapshot.
+- Migration files inherit `TreatWarningsAsErrors`: use `Array.Empty<string>()` (CA1825) and keep `using System;`.
