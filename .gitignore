@@ -32,3 +32,7 @@ msbuild.wrn
 
 # Visual Studio 2015
 .vs/
+
+# Claude Code — commit shared config (agents, skills, settings, README); ignore transient + local-only
+.claude/worktrees/
+.claude/settings.local.json
