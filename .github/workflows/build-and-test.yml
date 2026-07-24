@@ -4,10 +4,15 @@
 name: build-and-test
 
 on:
-  push:
-    branches: ["master"]
+  # build-and-test runs only on PRs (not the redundant post-merge master push -
+  # squash-merge already tested that tree on the PR) and skips doc-only changes.
+  # workflow_call is kept so tag/release deploy workflows still gate on the tests.
   pull_request:
     branches: ["master"]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - ".claude/**"
   workflow_call:
 
 jobs:
