@@ -96,7 +96,7 @@ public class DistributedCachingServiceTests
         await ((ICachingService)_cachingService).SetAsync(key, obj, absoluteExpiration);
 
         capturedOptions.ShouldNotBeNull();
-        capturedOptions!.AbsoluteExpiration.ShouldBe(absoluteExpiration);
+        capturedOptions.AbsoluteExpiration.ShouldBe(absoluteExpiration);
         capturedOptions.AbsoluteExpirationRelativeToNow.ShouldBeNull();
     }
 
@@ -115,7 +115,7 @@ public class DistributedCachingServiceTests
         await ((ICachingService)_cachingService).SetAsync(key, obj, absoluteExpiration);
 
         capturedOptions.ShouldNotBeNull();
-        capturedOptions!.AbsoluteExpiration.ShouldBe(absoluteExpiration);
+        capturedOptions.AbsoluteExpiration.ShouldBe(absoluteExpiration);
         capturedOptions.AbsoluteExpirationRelativeToNow.ShouldBeNull();
     }
 
@@ -133,7 +133,7 @@ public class DistributedCachingServiceTests
         await ((ICachingService)_cachingService).SetAsync(key, obj, slidingExpiration);
 
         capturedOptions.ShouldNotBeNull();
-        capturedOptions!.SlidingExpiration.ShouldBe(slidingExpiration);
+        capturedOptions.SlidingExpiration.ShouldBe(slidingExpiration);
         capturedOptions.AbsoluteExpiration.ShouldBeNull();
         capturedOptions.AbsoluteExpirationRelativeToNow.ShouldBeNull();
     }

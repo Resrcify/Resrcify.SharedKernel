@@ -110,7 +110,7 @@ public class ResultExtensionsTests
         // Assert
         httpResult.ShouldNotBeNull();
 
-        var problem = httpResult!.ProblemDetails;
+        var problem = httpResult.ProblemDetails;
         problem.ShouldNotBeNull();
 
         var dominant = typeof(ResultExtensions)
@@ -304,7 +304,7 @@ public class ResultExtensionsTests
         using var message = new HttpResponseMessage()
         {
             StatusCode = httpStatusCode,
-            Content = new StringContent(JsonSerializer.Serialize(problemDetails!.ProblemDetails, _options), Encoding.UTF8, "application/json")
+            Content = new StringContent(JsonSerializer.Serialize(problemDetails.ProblemDetails, _options), Encoding.UTF8, "application/json")
         };
 
         //Act
@@ -447,7 +447,7 @@ public class ResultExtensionsTests
         using var message = new HttpResponseMessage()
         {
             StatusCode = httpStatusCode,
-            Content = new StringContent(JsonSerializer.Serialize(problemDetails!.ProblemDetails, _options), Encoding.UTF8, "application/json")
+            Content = new StringContent(JsonSerializer.Serialize(problemDetails.ProblemDetails, _options), Encoding.UTF8, "application/json")
         };
 
         //Act

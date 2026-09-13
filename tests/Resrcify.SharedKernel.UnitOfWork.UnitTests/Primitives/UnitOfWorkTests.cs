@@ -28,7 +28,7 @@ public class UnitOfWorkTests : DbSetupBase
         // Assert
         var fetchedPerson = await DbContext.Persons.SingleOrDefaultAsync();
         fetchedPerson!.ShouldNotBeNull();
-        fetchedPerson!.Name.ShouldBe("John Doe");
+        fetchedPerson.Name.ShouldBe("John Doe");
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class UnitOfWorkTests : DbSetupBase
         // Assert
         var fetchedPerson = await DbContext.Persons.SingleOrDefaultAsync();
         fetchedPerson.ShouldNotBeNull();
-        fetchedPerson!.Name.ShouldBe("Jane Doe");
+        fetchedPerson.Name.ShouldBe("Jane Doe");
     }
 
     [Fact]
@@ -82,7 +82,7 @@ public class UnitOfWorkTests : DbSetupBase
         DbContext.ChangeTracker.Clear();
         var fetchedPerson = await DbContext.Persons.SingleOrDefaultAsync();
         fetchedPerson.ShouldNotBeNull();
-        fetchedPerson!.Name.ShouldBe("Committed");
+        fetchedPerson.Name.ShouldBe("Committed");
         DbContext.Database.CurrentTransaction.ShouldBeNull();
     }
 

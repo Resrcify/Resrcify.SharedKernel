@@ -28,11 +28,18 @@ public class RabbitMqContainerFixture
     private const ushort AmqpContainerPort = 5672;
     private const ushort ManagementContainerPort = 15672;
 
+    /// <summary>
+    /// Image used when <see cref="Configure"/> doesn't call <c>WithImage</c>.
+    /// This is the value Testcontainers' own parameterless <see cref="RabbitMqBuilder"/>
+    /// constructor used before it was obsoleted, so the default is unchanged.
+    /// </summary>
+    protected const string DefaultImage = "rabbitmq:3.11";
+
     protected virtual RabbitMqBuilder Configure(RabbitMqBuilder builder)
         => builder;
 
     protected override RabbitMqContainer Build()
-        => Configure(new RabbitMqBuilder())
+        => Configure(new RabbitMqBuilder(DefaultImage))
             .WithPortBinding(ManagementContainerPort, assignRandomHostPort: true)
             .Build();
 
