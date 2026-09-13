@@ -5,6 +5,10 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <NoWarn>$(NoWarn);CA1515</NoWarn>
+    <!-- Benchmark host, not a shipped library: the release workflow packs the whole
+         solution, so without this it would be published to nuget.org alongside the real
+         packages. Every other test project already opts out the same way. -->
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
