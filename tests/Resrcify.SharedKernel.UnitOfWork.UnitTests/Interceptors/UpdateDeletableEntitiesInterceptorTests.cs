@@ -59,10 +59,10 @@ public sealed class UpdateDeletableEntitiesInterceptorTests : DbSetupBase
         foundEntity
             .ShouldNotBeNull();
 
-        foundEntity!.DeletedOnUtc
+        foundEntity.DeletedOnUtc
             .ShouldBe(now, TimeSpan.FromSeconds(1));
 
-        foundEntity!.IsDeleted
+        foundEntity.IsDeleted
             .ShouldBeTrue();
 
     }

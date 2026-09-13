@@ -10,9 +10,9 @@ namespace Resrcify.SharedKernel.IntegrationTesting.Fixtures;
 /// <summary>
 /// Postgres-flavoured <see cref="ContainerFixture{TContainer}"/>. Subclasses
 /// (or direct consumers) override <see cref="Configure"/> to set image,
-/// database, credentials, and any other builder options. Defaults to whatever
-/// <see cref="PostgreSqlBuilder"/> produces with no overrides — useful when
-/// the consumer doesn't care about specific versions or naming.
+/// database, credentials, and any other builder options. Defaults to
+/// <see cref="DefaultImage"/> — useful when the consumer doesn't care about
+/// specific versions or naming.
 ///
 /// Exposes <see cref="Host"/> and <see cref="Port"/> so consumers can wire
 /// connection settings without poking at <see cref="ContainerFixture{TContainer}.Container"/>
@@ -24,11 +24,18 @@ public class PostgresContainerFixture
 {
     private const ushort ContainerPort = 5432;
 
+    /// <summary>
+    /// Image used when <see cref="Configure"/> doesn't call <c>WithImage</c>.
+    /// This is the value Testcontainers' own parameterless <see cref="PostgreSqlBuilder"/>
+    /// constructor used before it was obsoleted, so the default is unchanged.
+    /// </summary>
+    protected const string DefaultImage = "postgres:15.1";
+
     protected virtual PostgreSqlBuilder Configure(PostgreSqlBuilder builder)
         => builder;
 
     protected override PostgreSqlContainer Build()
-        => Configure(new PostgreSqlBuilder()).Build();
+        => Configure(new PostgreSqlBuilder(DefaultImage)).Build();
 
     public string Host
         => Container.Hostname;

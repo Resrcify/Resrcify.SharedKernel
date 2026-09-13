@@ -72,10 +72,10 @@ public sealed class UpdateAuditableEntitiesInterceptorTests : DbSetupBase
 
         foundEntity.ShouldNotBeNull();
 
-        foundEntity!.CreatedOnUtc
+        foundEntity.CreatedOnUtc
             .ShouldBe(now, TimeSpan.FromSeconds(1));
 
-        foundEntity!.ModifiedOnUtc
+        foundEntity.ModifiedOnUtc
             .ShouldBe(now, TimeSpan.FromSeconds(1));
     }
     [Fact]
@@ -97,7 +97,7 @@ public sealed class UpdateAuditableEntitiesInterceptorTests : DbSetupBase
 
         foundEntity.ShouldNotBeNull();
 
-        foundEntity!.ModifiedOnUtc
+        foundEntity.ModifiedOnUtc
             .ShouldBe(now, TimeSpan.FromSeconds(1));
     }
 }

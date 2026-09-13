@@ -85,7 +85,7 @@ internal sealed class DiComposedSendRuntime<TRequest, TResponse>(IServiceProvide
         {
             var preProcessTask = _preProcessors[index].Process(request, cancellationToken);
             if (!preProcessTask.IsCompletedSuccessfully)
-                return new ValueTask<TResponse>(ExecuteSlowTask(request, index, preProcessTask, cancellationToken));
+                return new ValueTask<TResponse>(ExecuteSlowTask(request, executor, index, preProcessTask, cancellationToken));
         }
 
         var responseTask = executor(request, cancellationToken);
@@ -118,7 +118,7 @@ internal sealed class DiComposedSendRuntime<TRequest, TResponse>(IServiceProvide
         {
             var preProcessTask = _preProcessors[index].Process(request, cancellationToken);
             if (!preProcessTask.IsCompletedSuccessfully)
-                return ExecuteSlowValueTask(request, index, preProcessTask, cancellationToken);
+                return ExecuteSlowValueTask(request, executor, index, preProcessTask, cancellationToken);
         }
 
         var response = executor(request, cancellationToken);
@@ -142,6 +142,7 @@ internal sealed class DiComposedSendRuntime<TRequest, TResponse>(IServiceProvide
 
     private async Task<TResponse> ExecuteSlowTask(
         TRequest request,
+        RequestExecutionDelegate<TRequest, TResponse> executor,
         int preProcessorIndex,
         Task pendingPreProcessorTask,
         CancellationToken cancellationToken)
@@ -151,7 +152,7 @@ internal sealed class DiComposedSendRuntime<TRequest, TResponse>(IServiceProvide
         for (var index = preProcessorIndex + 1; index < _preProcessors.Length; index++)
             await _preProcessors[index].Process(request, cancellationToken).ConfigureAwait(false);
 
-        var response = await _taskExecutor!(request, cancellationToken).ConfigureAwait(false);
+        var response = await executor(request, cancellationToken).ConfigureAwait(false);
 
         for (var index = 0; index < _postProcessors.Length; index++)
             await _postProcessors[index].Process(request, response, cancellationToken).ConfigureAwait(false);
@@ -193,6 +194,7 @@ internal sealed class DiComposedSendRuntime<TRequest, TResponse>(IServiceProvide
 
     private async ValueTask<TResponse> ExecuteSlowValueTask(
         TRequest request,
+        ValueTaskRequestExecutionDelegate<TRequest, TResponse> executor,
         int preProcessorIndex,
         Task pendingPreProcessorTask,
         CancellationToken cancellationToken)
@@ -202,7 +204,7 @@ internal sealed class DiComposedSendRuntime<TRequest, TResponse>(IServiceProvide
         for (var index = preProcessorIndex + 1; index < _preProcessors.Length; index++)
             await _preProcessors[index].Process(request, cancellationToken).ConfigureAwait(false);
 
-        var response = await _valueTaskExecutor!(request, cancellationToken).ConfigureAwait(false);
+        var response = await executor(request, cancellationToken).ConfigureAwait(false);
 
         for (var index = 0; index < _postProcessors.Length; index++)
             await _postProcessors[index].Process(request, response, cancellationToken).ConfigureAwait(false);

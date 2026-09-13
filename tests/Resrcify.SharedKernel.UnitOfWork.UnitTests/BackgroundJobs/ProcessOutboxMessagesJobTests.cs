@@ -64,7 +64,7 @@ public class ProcessOutboxMessagesJobTests
         row.ProcessedOnUtc.ShouldBeNull();
         row.RetryCount.ShouldBe(1);
         row.Error.ShouldNotBeNull();
-        row.Error!.ShouldContain("handler failed");
+        row.Error.ShouldContain("handler failed");
     }
 
     [Fact]

@@ -64,8 +64,8 @@ public sealed class InsertOutboxMessagesInterceptorTests : DbSetupBase
         var message = outboxMessages[0];
         var deserializedMessage = (TestDomainEvent?)JsonSerializer.Deserialize<IDomainEvent>(message.Content, _jsonOptions);
         deserializedMessage.ShouldNotBeNull();
-        deserializedMessage!.Id.ShouldNotBe(Guid.Empty);
-        deserializedMessage!.Message.ShouldBe("Test message");
+        deserializedMessage.Id.ShouldNotBe(Guid.Empty);
+        deserializedMessage.Message.ShouldBe("Test message");
     }
 
     [Fact]
