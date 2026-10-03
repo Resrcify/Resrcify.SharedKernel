@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
+using Quartz;
 using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using Resrcify.SharedKernel.Abstractions.Messaging;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
@@ -93,6 +94,44 @@ public class ProcessOutboxMessagesJobTests
         row.ProcessedOnUtc.ShouldBeNull();
         row.Error.ShouldNotBeNull();
     }
+
+    /// <summary>
+    /// Quartz 4 removed the typed JobDataMap getters, so the job now reads the stored object itself. These
+    /// pin how it treats each shape a batch size can arrive in: honoured when it is a usable number however
+    /// it was stored, and the default of 20 otherwise - never an exception that fails the job.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(BatchSizeShapes))]
+    public async Task Execute_ShouldHonourBatchSize_HoweverItWasStored(object? storedBatchSize, int expectedProcessed)
+    {
+        // Arrange
+        await using var harness = await OutboxJobTestHarness.CreateAsync();
+        await harness.SeedAsync(Enumerable
+            .Range(0, 5)
+            .Select(_ => CreateMessage(new TestDomainEvent(Guid.NewGuid(), "Test message")))
+            .ToArray());
+        var data = new JobDataMap();
+        if (storedBatchSize is not null)
+            data.Add("ProcessBatchSize", storedBatchSize);
+
+        // Act
+        await harness.Job.Execute(OutboxJobTestHarness.JobContext(data));
+
+        // Assert
+        (await harness.GetMessagesAsync())
+            .Count(m => m.ProcessedOnUtc != null)
+            .ShouldBe(expectedProcessed);
+    }
+
+    public static TheoryData<object?, int> BatchSizeShapes => new()
+    {
+        { 2, 2 },               // stored as an int, as the setup does
+        { 2L, 2 },              // a long, as a persistent store may hand it back
+        { "2", 2 },             // a string, as configuration supplies it
+        { "not-a-number", 5 },  // unusable: falls back to the default batch of 20
+        { long.MaxValue, 5 },   // out of int range: falls back rather than overflowing
+        { null, 5 },            // absent: the default batch of 20
+    };
 
     private static OutboxMessage CreateMessage(IDomainEvent domainEvent)
         => new()

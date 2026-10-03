@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,18 +19,23 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(IServiceScopeFactory sc
     : IJob
     where TDbContext : DbContext
 {
-    public async Task Execute(IJobExecutionContext context)
-    {
-        var cancellationToken = context.CancellationToken;
+    internal const string ProcessBatchSizeKey = "ProcessBatchSize";
+    internal const string ProcessMaxRetryCountKey = "ProcessMaxRetryCount";
+    internal const int DefaultProcessBatchSize = 20;
+    internal const int DefaultProcessMaxRetryCount = 3;
 
-        if (!context.MergedJobDataMap.TryGetInt(
-            "ProcessBatchSize",
-            out var batchSize))
-            batchSize = 20;
-        if (!context.MergedJobDataMap.TryGetInt(
-            "ProcessMaxRetryCount",
-            out var maxRetryCount))
-            maxRetryCount = 3;
+    public async ValueTask Execute(
+        IJobExecutionContext context,
+        CancellationToken cancellationToken = default)
+    {
+        var batchSize = ReadInt(
+            context.MergedJobDataMap,
+            ProcessBatchSizeKey,
+            DefaultProcessBatchSize);
+        var maxRetryCount = ReadInt(
+            context.MergedJobDataMap,
+            ProcessMaxRetryCountKey,
+            DefaultProcessMaxRetryCount);
 
         var messages = await ReadBatchAsync(
             batchSize,
@@ -38,6 +44,28 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(IServiceScopeFactory sc
 
         foreach (var message in messages)
             await ProcessMessageAsync(message, cancellationToken);
+    }
+
+    // Quartz 4 dropped the typed JobDataMap accessors (TryGetInt and friends); the map
+    // only hands back the stored object. The setup stores ints, but a value that came in
+    // as a long or a string (configuration, a persistent store) is accepted too, and
+    // anything unusable falls back to the default rather than failing the job.
+    private static int ReadInt(JobDataMap data, string key, int fallback)
+    {
+        if (!data.TryGetValue(key, out var value))
+            return fallback;
+
+        return value switch
+        {
+            int number => number,
+            long number when number is >= int.MinValue and <= int.MaxValue => (int)number,
+            string text when int.TryParse(
+                text,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var parsed) => parsed,
+            _ => fallback
+        };
     }
 
     // No-tracking projection — only the columns the job needs, so the covering index

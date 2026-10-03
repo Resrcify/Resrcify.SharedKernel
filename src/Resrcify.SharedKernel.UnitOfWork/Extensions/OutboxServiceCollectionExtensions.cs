@@ -2,7 +2,6 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Options;
 using Quartz;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
@@ -35,7 +34,7 @@ public static class OutboxServiceCollectionExtensions
     /// </code>
     /// Register the EF model with
     /// <see cref="OutboxModelBuilderExtensions.ApplyOutboxMessageConfiguration"/> and
-    /// host Quartz with <c>AddQuartz()</c> / <c>AddQuartzHostedService()</c>.
+    /// start the scheduler with <c>AddQuartzHostedService()</c>; the Quartz registration itself is made here.
     /// </summary>
     public static IServiceCollection AddOutboxProcessing<TDbContext>(
         this IServiceCollection services,
@@ -51,12 +50,14 @@ public static class OutboxServiceCollectionExtensions
         services.TryAddSingleton(serializer);
         services.TryAddScoped<IUnitOfWork, UnitOfWork<TDbContext>>();
 
-        services.AddSingleton<IConfigureOptions<QuartzOptions>>(
-            new ProcessOutboxMessagesJobSetup<TDbContext>(
-                options.BatchSize,
-                options.ProcessIntervalInSeconds,
-                options.DelayInSecondsBeforeStart,
-                options.MaxRetryCount));
+        // AddQuartz composes: every call after the first adds to the same default scheduler
+        // (its registrations are TryAdd), so this is safe alongside the application's own
+        // AddQuartz call, in either order.
+        services.AddQuartz(quartz => quartz.AddProcessOutboxMessagesJob<TDbContext>(
+            options.BatchSize,
+            options.ProcessIntervalInSeconds,
+            options.DelayInSecondsBeforeStart,
+            options.MaxRetryCount));
 
         return services;
     }

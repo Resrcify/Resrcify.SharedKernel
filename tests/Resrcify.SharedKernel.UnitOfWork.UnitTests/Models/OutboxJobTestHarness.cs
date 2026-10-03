@@ -96,6 +96,17 @@ internal sealed class OutboxJobTestHarness : IAsyncDisposable
         return jobContext;
     }
 
+    /// <summary>
+    /// A context whose job data is exactly <paramref name="data"/>, for exercising how the job reads values
+    /// that were not stored as ints (or not stored at all).
+    /// </summary>
+    internal static IJobExecutionContext JobContext(JobDataMap data)
+    {
+        var jobContext = Substitute.For<IJobExecutionContext>();
+        jobContext.MergedJobDataMap.Returns(data);
+        return jobContext;
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _provider.DisposeAsync();
