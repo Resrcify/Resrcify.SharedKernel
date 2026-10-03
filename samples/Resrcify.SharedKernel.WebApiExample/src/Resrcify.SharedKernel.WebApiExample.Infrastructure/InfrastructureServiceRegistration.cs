@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Quartz;
 using Resrcify.SharedKernel.Abstractions.Caching;
 using Resrcify.SharedKernel.Caching.Primitives;
 
