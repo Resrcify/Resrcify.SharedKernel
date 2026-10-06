@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <PackageId>Resrcify.SharedKernel.MessageBus</PackageId>
+    <Title>Resrcify.SharedKernel.MessageBus</Title>
+    <Description>Message bus on Rebus and RabbitMQ (or in memory): scatter-gather through the outbox, per-instance rate-limited request queues, and publish/subscribe integration events.</Description>
+    <Summary>Message bus on Rebus and RabbitMQ (or in memory): scatter-gather through the outbox, per-instance rate-limited request queues, and publish/subscribe integration events.</Summary>
+  </PropertyGroup>
+
+  <!-- Rebus is a real dependency: its types are part of this package's API (handlers, configuration
+       strategies), so consumers get it, at a version this package was built against, from this reference.
+       Rebus is MIT with no commercial tier. -->
+  <ItemGroup>
+    <PackageReference Include="Rebus" />
+    <PackageReference Include="Rebus.RabbitMq" />
+    <PackageReference Include="Rebus.ServiceProvider" />
+    <!-- Send/handle spans and trace propagation through headers; the service subscribes with Rebus.OpenTelemetry. -->
+    <PackageReference Include="Rebus.Diagnostics" />
+    <!-- Needed at run time by every consumer (hosted services, the health gate, logging), so not private: a host without ASP.NET Core must get them too. -->
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.MessageBus.UnitTests" />
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.MessageBus.IntegrationTests" />
+    <!-- The compression benchmark compares the internal gzip with Rebus' own. -->
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.PerformanceTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Only the contracts: the outbox (UnitOfWork) is reached through IOutboxLaneEvent and IOutboxMessageContext. -->
+    <ProjectReference Include="..\Resrcify.SharedKernel.Abstractions\Resrcify.SharedKernel.Abstractions.csproj" />
+  </ItemGroup>
+</Project>
