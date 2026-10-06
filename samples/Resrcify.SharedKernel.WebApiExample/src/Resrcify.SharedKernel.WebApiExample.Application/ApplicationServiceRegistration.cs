@@ -1,8 +1,7 @@
 using System.Reflection;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
-using Resrcify.SharedKernel.Messaging.Behaviors;
-using Resrcify.SharedKernel.Messaging.Extensions;
+using Resrcify.SharedKernel.Mediator.Extensions;
 
 namespace Resrcify.SharedKernel.WebApiExample.Application;
 
@@ -13,9 +12,8 @@ public static class ApplicationServiceRegistration
         services.AddMediator(config =>
         {
             config.RegisterServicesFromAssemblies(Assembly.GetExecutingAssembly());
-            config.AddOpenBehavior(typeof(LoggingPipelineBehavior<,>));
-            config.AddOpenBehavior(typeof(UnitOfWorkPipelineBehavior<,>));
-            config.AddOpenBehavior(typeof(CachingPipelineBehavior<,>));
+            // Logging -> Validation -> Transaction -> UnitOfWork -> Caching (the first is the outermost).
+            config.AddStandardBehaviors();
         });
 
         services.AddValidatorsFromAssembly(

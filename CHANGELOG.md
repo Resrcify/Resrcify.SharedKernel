@@ -1,0 +1,411 @@
+# Changelog
+
+All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
+every package in the repository is released together under one version.
+
+## 4.0.0 (unreleased)
+
+Upgrading a service: work through **Breaking changes** below, top to bottom. The step-by-step guide for our services
+(including the move from MassTransit) is `docs/migrating-from-masstransit.md` in the SwgohApi repository, "Step 0".
+
+### Breaking changes
+
+#### Packages and namespaces
+
+- **`Resrcify.SharedKernel.Messaging` is now `Resrcify.SharedKernel.Mediator`.** Replace the package, then rename
+  the namespaces:
+
+  | 3.x | 4.0 |
+  |---|---|
+  | `Resrcify.SharedKernel.Abstractions.Messaging` | `Resrcify.SharedKernel.Abstractions.Mediator` |
+  | `Resrcify.SharedKernel.Messaging.*` | `Resrcify.SharedKernel.Mediator.*` |
+  | `Resrcify.SharedKernel.Abstractions.Web` (`IEndpoint`) | `Resrcify.SharedKernel.Web.Abstractions` |
+
+- **Packages no longer bring other SharedKernel packages along.** `Web` no longer references `Mediator`;
+  `UnitOfWork` no longer references `Mediator` or `DomainDrivenDesign`; `Mediator` no longer references `Caching`.
+  Reference every SharedKernel package a project uses directly (a missing-namespace error tells you which).
+- **Newtonsoft.Json is gone.** `NewtonsoftJsonOutboxSerializer` is removed and no package references Newtonsoft.Json.
+  Use `SystemTextJsonOutboxSerializer` (no service used the Newtonsoft one). `Resrcify.SharedKernel.MessageBus` still
+  gets Newtonsoft.Json 13.0.4 through Rebus, which depends on it.
+
+#### Results
+
+- **A result's rules are enforced.** A failure needs at least one error and can't contain `Error.None`; a success has
+  no errors. Breaking them throws `ArgumentException` (it used to make a malformed result). Look for
+  `Result.Failure(x.Errors)` where `x` might be a success, and for `Error.None` used as a placeholder error.
+- **`Result.Errors` is an `IReadOnlyList<Error>`** (was `Error[]`), copied when the result is made. `Errors.Length` →
+  `Errors.Count`. `Result.Failure` takes an `IReadOnlyList<Error>` (arrays still work). `Match`'s `onFailure`
+  receives an `IReadOnlyList<Error>`: a method group taking `Error[]` must take `IReadOnlyList<Error>`.
+- **`Error` → `string` is explicit.** Write `(string)error` or, better, `error.Code`.
+- **The `Create` extensions are removed**; they did exactly what `Map` does. `.Create(f)` → `.Map(f)`.
+- **`Match(func, error)`, which returned a `Result`, is now `Map(func, error)`.** It maps a success and replaces a
+  failure's errors with `error`.
+- **`Tap` on a `Result<T>` with a step returning a `Result` stops on that step's failure**, as the `Task` form always
+  did. It used to ignore it.
+- **`TryCatch` lets an `OperationCanceledException` through** instead of turning it into the error.
+
+#### Web
+
+- **`ResultExtensions` (Web) is split in two**, so it no longer clashes with the Results package's
+  `ResultExtensions`: `HttpResultExtensions` (`ToProblemDetails`, `Match`) and `HttpResponseMessageExtensions`.
+  Delete the `using ResultExtensions = Resrcify.SharedKernel.Web.Extensions.ResultExtensions;` alias and write
+  `HttpResultExtensions.ToProblemDetails` where a method group named the class.
+- **`HttpResponseMessage.Convert` / `Convert<T>` are `ToResultAsync` / `ToResultAsync<T>`.** They now also return a
+  failure instead of throwing when the body isn't what they expect: `Http.<status>` (with the status's error type)
+  for a failure without problem details, `Http.EmptyContent` for a 204 or a `null` body, `Http.UnreadableContent` for
+  a success body that isn't JSON.
+- **A missing or invalid user id claim (`GetUserId`) is `Unauthorized` (401)**; it was `Validation` (400).
+- **`ErrorType.Timeout` problem details are titled "Gateway Timeout"** (the status was already 504).
+
+#### Caching
+
+- **`ICachingService.SetAsync` with a `TimeSpan` is gone; the expiry is in the method's name.** A positional
+  `TimeSpan` used to mean a *sliding* expiration, which few callers meant. Pick one:
+
+  | Was | Now |
+  |---|---|
+  | `SetAsync(key, value, TimeSpan.FromMinutes(5), ct)` meant to expire after 5 min | `SetForAsync(key, value, TimeSpan.FromMinutes(5), ct)` |
+  | `SetAsync(key, value, TimeSpan.FromMinutes(5), ct)` meant to stay while read | `SetSlidingAsync(key, value, TimeSpan.FromMinutes(5), ct)` |
+  | `SetAsync(key, value, TimeSpan.MaxValue, ...)` (keep it until replaced) | `SetForAsync(key, value, <a real lifetime>, ct)`: see below |
+  | `SetAsync(key, value, someDateTimeOffset, ct)` | unchanged |
+
+- **Every cache entry expires.** There is no way to cache without an expiry any more: the implementation refuses one
+  (`ArgumentException`), and `SetForAsync` refuses a lifetime past the last date there is (`TimeSpan.MaxValue`).
+  Data kept "until the next update replaces it" (DataProvider's base data and localisation, Sandbox's content
+  versions and log settings) needs a lifetime longer than the update interval, and code that reads it must handle
+  it being gone (re-fetch, or fail clearly), as it already must when the cache is restarted or evicts.
+- An implementation of `ICachingService` implements
+  `SetAsync(key, value, absoluteExpiration, absoluteExpirationRelativeToNow, slidingExpiration, serializerOptions, cancellationToken)`,
+  now without defaults, with at least one expiration. `SetForAsync` passes a duration
+  (`absoluteExpirationRelativeToNow`), which the cache measures on its own clock.
+- **`ICachingService` has `TryClaimForAsync(key, expiresIn, cancellationToken)`**, set-if-absent with an expiry. An
+  implementation must provide it, atomically where its store allows (Redis: a Lua script or `SET … PX … NX` on the key
+  `RemoveAsync` deletes). A claim key is used only with `TryClaimForAsync`/`RemoveAsync`.
+
+#### Mediator
+
+- **The mediator can't be a singleton** (`AddMediator(ServiceLifetime.Singleton, ...)` and
+  `UseMediatorLifetime(Singleton)` throw): it would resolve handlers and their scoped services from the root
+  provider. Behaviors can still be singletons.
+- **The transaction and unit-of-work behaviors rethrow a handler's exception as it is**; they used to wrap it in an
+  `InvalidOperationException`. Code catching `InvalidOperationException` around `Send` must catch the real type.
+- **`CachingPipelineBehavior` caches for `Expiration` from the time it caches** (`SetForAsync`). Reads no longer
+  keep an entry alive. A query with an `Expiration` of zero or less isn't cached (nor looked up).
+- **`LoggingPipelineBehavior` logs a transient failure at `Warning`.** A failure with an `IsTransient()` error
+  (`Failure`, `ExternalFailure`, `Timeout`, `RateLimit`) is now `Warning`; one about the request (`NotFound`,
+  `Validation`, `Conflict`, `Unauthorized`, `Forbidden`) stays at `Information` (an expected answer). Check log filters and alerts
+  keyed on the level.
+- **The assembly scan registers handlers only** (`IRequestHandler`, `IValueTaskRequestHandler`,
+  `IStreamRequestHandler`, `INotificationHandler`). Pipeline behaviors (all five kinds) and pre/post-processors in
+  scanned assemblies used to be registered too, running whether asked for or not, outermost, in reflection order. Now
+  they run only when registered, in the order registered: open behaviors with `cfg.AddOpenBehavior(typeof(MyBehavior<,>))`
+  (now also stream behaviors) or `cfg.AddStandardBehaviors(...)`; closed ones in the container
+  (`services.AddTransient<IPipelineBehavior<MyRequest, Result>, MyBehavior>()`); processors with the new
+  `cfg.AddRequestPreProcessor(type)` / `cfg.AddRequestPostProcessor(type)`, open or closed. Look for behaviors that
+  existed only to be found by the scan (Sandbox: `GameGetGameDataPipelineBehavior<,>`).
+- **`AddMediator` fails at start-up when a request asks for a missing behavior**: a scanned request implementing
+  `ICachingQuery` or `ITransactionalCommand` with no registered behavior constrained to that interface throws
+  `InvalidOperationException` (add the behavior, e.g. with `AddStandardBehaviors()`; `cfg.SkipBehaviorCheck()` if
+  yours is registered after `AddMediator`).
+- **A request's exception is logged at `Error` once**, with its stack, by the first behavior it leaves: the
+  unit-of-work behavior for a command ("Request X threw Y; nothing it changed is saved"), the transaction behavior
+  ("…; its transaction is rolled back"), or the logging behavior for a query; the others log a `Debug` line without
+  the stack. A request sent from a handler no longer logs its exception again in the sending request's behaviors. The
+  messages "Exception caught in TransactionPipelineBehavior" / "...UnitOfWorkPipelineBehavior" are gone: check log
+  filters and alerts matching them. A pipeline without the logging behavior still logs the exception.
+
+#### Message bus
+
+- **`HandleInPartitions` and `HandleOneAtATime` handle events in publish order by default** (`inPublishOrder: false`
+  turns it off): an event takes its place in its partition in the order the bus received it; a failing event is
+  retried in its place (5 tries, waiting 0.5–4 s) and then moved to the error queue, so the events after it of the
+  same partition wait and then follow in order; and the service's RabbitMQ input queue gets a single active consumer
+  (one instance consumes, the others stand by and take over if it stops). Order means the order the events reached
+  the broker; an event that ends in the error queue is skipped. **A queue that already exists can't get the single
+  active consumer flag**: RabbitMQ refuses the declaration and the bus doesn't start. Delete the drained queue, or use
+  a new input queue name, when turning it on for a service that runs.
+
+- **`IIntegrationEventHandler.HandleAsync` returns `Task<Result>`**, and event failures are handled without exceptions:
+  a failure that is the event's fault (every error `NotFound`, `Validation`, `Conflict`, `Unauthorized`,
+  `Forbidden`) is logged and not retried; any other failure, or an exception, is retried in place (as many tries as
+  the bus' retry strategy allows, 5 by default) and then moved to the error queue. Return `Result.Success()` from a
+  handler that has nothing to report.
+
+- **Scatter requests are retried without exceptions, and a failure is always answered.** A responder's failure that is
+  the request's fault (the same five error types) is answered at once; any other failure, or an exception, sends the
+  request back to its queue for another try (any instance may take it, and it passes the rate limiter again, so retries
+  spend the upstream's budget like any request), up to the bus' delivery attempts, 0.5–4 s apart, and is then answered
+  with its errors. It used to be: throw to have Rebus retry, and a request that kept failing ended unanswered. So:
+  - **return a failure instead of throwing** for what another try might fix, and type "no result" as `NotFound` (or
+    another of the five) so it isn't retried;
+  - **a requester that treated "answered" as "definite"** now also gets the given-up failures: use the gather's new
+    `SettledKeys` (or `error.Type.IsTransient()`) to tell them apart;
+  - the default mediator responder no longer throws (`AnswerFailure` now picks between answering at once and trying
+    again first);
+  - metrics: the `messagebus.requests.handled` outcome `error` is now `retried`, a request answered after its last try
+    is `gave_up` (no longer `failure`), and `messagebus.scatter_gather.items` has `gave_up` too (no longer `failed`).
+
+#### Unit of work and outbox
+
+- **The outbox's Quartz jobs are keyed per DbContext**: `ProcessOutboxMessagesJob-<DbContext>`, plus the new
+  `CleanupOutboxMessagesJob-<DbContext>`. Tests or tools that look a job up by name must use the new name.
+- **Processed outbox messages are deleted after 7 days** by the new hourly cleanup job
+  (`processedRetentionInDays`, 0 turns it off).
+- **A new index, `IX_OutboxMessages_Processed`**, backs the cleanup: add an EF migration.
+- **`IDeletableEntity.DeletedOnUtc` is `DateTime?`** (it was a `DateTime` holding `DateTime.MinValue` until deleted).
+  Add a migration that makes the column nullable and sets never-deleted rows to `NULL`:
+  `UPDATE "<Table>" SET "DeletedOnUtc" = NULL WHERE "DeletedOnUtc" = '-infinity' OR "DeletedOnUtc" = '0001-01-01 00:00:00+00';`
+  (the sample's `UpgradeToSharedKernel4` migration shows it).
+- **`SaveChanges` (synchronous) throws when aggregates raised domain events**, rather than dropping them. Save with
+  `SaveChangesAsync`.
+- **`UnitOfWork.Dispose` no longer disposes the DbContext** (the container owns it).
+- **`IUnitOfWork.BeginTransactionAsync`'s `commandLifetime` parameter is `commandTimeout`.**
+- **A message that gives up is marked, no longer left unprocessed**: its `ProcessedOnUtc` is
+  `OutboxMessage.GivenUpProcessedOnUtc` (9999-12-31), and `Error` starts with "Gave up at … after n tries.". The polls
+  no longer read past it, the cleanup keeps it, and the poison gauge counts it. Raising `MaxRetryCount` no longer
+  retries it: set `ProcessedOnUtc` to `NULL` and `RetryCount` to 0. No schema change. Recommended data migration for
+  rows that already gave up: `UPDATE "OutboxMessages" SET "ProcessedOnUtc" = '9999-12-31T00:00:00Z' WHERE
+  "ProcessedOnUtc" IS NULL AND "RetryCount" >= <MaxRetryCount>;` (per lane with its own limit).
+- **`ApplyMigrations<T>()` is removed.** Replace `if (migrations.Run) services.ApplyMigrations<TContext>();` (and the
+  `MigrationsOptions` read before it) with `services.AddMigrationsOnStartup<TContext>(configuration);`: it migrates in
+  `StartingAsync`, before anything serves, reads `Migrations:Run` at start-up, and fails the start when a migration
+  fails. The old method built a second service provider during registration and migrated synchronously before logging
+  was up.
+- **`IUnitOfWork` has `TryCompleteAsync`**; an implementation (a fake or a stub) must implement it.
+- **The outbox job drains a backlog in one run**: it keeps reading batches while they come back full, for up to 80% of
+  its interval, so a run can last longer than one batch. A test counting what one run processes must expect the whole
+  backlog. A message that fails in a run isn't tried again in the same run.
+- **Outbox lanes poll as soon as a slot frees up or the outbox is woken**; `PollInterval` is now the longest wait after
+  a poll, not a fixed cadence. A message another instance holds is looked at again after `PollInterval`.
+- `InsertOutboxMessagesInterceptor`, `ProcessOutboxMessagesJob` and `UnitOfWorkPipelineBehavior` have new optional
+  constructor parameters; code compiles unchanged but must be recompiled.
+- **`UnitOfWork.CompleteAsync` saves through the context's execution strategy** outside a transaction, so
+  `RetryOnFailure` works with the `ON CONFLICT DO NOTHING` outbox insert; without retries nothing changes.
+
+#### Domain-driven design
+
+- **`Enumeration<T>` is stricter**: two members with the same value, or names that differ only in case, throw when
+  the type is first used. `Register` is removed (members are found by reflection).
+- **`ValueObject` equality is by type as well**: two value objects of different types are never equal, even with
+  the same components. (`Entity` and `ValueObject` `==` also handle `null` on either side now.)
+
+#### Repository
+
+- **`IRepository<TEntity, TId>` has the fetches** (`GetByIdAsync`, both `FirstOrDefaultAsync`), returning `TEntity?`.
+  `INullableFetchRepository` is gone: a repository interface derives from `IRepository` alone. Delete
+  `INullableFetchRepository<…>,` (or `, INullableFetchRepository<…>`) from each repository interface.
+- **`ResultRepository` and `IResultFetchRepository` are removed** (no service used them). Whether "not found" is an
+  error is the handler's decision: it turns `null` into its own error with `ToResult` / `ToResultAsync`, e.g.
+  `await shards.GetByIdAsync(id, ct).ToResultAsync(DomainErrors.Shard.NotFound(id))`.
+
+#### Test fixtures
+
+- **`PostgresContainerFixture` and `RabbitMqContainerFixture` default to `postgres:18` and
+  `rabbitmq:4.1-management`** (what production runs; was `postgres:15.1` and `rabbitmq:3.11`).
+  `RESRCIFY_TEST_POSTGRES_IMAGE` / `RESRCIFY_TEST_RABBITMQ_IMAGE` replace the image for every fixture.
+- ArchitectureTesting: `SharedKernelPackage` has new members, `Observability` (after `Web`) and `UnitOfWorkPostgres` (after `UnitOfWork`),
+  so the numeric values of the members after them shift.
+
+### Added
+
+- **`IGathered.SettledKeys`**: the items with a definite answer (a result, or a failure that is the request's fault),
+  for an all-or-nothing gather that must not apply when an item's responder gave up.
+- **`ForwardEvent<TEvent>(...)`** on the message bus builder: hands an integration event to the mediator as a
+  notification or a command, so a handler that only does that needn't be written.
+- **`messagebus.events.published` has a `via_outbox` tag**: `false` marks an event published outside the outbox (a
+  command handler, a callback), which nothing retries if the publish fails. The dashboard splits it.
+- **Outbox metrics and a health check.** The meter `OutboxDiagnostics.MeterName` counts messages handled by outcome
+  (`processed`, `retrying`, `gave_up`), times handling and time in the outbox, and gauges the backlog (waiting,
+  given up, oldest waiting age), measured every 30 s by a background monitor. `AddHealthChecks().AddOutbox<TDbContext>()`
+  fails when the oldest waiting message has waited more than 5 minutes or the backlog can't be measured. The Grafana
+  dashboard and two alerts (`OutboxBacklogOld`, `OutboxMessagesGaveUp`) are in `Resrcify.Kubernetes/prod`.
+- **`TimeProvider` everywhere SharedKernel reads the clock**: the audit, soft-delete and outbox timestamps, the
+  outbox cleanup and lanes, the mediator's logging, the message bus' deadlines, retries, gather timeouts, broker
+  reconnects and health gate, and every duration a metric records. The system clock by default; register a
+  `FakeTimeProvider` (and pass it to interceptors you construct) to control time in tests. The outbox's Quartz job
+  setups (`AddProcessOutboxMessagesJob`, `AddCleanupOutboxMessagesJob`) take an optional `timeProvider` for their
+  first start; Quartz 4 runs the scheduler itself on the `TimeProvider` registered in DI.
+
+- **`Resrcify.SharedKernel.MessageBus`**: a message bus on Rebus (MIT) and RabbitMQ, or in memory:
+  - scatter-gather requests through the outbox (`IScatterGatherClient`: `RequestAsync`, `GatherAsync`,
+    `StreamAsync`), answered by `IRequestResponder`s on per-instance rate-limited queues, with a default responder that
+    sends the request through the mediator;
+  - publish/subscribe integration events (`IEventBus`, `IIntegrationEventHandler`), with partitions
+    (`HandleInPartitions`: one at a time per key, in publish order), duplicate skipping through `ICachingService`
+    (`SkipDuplicateEvents`, 3 h), and name-clash detection between publishers;
+  - messages named by class name, a health check (`AddMessageBus`), metrics (`Resrcify.SharedKernel.MessageBus`
+    meter), compression above 32 KB, and `MessageContract` checks for tests.
+- **Outbox**: lanes (`IOutboxLaneEvent`), stable message IDs per outbox message (`IOutboxMessageContext`), claims
+  for running several instances, lane backoff (5 s doubling to 5 min), the cleanup job.
+- **Results**: `ErrorType.IsTransient()` (`Failure`, `ExternalFailure`, `Timeout`, `RateLimit`: another try may
+  pass), the rule the message bus retries by and the mediator's logging picks its level by;
+  a JSON converter, so a failed `Result` serializes (it used to throw) and old payloads still read;
+  `Tap` with a step returning a `Result`; `TryCatch` with a `Func<Exception, Error>`; `ToResult` / `ToResultAsync`
+  to turn a fetched value, or its absence, into a result, with the error given (`ToResultAsync(error)`) or made only
+  when needed (`ToResultAsync(() => error)`, for an error with a formatted message).
+- **Caching**: `SetForAsync` (expires a set time from now) and `SetSlidingAsync`.
+- **ArchitectureTesting**: a rule for which layer may use which SharedKernel package (`SharedKernelPackage`, `Layers`).
+- **Mediator**: tests for DI-time pipeline composition.
+- **Mediator tracing and metrics**, for every `Send` whatever the behaviors: the `ActivitySource` and `Meter`
+  `MediatorDiagnostics.ActivitySourceName` / `MeterName` (`Resrcify.SharedKernel.Mediator`). One span per request
+  (outcome, error code and type, exception) and the histogram `mediator.request.duration` (s, tags `request`,
+  `outcome`). A single check when nothing listens.
+- **`AddStandardBehaviors()`** on the mediator configuration: Logging → Validation → Transaction → UnitOfWork →
+  Caching, with `Without(...)`, `InsertBefore(...)` and `InsertAfter(...)` for a service's own behaviors.
+- **`LoggingPipelineOptions`** (`cfg.ConfigureLogging(...)`): `RequestLevel` for the start/complete lines (default
+  `Information`), `SlowRequestThreshold` (a Warning when exceeded; off by default). The logging behavior also logs a
+  handler's exception at `Error`, letting it through unchanged.
+- **`AddRequestPreProcessor` / `AddRequestPostProcessor`** on the mediator configuration; `AddOpenBehavior` takes
+  stream behaviors.
+- **`ResultFactory.Failure<TResult>(errors)` / `(error)`** (Results): a failed `Result` or `Result<T>` for code generic
+  over the result type, built once per type.
+- **`ICachingService.TryClaimForAsync`**; `DistributedCachingService` claims atomically within one process.
+- **`Resrcify.SharedKernel.Observability`**: one call, `services.AddServiceTelemetry(serviceName, configuration,
+  configure?)`, wires a service's telemetry the same way everywhere:
+  - OpenTelemetry tracing and metrics: ASP.NET Core (without the `/metrics` and `/health` requests, `UntracedPaths`),
+    HttpClient, the runtime, every SharedKernel source and meter (`Resrcify.SharedKernel.*`: mediator, outbox, message
+    bus), Rebus.Diagnostics and Quartz 4 (`"Quartz"`);
+  - the Prometheus exporter, with `app.MapServiceMetrics()` mapping an anonymous scrape endpoint;
+  - traces over OTLP when `Observability:OtlpEndpoint` is set (the services' existing section and key, now validated);
+  - Serilog from the `Serilog` section, with its self-log to stderr and `TraceId`/`SpanId` on every event.
+  Every part can be turned off; more sources and meters (e.g. `Npgsql`) and hooks for the tracer, the meter provider
+  and Serilog go through `ServiceTelemetryOptions`. Its dependencies are private like every package's: the service
+  references the OpenTelemetry and Serilog packages it wires (listed in the package README).
+- **Web: `app.MapHealthEndpoints()`** maps `/health` (every check), `/health/ready` (checks tagged
+  `HealthTags.Ready`) and `/health/live` (`HealthTags.Live`; Healthy without any), anonymous, with `HealthResponseWriter`
+  (status, duration, and per check its status, description, data, error and tags) and no dependency on
+  `AspNetCore.HealthChecks.UI.Client`. Paths via `HealthEndpointOptions`.
+- **Web: `services.AddResultProblemDetails()`** answers an unhandled exception with the same problem details as a
+  failed result: a 500 whose `errors` hold one `Failure` error `Unhandled` (`ResultExceptionHandler.ErrorCode`), so
+  `ToResultAsync` reads it back. The exception's type, message and stack appear only in Development
+  (`IncludeExceptionDetails`); it is logged once, at Error; a request the client aborted is a 499, logged at Debug.
+  Keep `app.UseExceptionHandler()`.
+- **Web: `httpClientBuilder.AddResultResilience(configure?)`** (on Microsoft.Extensions.Http.Resilience, which the
+  service references) retries what the result pattern calls transient: a status whose `ErrorType` `IsTransient()`
+  (5xx, 429), network errors and timed-out attempts; three times by default, exponential with jitter, honouring
+  `Retry-After`. Per-attempt timeout (10 s), total timeout (30 s), a circuit breaker; `AlsoRetry` / `NeverRetry` status
+  lists (e.g. `AlsoRetry.Add(404)` where a service retried 404 with Polly). Every wait runs on the container's
+  `TimeProvider`.
+- **Web: `services.AddResrcifyJwtBearer(configuration)`**: JWT bearer authentication against Resrcify.Identity from
+  the `Jwt` section (`Authority`, `Issuer`, `Audience`, validated at start-up): keys from the authority's discovery
+  document (JWKS); issuer, audience, lifetime and signature checked; bearer as the default scheme. The service
+  references `Microsoft.AspNetCore.Authentication.JwtBearer`.
+- **ArchitectureTesting:** `SharedKernelPackage.Observability`, not allowed in Domain, Application, Persistence or
+  Presentation.
+- **`Resrcify.SharedKernel.UnitOfWork.Postgres`**: `services.AddPostgresDbContext<TContext>(configuration, db => ...)`
+  binds the `Database` section the services already have (`Host`, `Port`, `Database`, `Username`, `Password`, new
+  `CommandTimeoutInSeconds`), validated at start-up; builds the connection string with `NpgsqlConnectionStringBuilder`
+  (a `;` in the password works); adds the interceptors from the container (with its `TimeProvider`); and offers
+  `.WithOutbox()`, `.WithOutboxWakeUp()`, `.RetryOnFailure()`, `.ConfigureNpgsql/ConfigureDbContext/ConfigureConnection`
+  and `.FromSection(...)`. Also `GetPostgresConnectionString<TContext>()` (for the Npgsql health check),
+  `PostgresDesignTimeFactory<TContext>` (a one-line `dotnet ef` factory reading the Web project's appsettings,
+  environment variables and arguments) and `HasPostgresRowVersion()` (optimistic concurrency on `xmin`, no new column).
+  Its dependencies are private: the service references `Npgsql.EntityFrameworkCore.PostgreSQL`, EF Core,
+  `Microsoft.Extensions.Hosting` and `Quartz`.
+- **Outbox wake-up** (`WithOutboxWakeUp()`): a save that writes outbox messages sends `NOTIFY resrcify_outbox` within
+  its transaction (delivered on commit only); a listener on one dedicated connection (debounce, keepalive, reconnect
+  backoff on the `TimeProvider`) runs the outbox job and wakes the lanes at once, with polling as the safety net.
+  Measured: 76 ms from save to handled, against a 10-minute poll.
+- **Unit of work**: `IUnitOfWork.TryCompleteAsync` and `PersistenceErrors` (a concurrency conflict or unique violation
+  is a `Conflict`; a serialization failure or deadlock outside a transaction is a transient `Failure`; anything else
+  still throws); `AddEntityInterceptors()`, `AddOutboxInterceptor()`, `AddSaveChangesInterceptors(provider, withOutbox)`
+  (interceptors from the container); `IOutboxSaveObserver`; `OutboxWakeUp<TDbContext>`; `OutboxJobs` is public;
+  `AddMigrationsOnStartup<TContext>(configuration)`.
+- **Mediator**: `cfg.ConfigureUnitOfWork(uow => uow.ReturnPersistenceFailures = true)` makes the unit-of-work behavior
+  return persistence failures as the command's result (a 409 for a conflict) instead of throwing.
+- **Quartz helpers** (UnitOfWork): `AddIntervalJob<TJob>(interval, startAfter, timeProvider)` and
+  `AddIntervalCommandJob<TCommand>` (replacing per-job `*JobSetup` classes); `CommandJob<TCommand>` /
+  `CommandJob<TCommand, TResponse>` / `SendCommandJob<TCommand>` (a failed result logged at a level chosen by
+  `IsTransient()`, an exception turned into a `JobExecutionException`); `AddJobHeartbeats()` and
+  `AddHealthChecks().AddQuartzJobs(tags: ["live"])`, a liveness check that fails when a job stops firing (lifted from
+  Shard).
+- **`ISingleValueObject<TSelf, TValue>`** (Abstractions): a value object stored as its one value. It asks for the
+  `Value` and `static Result<TSelf> Create(TValue)` such value objects already have; `FromPersisted` reads a stored
+  value and is `Create(value).Value` unless the value object implements it.
+- **`configurationBuilder.AddSingleValueObjectConversions(assemblies)`** (UnitOfWork, in `ConfigureConventions`):
+  every property of an opted-in type is stored as `Value` and read with `FromPersisted`, keys, foreign keys, indexes,
+  nullable, owned and complex types included, replacing the per-property `HasConversion(x => x.Value, v =>
+  X.Create(v).Value)`. The model, the SQL and the reads stay identical and no migration is needed (tested against
+  hand-written conversions on Npgsql and SQLite). A property's own `HasConversion` still wins; elements of primitive
+  collections keep their `ElementType(...)` conversion. Also `SingleValueObjectConverter<TSelf, TValue>`. It works in
+  compiled models (`dotnet ef dbcontext optimize`), `--native-aot` included (the read goes through the public
+  `SingleValueObjectConverter.FromPersisted<TSelf, TValue>`): tested by generating the model with EF Core's generator,
+  compiling and loading it, and comparing SQL (SQLite and PostgreSQL), rows, `Find`, writes, change tracking and
+  validation failures with the model built at run time. Precompiled queries read through the same conversion but
+  weren't run end to end (their generator is experimental, EF9100). Known EF Core 10.0 limitation: a NativeAOT compiled
+  model can't build the relational model of an owned type sharing its owner's table when that table has an index.
+- **`ServiceHostFixture<TProgram>`** (IntegrationTesting): hosts a service's `Program` on its own PostgreSQL (and
+  RabbitMQ when `CreateRabbitMq` returns one, optionally on a shared network as `postgres` / `rabbitmq`), handing the
+  host `Database:*`, `MessageBus:*` and `Migrations:Run=true` through `UseSetting` instead of process-wide environment
+  variables, with `ConfigureSettings` and `ConfigureTestServices` for the service's own. A `Program` that builds its
+  own `ConfigurationBuilder` must read `builder.Configuration` to see them. Also `JoinNetwork(network, aliases)` on
+  `PostgresContainerFixture` and `RabbitMqContainerFixture`.
+- **Results: `LoggedExceptions`** (`Resrcify.SharedKernel.Results.Diagnostics`): `Claim(exception)`,
+  `IsLogged(exception)` and `DataKey`, the log-once convention the mediator's behaviors and the Web exception handler
+  follow. A service's own log-and-rethrow code joins in by logging at Error only when `Claim` returns true. An
+  exception with read-only `Data` is logged everywhere, as before.
+
+### Fixed
+
+- The validation behavior ran a request's validators at once (unsafe with a shared DbContext) and without the
+  cancellation token; it runs them one at a time with the token.
+- DI-time pipeline composition created each request handler three times per request.
+- **The mediator's per-request cost.** A send through a fresh scope (how a service sends: the mediator is transient)
+  took ~980 ns and 9.6 KB with one behavior; with five behaviors it now takes ~180 ns and ~1.2 KB, about what
+  MediatR 12 takes, and a warm send ~55 ns (about 3 times faster than MediatR) (`MediatorPerScopeBenchmarks`):
+  - each mediator kept five caches sized by the core count that a mediator handling one call never read; it keeps
+    one small slot per kind of call instead;
+  - pipelines were composed up front as closures (two closures and two delegates per behavior, for one call); a
+    pipeline is now walked by index, making only the `next` each behavior is handed;
+  - the DI-composed runtimes are transient (scoped cost every scope its tracking dictionary), the notification
+    publisher is a singleton (both are stateless), and a transient `ISender`/`IPublisher`/`IStreamSender` is built
+    directly instead of through a factory resolving `IMediator` (a scoped mediator still shares one instance).
+- Outbox: a failed save kept the events and wrote them again correctly with every insert strategy; a retried
+  execution strategy no longer loses outbox messages; nested transactional commands use savepoints.
+- Two events of the same name published from one outbox message could swap message IDs between attempts (and one be
+  skipped as a duplicate); IDs now depend on the content.
+- `HttpResponseMessage` conversion threw on an HTML error page, an empty body, or a 204.
+- `ResultRepository` built its not-found error even when the entity was found.
+- A save scanned the change tracker once per SharedKernel interceptor plus once in EF (4 full `DetectChanges` with
+  all three). It now scans twice: 20,000 tracked, 1 modified went from 17.0 ms / 40 MB to 9.7 ms / 21 MB (3.97 ms /
+  9.5 MB without interceptors).
+- `DistributedCachingService` ignored the caller's `JsonSerializerOptions` for indentation and escaping, and copied
+  every value once more. A 1.6 MB value: 7.9 ms / 5.8 MB → 2.7 ms / 1.6 MB.
+- The outbox serializer went through a string and a cloned `JsonDocument` per event, and resolved the type by name on
+  every read. Serialize 552 ns → 208 ns, deserialize 1.6 µs → 0.4 µs. The stored format is unchanged and existing rows
+  read.
+- Duplicate skipping (`SkipDuplicateEvents`) is atomic: a copy of an event already being handled on the instance is
+  skipped, and the handled ID is claimed in one step (`TryClaimForAsync`). Before, two copies arriving together could
+  both be handled. A message that leaves handling by an exception (a shutdown) releases its claim, so its redelivery is
+  handled instead of being skipped and lost.
+- A given-up outbox message with a `DedupKey` no longer blocks later events with the same key.
+- Scatter-gather: counting a batch's replies took every lock of its dictionary per reply (1,000 replies: 7.2 ms →
+  0.17 ms). A gathered batch also kept every reply in a channel nobody read, and a streamed batch could complete before
+  its last arrival was written.
+- **The message bus compresses at the fastest level.** Large bodies are gzipped at `CompressionLevel.Fastest` and
+  unzipped into a buffer sized from the gzip trailer, by the bus's own pipeline steps instead of Rebus's
+  `EnableCompression`. The wire format is unchanged (header `rbs2-content-encoding: gzip`, same threshold rule), so a
+  service on Rebus's compression and one on this bus read each other's messages. A 755 KB message: zip 7.2 → 1.8 ms;
+  unzip 2.7 MB → 0.74 MB allocated; the compressed body is larger (189 → 313 KB for that message). Every bus now reads
+  a gzipped message whatever its own `CompressMessagesAbove`, and a handler no longer sees `rbs2-content-encoding` in
+  the headers of a message that came compressed.
+- `RetryOnFailure` with the `ON CONFLICT DO NOTHING` outbox insert threw "does not support user-initiated
+  transactions" on `CompleteAsync`.
+- Outbox lanes waited a full poll interval after a slot freed up before starting the next message.
+- **`AddMigrationsOnStartup`: instances starting together on a database that doesn't exist yet all start.** EF Core
+  creates the database and the history table before it takes its migration lock, and Npgsql 10 ignores only the
+  unique violation on `pg_database`, so one instance could fail the start with `42P04: database "…" already exists`
+  (measured: 20 of 4,240 instances with 8 starting at once; after the fix 0 of 4,800). A migration that fails because
+  something already exists (`SQLSTATE` 42P04, 42P06, 42P07, 42710 or 23505) is logged at Warning and tried again, up to
+  5 tries, 0.2 to 1.6 s apart on the `TimeProvider`; any other failure, or the fifth, still fails the start.
+- **An exception thrown by a request sent through the mediator is logged at `Error` once**, not a second time by
+  `AddResultProblemDetails()`'s exception handler: both follow Results' `LoggedExceptions`. Whoever logs first marks
+  `Exception.Data["Resrcify.SharedKernel.Logged"]`; the handler then logs a `Debug` line without the stack and answers
+  the same 500.
+
+### Removed
+
+- `Resrcify.SharedKernel.Messaging` (replaced by `Resrcify.SharedKernel.Mediator`).
+- `NewtonsoftJsonOutboxSerializer` and the Newtonsoft.Json dependency.
+- The Results `Create` extensions (use `Map`).
+- `MigrationsExtensions.ApplyMigrations<T>()` (use `AddMigrationsOnStartup<T>(configuration)`).

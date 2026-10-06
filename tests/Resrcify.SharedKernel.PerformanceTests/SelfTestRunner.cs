@@ -2,7 +2,8 @@ using System;
 using Resrcify.SharedKernel.PerformanceTests.Abstractions;
 using Resrcify.SharedKernel.PerformanceTests.Caching;
 using Resrcify.SharedKernel.PerformanceTests.DomainDrivenDesign;
-using Resrcify.SharedKernel.PerformanceTests.Messaging;
+using Resrcify.SharedKernel.PerformanceTests.Mediator;
+using Resrcify.SharedKernel.PerformanceTests.MessageBus;
 using Resrcify.SharedKernel.PerformanceTests.Repository;
 using Resrcify.SharedKernel.PerformanceTests.Results;
 using Resrcify.SharedKernel.PerformanceTests.UnitOfWork;
@@ -22,23 +23,24 @@ internal static class SelfTestRunner
         UnitOfWorkBenchmarks.SelfTest();
         OutboxSerializerBenchmarks.SelfTest();
         WebBenchmarks.SelfTest();
+        MessageCompressionBenchmarks.SelfTest();
 
         using var messagingBenchmarks = new MediatorComparisonBenchmarks();
         messagingBenchmarks.GlobalSetup().GetAwaiter().GetResult();
         _ = messagingBenchmarks.Custom_Send_Typed_Task().GetAwaiter().GetResult();
         _ = messagingBenchmarks.MediatR_Send_Typed().GetAwaiter().GetResult();
 
-        using var matrixBenchmarks = new MessagingPipelineMatrixBenchmarks
+        using var matrixBenchmarks = new MediatorPipelineMatrixBenchmarks
         {
             BehaviorCount = 1,
-            PublishStrategy = Resrcify.SharedKernel.Messaging.Publishing.NotificationPublishStrategy.Sequential
+            PublishStrategy = Resrcify.SharedKernel.Mediator.Publishing.NotificationPublishStrategy.Sequential
         };
 
         matrixBenchmarks.GlobalSetup().GetAwaiter().GetResult();
         _ = matrixBenchmarks.Custom_Send_Typed_Matrix().GetAwaiter().GetResult();
         matrixBenchmarks.Custom_Publish_Matrix().GetAwaiter().GetResult();
 
-        using var processorBenchmarks = new MessagingProcessorMatrixBenchmarks
+        using var processorBenchmarks = new MediatorProcessorMatrixBenchmarks
         {
             PreProcessorCount = 1,
             PostProcessorCount = 1
@@ -47,7 +49,7 @@ internal static class SelfTestRunner
         processorBenchmarks.GlobalSetup().GetAwaiter().GetResult();
         _ = processorBenchmarks.Custom_Send_With_PrePost_Matrix().GetAwaiter().GetResult();
 
-        using var streamBenchmarks = new MessagingStreamBenchmarks
+        using var streamBenchmarks = new MediatorStreamBenchmarks
         {
             BehaviorCount = 1,
             ItemCount = 16
@@ -56,10 +58,10 @@ internal static class SelfTestRunner
         streamBenchmarks.GlobalSetup().GetAwaiter().GetResult();
         _ = streamBenchmarks.Custom_CreateStream_ConsumeAll().GetAwaiter().GetResult();
 
-        using var polymorphicBenchmarks = new MessagingPolymorphicBenchmarks
+        using var polymorphicBenchmarks = new MediatorPolymorphicBenchmarks
         {
             RequestTypeCount = 10,
-            Distribution = MessagingPolymorphicBenchmarks.WorkloadDistribution.Uniform
+            Distribution = MediatorPolymorphicBenchmarks.WorkloadDistribution.Uniform
         };
 
         polymorphicBenchmarks.GlobalSetup().GetAwaiter().GetResult();

@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Resrcify.SharedKernel.Abstractions.Messaging;
+using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.Web.Extensions;
 using Resrcify.SharedKernel.Web.Primitives;

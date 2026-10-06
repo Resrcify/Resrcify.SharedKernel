@@ -1,8 +1,9 @@
 using System.Threading;
 using System.Threading.Tasks;
-using Resrcify.SharedKernel.Abstractions.Messaging;
+using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.WebApiExample.Application.Abstractions.Repositories;
+using Resrcify.SharedKernel.WebApiExample.Domain.Errors;
 using Resrcify.SharedKernel.WebApiExample.Domain.Features.Companies.ValueObjects;
 using System.Linq;
 
@@ -17,7 +18,8 @@ internal sealed class GetAllCompaniesQueryHandler(
         CancellationToken cancellationToken)
         => await CompanyId
             .Create(request.CompanyId)
-            .Bind(companyId => _companyRepository.GetCompanyAggregateByIdAsync(companyId, cancellationToken))
+            .Bind(companyId => _companyRepository.GetCompanyAggregateByIdAsync(companyId, cancellationToken)
+                .ToResultAsync(DomainErrors.Company.NotFound(companyId.Value)))
             .Map(company => new GetCompanyByIdQueryResponse(
                 company!.Id.Value,
                 company.Name.Value,

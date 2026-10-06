@@ -3,14 +3,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using Microsoft.Extensions.DependencyInjection;
-using Resrcify.SharedKernel.Abstractions.Messaging;
-using Resrcify.SharedKernel.Messaging.Extensions;
-using Resrcify.SharedKernel.Messaging.Publishing;
+using Resrcify.SharedKernel.Abstractions.Mediator;
+using Resrcify.SharedKernel.Mediator.Extensions;
+using Resrcify.SharedKernel.Mediator.Publishing;
 
-namespace Resrcify.SharedKernel.PerformanceTests.Messaging;
+namespace Resrcify.SharedKernel.PerformanceTests.Mediator;
 
 [MemoryDiagnoser]
-public class MessagingPipelineMatrixBenchmarks : IDisposable
+public class MediatorPipelineMatrixBenchmarks : IDisposable
 {
     [Params(0, 1, 3)]
     public int BehaviorCount { get; set; }
@@ -70,7 +70,7 @@ public class MessagingPipelineMatrixBenchmarks : IDisposable
         services.AddMediator(configure =>
         {
             configure
-                .RegisterServicesFromAssemblies(typeof(MessagingPipelineMatrixBenchmarks).Assembly)
+                .RegisterServicesFromAssemblies(typeof(MediatorPipelineMatrixBenchmarks).Assembly)
                 .UseNotificationPublishStrategy(PublishStrategy);
 
             if (BehaviorCount >= 1)

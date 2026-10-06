@@ -24,7 +24,7 @@ public class WebBenchmarks
     public Task<IResult> Match_Result()
     {
         _ = _state;
-        return Resrcify.SharedKernel.Web.Extensions.ResultExtensions.Match(
+        return Resrcify.SharedKernel.Web.Extensions.HttpResultExtensions.Match(
             Task.FromResult(FailureResult),
             onSuccess: () => Microsoft.AspNetCore.Http.Results.Ok(),
             onFailure: result => result.ToProblemDetails());

@@ -4,5 +4,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <!-- Built and tested with SharedKernel's solution (so a breaking change shows), never packed. -->
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
   </Project>

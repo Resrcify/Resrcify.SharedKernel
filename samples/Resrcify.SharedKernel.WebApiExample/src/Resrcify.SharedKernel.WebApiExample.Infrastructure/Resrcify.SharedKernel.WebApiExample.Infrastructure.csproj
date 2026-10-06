@@ -6,6 +6,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Resrcify.SharedKernel.WebApiExample.Persistence\Resrcify.SharedKernel.WebApiExample.Persistence.csproj" />
     <ProjectReference Include="..\Resrcify.SharedKernel.WebApiExample.Application\Resrcify.SharedKernel.WebApiExample.Application.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.Caching\Resrcify.SharedKernel.Caching.csproj" />
   </ItemGroup>
 
   <ItemGroup>

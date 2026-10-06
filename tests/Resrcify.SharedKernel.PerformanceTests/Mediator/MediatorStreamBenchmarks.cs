@@ -4,13 +4,13 @@ using System.Threading;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using Microsoft.Extensions.DependencyInjection;
-using Resrcify.SharedKernel.Abstractions.Messaging;
-using Resrcify.SharedKernel.Messaging.Extensions;
+using Resrcify.SharedKernel.Abstractions.Mediator;
+using Resrcify.SharedKernel.Mediator.Extensions;
 
-namespace Resrcify.SharedKernel.PerformanceTests.Messaging;
+namespace Resrcify.SharedKernel.PerformanceTests.Mediator;
 
 [MemoryDiagnoser]
-public class MessagingStreamBenchmarks : IDisposable
+public class MediatorStreamBenchmarks : IDisposable
 {
     [Params(0, 1, 3)]
     public int BehaviorCount { get; set; }

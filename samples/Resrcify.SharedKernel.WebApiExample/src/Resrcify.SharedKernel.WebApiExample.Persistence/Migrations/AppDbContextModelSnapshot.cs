@@ -17,7 +17,7 @@ namespace Resrcify.SharedKernel.WebApiExample.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.10")
+                .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -32,6 +32,9 @@ namespace Resrcify.SharedKernel.WebApiExample.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("DedupKey")
+                        .HasColumnType("text");
+
                     b.Property<string>("Error")
                         .HasColumnType("text");
 
@@ -40,6 +43,9 @@ namespace Resrcify.SharedKernel.WebApiExample.Persistence.Migrations
 
                     b.Property<DateTime?>("ProcessedOnUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -61,7 +67,7 @@ namespace Resrcify.SharedKernel.WebApiExample.Persistence.Migrations
                     b.Property<DateTime>("CreatedOnUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime>("DeletedOnUtc")
+                    b.Property<DateTime?>("DeletedOnUtc")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsDeleted")

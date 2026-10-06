@@ -55,9 +55,12 @@ public class AbstractionsBenchmarks : IDisposable
         public Task CompleteAsync(CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
+        public Task<Result> TryCompleteAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(Result.Success());
+
         public Task BeginTransactionAsync(
             IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
-            TimeSpan? commandLifetime = null,
+            TimeSpan? commandTimeout = null,
             CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 

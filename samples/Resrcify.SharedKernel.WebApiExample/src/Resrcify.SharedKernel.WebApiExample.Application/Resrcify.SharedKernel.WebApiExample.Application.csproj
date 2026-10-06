@@ -5,7 +5,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Resrcify.SharedKernel.WebApiExample.Domain\Resrcify.SharedKernel.WebApiExample.Domain.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.Messaging\Resrcify.SharedKernel.Messaging.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.Mediator\Resrcify.SharedKernel.Mediator.csproj" />
     <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.Repository\Resrcify.SharedKernel.Repository.csproj" />
     <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.UnitOfWork\Resrcify.SharedKernel.UnitOfWork.csproj" />
   </ItemGroup>
@@ -14,7 +14,6 @@
     <PackageReference Include="FluentValidation" Version="12.1.1" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
     <PackageReference Include="System.Linq.Async" Version="7.0.1" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
   </ItemGroup>
 </Project>

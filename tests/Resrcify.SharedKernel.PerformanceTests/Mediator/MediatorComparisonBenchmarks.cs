@@ -6,10 +6,10 @@ using BenchmarkDotNet.Attributes;
 using MediatR;
 using MediatR.Pipeline;
 using Microsoft.Extensions.DependencyInjection;
-using Resrcify.SharedKernel.Messaging.Extensions;
-using CustomAbstractions = Resrcify.SharedKernel.Abstractions.Messaging;
+using Resrcify.SharedKernel.Mediator.Extensions;
+using CustomAbstractions = Resrcify.SharedKernel.Abstractions.Mediator;
 
-namespace Resrcify.SharedKernel.PerformanceTests.Messaging;
+namespace Resrcify.SharedKernel.PerformanceTests.Mediator;
 
 [MemoryDiagnoser]
 [RankColumn]

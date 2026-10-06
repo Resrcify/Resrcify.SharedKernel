@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using Microsoft.Extensions.Caching.Distributed;
+using Resrcify.SharedKernel.Abstractions.Caching;
 using Resrcify.SharedKernel.Caching.Primitives;
 
 namespace Resrcify.SharedKernel.PerformanceTests.Caching;
@@ -12,7 +13,7 @@ namespace Resrcify.SharedKernel.PerformanceTests.Caching;
 [MemoryDiagnoser]
 public class CachingBenchmarks
 {
-    private DistributedCachingService _cachingService = default!;
+    private ICachingService _cachingService = default!;
     private static readonly TestPayload Payload = new(42, "bench");
     private static readonly string[] BulkKeys = ["payload", "payload", "payload"];
 
@@ -22,7 +23,7 @@ public class CachingBenchmarks
         var distributedCache = new InMemoryDistributedCache();
         _cachingService = new DistributedCachingService(distributedCache);
 
-        await _cachingService.SetAsync(
+        await _cachingService.SetSlidingAsync(
             "payload",
             Payload,
             slidingExpiration: TimeSpan.FromMinutes(5),
@@ -31,7 +32,7 @@ public class CachingBenchmarks
 
     [Benchmark(Baseline = true)]
     public Task SetAsync()
-        => _cachingService.SetAsync(
+        => _cachingService.SetSlidingAsync(
             "payload",
             Payload,
             slidingExpiration: TimeSpan.FromMinutes(5),

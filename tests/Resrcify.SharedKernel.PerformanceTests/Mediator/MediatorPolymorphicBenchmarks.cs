@@ -4,14 +4,14 @@ using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
-using Resrcify.SharedKernel.Messaging.Extensions;
-using CustomAbstractions = Resrcify.SharedKernel.Abstractions.Messaging;
+using Resrcify.SharedKernel.Mediator.Extensions;
+using CustomAbstractions = Resrcify.SharedKernel.Abstractions.Mediator;
 
-namespace Resrcify.SharedKernel.PerformanceTests.Messaging;
+namespace Resrcify.SharedKernel.PerformanceTests.Mediator;
 
 [MemoryDiagnoser]
 [RankColumn]
-public class MessagingPolymorphicBenchmarks : IDisposable
+public class MediatorPolymorphicBenchmarks : IDisposable
 {
     public enum WorkloadDistribution
     {
