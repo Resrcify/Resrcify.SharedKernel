@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <PackageId>Resrcify.SharedKernel.Mediator</PackageId>
+    <Title>Resrcify.SharedKernel.Mediator</Title>
+    <Description>In-process mediator: request/notification/stream dispatching with pipeline behaviors.</Description>
+    <Summary>In-process mediator: request/notification/stream dispatching with pipeline behaviors.</Summary>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Logging">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.Mediator.UnitTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Resrcify.SharedKernel.Abstractions\Resrcify.SharedKernel.Abstractions.csproj" />
+    <ProjectReference Include="..\Resrcify.SharedKernel.Results\Resrcify.SharedKernel.Results.csproj" />
+  </ItemGroup>
+</Project>
