@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using Resrcify.SharedKernel.Results.Serialization;
 
 namespace Resrcify.SharedKernel.Results.Primitives;
 
+[JsonConverter(typeof(ResultJsonConverterFactory))]
 public class Result
 {
     private static readonly Error[] EmptyErrors = [];
@@ -29,20 +31,34 @@ public class Result
             : [error];
     }
 
-    [JsonConstructor]
     protected internal Result(
         bool isSuccess,
-        Error[] errors)
+        IReadOnlyList<Error> errors)
     {
+        // Copied: a result can't change after it is made, whatever the caller does with its list.
+        Error[] copy = errors is null || errors.Count == 0
+            ? EmptyErrors
+            : [.. errors];
+
+        if (isSuccess && copy.Length != 0)
+            throw new ArgumentException("A successful result has no errors.", nameof(errors));
+
+        if (!isSuccess && copy.Length == 0)
+            throw new ArgumentException("A failed result needs at least one error.", nameof(errors));
+
+        if (!isSuccess && Array.IndexOf(copy, Error.None) >= 0)
+            throw new ArgumentException("A failed result's errors can't include Error.None.", nameof(errors));
+
         IsSuccess = isSuccess;
-        Errors = errors ?? EmptyErrors;
+        Errors = copy;
     }
 
     public bool IsSuccess { get; }
 
     public bool IsFailure => !IsSuccess;
 
-    public Error[] Errors { get; }
+    /// <summary>Why the result failed: at least one error on a failure, none on a success.</summary>
+    public IReadOnlyList<Error> Errors { get; }
 
     public static Result Success() => SuccessResult;
 
@@ -60,7 +76,7 @@ public class Result
             error);
 
     public static Result Failure(
-        Error[] errors)
+        IReadOnlyList<Error> errors)
         => new(
             false,
             errors);
@@ -73,7 +89,7 @@ public class Result
             error);
 
     public static Result<TValue> Failure<TValue>(
-        Error[] errors)
+        IReadOnlyList<Error> errors)
         => new(
             default,
             false,

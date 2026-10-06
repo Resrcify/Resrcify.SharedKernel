@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Resrcify.SharedKernel.Results.Primitives;
@@ -156,6 +157,15 @@ public static class ResultExtensions
                 ? Result.Success(await asyncMappingFunc(result.Value))
                 : Result.Failure<TOut>(result.Errors);
 
+    /// <summary>Maps a success like <c>Map</c>; a failure becomes <paramref name="failureError"/> instead of its own errors.</summary>
+    public static Result<TOut> Map<TIn, TOut>(
+        this Result<TIn> result,
+        Func<TIn, TOut> mappingFunc,
+        Error failureError)
+        => result.IsSuccess
+            ? Result.Success(mappingFunc(result.Value))
+            : Result.Failure<TOut>(failureError);
+
     public static Result Bind<TIn>(
         this Result<TIn> result,
         Func<TIn, Result> func)
@@ -286,6 +296,20 @@ public static class ResultExtensions
         return result;
     }
 
+    // Runs a step that can fail: its failure becomes the result's (as the Task form of Tap does).
+    public static Result<TIn> Tap<TIn>(
+        this Result<TIn> result,
+        Func<TIn, Result> func)
+    {
+        if (result.IsFailure)
+            return result;
+
+        var value = func(result.Value);
+        return value.IsSuccess
+            ? result
+            : Result.Failure<TIn>(value.Errors);
+    }
+
     public static async Task<Result<TIn>> Tap<TIn>(
         this Result<TIn> result,
         Func<Task> asyncFunc)
@@ -398,65 +422,17 @@ public static class ResultExtensions
             : Result.Failure<TIn>(value.Errors);
     }
 
-    public static async Task<Result<TOut>> Create<TIn, TOut>(
-        this Task<Result<TIn>> resultTask,
-        Func<TIn, TOut> func)
-    {
-        var result = await resultTask;
-        if (result.IsFailure)
-            return Result.Failure<TOut>(result.Errors);
-
-        var value = func(result.Value);
-        return Result.Success(value);
-    }
-
-    public static Task<Result<TOut>> Create<TIn, TOut>(
-       this Task<Result<TIn>> resultTask,
-       Func<TIn, Task<TOut>> asyncFunc)
-    {
-        if (TaskUtils.TryGetResult(resultTask, out var completedResult))
-        {
-            if (completedResult.IsFailure)
-                return Task.FromResult(Result.Failure<TOut>(completedResult.Errors));
-
-            var createTask = asyncFunc(completedResult.Value);
-            if (TaskUtils.TryGetResult(createTask, out var createdValue))
-                return Task.FromResult(Result.Success(createdValue));
-
-            return CreateFromPendingTask(createTask);
-        }
-
-        return CreateAwaited(resultTask, asyncFunc);
-
-        static async Task<Result<TOut>> CreateFromPendingTask(Task<TOut> createTask)
-            => Result.Success(await createTask);
-
-        static async Task<Result<TOut>> CreateAwaited(
-            Task<Result<TIn>> resultTask,
-            Func<TIn, Task<TOut>> asyncFunc)
-        {
-            var result = await resultTask;
-            if (result.IsFailure)
-                return Result.Failure<TOut>(result.Errors);
-
-            var value = await asyncFunc(result.Value);
-            return Result.Success(value);
-        }
-    }
-    public static async Task<Result<TOut>> Create<TIn, TOut>(
-       this Result<TIn> result,
-       Func<TIn, Task<TOut>> asyncFunc)
-    {
-        if (result.IsFailure)
-            return Result.Failure<TOut>(result.Errors);
-
-        var value = await asyncFunc(result.Value);
-        return Result.Success(value);
-    }
+    // A cancellation isn't a failure of func: it is rethrown, so the caller stops as it asked to.
     public static Result<TOut> TryCatch<TIn, TOut>(
         this Result<TIn> result,
         Func<TIn, TOut> func,
         Error error)
+        => result.TryCatch(func, _ => error);
+
+    public static Result<TOut> TryCatch<TIn, TOut>(
+        this Result<TIn> result,
+        Func<TIn, TOut> func,
+        Func<Exception, Error> onException)
     {
         try
         {
@@ -464,15 +440,22 @@ public static class ResultExtensions
                 ? Result.Success(func(result.Value))
                 : Result.Failure<TOut>(result.Errors);
         }
-        catch
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            return Result.Failure<TOut>(error);
+            return Result.Failure<TOut>(onException(exception));
         }
     }
-    public static async Task<Result<TOut>> TryCatch<TIn, TOut>(
+
+    public static Task<Result<TOut>> TryCatch<TIn, TOut>(
         this Task<Result<TIn>> resultTask,
         Func<TIn, TOut> func,
         Error error)
+        => resultTask.TryCatch(func, _ => error);
+
+    public static async Task<Result<TOut>> TryCatch<TIn, TOut>(
+        this Task<Result<TIn>> resultTask,
+        Func<TIn, TOut> func,
+        Func<Exception, Error> onException)
     {
         try
         {
@@ -481,22 +464,22 @@ public static class ResultExtensions
                 ? Result.Success(func(result.Value))
                 : Result.Failure<TOut>(result.Errors);
         }
-        catch
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            return Result.Failure<TOut>(error);
+            return Result.Failure<TOut>(onException(exception));
         }
     }
     public static TOut Match<TIn, TOut>(
         this Result<TIn> result,
         Func<TIn, TOut> onSuccess,
-        Func<Error[], TOut> onFailure)
+        Func<IReadOnlyList<Error>, TOut> onFailure)
         => result.IsSuccess
             ? onSuccess(result.Value)
             : onFailure(result.Errors);
     public static async Task<TOut> Match<TIn, TOut>(
         this Task<Result<TIn>> resultTask,
         Func<TIn, TOut> onSuccess,
-        Func<Error[], TOut> onFailure)
+        Func<IReadOnlyList<Error>, TOut> onFailure)
     {
         if (TaskUtils.TryGetResult(resultTask, out var completedResult))
         {
@@ -513,7 +496,7 @@ public static class ResultExtensions
     public static async Task<TOut> Match<TIn, TOut>(
         this Result<TIn> result,
         Func<TIn, Task<TOut>> onSuccess,
-        Func<Error[], Task<TOut>> onFailure)
+        Func<IReadOnlyList<Error>, Task<TOut>> onFailure)
     {
         return result.IsSuccess
             ? await onSuccess(result.Value)
@@ -522,7 +505,7 @@ public static class ResultExtensions
     public static Task<TOut> Match<TIn, TOut>(
         this Task<Result<TIn>> resultTask,
         Func<TIn, Task<TOut>> onSuccess,
-        Func<Error[], Task<TOut>> onFailure)
+        Func<IReadOnlyList<Error>, Task<TOut>> onFailure)
     {
         if (TaskUtils.TryGetResult(resultTask, out var completedResult))
         {
@@ -541,7 +524,7 @@ public static class ResultExtensions
         static async Task<TOut> MatchAwaited(
             Task<Result<TIn>> resultTask,
             Func<TIn, Task<TOut>> onSuccess,
-            Func<Error[], Task<TOut>> onFailure)
+            Func<IReadOnlyList<Error>, Task<TOut>> onFailure)
         {
             var result = await resultTask;
             return result.IsSuccess
@@ -552,14 +535,14 @@ public static class ResultExtensions
     public static async Task<TOut> Match<TIn, TOut>(
         this Result<TIn> result,
         Func<TIn, Task<TOut>> onSuccess,
-        Func<Error[], TOut> onFailure)
+        Func<IReadOnlyList<Error>, TOut> onFailure)
         => result.IsSuccess
             ? await onSuccess(result.Value)
             : onFailure(result.Errors);
     public static async Task<TOut> Match<TIn, TOut>(
         this Task<Result<TIn>> resultTask,
         Func<TIn, Task<TOut>> onSuccess,
-        Func<Error[], TOut> onFailure)
+        Func<IReadOnlyList<Error>, TOut> onFailure)
     {
         var result = await resultTask;
         return result.IsSuccess
@@ -569,31 +552,70 @@ public static class ResultExtensions
     public static async Task<TOut> Match<TIn, TOut>(
         this Result<TIn> result,
         Func<TIn, TOut> onSuccess,
-        Func<Error[], Task<TOut>> onFailure)
+        Func<IReadOnlyList<Error>, Task<TOut>> onFailure)
         => result.IsSuccess
             ? onSuccess(result.Value)
             : await onFailure(result.Errors);
     public static async Task<TOut> Match<TIn, TOut>(
         this Task<Result<TIn>> resultTask,
         Func<TIn, TOut> onSuccess,
-        Func<Error[], Task<TOut>> onFailure)
+        Func<IReadOnlyList<Error>, Task<TOut>> onFailure)
     {
         var result = await resultTask;
         return result.IsSuccess
             ? onSuccess(result.Value)
             : await onFailure(result.Errors);
     }
-    public static Result<TOut> Match<TIn, TOut>(
-        this Result<TIn> result,
-        Func<TIn, TOut> func,
-        Error? error = null)
-    {
-        if (result.IsFailure)
-            return error is not null
-                ? Result.Failure<TOut>(error)
-                : Result.Failure<TOut>(result.Errors);
 
-        var value = func(result.Value);
-        return Result.Success(value);
+    /// <summary>
+    /// <paramref name="value"/> as a success, or <paramref name="errorIfNull"/> when it is <see langword="null"/>: how a
+    /// handler turns a repository fetch into its own <c>NotFound</c> error.
+    /// </summary>
+    /// <example><c>var shard = (await shards.GetByIdAsync(id, ct)).ToResult(DomainErrors.Shard.NotFound(id));</c></example>
+    public static Result<T> ToResult<T>(
+        this T? value,
+        Error errorIfNull)
+        where T : class
+        => value is null
+            ? Result.Failure<T>(errorIfNull)
+            : Result.Success(value);
+
+    /// <summary>
+    /// <paramref name="value"/> as a success, or the error <paramref name="errorIfNull"/> makes when it is
+    /// <see langword="null"/>. The error is only made when it is needed, so a formatted message costs nothing when the
+    /// value is there.
+    /// </summary>
+    /// <example><c>var shard = found.ToResult(() =&gt; DomainErrors.Shard.NotFound(id));</c></example>
+    public static Result<T> ToResult<T>(
+        this T? value,
+        Func<Error> errorIfNull)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(errorIfNull);
+        return value is null
+            ? Result.Failure<T>(errorIfNull())
+            : Result.Success(value);
+    }
+
+    /// <inheritdoc cref="ToResult{T}(T, Error)"/>
+    /// <example><c>var shard = await shards.GetByIdAsync(id, ct).ToResultAsync(DomainErrors.Shard.NotFound(id));</c></example>
+    public static async Task<Result<T>> ToResultAsync<T>(
+        this Task<T?> valueTask,
+        Error errorIfNull)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(valueTask);
+        return (await valueTask).ToResult(errorIfNull);
+    }
+
+    /// <inheritdoc cref="ToResult{T}(T, Func{Error})"/>
+    /// <example><c>var shard = await shards.GetByIdAsync(id, ct).ToResultAsync(() =&gt; DomainErrors.Shard.NotFound(id));</c></example>
+    public static async Task<Result<T>> ToResultAsync<T>(
+        this Task<T?> valueTask,
+        Func<Error> errorIfNull)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(valueTask);
+        return (await valueTask).ToResult(errorIfNull);
     }
 }

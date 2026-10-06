@@ -4,7 +4,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
 using NetArchTest.Rules;
-using Resrcify.SharedKernel.Abstractions.Messaging;
+using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.ArchitectureTesting.Extensions;
 using Resrcify.SharedKernel.ArchitectureTesting.Helpers;
 using Resrcify.SharedKernel.Results.Primitives;
@@ -45,7 +45,7 @@ namespace Resrcify.SharedKernel.ArchitectureTesting.Tests;
     Justification = "xUnit discovers tests on public abstract bases via inheritance.")]
 public abstract class ConventionalApplicationTests : BaseArchitectureTest
 {
-    private const string Layer = "Application";
+    private const string Layer = Layers.Application;
 
     // ─────────────────────────── Commands ───────────────────────────
 

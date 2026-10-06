@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -162,36 +163,6 @@ public class ResultExtensionsTests
     }
 
     [Fact]
-    public async Task Create_WithSuccess_ShouldReturnMappedResult()
-    {
-        // Arrange
-        var resultTask = Task.FromResult(Result.Success(42));
-        static string func(int i) => (i * 2).ToString(CultureInfo.InvariantCulture);
-
-        // Act
-        var createdResult = await resultTask.Create(func);
-
-        // Assert
-        createdResult.IsSuccess.ShouldBeTrue();
-        createdResult.Value.ShouldBe("84");
-    }
-
-    [Fact]
-    public async Task Create_WithFailure_ShouldReturnOriginalFailureResult()
-    {
-        // Arrange
-        var resultTask = Task.FromResult(Result.Failure<int>(Error.NullValue));
-        static string func(int i) => (i * 2).ToString(CultureInfo.InvariantCulture);
-
-        // Act
-        var createdResult = await resultTask.Create(func);
-
-        // Assert
-        createdResult.IsSuccess.ShouldBeFalse();
-        createdResult.Errors.ShouldContain(Error.NullValue);
-    }
-
-    [Fact]
     public void TryCatch_WithSuccessAndNonThrowingFunc_ShouldReturnMappedResult()
     {
         // Arrange
@@ -332,7 +303,7 @@ public class ResultExtensionsTests
         // Arrange
         var result = Result.Success(42);
         static string onSuccess(int x) => $"Success: {x}";
-        static string onFailure(Error[] errors) => "Failure";
+        static string onFailure(IReadOnlyList<Error> errors) => "Failure";
 
         // Act
         var matchResult = result.Match(onSuccess, onFailure);
@@ -347,7 +318,7 @@ public class ResultExtensionsTests
         // Arrange
         var result = Result.Failure<int>(Error.NullValue);
         static string onSuccess(int x) => $"Success: {x}";
-        static string onFailure(Error[] errors) => $"Failure: {errors[0].Code}";
+        static string onFailure(IReadOnlyList<Error> errors) => $"Failure: {errors[0].Code}";
 
         // Act
         var matchResult = result.Match(onSuccess, onFailure);
@@ -362,7 +333,7 @@ public class ResultExtensionsTests
         // Arrange
         var resultTask = Task.FromResult(Result.Success(42));
         static string onSuccess(int x) => $"Success: {x}";
-        static string onFailure(Error[] errors) => "Failure";
+        static string onFailure(IReadOnlyList<Error> errors) => "Failure";
 
         // Act
         var matchResult = await resultTask.Match(onSuccess, onFailure);
@@ -377,7 +348,7 @@ public class ResultExtensionsTests
         // Arrange
         var resultTask = Task.FromResult(Result.Failure<int>(Error.NullValue));
         static string onSuccess(int x) => $"Success: {x}";
-        static string onFailure(Error[] errors) => $"Failure: {errors[0].Code}";
+        static string onFailure(IReadOnlyList<Error> errors) => $"Failure: {errors[0].Code}";
 
         // Act
         var matchResult = await resultTask.Match(onSuccess, onFailure);
@@ -386,4 +357,194 @@ public class ResultExtensionsTests
         matchResult.ShouldBe($"Failure: {Error.NullValue.Code}");
     }
 
+    [Fact]
+    public void Tap_WithResultFunc_ShouldReturnTheOriginalResult_WhenTheStepSucceeds()
+    {
+        // Arrange
+        var result = Result.Success(42);
+        var seen = 0;
+
+        // Act
+        var tapped = result.Tap(value =>
+        {
+            seen = value;
+            return Result.Success();
+        });
+
+        // Assert
+        tapped.ShouldBeSameAs(result);
+        seen.ShouldBe(42);
+    }
+
+    [Fact]
+    public void Tap_WithResultFunc_ShouldReturnTheStepsErrors_WhenTheStepFails()
+    {
+        // Arrange
+        var result = Result.Success(42);
+
+        // Act
+        var tapped = result.Tap(_ => Result.Failure(Error.NullValue));
+
+        // Assert
+        tapped.IsFailure.ShouldBeTrue();
+        tapped.Errors.ShouldBe([Error.NullValue]);
+    }
+
+    [Fact]
+    public void Tap_WithResultFunc_ShouldNotRunTheStep_WhenTheResultIsAFailure()
+    {
+        // Arrange
+        var result = Result.Failure<int>(Error.EmptyInput);
+        var ran = false;
+
+        // Act
+        var tapped = result.Tap(_ =>
+        {
+            ran = true;
+            return Result.Success();
+        });
+
+        // Assert
+        ran.ShouldBeFalse();
+        tapped.Errors.ShouldBe([Error.EmptyInput]);
+    }
+
+    [Fact]
+    public void TryCatch_ShouldRethrow_WhenTheFuncIsCancelled()
+    {
+        // Arrange
+        var result = Result.Success(42);
+        static string func(int i) => throw new OperationCanceledException();
+
+        // Act & Assert
+        Should.Throw<OperationCanceledException>(() => result.TryCatch(func, Error.NullValue));
+    }
+
+    [Fact]
+    public async Task TryCatchAsync_ShouldRethrow_WhenTheResultTaskIsCancelled()
+    {
+        // Arrange
+        var resultTask = Task.FromCanceled<Result<int>>(new System.Threading.CancellationToken(canceled: true));
+
+        // Act & Assert
+        await Should.ThrowAsync<TaskCanceledException>(() => resultTask.TryCatch(i => i.ToString(CultureInfo.InvariantCulture), Error.NullValue));
+    }
+
+    [Fact]
+    public void TryCatch_ShouldMapTheException_WhenGivenAnExceptionMapper()
+    {
+        // Arrange
+        var result = Result.Success(42);
+        static string func(int i) => throw new FormatException("bad format");
+
+        // Act
+        var tryCatchResult = result.TryCatch(func, exception => Error.Validation("Parse", exception.Message));
+
+        // Assert
+        tryCatchResult.Errors.ShouldHaveSingleItem().ShouldBe(Error.Validation("Parse", "bad format"));
+    }
+
+    [Fact]
+    public async Task TryCatchAsync_ShouldMapTheException_WhenGivenAnExceptionMapper()
+    {
+        // Arrange
+        var resultTask = Task.FromResult(Result.Success(42));
+        static string func(int i) => throw new FormatException("bad format");
+
+        // Act
+        var tryCatchResult = await resultTask.TryCatch(func, exception => Error.Validation("Parse", exception.Message));
+
+        // Assert
+        tryCatchResult.Errors.ShouldHaveSingleItem().ShouldBe(Error.Validation("Parse", "bad format"));
+    }
+
+    [Fact]
+    public void ToResult_ShouldBeASuccess_WhenThereIsAValue()
+    {
+        var value = new Box("found");
+
+        var result = value.ToResult(Error.NotFound("Box.NotFound", "No box."));
+
+        result.Value.ShouldBeSameAs(value);
+    }
+
+    [Fact]
+    public void ToResult_ShouldBeTheGivenError_WhenTheValueIsNull()
+    {
+        Box? value = null;
+        var notFound = Error.NotFound("Box.NotFound", "No box.");
+
+        var result = value.ToResult(notFound);
+
+        result.Errors.ShouldBe([notFound]);
+    }
+
+    [Fact]
+    public async Task ToResultAsync_ShouldBeTheGivenError_WhenTheFetchFindsNothing()
+    {
+        var notFound = Error.NotFound("Box.NotFound", "No box.");
+
+        var result = await Task.FromResult<Box?>(null).ToResultAsync(notFound);
+
+        result.Errors.ShouldBe([notFound]);
+    }
+
+    [Fact]
+    public async Task ToResultAsync_ShouldBeASuccess_WhenTheFetchFindsAValue()
+    {
+        var value = new Box("found");
+
+        var result = await Task.FromResult<Box?>(value).ToResultAsync(Error.NullValue);
+
+        result.Value.ShouldBeSameAs(value);
+    }
+
+    [Fact]
+    public void ToResult_ShouldNotMakeTheError_WhenThereIsAValue()
+    {
+        var made = 0;
+
+        var result = new Box("found").ToResult(() =>
+        {
+            made++;
+            return Error.NotFound("Box.NotFound", "No box.");
+        });
+
+        result.IsSuccess.ShouldBeTrue();
+        made.ShouldBe(0);
+    }
+
+    [Fact]
+    public void ToResult_ShouldMakeTheError_WhenTheValueIsNull()
+    {
+        Box? value = null;
+
+        var result = value.ToResult(() => Error.NotFound("Box.NotFound", "No box."));
+
+        result.Errors.ShouldHaveSingleItem().Code.ShouldBe("Box.NotFound");
+    }
+
+    [Fact]
+    public async Task ToResultAsync_ShouldMakeTheError_OnlyWhenTheFetchFindsNothing()
+    {
+        var made = 0;
+        Error NotFound()
+        {
+            made++;
+            return Error.NotFound("Box.NotFound", "No box.");
+        }
+
+        var found = await Task.FromResult<Box?>(new Box("found")).ToResultAsync(NotFound);
+        var missing = await Task.FromResult<Box?>(null).ToResultAsync(NotFound);
+
+        found.IsSuccess.ShouldBeTrue();
+        missing.Errors.ShouldHaveSingleItem().Code.ShouldBe("Box.NotFound");
+        made.ShouldBe(1);
+    }
+
+    [SuppressMessage(
+        "Performance",
+        "CA1515:Consider making public types internal",
+        Justification = "Used by public test methods.")]
+    public sealed record Box(string Name);
 }

@@ -10,9 +10,18 @@ public interface IUnitOfWork : IDisposable
 {
     Task CompleteAsync(
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <see cref="CompleteAsync"/>, with the failures a caller can answer returned instead of thrown: a concurrency
+    /// conflict and a unique-constraint violation are a <c>Conflict</c>; a serialization failure or a deadlock (outside a
+    /// transaction, where nothing else retries it) is a transient <c>Failure</c>. Anything else still throws.
+    /// </summary>
+    Task<Result> TryCompleteAsync(
+        CancellationToken cancellationToken = default);
+
     Task BeginTransactionAsync(
         IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
-        TimeSpan? commandLifetime = null,
+        TimeSpan? commandTimeout = null,
         CancellationToken cancellationToken = default);
     Task CommitTransactionAsync(
         CancellationToken cancellationToken = default);

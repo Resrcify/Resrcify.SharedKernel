@@ -1,10 +1,14 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using Resrcify.SharedKernel.Abstractions.Caching;
 using Resrcify.SharedKernel.Caching.Primitives;
@@ -63,7 +67,7 @@ public class DistributedCachingServiceTests
             });
 
         // Act
-        await _cachingService.SetAsync(
+        await ((ICachingService)_cachingService).SetSlidingAsync(
             key,
             obj,
             slidingExpiration: expiration);
@@ -120,7 +124,7 @@ public class DistributedCachingServiceTests
     }
 
     [Fact]
-    public async Task SetAsync_WithSlidingExpirationOverload_ShouldSetSlidingExpiration()
+    public async Task SetSlidingAsync_ShouldSetOnlyASlidingExpiration()
     {
         var key = "sliding-key";
         var obj = new Adress("Test", 123);
@@ -130,7 +134,7 @@ public class DistributedCachingServiceTests
         _mockCache.WhenForAnyArgs(x => x.SetAsync(key, null!, null!, default))
             .Do(info => capturedOptions = info.Arg<DistributedCacheEntryOptions>());
 
-        await ((ICachingService)_cachingService).SetAsync(key, obj, slidingExpiration);
+        await ((ICachingService)_cachingService).SetSlidingAsync(key, obj, slidingExpiration);
 
         capturedOptions.ShouldNotBeNull();
         capturedOptions.SlidingExpiration.ShouldBe(slidingExpiration);
@@ -225,4 +229,133 @@ public class DistributedCachingServiceTests
             .Received(300)
             .GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task SetForAsync_ShouldPassTheDurationToTheCache_WhenGivenADuration()
+    {
+        // The cache measures it on its own clock (Redis' or the memory cache's), so no clock is read here.
+        var obj = new Adress("Test", 123);
+        DistributedCacheEntryOptions? capturedOptions = null;
+        _mockCache.WhenForAnyArgs(x => x.SetAsync("for-key", null!, null!, default))
+            .Do(info => capturedOptions = info.Arg<DistributedCacheEntryOptions>());
+
+        await ((ICachingService)_cachingService).SetForAsync("for-key", obj, TimeSpan.FromMinutes(5));
+
+        capturedOptions.ShouldNotBeNull();
+        capturedOptions.AbsoluteExpirationRelativeToNow.ShouldBe(TimeSpan.FromMinutes(5));
+        capturedOptions.AbsoluteExpiration.ShouldBeNull();
+        capturedOptions.SlidingExpiration.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task SetForAsync_ShouldThrow_WhenTheDurationIsNotPositive()
+        => await Should.ThrowAsync<ArgumentOutOfRangeException>(
+            () => ((ICachingService)_cachingService).SetForAsync("for-key", new Adress("Test", 123), TimeSpan.Zero));
+
+    [Fact]
+    public async Task SetAsync_ShouldThrowAndCacheNothing_WhenGivenNoExpiration()
+    {
+        await Should.ThrowAsync<ArgumentException>(() => _cachingService.SetAsync(
+            "kept-key",
+            new Adress("Test", 123),
+            absoluteExpiration: null,
+            absoluteExpirationRelativeToNow: null,
+            slidingExpiration: null,
+            serializerOptions: null,
+            cancellationToken: CancellationToken.None));
+
+        await _mockCache.DidNotReceiveWithAnyArgs().SetAsync(default!, default!, default!, default);
+    }
+
+    [Fact]
+    public async Task SetForAsync_ShouldThrow_WhenTheLifetimeRunsPastTheLastDate()
+        => await Should.ThrowAsync<ArgumentOutOfRangeException>(
+            () => ((ICachingService)_cachingService).SetForAsync("for-key", new Adress("Test", 123), TimeSpan.MaxValue));
+
+    [Fact]
+    public async Task SetForAsync_ShouldSerializeWithTheCallersOptions_WhenGivenOptions()
+    {
+        // Arrange: indentation and escaping are the writer's, so a writer made without the options would drop them.
+        var options = new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        };
+        var obj = new Adress("<Main & Co>", 123);
+        byte[]? capturedBytes = null;
+        _mockCache.WhenForAnyArgs(x => x.SetAsync("options-key", null!, null!, default))
+            .Do(info => capturedBytes = info.Arg<byte[]>());
+
+        // Act
+        await ((ICachingService)_cachingService).SetForAsync("options-key", obj, TimeSpan.FromMinutes(5), options);
+
+        // Assert
+        capturedBytes.ShouldBe(JsonSerializer.SerializeToUtf8Bytes(obj, options));
+        var json = Encoding.UTF8.GetString(capturedBytes!);
+        json.ShouldContain(Environment.NewLine);
+        json.ShouldContain("<Main & Co>");
+    }
+
+    [Fact]
+    public async Task TryClaimForAsync_ShouldClaimOnlyOnce_WhenManyClaimTheSameKeyAtOnce()
+    {
+        // Arrange
+        var cachingService = new DistributedCachingService(
+            new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())));
+        using var start = new ManualResetEventSlim();
+
+        // Act
+        var claims = Enumerable.Range(0, 64)
+            .Select(_ => Task.Run(async () =>
+            {
+                start.Wait();
+                return await cachingService.TryClaimForAsync("claim-key", TimeSpan.FromMinutes(5));
+            }))
+            .ToList();
+        start.Set();
+        var claimed = await Task.WhenAll(claims);
+
+        // Assert
+        claimed.Count(won => won).ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task TryClaimForAsync_ShouldClaimAgain_WhenTheClaimWasRemoved()
+    {
+        // Arrange
+        var cachingService = new DistributedCachingService(
+            new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())));
+        (await cachingService.TryClaimForAsync("claim-key", TimeSpan.FromMinutes(5))).ShouldBeTrue();
+        (await cachingService.TryClaimForAsync("claim-key", TimeSpan.FromMinutes(5))).ShouldBeFalse();
+
+        // Act
+        await cachingService.RemoveAsync("claim-key");
+
+        // Assert
+        (await cachingService.TryClaimForAsync("claim-key", TimeSpan.FromMinutes(5))).ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task TryClaimForAsync_ShouldExpireTheClaimAfterTheLifetime_WhenItClaims()
+    {
+        // Arrange
+        DistributedCacheEntryOptions? capturedOptions = null;
+        _mockCache.GetAsync("claim-key", Arg.Any<CancellationToken>()).Returns((byte[]?)null);
+        _mockCache.WhenForAnyArgs(x => x.SetAsync("claim-key", null!, null!, default))
+            .Do(info => capturedOptions = info.Arg<DistributedCacheEntryOptions>());
+
+        // Act
+        var claimed = await _cachingService.TryClaimForAsync("claim-key", TimeSpan.FromMinutes(5));
+
+        // Assert
+        claimed.ShouldBeTrue();
+        capturedOptions.ShouldNotBeNull();
+        capturedOptions.AbsoluteExpirationRelativeToNow.ShouldBe(TimeSpan.FromMinutes(5));
+        capturedOptions.SlidingExpiration.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task TryClaimForAsync_ShouldThrow_WhenTheLifetimeIsNotPositive()
+        => await Should.ThrowAsync<ArgumentOutOfRangeException>(
+            () => _cachingService.TryClaimForAsync("claim-key", TimeSpan.Zero));
 }

@@ -31,20 +31,14 @@ public class ResultTTests
     }
 
     [Fact]
-    public void ConstructorT_WithSuccessAndMultipleErrors_ShouldCreateSuccessResultWithMultipleErrors()
+    public void ConstructorT_WithSuccessAndMultipleErrors_ShouldThrowException()
     {
         // Arrange
         int value = 42;
-        Error[] errors = [Error.None, Error.NullValue];
+        Error[] errors = [Error.EmptyInput, Error.NullValue];
 
-        // Act
-        var result = new TestResult<int>(value, true, errors);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        result.IsFailure.ShouldBeFalse();
-        result.Errors.ShouldBeEquivalentTo(errors);
-        result.Value.ShouldBe(value);
+        // Act & Assert
+        Should.Throw<ArgumentException>(() => new TestResult<int>(value, true, errors));
     }
 
     [Fact]
@@ -67,7 +61,7 @@ public class ResultTTests
     public void ConstructorT_WithFailureAndMultipleErrors_ShouldCreateFailureResultWithMultipleErrors()
     {
         // Arrange
-        Error[] errors = [Error.None, Error.NullValue];
+        Error[] errors = [Error.EmptyInput, Error.NullValue];
 
         // Act
         var result = new TestResult<int>(default, false, errors);

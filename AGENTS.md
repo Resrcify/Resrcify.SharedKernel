@@ -9,11 +9,15 @@ domain-driven design primitives, result handling, messaging behaviors, repositor
 
 - `src/Resrcify.SharedKernel.DomainDrivenDesign` for domain-driven design abstractions and primitives.
 - `src/Resrcify.SharedKernel.Results` for result types, errors, and helper extensions.
-- `src/Resrcify.SharedKernel.Messaging` for mediator behaviors and messaging abstractions.
+- `src/Resrcify.SharedKernel.Mediator` for the in-process mediator: dispatch, pipeline behaviors, notification publishing.
+- `src/Resrcify.SharedKernel.MessageBus` for the message bus (Rebus on RabbitMQ, or in memory): scatter-gather through the outbox, rate-limited request queues (with a mediator-forwarding default responder), publish/subscribe integration events (duplicate skipping, partitions, clash detection), health check, metrics, message contracts. It depends only on `Abstractions` (it reaches the outbox through `IOutboxLaneEvent` / `IOutboxMessageContext`), never on `UnitOfWork`.
+- `src/Resrcify.SharedKernel.ArchitectureTesting` for the conventional NetArchTest rules services inherit, including which layer may use which SharedKernel package (`ConventionalLayerDependencyTests.SharedKernelPackageRestrictions`).
 - `src/Resrcify.SharedKernel.Repository` for repository abstractions and query helpers.
 - `src/Resrcify.SharedKernel.Caching` for cache abstractions and cache helpers.
-- `src/Resrcify.SharedKernel.UnitOfWork` for unit-of-work, background job, and outbox helpers.
-- `src/Resrcify.SharedKernel.Web` for web extensions and request/response helpers.
+- `src/Resrcify.SharedKernel.UnitOfWork` for unit-of-work, background job, and outbox helpers (outbox lanes, the hourly cleanup of processed messages after 7 days, stable IDs for retried messages, draining and waking the outbox, `TryCompleteAsync`, migrations on start-up, the Quartz helpers: interval and command jobs, job heartbeats and the liveness check).
+- `src/Resrcify.SharedKernel.UnitOfWork.Postgres` for the PostgreSQL side: `AddPostgresDbContext` (the `Database` section, interceptors from the container, outbox, retries), `PostgresDesignTimeFactory`, the `xmin` row version and the outbox wake-up (`NOTIFY`/`LISTEN`). Npgsql-specific code belongs here, not in `UnitOfWork`.
+- `src/Resrcify.SharedKernel.Web` for web extensions and request/response helpers: problem details (also for unhandled exceptions), reading responses back as results, the health endpoints, the `ErrorType`-keyed HTTP resilience preset and the shared JWT bearer setup.
+- `src/Resrcify.SharedKernel.Observability` for the one-call telemetry wiring (`AddServiceTelemetry`: OpenTelemetry, Prometheus, OTLP, Serilog). It subscribes to the other packages' sources and meters by name (`Resrcify.SharedKernel.*`), never by reference: name a new `ActivitySource`/`Meter` under that prefix.
 - `samples/Resrcify.SharedKernel.WebApiExample` for example host wiring and usage.
 
 ## Runtime rules
@@ -33,9 +37,11 @@ domain-driven design primitives, result handling, messaging behaviors, repositor
 - Keep public APIs consistent with the existing shared-kernel naming and module boundaries.
 - Place interfaces by reach: an interface used only within one project goes in that project's own `Abstractions/` folder (namespace `Resrcify.SharedKernel.<Module>.Abstractions`); an interface shared across projects goes in the `Resrcify.SharedKernel.Abstractions` project, in the sub-folder matching its concern.
 - Keep namespace declarations aligned to folder structure from `src/` and `tests/` roots.
-- Ensure the namespace root reflects the owning module path (for example, `Abstractions/Messaging` maps to `Resrcify.SharedKernel.Abstractions.Messaging`).
+- Ensure the namespace root reflects the owning module path (for example, `Abstractions/Mediator` maps to `Resrcify.SharedKernel.Abstractions.Mediator`).
 - When moving files between folders, update namespace declarations and related `using` directives in the same change.
 - Preserve existing project style and avoid unrelated refactors while applying namespace corrections.
+- Read the clock through `TimeProvider` (from DI, or an optional constructor parameter defaulting to `TimeProvider.System`), never `DateTime.UtcNow` / `DateTimeOffset.UtcNow`, and wait with its overloads (`Task.Delay(delay, timeProvider, ct)`, `new PeriodicTimer(interval, timeProvider)`), so services can test time with `FakeTimeProvider`.
+- Record every change a consumer can notice in `CHANGELOG.md`, under the unreleased version: a breaking one under "Breaking changes" with what the consumer must do, the rest under Added / Fixed / Removed.
 
 ## Naming and solution conventions
 
@@ -55,7 +61,7 @@ Trace the suspect path by hand. Most bugs in well-typed C# are visible if read c
 
 ### 2. Unit test — `*.UnitTests` projects
 
-Write a focused test that exercises the actual call shape — for dispatch / overload-resolution issues this means passing the argument typed exactly like the production call site (often a base interface like `IDomainEvent`, not a concrete type). No DB, no MQ, no docker. See `tests/Resrcify.SharedKernel.Messaging.UnitTests/Runtime/MediatorRuntimeTests.cs#Publish_DispatchesByRuntimeType_WhenCallerHoldsBaseInterfaceVariable` for a template.
+Write a focused test that exercises the actual call shape — for dispatch / overload-resolution issues this means passing the argument typed exactly like the production call site (often a base interface like `IDomainEvent`, not a concrete type). No DB, no MQ, no docker. See `tests/Resrcify.SharedKernel.Mediator.UnitTests/Runtime/MediatorRuntimeTests.cs#Publish_DispatchesByRuntimeType_WhenCallerHoldsBaseInterfaceVariable` for a template.
 
 ```sh
 dotnet test Resrcify.SharedKernel.slnx --no-build
@@ -70,6 +76,8 @@ dotnet test tests/Resrcify.SharedKernel.UnitOfWork.IntegrationTests
 ```
 
 Requires Docker on the runner. CI (`build-and-test.yml`) has it on `ubuntu-latest`.
+
+The fixtures default to the images production runs (`postgres:18`, `rabbitmq:4.1-management`); don't pin an older one with `WithImage`. To run a suite against another version without editing code, set `RESRCIFY_TEST_POSTGRES_IMAGE` / `RESRCIFY_TEST_RABBITMQ_IMAGE` — they win over a fixture's own `WithImage`.
 
 ### 4. Architecture test — `Resrcify.SharedKernel.ArchitectureTesting`
 

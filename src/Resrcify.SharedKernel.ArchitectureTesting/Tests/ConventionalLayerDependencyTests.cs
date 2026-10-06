@@ -49,17 +49,17 @@ public abstract class ConventionalLayerDependencyTests : BaseArchitectureTest
     private static readonly IReadOnlyDictionary<string, int> DefaultLayerTiers
         = new Dictionary<string, int>(StringComparer.Ordinal)
         {
-            ["Domain"] = 0,
-            ["Application"] = 1,
+            [Layers.Domain] = 0,
+            [Layers.Application] = 1,
             // Persistence sits between Application and the outer adapters:
             // it implements Application's repository abstractions, and outer
             // adapters (notably Infrastructure for outbox / job wiring) may
             // legitimately depend on it. Putting Persistence at tier 2 makes
             // Infra/Presentation peers above it.
-            ["Persistence"] = 2,
-            ["Infrastructure"] = 3,
-            ["Presentation"] = 3,
-            ["Web"] = 4,
+            [Layers.Persistence] = 2,
+            [Layers.Infrastructure] = 3,
+            [Layers.Presentation] = 3,
+            [Layers.Web] = 4,
         };
 
     // Host should never reach into Domain directly; talk to Application instead.
@@ -68,8 +68,8 @@ public abstract class ConventionalLayerDependencyTests : BaseArchitectureTest
     // Presentation outranks Persistence; the extras restore strict separation.
     private static readonly (string Source, string Target)[] DefaultExtraForbidden =
     [
-        ("Web", "Domain"),
-        ("Presentation", "Persistence"),
+        (Layers.Web, Layers.Domain),
+        (Layers.Presentation, Layers.Persistence),
     ];
 
     [SkippableFact]
@@ -99,6 +99,68 @@ public abstract class ConventionalLayerDependencyTests : BaseArchitectureTest
             {
                 foreach (var typeName in failing)
                     failures.Add($"{source} → {target}: {typeName}");
+            }
+        }
+
+        failures.ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// Each SharedKernel package → the layers that must not use it. An implementation package belongs to the outer
+    /// layer that wires it; inner layers reach it through <c>Resrcify.SharedKernel.Abstractions</c>. Contracts,
+    /// <c>Results</c> and <c>DomainDrivenDesign</c> are allowed everywhere. Override to loosen or tighten a package.
+    /// </summary>
+    protected virtual IReadOnlyDictionary<SharedKernelPackage, string[]> SharedKernelPackageRestrictions
+        => DefaultSharedKernelPackageRestrictions;
+
+    private static readonly string[] AllLayers =
+        [Layers.Domain, Layers.Application, Layers.Persistence, Layers.Infrastructure, Layers.Presentation, Layers.Web];
+
+    private static readonly IReadOnlyDictionary<SharedKernelPackage, string[]> DefaultSharedKernelPackageRestrictions
+        = new Dictionary<SharedKernelPackage, string[]>
+        {
+            // The mediator is registered by Application; everything else sends through ISender/IPublisher.
+            [SharedKernelPackage.Mediator] = [Layers.Domain, Layers.Persistence, Layers.Presentation],
+            // The bus is wired by Infrastructure; handlers use IEventBus, IScatterGatherHandler, ….
+            [SharedKernelPackage.MessageBus] = [Layers.Domain, Layers.Application, Layers.Persistence, Layers.Presentation],
+            // The outbox and its interceptors belong where the DbContext and its jobs are.
+            [SharedKernelPackage.UnitOfWork] = [Layers.Domain, Layers.Application, Layers.Presentation],
+            // The PostgreSQL DbContext setup and its design-time factory: Persistence (and Infrastructure's wiring).
+            [SharedKernelPackage.UnitOfWorkPostgres] = [Layers.Domain, Layers.Application, Layers.Presentation, Layers.Web],
+            // Repository base classes are EF Core: Persistence only.
+            [SharedKernelPackage.Repository] = [Layers.Domain, Layers.Application, Layers.Infrastructure, Layers.Presentation, Layers.Web],
+            // Cache implementations; Application uses ICachingService.
+            [SharedKernelPackage.Caching] = [Layers.Domain, Layers.Application, Layers.Persistence, Layers.Presentation],
+            // ASP.NET Core helpers: the HTTP-facing layers (and Infrastructure's auth wiring).
+            [SharedKernelPackage.Web] = [Layers.Domain, Layers.Application, Layers.Persistence],
+            // Telemetry is wired by Infrastructure (AddServiceTelemetry) and the host (MapServiceMetrics).
+            [SharedKernelPackage.Observability] = [Layers.Domain, Layers.Application, Layers.Persistence, Layers.Presentation],
+            // Test helpers never ship in a layer.
+            [SharedKernelPackage.ArchitectureTesting] = AllLayers,
+            [SharedKernelPackage.IntegrationTesting] = AllLayers,
+        };
+
+    [SkippableFact]
+    public virtual void Layers_ShouldNotDependOnSharedKernelPackagesOutsideTheirLayers()
+    {
+        var failures = new List<string>();
+
+        foreach (var (package, layers) in SharedKernelPackageRestrictions)
+        {
+            foreach (var layer in layers)
+            {
+                var assembly = GetLayerAssembly(layer);
+                if (assembly is null)
+                    continue;
+
+                var result = Types
+                    .InAssembly(assembly)
+                    .Should()
+                    .NotHaveDependencyOn(package.Namespace())
+                    .GetResult();
+
+                if (!result.IsSuccessful && result.FailingTypeNames is { } failing)
+                    failures.AddRange(failing.Select(typeName => $"{layer} → {package}: {typeName}"));
             }
         }
 

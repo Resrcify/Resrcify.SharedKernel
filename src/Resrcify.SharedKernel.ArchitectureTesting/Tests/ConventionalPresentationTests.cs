@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using NetArchTest.Rules;
-using Resrcify.SharedKernel.Abstractions.Web;
 using Resrcify.SharedKernel.ArchitectureTesting.Extensions;
 using Resrcify.SharedKernel.ArchitectureTesting.Helpers;
 using Shouldly;
@@ -14,11 +13,12 @@ namespace Resrcify.SharedKernel.ArchitectureTesting.Tests;
 /// <summary>
 /// Conventions for the Presentation layer (minimal-API endpoints + optional
 /// legacy controllers):
-/// - Types ending with "Endpoint" implement <see cref="IEndpoint"/>, are
+/// - Types ending with "Endpoint" implement <c>Resrcify.SharedKernel.Web.Abstractions.IEndpoint</c> (matched by full
+///   type name, like <c>ApiController</c> below), are
 ///   sealed, expose exactly one method named <c>MapEndpoint</c>, and depend
-///   on <see cref="Resrcify.SharedKernel.Abstractions.Messaging"/>.
+///   on <see cref="Resrcify.SharedKernel.Abstractions.Mediator"/>.
 /// - Types ending with "Controller" depend on
-///   <see cref="Resrcify.SharedKernel.Abstractions.Messaging"/> and inherit
+///   <see cref="Resrcify.SharedKernel.Abstractions.Mediator"/> and inherit
 ///   from <c>Resrcify.SharedKernel.Web.Primitives.ApiController</c> (matched
 ///   by full type name to avoid pulling <c>SharedKernel.Web</c> into this
 ///   package's transitive closure).
@@ -32,8 +32,10 @@ namespace Resrcify.SharedKernel.ArchitectureTesting.Tests;
     Justification = "xUnit discovers tests on public abstract bases via inheritance.")]
 public abstract class ConventionalPresentationTests : BaseArchitectureTest
 {
-    private const string Layer = "Presentation";
-    private const string MessagingNamespace = "Resrcify.SharedKernel.Abstractions.Messaging";
+    private const string Layer = Layers.Presentation;
+    private const string EndpointInterfaceFullName = "Resrcify.SharedKernel.Web.Abstractions.IEndpoint";
+    private const string MapEndpointMethodName = "MapEndpoint";
+    private const string MediatorNamespace = "Resrcify.SharedKernel.Abstractions.Mediator";
 
     [SkippableFact]
     public virtual void Endpoints_Should_ImplementIEndpoint()
@@ -46,9 +48,10 @@ public abstract class ConventionalPresentationTests : BaseArchitectureTest
             .HaveNameEndingWith("Endpoint", StringComparison.Ordinal)
             .And()
             .AreNotAbstract()
-            .Should()
-            .ImplementInterface(typeof(IEndpoint))
-            .Evaluate();
+            .GetTypes()
+            .Where(endpoint => !endpoint.GetInterfaces().Any(contract =>
+                string.Equals(contract.FullName, EndpointInterfaceFullName, StringComparison.Ordinal)))
+            .ShouldBeEmpty();
     }
 
     [SkippableFact]
@@ -68,7 +71,7 @@ public abstract class ConventionalPresentationTests : BaseArchitectureTest
     }
 
     [SkippableFact]
-    public virtual void Endpoints_Should_DependOnMessaging()
+    public virtual void Endpoints_Should_DependOnMediator()
     {
         SkipIfNoAssembly(Layer);
 
@@ -77,7 +80,7 @@ public abstract class ConventionalPresentationTests : BaseArchitectureTest
             .That()
             .HaveNameEndingWith("Endpoint", StringComparison.Ordinal)
             .Should()
-            .HaveDependencyOn(MessagingNamespace)
+            .HaveDependencyOn(MediatorNamespace)
             .Evaluate();
     }
 
@@ -99,14 +102,14 @@ public abstract class ConventionalPresentationTests : BaseArchitectureTest
         {
             var mapMethods = endpoint
                 .GetMethods()
-                .Where(m => m.Name == nameof(IEndpoint.MapEndpoint))
+                .Where(m => m.Name == MapEndpointMethodName)
                 .ToList();
             Assert.Single(mapMethods);
         }
     }
 
     [SkippableFact]
-    public virtual void Controllers_Should_DependOnMessaging()
+    public virtual void Controllers_Should_DependOnMediator()
     {
         SkipIfNoAssembly(Layer);
 
@@ -115,7 +118,7 @@ public abstract class ConventionalPresentationTests : BaseArchitectureTest
             .That()
             .HaveNameEndingWith("Controller", StringComparison.Ordinal)
             .Should()
-            .HaveDependencyOn(MessagingNamespace)
+            .HaveDependencyOn(MediatorNamespace)
             .Evaluate();
     }
 

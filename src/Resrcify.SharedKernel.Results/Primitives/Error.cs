@@ -102,7 +102,8 @@ public class Error
     public string Message { get; init; }
     public ErrorType Type { get; init; }
 
-    public static implicit operator string(
+    // Explicit: an error passed where a string is expected (a code, a message) shouldn't compile silently.
+    public static explicit operator string(
         Error error)
         => error.Code;
     public static implicit operator Result(

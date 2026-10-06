@@ -1,4 +1,5 @@
 using System;
+using Resrcify.SharedKernel.Abstractions.Repository;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -434,4 +435,29 @@ public class RepositoryTests
         var foundEntities = dbContext.Persons.Where(p => entities.Select(e => e.Id).Contains(p.Id)).ToList();
         foundEntities.ShouldBeEmpty();
     }
+
+    [Fact]
+    public async Task GetByIdAsync_ShouldReturnTheEntity_WhenCalledThroughIRepository()
+    {
+        // Arrange — a service's repository interface derives from IRepository and gets the fetches from it.
+        var entityId = SocialSecurityNumber.Create(123);
+        var entity = new Person(entityId);
+        using var dbContext = CreateDbContext();
+        dbContext.Add(entity);
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        var (found, missing) = await FetchThroughIRepositoryAsync(new TestRepository(dbContext), entityId);
+
+        // Assert
+        found.ShouldBeSameAs(entity);
+        missing.ShouldBeNull();
+    }
+
+    private static async Task<(Person? Found, Person? Missing)> FetchThroughIRepositoryAsync<TRepository>(
+        TRepository repository,
+        SocialSecurityNumber id)
+        where TRepository : IRepository<Person, SocialSecurityNumber>
+        => (await repository.GetByIdAsync(id),
+            await repository.FirstOrDefaultAsync(person => person.Id == SocialSecurityNumber.Create(999)));
 }

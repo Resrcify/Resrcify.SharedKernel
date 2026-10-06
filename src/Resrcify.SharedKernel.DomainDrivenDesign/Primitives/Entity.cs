@@ -14,15 +14,19 @@ public abstract class Entity<TId>
     }
 
     public static bool operator ==(
-        Entity<TId> first,
-        Entity<TId> second)
-        => first is not null &&
-            second is not null &&
-            first.Equals(second);
+        Entity<TId>? first,
+        Entity<TId>? second)
+    {
+        if (ReferenceEquals(first, second))
+            return true;
+        if (first is null || second is null)
+            return false;
+        return first.Equals(second);
+    }
 
     public static bool operator !=(
-        Entity<TId> first,
-        Entity<TId> second)
+        Entity<TId>? first,
+        Entity<TId>? second)
         => !(first == second);
 
     public override bool Equals(

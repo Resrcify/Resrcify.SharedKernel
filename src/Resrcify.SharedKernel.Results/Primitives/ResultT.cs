@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using Resrcify.SharedKernel.Results.Serialization;
 
 namespace Resrcify.SharedKernel.Results.Primitives;
 
+[JsonConverter(typeof(ResultJsonConverterFactory))]
 public class Result<TValue>
     : Result
 {
@@ -14,11 +17,10 @@ public class Result<TValue>
         : base(isSuccess, error) =>
         Value = value;
 
-    [JsonConstructor]
     protected internal Result(
         TValue? value,
         bool isSuccess,
-        Error[] errors)
+        IReadOnlyList<Error> errors)
         : base(isSuccess, errors) =>
         Value = value;
 

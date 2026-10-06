@@ -9,22 +9,42 @@
     <Project Path="src/Resrcify.SharedKernel.ArchitectureTesting/Resrcify.SharedKernel.ArchitectureTesting.csproj" />
     <Project Path="src/Resrcify.SharedKernel.Caching/Resrcify.SharedKernel.Caching.csproj" />
     <Project Path="src/Resrcify.SharedKernel.DomainDrivenDesign/Resrcify.SharedKernel.DomainDrivenDesign.csproj" />
-    <Project Path="src/Resrcify.SharedKernel.Messaging/Resrcify.SharedKernel.Messaging.csproj" />
+    <Project Path="src/Resrcify.SharedKernel.Mediator/Resrcify.SharedKernel.Mediator.csproj" />
+    <Project Path="src/Resrcify.SharedKernel.MessageBus/Resrcify.SharedKernel.MessageBus.csproj" />
+    <Project Path="src/Resrcify.SharedKernel.Observability/Resrcify.SharedKernel.Observability.csproj" />
     <Project Path="src/Resrcify.SharedKernel.Repository/Resrcify.SharedKernel.Repository.csproj" />
     <Project Path="src/Resrcify.SharedKernel.Results/Resrcify.SharedKernel.Results.csproj" />
     <Project Path="src/Resrcify.SharedKernel.IntegrationTesting/Resrcify.SharedKernel.IntegrationTesting.csproj" />
     <Project Path="src/Resrcify.SharedKernel.UnitOfWork/Resrcify.SharedKernel.UnitOfWork.csproj" />
+    <Project Path="src/Resrcify.SharedKernel.UnitOfWork.Postgres/Resrcify.SharedKernel.UnitOfWork.Postgres.csproj" />
     <Project Path="src/Resrcify.SharedKernel.Web/Resrcify.SharedKernel.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Resrcify.SharedKernel.Caching.UnitTests/Resrcify.SharedKernel.Caching.UnitTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.DomainDrivenDesign.UnitTests/Resrcify.SharedKernel.DomainDrivenDesign.UnitTests.csproj" />
-    <Project Path="tests/Resrcify.SharedKernel.Messaging.UnitTests/Resrcify.SharedKernel.Messaging.UnitTests.csproj" />
+    <Project Path="tests/Resrcify.SharedKernel.IntegrationTesting.IntegrationTests/Resrcify.SharedKernel.IntegrationTesting.IntegrationTests.csproj" />
+    <Project Path="tests/Resrcify.SharedKernel.IntegrationTesting.TestService/Resrcify.SharedKernel.IntegrationTesting.TestService.csproj" />
+    <Project Path="tests/Resrcify.SharedKernel.MessageBus.IntegrationTests/Resrcify.SharedKernel.MessageBus.IntegrationTests.csproj" />
+    <Project Path="tests/Resrcify.SharedKernel.Mediator.UnitTests/Resrcify.SharedKernel.Mediator.UnitTests.csproj" />
+    <Project Path="tests/Resrcify.SharedKernel.MessageBus.UnitTests/Resrcify.SharedKernel.MessageBus.UnitTests.csproj" />
+    <Project Path="tests/Resrcify.SharedKernel.Observability.UnitTests/Resrcify.SharedKernel.Observability.UnitTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.PerformanceTests/Resrcify.SharedKernel.PerformanceTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.Repository.UnitTests/Resrcify.SharedKernel.Repository.UnitTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.Results.UnitTests/Resrcify.SharedKernel.Results.UnitTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.UnitOfWork.IntegrationTests/Resrcify.SharedKernel.UnitOfWork.IntegrationTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.UnitOfWork.UnitTests/Resrcify.SharedKernel.UnitOfWork.UnitTests.csproj" />
+    <Project Path="tests/Resrcify.SharedKernel.UnitOfWork.Postgres.IntegrationTests/Resrcify.SharedKernel.UnitOfWork.Postgres.IntegrationTests.csproj" />
+    <Project Path="tests/Resrcify.SharedKernel.UnitOfWork.Postgres.UnitTests/Resrcify.SharedKernel.UnitOfWork.Postgres.UnitTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.Web.UnitTests/Resrcify.SharedKernel.Web.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/Resrcify.SharedKernel.WebApiExample/src/Resrcify.SharedKernel.WebApiExample.Application/Resrcify.SharedKernel.WebApiExample.Application.csproj" />
+    <Project Path="samples/Resrcify.SharedKernel.WebApiExample/src/Resrcify.SharedKernel.WebApiExample.Domain/Resrcify.SharedKernel.WebApiExample.Domain.csproj" />
+    <Project Path="samples/Resrcify.SharedKernel.WebApiExample/src/Resrcify.SharedKernel.WebApiExample.Infrastructure/Resrcify.SharedKernel.WebApiExample.Infrastructure.csproj" />
+    <Project Path="samples/Resrcify.SharedKernel.WebApiExample/src/Resrcify.SharedKernel.WebApiExample.Persistence/Resrcify.SharedKernel.WebApiExample.Persistence.csproj" />
+    <Project Path="samples/Resrcify.SharedKernel.WebApiExample/src/Resrcify.SharedKernel.WebApiExample.Presentation/Resrcify.SharedKernel.WebApiExample.Presentation.csproj" />
+    <Project Path="samples/Resrcify.SharedKernel.WebApiExample/src/Resrcify.SharedKernel.WebApiExample.Web/Resrcify.SharedKernel.WebApiExample.Web.csproj" />
+    <Project Path="samples/Resrcify.SharedKernel.WebApiExample/tests/Resrcify.SharedKernel.WebApiExample.ArchitectureTests/Resrcify.SharedKernel.WebApiExample.ArchitectureTests.csproj" />
+    <Project Path="samples/Resrcify.SharedKernel.WebApiExample/tests/Resrcify.SharedKernel.WebApiExample.Domain.UnitTests/Resrcify.SharedKernel.WebApiExample.Domain.UnitTests.csproj" />
   </Folder>
 </Solution>

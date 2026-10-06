@@ -64,14 +64,17 @@ services.AddScoped<ICompanyRepository, CompanyRepository>();
 
 ### Repository contract
 
+`IRepository<TEntity, TId>` has what every repository needs: `GetByIdAsync` and `FirstOrDefaultAsync` (returning
+the aggregate, or `null`), `GetAllAsync`, `FindAsync`, `ExistsAsync`, `AddAsync`, `Remove`. A per-aggregate
+interface derives from it and adds only the queries its handlers need:
+
 ```csharp
 using Resrcify.SharedKernel.Abstractions.Repository;
-using Resrcify.SharedKernel.Results.Primitives;
 
 public interface ICompanyRepository
     : IRepository<Company, CompanyId>
 {
-    Task<Result<Company>> GetCompanyAggregateByIdAsync(
+    Task<Company?> GetCompanyWithContactsAsync(
         CompanyId companyId,
         CancellationToken cancellationToken = default);
 }
@@ -84,21 +87,31 @@ internal sealed class CompanyRepository(
     AppDbContext context)
     : Repository<AppDbContext, Company, CompanyId>(context), ICompanyRepository
 {
-    public async Task<Result<Company>> GetCompanyAggregateByIdAsync(
+    public Task<Company?> GetCompanyWithContactsAsync(
         CompanyId companyId,
         CancellationToken cancellationToken = default)
-    {
-        var company = await Context.Companies
+        => Context.Companies
             .Include(x => x.Contacts)
             .FirstOrDefaultAsync(x => x.Id == companyId, cancellationToken);
-
-        return Result.Create(company)
-            .Match(
-                onSuccess: value => value,
-                onFailure: DomainErrors.Company.NotFound(companyId.Value));
-    }
 }
 ```
+
+### Not found is the handler's decision
+
+A fetch returns `null` when there is nothing; whether that is an error depends on the use case (a 404 for "get",
+the normal path for "create if missing"). The handler turns it into its own error:
+
+```csharp
+var company = await companies
+    .GetCompanyWithContactsAsync(command.CompanyId, cancellationToken)
+    .ToResultAsync(() => DomainErrors.Company.NotFound(command.CompanyId.Value));
+if (company.IsFailure)
+    return company;
+```
+
+`ToResultAsync(error)` takes the error itself; `ToResultAsync(() => error)` makes it only when nothing was found,
+which saves formatting its message on every successful fetch. `ToResult` does the same for a value you already
+have.
 
 ### Specification usage
 

@@ -12,6 +12,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- IServiceCollection (Mediator: IMediatorAssemblyScanListener). Not the ASP.NET Core framework:
+         Domain and Application reference this package. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>
 </Project>

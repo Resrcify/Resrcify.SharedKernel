@@ -20,13 +20,14 @@ It exists to keep dependency direction explicit and prevent circular references 
 ## What you get
 
 - Contracts grouped by module under `src/Resrcify.SharedKernel.Abstractions`:
-    - `Messaging/`
+    - `Mediator/`
+    - `MessageBus/`
     - `UnitOfWork/`
     - `DomainDrivenDesign/`
     - `Repository/`
     - `Caching/`
-    - `Web/`
-- Zero implementation logic, only interfaces/contracts.
+- Zero implementation logic, only interfaces/contracts. (One interface carries a default: `ISingleValueObject`'s
+  static `FromPersisted` is `Create(value).Value` unless the value object implements it.)
 
 ## Prerequisites
 
@@ -56,7 +57,7 @@ dotnet add package Resrcify.SharedKernel.Abstractions
 
 - Keep namespace declarations aligned to folder structure from `src/` and `tests/` roots.
 - Use module-rooted namespaces such as:
-    - `Resrcify.SharedKernel.Abstractions.Messaging`
+    - `Resrcify.SharedKernel.Abstractions.Mediator`
     - `Resrcify.SharedKernel.Abstractions.Repository`
     - `Resrcify.SharedKernel.Abstractions.DomainDrivenDesign`
     - `Resrcify.SharedKernel.Abstractions.UnitOfWork`
@@ -67,7 +68,7 @@ dotnet add package Resrcify.SharedKernel.Abstractions
 Reference this project from modules that should depend only on contracts.
 
 ```csharp
-using Resrcify.SharedKernel.Abstractions.Messaging;
+using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 
 public sealed class ExampleService(

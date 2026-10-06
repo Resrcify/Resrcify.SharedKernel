@@ -16,6 +16,7 @@
     - [Basic result flow](#basic-result-flow)
     - [Combining results](#combining-results)
     - [Functional chaining](#functional-chaining)
+    - [Logging an exception once](#logging-an-exception-once)
   - [Common issues](#common-issues)
   - [Sample project](#sample-project)
 
@@ -25,12 +26,17 @@
     - `Result`
     - `Result<TValue>`
     - `Error`
-    - `ErrorType`
+    - `ErrorType`, with `IsTransient()`: `Failure`, `ExternalFailure`, `Timeout` and `RateLimit` may pass next time;
+      `NotFound`, `Validation`, `Conflict`, `Unauthorized` and `Forbidden` are about the request (another try fails
+      the same way). The message bus
+      retries by it, the mediator's logging picks its level by it.
 - Factory and composition helpers:
     - `Success(...)`, `Failure(...)`, `Create(...)`
     - `Combine(...)`
     - `Map(...)`, `Bind(...)`, `Tap(...)`, `Ensure(...)`, `Match(...)`
 - Sync and async extension methods for fluent pipelines.
+- `Diagnostics/LoggedExceptions`: the convention that logs an exception at `Error` once across the packages that see
+  it.
 
 ## Prerequisites
 
@@ -119,6 +125,27 @@ Result<UserProfileDto> profile = Result.Combine(user, orders)
         Error.Validation("Profile.EmptyOrders", "Orders cannot be empty."))
     .Tap(value => audit.Log("profile-created", value.User.Id));
 ```
+
+### Logging an exception once
+
+An exception on its way out of a request passes several places that log it: the mediator's behaviors, then the Web
+package's exception handler. They follow one convention, so it is logged at `Error`, with its stack, once: the first
+to see it claims it, which marks it in `Exception.Data` under `LoggedExceptions.DataKey`
+(`"Resrcify.SharedKernel.Logged"`, set to `true`); the others find the mark and log a `Debug` line without the stack.
+Code of a service's own that logs and rethrows can join in:
+
+```csharp
+catch (Exception exception)
+{
+    if (LoggedExceptions.Claim(exception))
+        logger.LogError(exception, "Importing {File} failed", file);
+    else
+        logger.LogDebug("Importing {File} failed: {Exception}", file, exception.GetType().Name);
+    throw;
+}
+```
+
+An exception whose `Data` is read-only can't be marked: everyone logs it at `Error`, as before.
 
 ## Common issues
 

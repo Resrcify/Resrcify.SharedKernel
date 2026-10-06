@@ -50,13 +50,13 @@ public sealed class ErrorTests
     }
 
     [Fact]
-    public void ImplicitConversionToString_ShouldReturnErrorCode()
+    public void ExplicitConversionToString_ShouldReturnErrorCode()
     {
         // Arrange
         var error = new Error("Code", "Message", ErrorType.Failure);
 
         // Act
-        string errorCode = error;
+        var errorCode = (string)error;
 
         // Assert
         errorCode

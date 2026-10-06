@@ -1,5 +1,6 @@
 
 
+using System;
 using Xunit;
 using System.Diagnostics.CodeAnalysis;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
@@ -96,6 +97,77 @@ public class EnumerationTests
         public static readonly ExampleEnumeration Example2 = new(2, "Example2");
 
         internal ExampleEnumeration(int value, string name) : base(value, name)
+        {
+        }
+    }
+
+    [Fact]
+    public void FromName_ShouldIgnoreCase_WhenLookingUpAName()
+        => ExampleEnumeration.FromName("EXAMPLE2").ShouldBe(ExampleEnumeration.Example2);
+
+    [Fact]
+    public void Enumerations_ShouldCountAnAliasOnce_WhenTwoFieldsHoldTheSameMember()
+    {
+        WithAlias.Enumerations.Count.ShouldBe(2);
+        WithAlias.FromValue(1).ShouldBeSameAs(WithAlias.Red);
+    }
+
+    [Fact]
+    public void FromValue_ShouldThrow_WhenTwoMembersShareAValue()
+        => Should.Throw<InvalidOperationException>(() => DuplicateValue.FromValue(1))
+            .Message.ShouldContain("more than one member with the value '1'");
+
+    [Fact]
+    public void FromName_ShouldThrow_WhenTwoMembersNamesDifferOnlyInCase()
+        => Should.Throw<InvalidOperationException>(() => DuplicateName.FromName("Active"))
+            .Message.ShouldContain("more than one member with the name");
+
+    [Fact]
+    public void FromName_ShouldWork_WhenAMemberIsInitializedFromAnotherMember()
+    {
+        SelfReferencing.Default.ShouldBe(SelfReferencing.Red);
+        SelfReferencing.Enumerations.Count.ShouldBe(2);
+        SelfReferencing.FromName("Blue").ShouldBe(SelfReferencing.Blue);
+    }
+
+    internal sealed class WithAlias : Enumeration<WithAlias>
+    {
+        public static readonly WithAlias Red = new(1, "Red");
+        public static readonly WithAlias Blue = new(2, "Blue");
+        public static readonly WithAlias Crimson = Red;
+
+        private WithAlias(int value, string name) : base(value, name)
+        {
+        }
+    }
+
+    internal sealed class DuplicateValue : Enumeration<DuplicateValue>
+    {
+        public static readonly DuplicateValue First = new(1, "First");
+        public static readonly DuplicateValue Second = new(1, "Second");
+
+        private DuplicateValue(int value, string name) : base(value, name)
+        {
+        }
+    }
+
+    internal sealed class DuplicateName : Enumeration<DuplicateName>
+    {
+        public static readonly DuplicateName Active = new(1, "Active");
+        public static readonly DuplicateName Shouting = new(2, "ACTIVE");
+
+        private DuplicateName(int value, string name) : base(value, name)
+        {
+        }
+    }
+
+    internal sealed class SelfReferencing : Enumeration<SelfReferencing>
+    {
+        public static readonly SelfReferencing Red = new(1, "Red");
+        public static readonly SelfReferencing Default = FromName("Red")!;
+        public static readonly SelfReferencing Blue = new(2, "Blue");
+
+        private SelfReferencing(int value, string name) : base(value, name)
         {
         }
     }

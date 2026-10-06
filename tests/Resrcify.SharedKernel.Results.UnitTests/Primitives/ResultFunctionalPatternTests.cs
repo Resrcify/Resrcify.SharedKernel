@@ -59,7 +59,7 @@ public sealed class ResultFunctionalPatternTests
 
         result.IsFailure.ShouldBeTrue();
         result.Errors.ShouldContain(error);
-        result.Errors.Length.ShouldBe(1);
+        result.Errors.Count.ShouldBe(1);
         mapCalled.ShouldBeFalse();
         tapCalled.ShouldBeFalse();
         bindCalled.ShouldBeFalse();
@@ -78,7 +78,7 @@ public sealed class ResultFunctionalPatternTests
 
         result.IsFailure.ShouldBeTrue();
         result.Errors.ShouldBeEquivalentTo(new[] { first, second });
-        result.Errors.Length.ShouldBe(2);
+        result.Errors.Count.ShouldBe(2);
     }
 
     [Fact]
@@ -133,27 +133,27 @@ public sealed class ResultFunctionalPatternTests
 
         combined.IsFailure.ShouldBeTrue();
         combined.Errors.ShouldBeEquivalentTo(new[] { first, second });
-        combined.Errors.Length.ShouldBe(2);
+        combined.Errors.Count.ShouldBe(2);
     }
 
     [Fact]
-    public void Match_WithOptionalError_ShouldUseProvidedErrorWhenSourceFails()
+    public void Map_WithFailureError_ShouldUseProvidedErrorWhenSourceFails()
     {
         var source = Result.Failure<int>(Error.NotFound("Result.Source", "Source failed."));
         var mappedError = Error.ExternalFailure("Result.Mapped", "Mapped failure.");
 
-        var mapped = source.Match(value => value * 2, mappedError);
+        var mapped = source.Map(value => value * 2, mappedError);
 
         mapped.IsFailure.ShouldBeTrue();
         mapped.Errors.ShouldBe([mappedError]);
     }
 
     [Fact]
-    public void Match_WithOptionalError_ShouldMapValueWhenSourceSucceeds()
+    public void Map_WithFailureError_ShouldMapValueWhenSourceSucceeds()
     {
         var source = Result.Success(21);
 
-        var mapped = source.Match(value => value * 2, Error.NullValue);
+        var mapped = source.Map(value => value * 2, Error.NullValue);
 
         mapped.IsSuccess.ShouldBeTrue();
         mapped.Value.ShouldBe(42);

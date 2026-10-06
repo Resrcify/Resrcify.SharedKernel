@@ -34,19 +34,14 @@ public sealed class ResultTests
     }
 
     [Fact]
-    public void Constructor_WithSuccessAndMultipleErrors_ShouldCreateSuccessResult()
+    public void Constructor_WithSuccessAndMultipleErrors_ShouldThrowException()
     {
         // Arrange
         bool isSuccess = true;
-        Error[] errors = [Error.None, Error.NullValue];
+        Error[] errors = [Error.EmptyInput, Error.NullValue];
 
-        // Act
-        var result = new TestResult(isSuccess, errors);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        result.IsFailure.ShouldBeFalse();
-        result.Errors.ShouldBeEquivalentTo(errors);
+        // Act & Assert
+        Should.Throw<ArgumentException>(() => new TestResult(isSuccess, errors));
     }
 
     [Fact]
@@ -70,7 +65,7 @@ public sealed class ResultTests
     {
         // Arrange
         bool isSuccess = false;
-        Error[] errors = [Error.None, Error.NullValue];
+        Error[] errors = [Error.EmptyInput, Error.NullValue];
 
         // Act
         var result = new TestResult(isSuccess, errors);
@@ -104,25 +99,25 @@ public sealed class ResultTests
     }
 
     [Fact]
-    public void Constructor_WithSuccessAndNonEmptyErrorsArray_ShouldNotThrowException()
+    public void Constructor_WithSuccessAndNonEmptyErrorsArray_ShouldThrowException()
     {
         // Arrange
         bool isSuccess = true;
         Error[] errors = [Error.NullValue];
 
         // Act & Assert
-        Should.NotThrow(() => new TestResult(isSuccess, errors));
+        Should.Throw<ArgumentException>(() => new TestResult(isSuccess, errors));
     }
 
     [Fact]
-    public void Constructor_WithFailureAndEmptyErrorsArray_ShouldNotThrowException()
+    public void Constructor_WithFailureAndEmptyErrorsArray_ShouldThrowException()
     {
         // Arrange
         bool isSuccess = false;
         Error[] errors = [];
 
         // Act & Assert
-        Should.NotThrow(() => new TestResult(isSuccess, errors));
+        Should.Throw<ArgumentException>(() => new TestResult(isSuccess, errors));
     }
 
     [Fact]
@@ -172,7 +167,7 @@ public sealed class ResultTests
     public void FailureT_WithMultipleErrors_ShouldCreateFailureResultWithMultipleErrors()
     {
         // Arrange
-        Error[] errors = [Error.NullValue, Error.None];
+        Error[] errors = [Error.NullValue, Error.EmptyInput];
 
         // Act
         var result = Result.Failure(errors);
@@ -619,4 +614,31 @@ public sealed class ResultTests
         {
         }
     }
+
+    [Fact]
+    public void Failure_ShouldThrow_WhenGivenNoErrors()
+        => Should.Throw<ArgumentException>(() => Result.Failure(Array.Empty<Error>()));
+
+    [Fact]
+    public void FailureOfT_ShouldThrow_WhenGivenNoErrors()
+        => Should.Throw<ArgumentException>(() => Result.Failure<int>(Array.Empty<Error>()));
+
+    [Fact]
+    public void Failure_ShouldThrow_WhenItsErrorsIncludeErrorNone()
+        => Should.Throw<ArgumentException>(() => Result.Failure([Error.NullValue, Error.None]));
+
+    [Fact]
+    public void Errors_ShouldNotChange_WhenTheCallersArrayChangesAfterwards()
+    {
+        Error[] errors = [Error.NullValue];
+        var result = Result.Failure(errors);
+
+        errors[0] = Error.EmptyInput;
+
+        result.Errors.ShouldBe([Error.NullValue]);
+    }
+
+    [Fact]
+    public void Errors_ShouldBeEmpty_WhenTheResultIsASuccess()
+        => Result.Success().Errors.ShouldBeEmpty();
 }
