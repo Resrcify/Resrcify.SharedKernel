@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
-using Resrcify.SharedKernel.Abstractions.Web;
+using Resrcify.SharedKernel.Web.Abstractions;
 using Resrcify.SharedKernel.Web.Extensions;
 using Xunit;
 

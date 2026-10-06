@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <PackageId>Resrcify.SharedKernel.Observability</PackageId>
+    <Title>Resrcify.SharedKernel.Observability</Title>
+    <Description>One-call service telemetry: OpenTelemetry tracing and metrics (ASP.NET Core, HttpClient, runtime, every SharedKernel source, Quartz), the Prometheus scrape endpoint, OTLP trace export when configured, and Serilog with trace-correlated logs.</Description>
+    <Summary>One-call service telemetry: OpenTelemetry, Prometheus, OTLP and Serilog wired the same way in every service.</Summary>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- Private, like every SharedKernel package's public dependencies: the service references each one itself, so it
+       knows what it ships (see the README's "Packages the service references"). -->
+  <ItemGroup>
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Serilog.Extensions.Hosting">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Serilog.Settings.Configuration">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- Only ever published as a prerelease, which a stable package can't depend on (NU5104): the service references it
+       itself (every service does already). AddServiceTelemetry says so at start-up when it is missing. -->
+  <ItemGroup>
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.Observability.UnitTests" />
+  </ItemGroup>
+</Project>

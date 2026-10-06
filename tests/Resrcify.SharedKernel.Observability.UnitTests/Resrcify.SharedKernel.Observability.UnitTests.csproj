@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.collector">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
+    <!-- What a service references itself (the package's references are private). -->
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="Serilog.Extensions.Hosting" />
+    <PackageReference Include="Serilog.Settings.Configuration" />
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" />
+    <!-- Only for QuartzInstrumentation's names, checked against TelemetrySources. -->
+    <PackageReference Include="Quartz" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Observability\Resrcify.SharedKernel.Observability.csproj" />
+    <!-- The SharedKernel packages whose sources and meters the telemetry must include. -->
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Mediator\Resrcify.SharedKernel.Mediator.csproj" />
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.MessageBus\Resrcify.SharedKernel.MessageBus.csproj" />
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.UnitOfWork\Resrcify.SharedKernel.UnitOfWork.csproj" />
+  </ItemGroup>
+</Project>

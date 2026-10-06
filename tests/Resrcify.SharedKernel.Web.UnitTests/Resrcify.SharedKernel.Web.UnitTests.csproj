@@ -18,9 +18,18 @@
     </PackageReference>
     <PackageReference Include="Shouldly" />
     <PackageReference Include="NSubstitute" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <!-- What a service calling AddResultResilience / AddResrcifyJwtBearer references itself. -->
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <!-- What a service using the mediator's standard behaviors references itself (its validation behavior). -->
+    <PackageReference Include="FluentValidation" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Web\Resrcify.SharedKernel.Web.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Results\Resrcify.SharedKernel.Results.csproj" />
+    <!-- A service using the mediator's behaviors with AddResultProblemDetails: the exception is logged once. -->
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Mediator\Resrcify.SharedKernel.Mediator.csproj" />
   </ItemGroup>
 </Project>

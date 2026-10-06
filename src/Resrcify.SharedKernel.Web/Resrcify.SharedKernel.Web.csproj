@@ -1,19 +1,28 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>net10.0</TargetFrameworks>
     <PackageId>Resrcify.SharedKernel.Web</PackageId>
     <Title>Resrcify.SharedKernel.Web</Title>
-    <Description>Maps errors from the result patterns to a problem details response.</Description>
-    <Summary>Maps errors from the result patterns to a problem details response.</Summary>
+    <Description>ASP.NET Core helpers around the result pattern: problem details for failures and unhandled exceptions, reading responses back as results, health endpoints, an ErrorType-keyed HTTP resilience preset and the shared JWT bearer setup.</Description>
+    <Summary>ASP.NET Core helpers around the result pattern: problem details, health endpoints, HTTP resilience, JWT bearer.</Summary>
   </PropertyGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
+  <!-- Used only by the service that calls AddResultResilience / AddResrcifyJwtBearer, which references the package
+       itself (both appear in those methods' signatures, so a missing reference is a compile error). -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Resrcify.SharedKernel.Abstractions\Resrcify.SharedKernel.Abstractions.csproj" />
     <ProjectReference Include="..\Resrcify.SharedKernel.Results\Resrcify.SharedKernel.Results.csproj" />
-    <ProjectReference Include="..\Resrcify.SharedKernel.Messaging\Resrcify.SharedKernel.Messaging.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Resrcify.SharedKernel.Web.UnitTests" />

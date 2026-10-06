@@ -13,7 +13,8 @@ using Resrcify.SharedKernel.Results.Primitives;
 
 namespace Resrcify.SharedKernel.Web.Extensions;
 
-public static class ResultExtensions
+/// <summary>Turns a <see cref="Result"/> into an HTTP response: problem details for a failure.</summary>
+public static class HttpResultExtensions
 {
     [SuppressMessage(
         "Globalization",
@@ -87,7 +88,7 @@ public static class ResultExtensions
             ErrorType.Forbidden => "Forbidden",
             ErrorType.NotFound => "Not Found",
             ErrorType.Conflict => "Conflict",
-            ErrorType.Timeout => "Request Timeout",
+            ErrorType.Timeout => "Gateway Timeout",
             ErrorType.RateLimit => "Too Many Requests",
             ErrorType.ExternalFailure => "Bad Gateway",
             ErrorType.Failure => "Internal Server Error",
@@ -142,116 +143,5 @@ public static class ResultExtensions
         return result.IsSuccess
             ? onSuccess(result.Value)
             : onFailure(result);
-    }
-
-    private static readonly JsonSerializerOptions _options = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        NumberHandling = JsonNumberHandling.AllowReadingFromString,
-        PropertyNameCaseInsensitive = true,
-        AllowTrailingCommas = true,
-        Converters = { new JsonStringEnumConverter() }
-    };
-
-    public static async Task<Result<T>> Convert<T>(
-        this HttpResponseMessage response,
-        JsonSerializerOptions? options = null,
-        CancellationToken cancellationToken = default)
-    {
-        await using var content = await response.Content.ReadAsStreamAsync(
-            cancellationToken);
-
-        if (response.IsSuccessStatusCode)
-        {
-            if (response.Content.Headers.ContentLength == 0)
-                return Error.None;
-
-            var result = await JsonSerializer.DeserializeAsync<T>(
-                content,
-                options ?? _options,
-                cancellationToken: cancellationToken);
-
-            return result is null
-                ? Error.None
-                : Result.Success(result);
-        }
-
-        var problemDetails = await JsonSerializer.DeserializeAsync<ProblemDetails>(
-            content,
-            options ?? _options,
-            cancellationToken: cancellationToken);
-
-        if (!TryExtractErrors(
-            problemDetails,
-            options,
-            out var errors))
-            return Result.Failure<T>([Error.None]);
-
-        return Result.Failure<T>(errors);
-    }
-    public static async Task<Result> Convert(
-        this HttpResponseMessage response,
-        JsonSerializerOptions? options = null,
-        CancellationToken cancellationToken = default)
-    {
-        if (response.IsSuccessStatusCode)
-            return Result.Success();
-
-        await using var content = await response.Content.ReadAsStreamAsync(
-            cancellationToken);
-
-        var problemDetails = await JsonSerializer.DeserializeAsync<ProblemDetails>(
-            content,
-            options ?? _options,
-            cancellationToken: cancellationToken);
-
-        if (!TryExtractErrors(
-            problemDetails,
-            options,
-            out var errors))
-            return Result.Failure([Error.None]);
-
-        return Result.Failure(
-            errors);
-    }
-    private static bool TryExtractErrors(
-        ProblemDetails? details,
-        JsonSerializerOptions? options,
-        out Error[] errors)
-    {
-        errors = [];
-        if (details?.Extensions is null)
-            return false;
-
-        if (!details.Extensions.TryGetValue(
-            "errors",
-            out var errorsObj))
-            return false;
-
-        if (errorsObj is not JsonElement json)
-            return false;
-
-        var opts = options ?? _options;
-
-        if (json.ValueKind == JsonValueKind.Array)
-        {
-            errors = json.Deserialize<Error[]>(opts) ?? [];
-            return errors.Length > 0;
-        }
-
-        if (json.ValueKind == JsonValueKind.Object)
-        {
-            var dict = json.Deserialize<Dictionary<string, string[]>>(opts) ?? [];
-            errors = dict
-                .SelectMany(
-                    kvp => kvp.Value.Select(
-                        v => Error.Validation(
-                            kvp.Key,
-                            v)))
-                .ToArray();
-            return errors.Length > 0;
-        }
-
-        return false;
     }
 }
