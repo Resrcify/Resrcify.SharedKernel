@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Data.Common;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using Quartz;
-using Resrcify.SharedKernel.Abstractions.Messaging;
+using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
@@ -28,34 +31,51 @@ internal sealed class OutboxJobTestHarness : IAsyncDisposable
     private OutboxJobTestHarness(
         SqliteConnection connection,
         ServiceProvider provider,
-        IPublisher publisher)
+        IPublisher publisher,
+        QueryCounter queries,
+        TimeProvider? clock)
     {
         _connection = connection;
         _provider = provider;
         Publisher = publisher;
+        Queries = queries;
         Job = new ProcessOutboxMessagesJob<TestDbContext>(
-            provider.GetRequiredService<IServiceScopeFactory>());
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            clock,
+            provider.GetService<OutboxWakeUp<TestDbContext>>());
     }
 
     internal IPublisher Publisher { get; }
 
     internal ProcessOutboxMessagesJob<TestDbContext> Job { get; }
 
-    internal static async Task<OutboxJobTestHarness> CreateAsync()
+    internal IServiceProvider Services => _provider;
+
+    /// <summary>The SELECTs the job's contexts ran.</summary>
+    internal QueryCounter Queries { get; }
+
+    /// <param name="clock">The clock the job measures its drain budget on.</param>
+    /// <param name="configure">More services (an outbox wake-up, a scheduler).</param>
+    internal static async Task<OutboxJobTestHarness> CreateAsync(
+        TimeProvider? clock = null,
+        Action<IServiceCollection>? configure = null)
     {
         var connection = new SqliteConnection("DataSource=:memory:");
         await connection.OpenAsync();
 
         var publisher = Substitute.For<IPublisher>();
+        var queries = new QueryCounter();
 
         var services = new ServiceCollection();
         services.AddScoped(_ => new TestDbContext(
             new DbContextOptionsBuilder<TestDbContext>()
                 .UseSqlite(connection)
+                .AddInterceptors(queries)
                 .Options));
         services.AddScoped<IUnitOfWork, UnitOfWork<TestDbContext>>();
         services.AddSingleton(publisher);
         services.AddSingleton<IOutboxSerializer>(new SystemTextJsonOutboxSerializer());
+        configure?.Invoke(services);
 
         var provider = services.BuildServiceProvider();
 
@@ -65,7 +85,7 @@ internal sealed class OutboxJobTestHarness : IAsyncDisposable
                 .Database
                 .EnsureCreatedAsync();
 
-        return new OutboxJobTestHarness(connection, provider, publisher);
+        return new OutboxJobTestHarness(connection, provider, publisher, queries, clock);
     }
 
     internal async Task SeedAsync(params OutboxMessage[] messages)
@@ -85,14 +105,18 @@ internal sealed class OutboxJobTestHarness : IAsyncDisposable
 
     internal static IJobExecutionContext JobContext(
         int batchSize = 10,
-        int maxRetryCount = 3)
+        int maxRetryCount = 3,
+        int? intervalInSeconds = null)
     {
-        var jobContext = Substitute.For<IJobExecutionContext>();
-        jobContext.MergedJobDataMap.Returns(new JobDataMap
+        var data = new JobDataMap
         {
             { "ProcessBatchSize", batchSize },
             { "ProcessMaxRetryCount", maxRetryCount },
-        });
+        };
+        if (intervalInSeconds is { } interval)
+            data.Add("ProcessIntervalInSeconds", interval);
+        var jobContext = Substitute.For<IJobExecutionContext>();
+        jobContext.MergedJobDataMap.Returns(data);
         return jobContext;
     }
 
@@ -111,5 +135,38 @@ internal sealed class OutboxJobTestHarness : IAsyncDisposable
     {
         await _provider.DisposeAsync();
         await _connection.DisposeAsync();
+    }
+}
+
+/// <summary>Counts the SELECT commands run by the contexts it is added to.</summary>
+internal sealed class QueryCounter : DbCommandInterceptor
+{
+    private int _selects;
+    private int _readsDone;
+
+    /// <summary>How many SELECTs have run.</summary>
+    public int Selects => Volatile.Read(ref _selects);
+
+    /// <summary>How many result sets have been read to the end (their readers closed).</summary>
+    public int ReadsDone => Volatile.Read(ref _readsDone);
+
+    public override ValueTask<InterceptionResult> DataReaderClosingAsync(
+        DbCommand command,
+        DataReaderClosingEventData eventData,
+        InterceptionResult result)
+    {
+        Interlocked.Increment(ref _readsDone);
+        return base.DataReaderClosingAsync(command, eventData, result);
+    }
+
+    public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+        DbCommand command,
+        CommandEventData eventData,
+        InterceptionResult<DbDataReader> result,
+        CancellationToken cancellationToken = default)
+    {
+        if (command.CommandText.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
+            Interlocked.Increment(ref _selects);
+        return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
     }
 }

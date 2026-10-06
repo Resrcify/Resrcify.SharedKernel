@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <PackageId>Resrcify.SharedKernel.UnitOfWork.Postgres</PackageId>
+    <Title>Resrcify.SharedKernel.UnitOfWork.Postgres</Title>
+    <Description>PostgreSQL wiring for the unit of work: a DbContext from the services' Database section with the SharedKernel interceptors, retries, an xmin concurrency token, a design-time factory for dotnet ef, and an outbox woken by NOTIFY.</Description>
+    <Summary>PostgreSQL DbContext setup, design-time factory, xmin row versions and an outbox woken by NOTIFY.</Summary>
+  </PropertyGroup>
+
+  <!-- Private, like every SharedKernel package's dependencies: the service references the ones it uses itself (see the
+       README's "Packages the service references"). Npgsql's EF provider and EF Core appear in this package's API. -->
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <!-- The configuration providers and options binding the DbContext setup and the design-time factory read with.
+         A web host has them; a Persistence project gets them through Microsoft.Extensions.Hosting. -->
+    <PackageReference Include="Microsoft.Extensions.Hosting">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <!-- The wake-up listener is a hosted service that logs: needed at run time, so not private (as in UnitOfWork). -->
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.Postgres.UnitTests" />
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.Postgres.IntegrationTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Resrcify.SharedKernel.UnitOfWork\Resrcify.SharedKernel.UnitOfWork.csproj" />
+  </ItemGroup>
+</Project>

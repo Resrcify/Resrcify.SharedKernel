@@ -29,7 +29,7 @@ namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.BackgroundJobs;
     Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class ProcessOutboxMessagesJobSetupTests
 {
-    private static readonly JobKey OutboxJobKey = new("ProcessOutboxMessagesJob");
+    private static readonly JobKey OutboxJobKey = OutboxJobs.Process<TestDbContext>();
 
     [Fact]
     public async Task AddProcessOutboxMessagesJob_Should_RegisterTheJobOnTheScheduler()
@@ -174,6 +174,45 @@ public class ProcessOutboxMessagesJobSetupTests
         job.JobDataMap.TryGetValue("ProcessMaxRetryCount", out var maxRetryCount).ShouldBeTrue();
         maxRetryCount.ShouldBe(4);
         trigger.ShouldBeAssignableTo<ISimpleTrigger>().RepeatInterval.ShouldBe(TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public async Task AddProcessOutboxMessagesJob_Should_GiveEachDbContextItsOwnJobs_WhenTwoHaveAnOutbox()
+    {
+        await using var provider = BuildProvider(services => services.AddQuartz(quartz =>
+        {
+            quartz.AddProcessOutboxMessagesJob<TestDbContext>();
+            quartz.AddProcessOutboxMessagesJob<SecondTestDbContext>();
+        }));
+
+        var scheduler = await GetSchedulerAsync(provider);
+
+        (await scheduler.GetJobDetail(OutboxJobs.Process<TestDbContext>())).ShouldNotBeNull();
+        (await scheduler.GetJobDetail(OutboxJobs.Process<SecondTestDbContext>())).ShouldNotBeNull();
+        (await scheduler.GetJobDetail(OutboxJobs.Cleanup<TestDbContext>())).ShouldNotBeNull();
+        (await scheduler.GetJobDetail(OutboxJobs.Cleanup<SecondTestDbContext>())).ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task AddProcessOutboxMessagesJob_Should_ScheduleTheHourlyCleanup_WhenRetentionIsOn()
+    {
+        await using var provider = BuildProvider(services => services.AddQuartz(quartz =>
+            quartz.AddProcessOutboxMessagesJob<TestDbContext>()));
+        var scheduler = await GetSchedulerAsync(provider);
+
+        var trigger = (await scheduler.GetTriggersOfJob(OutboxJobs.Cleanup<TestDbContext>())).ShouldHaveSingleItem();
+
+        trigger.ShouldBeAssignableTo<ISimpleTrigger>().RepeatInterval.ShouldBe(TimeSpan.FromHours(1));
+    }
+
+    [Fact]
+    public async Task AddProcessOutboxMessagesJob_Should_NotScheduleTheCleanup_WhenRetentionIsOff()
+    {
+        await using var provider = BuildProvider(services => services.AddQuartz(quartz =>
+            quartz.AddProcessOutboxMessagesJob<TestDbContext>(processedRetentionInDays: 0)));
+        var scheduler = await GetSchedulerAsync(provider);
+
+        (await scheduler.GetJobDetail(OutboxJobs.Cleanup<TestDbContext>())).ShouldBeNull();
     }
 
     private static ServiceProvider BuildProvider(Action<IServiceCollection> configure)
