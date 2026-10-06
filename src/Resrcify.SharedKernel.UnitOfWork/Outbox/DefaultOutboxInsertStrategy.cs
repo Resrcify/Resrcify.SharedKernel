@@ -21,4 +21,7 @@ public sealed class DefaultOutboxInsertStrategy : IOutboxInsertStrategy
         IReadOnlyList<OutboxMessage> messages,
         CancellationToken cancellationToken)
         => context.Set<OutboxMessage>().AddRangeAsync(messages, cancellationToken);
+
+    /// <summary>The messages are tracked, so EF's own save (and its transaction) writes them with everything else.</summary>
+    public bool InsertsOutsideSaveChanges => false;
 }

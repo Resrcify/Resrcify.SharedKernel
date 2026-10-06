@@ -4,6 +4,18 @@ namespace Resrcify.SharedKernel.UnitOfWork.Outbox;
 
 public sealed class OutboxMessage
 {
+    /// <summary>
+    /// The <see cref="ProcessedOnUtc"/> of a message that gave up (failed its last try): 9999-12-31 UTC, never a real
+    /// processing time. It takes the message out of the unprocessed messages (<c>ProcessedOnUtc IS NULL</c>, and so out
+    /// of their index, which the polls read), never reaches the cleanup's cutoff (the message is kept), and is found
+    /// by the processed index (<c>ProcessedOnUtc = '9999-12-31'</c>). <see cref="Error"/> says when and why it gave up.
+    /// </summary>
+    /// <remarks>
+    /// To try a given-up message again: <c>UPDATE "OutboxMessages" SET "ProcessedOnUtc" = NULL, "RetryCount" = 0
+    /// WHERE "Id" = ...</c>.
+    /// </remarks>
+    public static readonly DateTime GivenUpProcessedOnUtc = new(9999, 12, 31, 0, 0, 0, DateTimeKind.Utc);
+
     public Guid Id { get; set; }
 
     public string Type { get; set; } = string.Empty;
@@ -12,6 +24,10 @@ public sealed class OutboxMessage
 
     public DateTime OccurredOnUtc { get; set; }
 
+    /// <summary>
+    /// When the message was processed; <see langword="null"/> while it waits (or is retried), and
+    /// <see cref="GivenUpProcessedOnUtc"/> once it gave up.
+    /// </summary>
     public DateTime? ProcessedOnUtc { get; set; }
 
     public string? Error { get; set; }

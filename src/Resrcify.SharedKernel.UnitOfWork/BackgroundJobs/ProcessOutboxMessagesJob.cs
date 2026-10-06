@@ -7,27 +7,53 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Quartz;
-using Resrcify.SharedKernel.Abstractions.Messaging;
+using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 
 namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 
+/// <summary>
+/// Processes <typeparamref name="TDbContext"/>'s outbox, in order of occurrence, a batch at a time.
+/// </summary>
+/// <remarks>
+/// <list type="bullet">
+/// <item>A run keeps reading batches while the last one came back full, so a backlog drains in one run instead of a
+/// batch per trigger. It stops starting batches after <see cref="DrainBudgetShare"/> of the trigger's interval, so a
+/// run ends before the next trigger is due (one batch may run past it). A quiet outbox costs one query per run.</item>
+/// <item>Each message is processed in its own scope and transaction, as before. A message that fails (or that another
+/// instance holds) is left for the next run: a run never reads it twice, so its retries keep their pace.</item>
+/// </list>
+/// </remarks>
 [DisallowConcurrentExecution]
-public sealed class ProcessOutboxMessagesJob<TDbContext>(IServiceScopeFactory scopeFactory)
+public sealed class ProcessOutboxMessagesJob<TDbContext>(
+    IServiceScopeFactory scopeFactory,
+    TimeProvider? timeProvider = null,
+    OutboxWakeUp<TDbContext>? wakeUp = null)
     : IJob
     where TDbContext : DbContext
 {
     internal const string ProcessBatchSizeKey = "ProcessBatchSize";
     internal const string ProcessMaxRetryCountKey = "ProcessMaxRetryCount";
+    internal const string ProcessIntervalInSecondsKey = "ProcessIntervalInSeconds";
     internal const int DefaultProcessBatchSize = 20;
     internal const int DefaultProcessMaxRetryCount = 3;
+    internal const int DefaultProcessIntervalInSeconds = 60;
+
+    /// <summary>The share of the trigger's interval a run spends starting batches: 80%.</summary>
+    public const double DrainBudgetShare = 0.8;
+
+    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
 
     public async ValueTask Execute(
         IJobExecutionContext context,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        // Wake-ups from now on trigger another run: what this run doesn't read, that one does.
+        wakeUp?.RunStarted();
+
         var batchSize = ReadInt(
             context.MergedJobDataMap,
             ProcessBatchSizeKey,
@@ -36,14 +62,54 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(IServiceScopeFactory sc
             context.MergedJobDataMap,
             ProcessMaxRetryCountKey,
             DefaultProcessMaxRetryCount);
+        var budget = DrainBudget(context);
+        var started = _time.GetTimestamp();
 
-        var messages = await ReadBatchAsync(
-            batchSize,
-            maxRetryCount,
-            cancellationToken);
+        IOutboxLaneClaim? claim;
+        await using (var scope = scopeFactory.CreateAsyncScope())
+            claim = scope.ServiceProvider.GetService<OutboxJobClaim<TDbContext>>()?.Claim;
 
-        foreach (var message in messages)
-            await ProcessMessageAsync(message, cancellationToken);
+        // Failed (or held by another instance) in this run: left for the next one.
+        var passedOver = new List<Guid>();
+        while (true)
+        {
+            var messages = await ReadBatchAsync(
+                batchSize,
+                maxRetryCount,
+                passedOver,
+                cancellationToken);
+
+            foreach (var message in messages)
+            {
+                var outcome = await OutboxMessageProcessor<TDbContext>.ProcessAsync(
+                    scopeFactory,
+                    message,
+                    claim,
+                    maxRetryCount,
+                    cancellationToken);
+                if (outcome != OutboxProcessOutcome.Processed)
+                    passedOver.Add(message.Id);
+            }
+
+            if (messages.Count < batchSize || _time.GetElapsedTime(started) >= budget)
+                return;
+        }
+    }
+
+    /// <summary>
+    /// How long a run starts batches: <see cref="DrainBudgetShare"/> of the interval the setup stored, else of the
+    /// trigger's repeat interval, else of 60 seconds.
+    /// </summary>
+    private static TimeSpan DrainBudget(IJobExecutionContext context)
+    {
+        var intervalInSeconds = ReadInt(context.MergedJobDataMap, ProcessIntervalInSecondsKey, 0);
+        if (intervalInSeconds > 0)
+            return TimeSpan.FromSeconds(intervalInSeconds) * DrainBudgetShare;
+
+        if (context.Trigger is ISimpleTrigger { RepeatInterval: var repeat } && repeat > TimeSpan.Zero)
+            return repeat * DrainBudgetShare;
+
+        return TimeSpan.FromSeconds(DefaultProcessIntervalInSeconds) * DrainBudgetShare;
     }
 
     // Quartz 4 dropped the typed JobDataMap accessors (TryGetInt and friends); the map
@@ -69,107 +135,37 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(IServiceScopeFactory sc
     }
 
     // No-tracking projection — only the columns the job needs, so the covering index
-    // can serve the read. Poison messages (RetryCount at the maximum) are skipped.
+    // can serve the read. Messages that gave up have a ProcessedOnUtc (OutboxMessage.GivenUpProcessedOnUtc), so the
+    // read doesn't meet them; the retry limit still skips one that gave up before they were marked. Event types that
+    // belong to an outbox lane are skipped too: the lane processes those itself.
     private async Task<List<OutboxMessageToProcess>> ReadBatchAsync(
         int batchSize,
         int maxRetryCount,
+        List<Guid> passedOver,
         CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
-        return await context
+        var query = context
             .Set<OutboxMessage>()
-            .Where(m => m.ProcessedOnUtc == null && m.RetryCount < maxRetryCount)
+            .Where(m => m.ProcessedOnUtc == null && m.RetryCount < maxRetryCount);
+
+        var laneTypes = scope.ServiceProvider.GetService<OutboxLaneRegistry>()?.LaneEventTypes ?? [];
+        if (laneTypes.Count > 0)
+            query = query.Where(m => !laneTypes.Contains(m.Type));
+        if (passedOver.Count > 0)
+            query = query.Where(m => !passedOver.Contains(m.Id));
+
+        return await query
             .OrderBy(m => m.OccurredOnUtc)
             .Take(batchSize)
             .Select(m => new OutboxMessageToProcess(
                 m.Id,
+                m.Type,
                 m.Content,
-                m.RetryCount))
+                m.RetryCount,
+                m.OccurredOnUtc))
             .ToListAsync(cancellationToken);
     }
-
-    private async Task ProcessMessageAsync(
-        OutboxMessageToProcess message,
-        CancellationToken cancellationToken)
-    {
-        Exception? failure = null;
-
-        // A dedicated DI scope per message: the DbContext, the event handlers and the
-        // "mark processed" update are isolated to this message and this transaction.
-        // The job never touches a DbContext (or its change tracker) shared with other
-        // work, so there is nothing it can clobber by mistake.
-        await using (var scope = scopeFactory.CreateAsyncScope())
-        {
-            var provider = scope.ServiceProvider;
-            var unitOfWork = provider.GetRequiredService<IUnitOfWork>();
-            var context = provider.GetRequiredService<TDbContext>();
-            var publisher = provider.GetRequiredService<IPublisher>();
-            var serializer = provider.GetRequiredService<IOutboxSerializer>();
-
-            try
-            {
-                // Publishing the event and marking the message processed commit
-                // together: the message is only marked done if everything its
-                // handlers persisted commits as well.
-                await unitOfWork.ExecuteInTransactionAsync(
-                    async token =>
-                    {
-                        var domainEvent = serializer.Deserialize(message.Content)
-                            ?? throw new InvalidOperationException(
-                                "Outbox message content could not be deserialized.");
-
-                        await publisher.Publish(domainEvent, token);
-
-                        MarkProcessed(context, message.Id);
-                    },
-                    cancellationToken: cancellationToken);
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                failure = exception;
-            }
-        }
-
-        if (failure is not null)
-            await RecordFailureAsync(message, failure, cancellationToken);
-    }
-
-    // Marks the row processed through the change tracker (a stub entity, no load
-    // required) so the UPDATE participates in the same transaction and SaveChanges
-    // as the work the event handlers persisted.
-    private static void MarkProcessed(TDbContext context, Guid id)
-    {
-        var stub = new OutboxMessage { Id = id };
-        context.Attach(stub);
-        stub.ProcessedOnUtc = DateTime.UtcNow;
-    }
-
-    // Records the failure in a fresh scope (the processing scope was disposed along
-    // with its rolled-back transaction and the failed handler's tracked entities).
-    // The row stays unprocessed and retries until RetryCount reaches the configured
-    // maximum, after which the polling query skips it.
-    private async Task RecordFailureAsync(
-        OutboxMessageToProcess message,
-        Exception exception,
-        CancellationToken cancellationToken)
-    {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var provider = scope.ServiceProvider;
-        var unitOfWork = provider.GetRequiredService<IUnitOfWork>();
-        var context = provider.GetRequiredService<TDbContext>();
-
-        var stub = new OutboxMessage { Id = message.Id };
-        context.Attach(stub);
-        stub.Error = exception.ToString();
-        stub.RetryCount = message.RetryCount + 1;
-
-        await unitOfWork.CompleteAsync(cancellationToken);
-    }
-
-    private sealed record OutboxMessageToProcess(
-        Guid Id,
-        string Content,
-        int RetryCount);
 }

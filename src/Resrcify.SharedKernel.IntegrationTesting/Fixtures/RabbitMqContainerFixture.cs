@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using DotNet.Testcontainers.Networks;
 using Testcontainers.RabbitMq;
 
 namespace Resrcify.SharedKernel.IntegrationTesting.Fixtures;
@@ -28,20 +29,54 @@ public class RabbitMqContainerFixture
     private const ushort AmqpContainerPort = 5672;
     private const ushort ManagementContainerPort = 15672;
 
+    // Waits on a real container, so on real time.
+    private static readonly TimeProvider Time = TimeProvider.System;
+
     /// <summary>
-    /// Image used when <see cref="Configure"/> doesn't call <c>WithImage</c>.
-    /// This is the value Testcontainers' own parameterless <see cref="RabbitMqBuilder"/>
-    /// constructor used before it was obsoleted, so the default is unchanged.
+    /// Image used when <see cref="Configure"/> doesn't call <c>WithImage</c>: the version production runs, with the
+    /// management plugin (<see cref="ManagementUrl"/> needs it).
     /// </summary>
-    protected const string DefaultImage = "rabbitmq:3.11";
+    protected const string DefaultImage = "rabbitmq:4.1-management";
+
+    /// <summary>
+    /// Environment variable naming the image to run instead, for every fixture (it wins over a
+    /// <c>WithImage</c> in <see cref="Configure"/>), e.g. to try a whole suite against the next version.
+    /// </summary>
+    public const string ImageVariable = "RESRCIFY_TEST_RABBITMQ_IMAGE";
 
     protected virtual RabbitMqBuilder Configure(RabbitMqBuilder builder)
         => builder;
 
+    private INetwork? _network;
+    private string[] _networkAliases = [];
+
+    /// <summary>
+    /// Puts the container on <paramref name="network"/> as <paramref name="aliases"/>, so other containers on it reach
+    /// this one by name; the test process keeps using <see cref="Host"/> and the mapped port. Call it before the fixture
+    /// starts. Without it the container is on the default network only.
+    /// </summary>
+    public void JoinNetwork(
+        INetwork network,
+        params string[] aliases)
+    {
+        ArgumentNullException.ThrowIfNull(network);
+        ArgumentNullException.ThrowIfNull(aliases);
+        _network = network;
+        _networkAliases = aliases;
+    }
+
     protected override RabbitMqContainer Build()
-        => Configure(new RabbitMqBuilder(DefaultImage))
-            .WithPortBinding(ManagementContainerPort, assignRandomHostPort: true)
-            .Build();
+    {
+        var builder = Configure(new RabbitMqBuilder(DefaultImage))
+            .WithPortBinding(ManagementContainerPort, assignRandomHostPort: true);
+        if (_network is { } network)
+            builder = builder
+                .WithNetwork(network)
+                .WithNetworkAliases(_networkAliases);
+        return ContainerImages.FromEnvironment(ImageVariable) is { } image
+            ? builder.WithImage(image).Build()
+            : builder.Build();
+    }
 
     public string Host
         => Container.Hostname;
@@ -82,9 +117,9 @@ public class RabbitMqContainerFixture
         var path = new Uri(
             $"/api/exchanges/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(exchange)}",
             UriKind.Relative);
-        var deadline = DateTime.UtcNow + timeout;
+        var deadline = Time.GetUtcNow() + timeout;
 
-        while (DateTime.UtcNow < deadline)
+        while (Time.GetUtcNow() < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -107,7 +142,7 @@ public class RabbitMqContainerFixture
                 // RMQ management plugin may still be warming up — keep polling.
             }
 
-            await Task.Delay(interval, cancellationToken);
+            await Task.Delay(interval, Time, cancellationToken);
         }
 
         return false;

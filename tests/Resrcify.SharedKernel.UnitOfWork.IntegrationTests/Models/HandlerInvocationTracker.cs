@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
-using Resrcify.SharedKernel.Abstractions.Messaging;
+using Resrcify.SharedKernel.Abstractions.Mediator;
 
 namespace Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Models;
 

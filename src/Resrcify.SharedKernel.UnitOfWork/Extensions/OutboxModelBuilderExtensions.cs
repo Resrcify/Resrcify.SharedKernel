@@ -30,19 +30,25 @@ public static class OutboxModelBuilderExtensions
     /// <see cref="Outbox.PostgresOutboxIndexes.PartialUniqueDedup"/> when wiring
     /// <see cref="Outbox.PostgresOnConflictOutboxInsertStrategy"/>.
     /// </param>
+    /// <param name="configureProcessedIndex">
+    /// Optional hook for the index the cleanup of processed messages uses; on PostgreSQL,
+    /// <see cref="Outbox.PostgresOutboxIndexes.PartialProcessed"/>.
+    /// </param>
     public static ModelBuilder ApplyOutboxMessageConfiguration(
         this ModelBuilder modelBuilder,
         string tableName = "OutboxMessages",
         string? schema = null,
         Action<IndexBuilder<OutboxMessage>>? configureUnprocessedIndex = null,
-        Action<IndexBuilder<OutboxMessage>>? configureDedupIndex = null)
+        Action<IndexBuilder<OutboxMessage>>? configureDedupIndex = null,
+        Action<IndexBuilder<OutboxMessage>>? configureProcessedIndex = null)
     {
         modelBuilder.ApplyConfiguration(
             new OutboxMessageConfiguration(
                 tableName,
                 schema,
                 configureUnprocessedIndex,
-                configureDedupIndex));
+                configureDedupIndex,
+                configureProcessedIndex));
 
         return modelBuilder;
     }
