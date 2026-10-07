@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Rebus.Transport.InMem;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
+using Resrcify.SharedKernel.MessageBus.ScatterGather;
 using Resrcify.SharedKernel.MessageBus.UnitTests.Support;
 using Resrcify.SharedKernel.Results.Primitives;
 using Shouldly;
@@ -97,6 +98,37 @@ public sealed class ScatterGatherTransportTests
         await Should.ThrowAsync<InvalidOperationException>(async () => await stream.ToListAsync());
 
         calls.Count.ShouldBe(3);   // sent once
+    }
+
+    [Fact]
+    public async Task OnBrokerRecovered_ShouldRestartTheReplyBusAgain_UntilARestartSucceeds()
+    {
+        // The broker is back, but the reply queue can't be declared yet (its node is still down): the restart used to
+        // fail unobserved, leaving no reply bus, and every gather failing, until the next outage or a pod restart.
+        var network = new InMemNetwork();
+        var queue = $"echo-{Guid.NewGuid():N}";
+        var strategy = new FailingStartStrategy(address => address?.Contains(".replies.", StringComparison.Ordinal) == true);
+        using var responder = await InMemoryServices.StartAsync(
+            network,
+            bus => bus.AddRateLimitedQueue<Echo, Echoed, EchoHandler>(queue),
+            services => services.AddSingleton(new EchoCalls()));
+        using var requester = await InMemoryServices.StartAsync(
+            network,
+            bus => bus.UseConfigurationStrategy(strategy).AddRequest<Echo, Echoed>(queue).AddScatterGather());
+        var transport = requester.Services.GetRequiredService<ScatterGatherTransport>();
+        transport.IsRunning.ShouldBeTrue();
+        strategy.Arm(2);
+
+        transport.OnBrokerRecovered();
+
+        // Two restarts fail (1 s apart); the bus is down meanwhile, and the next one, 2 s later, brings it back.
+        await InMemoryServices.WaitUntilAsync(() => strategy.Failed == 2, TimeSpan.FromSeconds(10));
+        transport.IsRunning.ShouldBeFalse();
+        transport.IsStarted.ShouldBeTrue();
+        await InMemoryServices.WaitUntilAsync(() => transport.IsRunning, TimeSpan.FromSeconds(10));
+
+        var reply = await Client(requester).RequestAsync<Echo, Echoed>(new Echo("back"), TimeSpan.FromSeconds(5));
+        reply.Value.Text.ShouldBe("back");
     }
 
     private static IScatterGatherClient Client(Microsoft.Extensions.Hosting.IHost host)

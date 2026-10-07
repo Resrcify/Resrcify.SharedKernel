@@ -100,6 +100,35 @@ public sealed class RateLimitedQueueHostTests
         reply.Value.Key.ShouldBe("published a");
     }
 
+    [Fact]
+    public async Task ExecuteAsync_ShouldStartTheBusAgain_WhenItFailedToStart()
+    {
+        // The queue can't be declared at first (RabbitMQ unreachable while the queue's health gate says healthy): the
+        // host used to fault, stopping the service, or leave the queue unconsumed for good.
+        var network = new InMemNetwork();
+        var queue = $"flaky-{Guid.NewGuid():N}";
+        var strategy = new FailingStartStrategy(address => address == queue);
+        strategy.Arm(1);
+        using var responder = await InMemoryServices.StartAsync(
+            network,
+            bus => bus
+                .UseConfigurationStrategy(strategy)
+                .AddRateLimitedQueue<SlowRequest, SlowResponse, RegularHandler>(queue));
+        using var requester = await InMemoryServices.StartAsync(network, bus => bus.AddRequest<SlowRequest, SlowResponse>(queue).AddScatterGather());
+        var consumer = responder.Services.GetServices<IQueueConsumer>().Single(registered => registered.QueueName == queue);
+
+        await InMemoryServices.WaitUntilAsync(() => strategy.Failed == 1);
+        consumer.IsConsuming.ShouldBeFalse();   // nothing half-started counts as consuming
+
+        // Tried again 5 s later, on the container's clock.
+        await InMemoryServices.WaitUntilAsync(() => consumer.IsConsuming, TimeSpan.FromSeconds(15));
+        var reply = await requester.Services.GetRequiredService<IScatterGatherClient>()
+            .RequestAsync<SlowRequest, SlowResponse>(new SlowRequest("a"), TimeSpan.FromSeconds(5));
+
+        reply.Value.Key.ShouldBe("regular a");
+        strategy.Failed.ShouldBe(1);
+    }
+
     internal sealed class RegularHandler : IRequestResponder<SlowRequest, SlowResponse>
     {
         public Task<Result<SlowResponse>> HandleAsync(SlowRequest request, CancellationToken cancellationToken = default)

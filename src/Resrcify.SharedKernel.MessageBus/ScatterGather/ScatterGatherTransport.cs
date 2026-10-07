@@ -108,8 +108,11 @@ internal sealed partial class ScatterGatherTransport(
         _stopping.Dispose();
     }
 
-    /// <summary>The broker is back: restart the bus, so its consumer subscribes at once (see <see cref="BrokerConnectionWatcher"/>).</summary>
-    private void OnBrokerRecovered()
+    /// <summary>
+    /// The broker is back: restart the bus, so its consumer subscribes at once (see <see cref="BrokerConnectionWatcher"/>).
+    /// Internal so tests can stand in for the watcher.
+    /// </summary>
+    internal void OnBrokerRecovered()
     {
         CancellationToken stopping;
         try

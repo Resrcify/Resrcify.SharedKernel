@@ -8,6 +8,8 @@ using Resrcify.SharedKernel.MessageBus.Broker;
 using Resrcify.SharedKernel.MessageBus.Configuration;
 using Resrcify.SharedKernel.MessageBus.Extensions;
 using Resrcify.SharedKernel.MessageBus.IntegrationTests.Fixtures;
+using Resrcify.SharedKernel.MessageBus.IntegrationTests.Support;
+using Resrcify.SharedKernel.MessageBus.ScatterGather;
 using Shouldly;
 using Xunit;
 
@@ -55,6 +57,33 @@ public sealed class MessageBusHealthCheckTests(BusFixture bus)
         report.Status.ShouldBe(HealthStatus.Unhealthy);
         report.Entries["messagebus"].Data["broker"].ShouldBe("unreachable");
         await watcher.StopAsync(default);
+    }
+
+    [Fact]
+    public async Task CheckHealthAsync_WhenTheReplyBusCantRestartAfterAnOutage_ReportsItUntilItIsBack()
+    {
+        var strategy = new FailingStartStrategy(address => address?.Contains(".replies.", StringComparison.Ordinal) == true);
+        var builder = Host.CreateApplicationBuilder();
+        builder.Services.AddMessageBus(messageBus => messageBus
+            .UseRabbitMq(bus.RabbitMqConnection)
+            .UseConfigurationStrategy(strategy)
+            .AddScatterGather());
+        builder.Services.AddHealthChecks().AddMessageBus(failureStatus: HealthStatus.Unhealthy);
+        using var host = builder.Build();
+        await host.StartAsync();
+        await WaitForStatusAsync(host.Services, HealthStatus.Healthy);
+        strategy.Arm(2);
+
+        // As the broker watcher does when RabbitMQ is back; the reply queue can't be declared for the next two tries.
+        host.Services.GetRequiredService<ScatterGatherTransport>().OnBrokerRecovered();
+
+        // It used to stay Healthy (the watcher's connection was fine) while every gather failed.
+        var failing = await WaitForStatusAsync(host.Services, HealthStatus.Unhealthy);
+        failing.Entries["messagebus"].Data["scatter_gather"].ShouldBe("restarting");
+        var back = await WaitForStatusAsync(host.Services, HealthStatus.Healthy);
+        back.Entries["messagebus"].Data["scatter_gather"].ShouldBe("running");
+        strategy.Failed.ShouldBe(2);
+        await host.StopAsync();
     }
 
     private static async Task<HealthReport> WaitForStatusAsync(IServiceProvider services, HealthStatus status)
