@@ -16,6 +16,7 @@
     - [Convert result to problem details](#convert-result-to-problem-details)
     - [Use Match in controllers](#use-match-in-controllers)
     - [Functional endpoint flow](#functional-endpoint-flow)
+    - [Endpoints for a command or query in one call](#endpoints-for-a-command-or-query-in-one-call)
     - [Read an HTTP response as a result](#read-an-http-response-as-a-result)
     - [Unhandled exceptions: the same problem details](#unhandled-exceptions-the-same-problem-details)
     - [Health endpoints](#health-endpoints)
@@ -28,6 +29,8 @@
 
 - `ApiController` base type in `Primitives/`.
 - Result-to-HTTP conversion extensions in `Extensions/`.
+- `MapGetQuery` / `MapPostCommand` / `MapPutCommand` / `MapPatchCommand` / `MapDeleteCommand`: a Minimal-API endpoint
+  that sends a mediator command or query, in one call, with its OpenAPI responses.
 - Consistent mapping from `ErrorType` to HTTP problem responses.
 - `AddResultProblemDetails()`: unhandled exceptions answered with the same problem details as a failed result.
 - `MapHealthEndpoints()`: `/health`, `/health/ready` and `/health/live`, anonymous, with a JSON response writer.
@@ -132,6 +135,45 @@ return await Result
         onSuccess: Results.Ok,
         onFailure: ToProblemDetails);
 ```
+
+### Endpoints for a command or query in one call
+
+The flow above is the body of most endpoints. `MapGetQuery`, `MapPostCommand`, `MapPutCommand`, `MapPatchCommand`
+and `MapDeleteCommand` write it for you: the request is bound with `[AsParameters]` (route values, query string,
+headers and body as properties of one record), turned into the command or query, sent through `ISender`, and the
+result is answered as 200 with the value (204 for a command without one) or as problem details. Each declares its
+responses for OpenAPI (the success response and problem details for 400, 404, 409 and 500), and returns the
+`RouteHandlerBuilder`, so naming, tags, authorization and the API version chain as usual.
+
+```csharp
+internal sealed record AddShardMemberRequest(
+    [FromRoute] Guid ShardId,
+    [FromRoute] long AllyCode,
+    [FromBody] AddShardMemberCommandRequest Body);
+
+app.MapPostCommand<AddShardMemberRequest, AddShardMemberCommand>(
+        ApiEndpoints.Shards.AddShardMember,
+        request => new(request.ShardId, request.AllyCode, request.Body.Alignment, request.Body.Emoji))
+    .WithName("Shards.AddShardMember")
+    .WithTags(ApiEndpoints.Shards.Tag)
+    .WithApiVersionSet(ApiVersioning.VersionSet)
+    .HasApiVersion(new ApiVersion(1, 0));
+
+// A query, answering with part of its result.
+app.MapGetQuery<ShardRoute, GetShardByIdQuery, GetShardByIdResponse, ShardDto>(
+    ApiEndpoints.Shards.GetShard,
+    request => new(request.ShardId),
+    response => response.Shard);
+
+// A query that takes nothing from the request.
+app.MapGetQuery<GetAllActiveShardsQuery, GetAllActiveShardsResponse>(ApiEndpoints.Shards.GetAll, () => new());
+```
+
+A command with a result (`ICommand<TResponse>`) takes the response type too:
+`MapPostCommand<TRequest, TCommand, TResponse>`. For a verb without a helper, `MapCommand(method, ...)`. Settings shared
+by a group of endpoints (tags, the version set, authorization) go on an ASP.NET route group:
+`var shards = app.MapGroup("").WithTags("Shards").RequireAuthorization();` then `shards.MapPostCommand<...>(...)`.
+An endpoint answering something else (201 with a location, a file) is written by hand with the flow above.
 
 ### Read an HTTP response as a result
 

@@ -271,6 +271,10 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   (`harness.Published.WaitForAsync<T>(match)`). `WaitUntilIdleAsync()` returns once no bus is handling a message and no
   queue holds one; `network.StartResponderAsync<TRequest, TResponse>(...)` stands in for another service's rate-limited
   queue; `FailNext<T>(deliveries)` and `FailStart(queue)` inject failures.
+- **Endpoints for a mediator command or query in one call** (Resrcify.SharedKernel.Web): `MapGetQuery`,
+  `MapPostCommand`, `MapPutCommand`, `MapPatchCommand`, `MapDeleteCommand` and `MapCommand(method, ...)` bind the
+  request (`[AsParameters]`), send the command or query, answer 200/204 or problem details, and declare their
+  responses for OpenAPI.
 - **`OutboxWakeUp<TDbContext>.DrainAsync()`** for tests: wakes the outbox until no unprocessed message is due, so a
   test needn't poll for its handlers to have run.
 - **`IGathered.SettledKeys`**: the items with a definite answer (a result, or a failure that is the request's fault),
