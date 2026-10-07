@@ -275,6 +275,10 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   `MapPostCommand`, `MapPutCommand`, `MapPatchCommand`, `MapDeleteCommand` and `MapCommand(method, ...)` bind the
   request (`[AsParameters]`), send the command or query, answer 200/204 or problem details, and declare their
   responses for OpenAPI.
+- **Idempotency keys** (Resrcify.SharedKernel.Web): `app.UseIdempotency()` and `WithIdempotency()` on an endpoint.
+  A request repeating an `Idempotency-Key` gets the first one's response (kept 24 hours in `ICachingService`), 409
+  while the first is still handled (`IClaimStore`), and 422 when the key was used for a different request. Server
+  errors aren't kept, so the client can retry.
 - **`OutboxWakeUp<TDbContext>.DrainAsync()`** for tests: wakes the outbox until no unprocessed message is due, so a
   test needn't poll for its handlers to have run.
 - **`IGathered.SettledKeys`**: the items with a definite answer (a result, or a failure that is the request's fault),

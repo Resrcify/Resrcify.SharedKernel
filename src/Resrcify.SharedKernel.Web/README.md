@@ -17,6 +17,7 @@
     - [Use Match in controllers](#use-match-in-controllers)
     - [Functional endpoint flow](#functional-endpoint-flow)
     - [Endpoints for a command or query in one call](#endpoints-for-a-command-or-query-in-one-call)
+    - [Idempotency keys](#idempotency-keys)
     - [Read an HTTP response as a result](#read-an-http-response-as-a-result)
     - [Unhandled exceptions: the same problem details](#unhandled-exceptions-the-same-problem-details)
     - [Health endpoints](#health-endpoints)
@@ -31,6 +32,7 @@
 - Result-to-HTTP conversion extensions in `Extensions/`.
 - `MapGetQuery` / `MapPostCommand` / `MapPutCommand` / `MapPatchCommand` / `MapDeleteCommand`: a Minimal-API endpoint
   that sends a mediator command or query, in one call, with its OpenAPI responses.
+- `UseIdempotency()` + `WithIdempotency()`: a request repeating an `Idempotency-Key` gets the first one's response.
 - Consistent mapping from `ErrorType` to HTTP problem responses.
 - `AddResultProblemDetails()`: unhandled exceptions answered with the same problem details as a failed result.
 - `MapHealthEndpoints()`: `/health`, `/health/ready` and `/health/live`, anonymous, with a JSON response writer.
@@ -174,6 +176,33 @@ A command with a result (`ICommand<TResponse>`) takes the response type too:
 by a group of endpoints (tags, the version set, authorization) go on an ASP.NET route group:
 `var shards = app.MapGroup("").WithTags("Shards").RequireAuthorization();` then `shards.MapPostCommand<...>(...)`.
 An endpoint answering something else (201 with a location, a file) is written by hand with the flow above.
+
+### Idempotency keys
+
+A client that retries a request (a timeout, a dropped connection) can send an `Idempotency-Key` header, and a repeat
+gets the first request's response instead of being handled again.
+
+```csharp
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseIdempotency();   // after authentication: keys are per user
+
+app.MapPostCommand<CreateShardRequest, CreateShardCommand, ShardDto>(ApiEndpoints.Shards.Create, request => new(...))
+    .WithIdempotency();   // or WithIdempotency(requireKey: true): 400 without the header
+```
+
+- The first request with a key holds it while it is handled (`IClaimStore`); a repeat meanwhile is answered **409**
+  with `Retry-After`.
+- Its response (status, content type, `Location`, body) is kept for 24 hours (`ICachingService`) and replayed to a
+  repeat, marked `Idempotency-Replayed: true`.
+- A key repeated with a different request (method, path, query or body) is answered **422**.
+- A response of 500 or more isn't kept, nor is one whose handling threw: the client can try again with the same key.
+- Without the header the request is handled as usual, unless the endpoint requires a key.
+
+It needs an `ICachingService` and an `IClaimStore` in the container: the Caching package's distributed cache is both,
+and so is a cache of the service's own that implements both. `UseIdempotency(options => ...)` sets the header name,
+how long responses are kept (`Expiration`), how long a request may hold its key (`InProgressTimeout`, 1 minute) and the
+longest key.
 
 ### Read an HTTP response as a result
 
