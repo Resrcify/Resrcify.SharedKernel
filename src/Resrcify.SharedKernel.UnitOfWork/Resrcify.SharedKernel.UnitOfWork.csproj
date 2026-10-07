@@ -26,6 +26,7 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.UnitTests" />
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.IntegrationTests" />
   </ItemGroup>
 
   <ItemGroup>

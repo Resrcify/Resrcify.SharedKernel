@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Metrics;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -137,6 +138,27 @@ public sealed class OutboxMessageProcessorTests(PostgresFixture pg)
         givenUp.RetryCount.ShouldBe(3);
         givenUp.Error!.ShouldStartWith("Gave up at 2026-10-05T12:00:00.0000000Z after 3 tries.");
         (await UnprocessedCountAsync()).ShouldBe(0);   // the rows the poll's partial index holds
+    }
+
+    [Fact]
+    public async Task Process_ShouldWriteWhenALaneMessagesNextTryIsDue_WhenItFails()
+    {
+        // As a lane processes it: claimed, with its retry delay.
+        var id = await SeedAsync(new TestSideEffectEvent(Guid.NewGuid(), Guid.NewGuid(), ShouldThrow: true));
+        var message = await FindAsync(id);
+
+        var outcome = await OutboxMessageProcessor<TestDbContext>.ProcessAsync(
+            _services.GetRequiredService<IServiceScopeFactory>(),
+            new OutboxMessageToProcess(message.Id, message.Type, message.Content, message.RetryCount, message.OccurredOnUtc),
+            PostgresOutboxLaneClaim.Instance,
+            maxRetryCount: 3,
+            retryDelay: TimeSpan.FromSeconds(5),
+            CancellationToken.None);
+
+        outcome.ShouldBe(OutboxProcessOutcome.Failed);
+        var failed = await FindAsync(id);
+        failed.RetryCount.ShouldBe(1);
+        failed.NextAttemptOnUtc.ShouldBe(new DateTime(2026, 10, 5, 12, 0, 5, DateTimeKind.Utc));
     }
 
     /// <summary>The <c>outbox.messages.handled</c> measurements, by event and outcome.</summary>

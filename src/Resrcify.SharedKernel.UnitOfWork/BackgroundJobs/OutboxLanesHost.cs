@@ -2,7 +2,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -23,10 +22,10 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 /// The regular outbox job skips these event types.
 /// </summary>
 /// <remarks>
-/// A failed message is tried again after 5 s, then 10 s, 20 s, … up to 5 min. That schedule is kept in the database,
-/// not only in this instance: try <c>n + 1</c> isn't due before the event's <c>OccurredOnUtc</c> plus the waits of
-/// the <c>n</c> tries before it, so several instances running the lanes don't spend a message's tries in a few
-/// seconds of an outage. Each instance also waits after a try of its own.
+/// A failed message is tried again after 5 s, then 10 s, 20 s, … up to 5 min. That schedule is kept in the database
+/// (<see cref="OutboxMessage.NextAttemptOnUtc"/>, written with the failure), not in this instance, so several
+/// instances running the lanes don't spend a message's tries in a few seconds of an outage, however long it waited
+/// before its first try.
 /// </remarks>
 internal sealed partial class OutboxLanesHost<TDbContext>(
     OutboxLaneRegistry registry,
@@ -47,7 +46,7 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
     private readonly OutboxLaneOptions options = settings.Options;
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
 
-    /// <summary>Failed messages and when they may be tried again (per instance; poison after MaxRetryCount).</summary>
+    /// <summary>Messages another instance held, and when this one may look at them again.</summary>
     private readonly ConcurrentDictionary<Guid, DateTimeOffset> _backingOff = new();
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -96,6 +95,7 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
             return;
 
         var now = _time.GetUtcNow();
+        var nowUtc = now.UtcDateTime;
         foreach (var (id, notBefore) in _backingOff)
             if (notBefore <= now)
                 _backingOff.TryRemove(id, out _);
@@ -109,8 +109,8 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
                     m.ProcessedOnUtc == null &&
                     m.RetryCount < options.MaxRetryCount &&
                     eventTypes.Contains(m.Type) &&
-                    !busy.Contains(m.Id))
-                .Where(DueForItsNextTry(now.UtcDateTime, options.MaxRetryCount))
+                    !busy.Contains(m.Id) &&
+                    (m.NextAttemptOnUtc == null || m.NextAttemptOnUtc <= nowUtc))
                 .OrderBy(m => m.OccurredOnUtc)
                 .Take(freeSlots)
                 .Select(m => new OutboxMessageToProcess(m.Id, m.Type, m.Content, m.RetryCount, m.OccurredOnUtc))
@@ -141,12 +141,11 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
                 message,
                 options.Claim,
                 options.MaxRetryCount,
+                RetryDelay(message.RetryCount + 1),
                 stoppingToken);
-            if (outcome == OutboxProcessOutcome.Failed)
-                _backingOff[message.Id] = _time.GetUtcNow() + RetryDelay(message.RetryCount + 1);
             // Another instance holds it (a scatter-gather may hold it a while): look again at the next poll, not at
-            // once, or the freed slot would claim it again and again.
-            else if (outcome == OutboxProcessOutcome.Skipped)
+            // once, or the freed slot would claim it again and again. A failed one waits in the database.
+            if (outcome == OutboxProcessOutcome.Skipped)
                 _backingOff[message.Id] = _time.GetUtcNow() + options.PollInterval;
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -175,35 +174,6 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
         return delay < MaxRetryDelay ? delay : MaxRetryDelay;
     }
 
-    /// <summary>The waits of a message's first <paramref name="failures"/> tries, end to end.</summary>
-    internal static TimeSpan TotalRetryDelay(int failures)
-    {
-        var total = TimeSpan.Zero;
-        for (var failure = 1; failure <= failures; failure++)
-            total += RetryDelay(failure);
-        return total;
-    }
-
-    // A message never tried, or one whose waits since the event occurred have passed: RetryCount = n is due once
-    // OccurredOnUtc + TotalRetryDelay(n) <= now. One comparison per retry count (MaxRetryCount is small).
-    internal static Expression<Func<OutboxMessage, bool>> DueForItsNextTry(DateTime nowUtc, int maxRetryCount)
-    {
-        var message = Expression.Parameter(typeof(OutboxMessage), "m");
-        var retryCount = Expression.Property(message, nameof(OutboxMessage.RetryCount));
-        var occurredOnUtc = Expression.Property(message, nameof(OutboxMessage.OccurredOnUtc));
-        Expression due = Expression.Equal(retryCount, Expression.Constant(0));
-        for (var failures = 1; failures < maxRetryCount; failures++)
-        {
-            var notBefore = nowUtc - TotalRetryDelay(failures);
-            due = Expression.OrElse(
-                due,
-                Expression.AndAlso(
-                    Expression.Equal(retryCount, Expression.Constant(failures)),
-                    Expression.LessThanOrEqual(occurredOnUtc, Expression.Constant(notBefore))));
-        }
-
-        return Expression.Lambda<Func<OutboxMessage, bool>>(due, message);
-    }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Outbox lane {Lane} started for {EventTypes} event type(s), {MaxConcurrency} at a time")]
     private partial void LogLaneStarted(string lane, int eventTypes, int maxConcurrency);

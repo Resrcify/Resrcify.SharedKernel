@@ -330,7 +330,8 @@ message processed commit together, so the message is only marked done if everyth
 its handlers persisted commits as well. Because every message gets a fresh scope, the
 job never shares (or clears) a `DbContext` change tracker with other work. A handler
 that throws does not abort the batch — the failure is written to the `Error` column
-and `RetryCount` is incremented. When its last try (`MaxRetryCount`, or its lane's) fails, the message **gives up**:
+and `RetryCount` is incremented (in a lane, `NextAttemptOnUtc` is set to when its next try is due, which every instance
+waits out). When its last try (`MaxRetryCount`, or its lane's) fails, the message **gives up**:
 its `ProcessedOnUtc` is set to `OutboxMessage.GivenUpProcessedOnUtc` (9999-12-31) and `Error` starts with
 `Gave up at <time> after <n> tries.`. That takes it out of the unprocessed rows (and their index), so the polls no
 longer read past it, and the cleanup keeps it for inspection. To try it again:

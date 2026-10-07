@@ -86,6 +86,7 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
                     message,
                     claim,
                     maxRetryCount,
+                    retryDelay: null,
                     cancellationToken);
                 if (outcome != OutboxProcessOutcome.Processed)
                     passedOver.Add(message.Id);

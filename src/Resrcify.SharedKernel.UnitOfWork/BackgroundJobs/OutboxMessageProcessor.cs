@@ -44,11 +44,16 @@ internal static class OutboxMessageProcessor<TDbContext>
     /// another instance holds the message: it is left alone, neither processed nor failed.
     /// </param>
     /// <param name="maxRetryCount">The tries a message gets: a failure on the last one is counted as giving up.</param>
+    /// <param name="retryDelay">
+    /// How long after a failure the message waits before its next try (<see cref="OutboxMessage.NextAttemptOnUtc"/>);
+    /// <see langword="null"/> when it may be tried again at once.
+    /// </param>
     public static async Task<OutboxProcessOutcome> ProcessAsync(
         IServiceScopeFactory scopeFactory,
         OutboxMessageToProcess message,
         IOutboxLaneClaim? claim,
         int maxRetryCount,
+        TimeSpan? retryDelay,
         CancellationToken cancellationToken)
     {
         Exception? failure = null;
@@ -119,7 +124,7 @@ internal static class OutboxMessageProcessor<TDbContext>
         if (failure is not null)
         {
             var givesUp = message.RetryCount + 1 >= maxRetryCount;
-            await RecordFailureAsync(scopeFactory, message, failure, maxRetryCount, time, cancellationToken);
+            await RecordFailureAsync(scopeFactory, message, failure, maxRetryCount, retryDelay, time, cancellationToken);
             Record(message, givesUp ? "gave_up" : "retrying", time.GetElapsedTime(started), wait: null);
             return OutboxProcessOutcome.Failed;
         }
@@ -157,11 +162,15 @@ internal static class OutboxMessageProcessor<TDbContext>
     // transaction rolled back), so another instance may be trying the same message.
     // Counting from this try's snapshot would lose a try, and an unconditional update
     // could mark given up a message the other instance has just published.
+    //
+    // The next try's time is written with it, for every instance to wait out. Two instances failing the same try at
+    // once (no claim) both count it; the later one's wait applies.
     private static async Task RecordFailureAsync(
         IServiceScopeFactory scopeFactory,
         OutboxMessageToProcess message,
         Exception exception,
         int maxRetryCount,
+        TimeSpan? retryDelay,
         TimeProvider time,
         CancellationToken cancellationToken)
     {
@@ -178,10 +187,16 @@ internal static class OutboxMessageProcessor<TDbContext>
             .Set<OutboxMessage>()
             .Where(row => row.Id == message.Id && row.ProcessedOnUtc == null)
             .ExecuteUpdateAsync(
-                set => set
-                    .SetProperty(row => row.RetryCount, row => row.RetryCount + 1)
-                    .SetProperty(row => row.ProcessedOnUtc, row => row.RetryCount + 1 >= maxRetryCount ? givenUpOn : null)
-                    .SetProperty(row => row.Error, row => row.RetryCount + 1 >= maxRetryCount ? givenUpError : error),
+                set =>
+                {
+                    set.SetProperty(row => row.RetryCount, row => row.RetryCount + 1)
+                        .SetProperty(row => row.ProcessedOnUtc, row => row.RetryCount + 1 >= maxRetryCount ? givenUpOn : null)
+                        .SetProperty(row => row.Error, row => row.RetryCount + 1 >= maxRetryCount ? givenUpError : error);
+                    // Only with a delay: a null parameter has no type PostgreSQL can infer. A message that gave up keeps
+                    // it, unread (it is out of the unprocessed rows); tried again by hand, it is due at once.
+                    if (retryDelay is { } delay)
+                        set.SetProperty(row => row.NextAttemptOnUtc, time.GetUtcNow().UtcDateTime + delay);
+                },
                 cancellationToken);
     }
 }

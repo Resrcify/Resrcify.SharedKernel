@@ -35,6 +35,12 @@ public sealed class OutboxMessage
     public int RetryCount { get; set; }
 
     /// <summary>
+    /// When an outbox lane may try the message again after a failed try; <see langword="null"/> when it may be tried at
+    /// once (never tried, or not in a lane). Kept in the database, so every instance running the lanes waits it out.
+    /// </summary>
+    public DateTime? NextAttemptOnUtc { get; set; }
+
+    /// <summary>
     /// Composed dedup key for events implementing
     /// <see cref="Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDedupable"/>.
     /// NULL when the source event is not dedupable. Format:

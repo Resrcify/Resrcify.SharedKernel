@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
 using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
@@ -71,22 +72,56 @@ public sealed class OutboxMessageProcessorTests
         stored.RetryCount.ShouldBe(3);
         stored.ProcessedOnUtc.ShouldBe(OutboxMessage.GivenUpProcessedOnUtc);
         stored.Error.ShouldNotBeNull().ShouldStartWith("Gave up at ");
+        stored.NextAttemptOnUtc.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ShouldWriteWhenTheNextTryIsDue_WhenATryWithARetryDelayFails()
+    {
+        // In the database, so every instance running the lanes waits it out.
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.Zero));
+        await using var harness = await FailingHarnessAsync(clock);
+        var row = Message(retryCount: 0);
+        await harness.SeedAsync(row);
+
+        await ProcessAsync(harness, Snapshot(row, retryCount: 0), maxRetryCount: 3, retryDelay: TimeSpan.FromSeconds(5));
+
+        (await harness.GetMessagesAsync()).Single().NextAttemptOnUtc.ShouldBe(new DateTime(2026, 10, 7, 12, 0, 5, DateTimeKind.Utc));
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ShouldLeaveTheMessageDueAtOnce_WhenATryWithoutARetryDelayFails()
+    {
+        await using var harness = await FailingHarnessAsync();
+        var row = Message(retryCount: 0);
+        await harness.SeedAsync(row);
+
+        await ProcessAsync(harness, Snapshot(row, retryCount: 0), maxRetryCount: 3);
+
+        (await harness.GetMessagesAsync()).Single().NextAttemptOnUtc.ShouldBeNull();
     }
 
     private static Task<OutboxProcessOutcome> ProcessAsync(
         OutboxJobTestHarness harness,
         OutboxMessageToProcess snapshot,
-        int maxRetryCount)
+        int maxRetryCount,
+        TimeSpan? retryDelay = null)
         => OutboxMessageProcessor<TestDbContext>.ProcessAsync(
             harness.Services.GetRequiredService<IServiceScopeFactory>(),
             snapshot,
             claim: null,
             maxRetryCount,
+            retryDelay,
             CancellationToken.None);
 
-    private static async Task<OutboxJobTestHarness> FailingHarnessAsync()
+    private static async Task<OutboxJobTestHarness> FailingHarnessAsync(TimeProvider? clock = null)
     {
-        var harness = await OutboxJobTestHarness.CreateAsync();
+        // The processor reads its clock from the container.
+        var harness = await OutboxJobTestHarness.CreateAsync(clock, services =>
+        {
+            if (clock is not null)
+                services.AddSingleton(clock);
+        });
         harness.Publisher
             .Publish(Arg.Any<IDomainEvent>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromException(new InvalidOperationException("the handler failed")));

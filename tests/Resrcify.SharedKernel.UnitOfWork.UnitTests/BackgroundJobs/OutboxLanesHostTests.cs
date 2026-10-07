@@ -42,27 +42,26 @@ public sealed class OutboxLanesHostTests
     public void RetryDelay_ShouldDoubleFromFiveSecondsUpToFiveMinutes_WhenAMessageKeepsFailing(int failures, int seconds)
         => OutboxLanesHost<TestDbContext>.RetryDelay(failures).ShouldBe(TimeSpan.FromSeconds(seconds));
 
-    [Theory]
-    [InlineData(0, 0, true)]
-    [InlineData(1, 4, false)]
-    [InlineData(1, 5, true)]
-    [InlineData(2, 14, false)]
-    [InlineData(2, 15, true)]
-    public void DueForItsNextTry_ShouldWaitTheBackoffOfItsTriesSoFar_MeasuredFromWhenTheEventOccurred(
-        int retryCount,
-        int secondsSinceItOccurred,
-        bool due)
+    [Fact]
+    public async Task AFailedMessage_ShouldWaitItsBackoff_OnEveryInstance_WhenItWaitedLongBeforeItsFirstTry()
     {
-        // Kept in the database (RetryCount, OccurredOnUtc), so every instance running the lanes waits it out.
-        var now = new DateTime(2026, 10, 7, 12, 0, 0, DateTimeKind.Utc);
-        var message = new OutboxMessage
-        {
-            Id = Guid.NewGuid(),
-            RetryCount = retryCount,
-            OccurredOnUtc = now.AddSeconds(-secondsSinceItOccurred),
-        };
+        // A day-old message in a backlog: the schedule used to count from when the event occurred, so its waits had all
+        // passed, and a second instance (which hadn't failed it itself) tried it again at once.
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.Zero));
+        var database = $"Data Source=lanes-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+        await using var first = await LaneHost.StartAsync(maxConcurrency: 8, seed: 1, database, time, publishFails: true);
+        await first.WaitForTriesAsync(1);
+        (await first.NextAttemptAsync()).ShouldBe(time.GetUtcNow().UtcDateTime.AddSeconds(5));
 
-        OutboxLanesHost<TestDbContext>.DueForItsNextTry(now, maxRetryCount: 3).Compile()(message).ShouldBe(due);
+        await using var second = await LaneHost.StartAsync(maxConcurrency: 8, seed: 0, database, time, publishFails: true);
+        await second.Services.GetRequiredService<OutboxWakeUp<TestDbContext>>().WakeAsync();
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+        (await second.RetryCountAsync()).ShouldBe(1);
+
+        time.Advance(TimeSpan.FromSeconds(5));
+        await second.Services.GetRequiredService<OutboxWakeUp<TestDbContext>>().WakeAsync();
+        await second.WaitForTriesAsync(2);
+        (await second.NextAttemptAsync()).ShouldBe(time.GetUtcNow().UtcDateTime.AddSeconds(10));
     }
 
     /// <summary>The clock never moves in these tests: a lane that waited for its poll would never get there.</summary>
@@ -107,7 +106,7 @@ public sealed class OutboxLanesHostTests
         private readonly ServiceProvider _provider;
         private int _published;
 
-        private LaneHost(SqliteConnection connection, ServiceProvider provider, IPublisher publisher)
+        private LaneHost(SqliteConnection connection, ServiceProvider provider, IPublisher publisher, bool publishFails)
         {
             _connection = connection;
             _provider = provider;
@@ -115,6 +114,8 @@ public sealed class OutboxLanesHostTests
                 .Publish(Arg.Any<IDomainEvent>(), Arg.Any<CancellationToken>())
                 .Returns(_ =>
                 {
+                    if (publishFails)
+                        throw new InvalidOperationException("The handler failed (the test's).");
                     Interlocked.Increment(ref _published);
                     return Task.CompletedTask;
                 });
@@ -128,18 +129,24 @@ public sealed class OutboxLanesHostTests
 
         public int Published => Volatile.Read(ref _published);
 
-        public static async Task<LaneHost> StartAsync(int maxConcurrency, int seed = 0)
+        /// <param name="connectionString">The database, shared by hosts standing for instances of one service.</param>
+        public static async Task<LaneHost> StartAsync(
+            int maxConcurrency,
+            int seed = 0,
+            string? connectionString = null,
+            FakeTimeProvider? time = null,
+            bool publishFails = false)
         {
             // A named in-memory database: each context opens its own connection (the lanes and the test run at once),
             // and this one keeps the database alive.
-            var connectionString = $"Data Source=lanes-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
+            connectionString ??= $"Data Source=lanes-{Guid.NewGuid():N};Mode=Memory;Cache=Shared";
             var connection = new SqliteConnection(connectionString);
             await connection.OpenAsync();
             var publisher = Substitute.For<IPublisher>();
             var queries = new QueryCounter();
             var services = new ServiceCollection();
             services.AddLogging();
-            services.AddSingleton<TimeProvider>(new FakeTimeProvider());
+            services.AddSingleton<TimeProvider>(time ?? new FakeTimeProvider());
             services.AddScoped(_ => new TestDbContext(new DbContextOptionsBuilder<TestDbContext>()
                 .UseSqlite(connectionString)
                 .AddInterceptors(queries)
@@ -157,7 +164,7 @@ public sealed class OutboxLanesHostTests
             await using (var scope = provider.CreateAsyncScope())
                 await scope.ServiceProvider.GetRequiredService<TestDbContext>().Database.EnsureCreatedAsync();
 
-            var host = new LaneHost(connection, provider, publisher);
+            var host = new LaneHost(connection, provider, publisher, publishFails);
             await host.SeedAsync(seed);
             var readsBefore = queries.ReadsDone;
             await host.Lanes.StartAsync(CancellationToken.None);
@@ -182,6 +189,27 @@ public sealed class OutboxLanesHostTests
                 });
             }
             await context.SaveChangesAsync();
+        }
+
+        /// <summary>Waits until the (only) message has failed <paramref name="count"/> tries.</summary>
+        public async Task WaitForTriesAsync(int count)
+        {
+            var deadline = TimeProvider.System.GetUtcNow().AddSeconds(10);
+            while (await RetryCountAsync() < count && TimeProvider.System.GetUtcNow() < deadline)
+                await Task.Delay(TimeSpan.FromMilliseconds(20));
+            (await RetryCountAsync()).ShouldBe(count);
+        }
+
+        public async Task<int> RetryCountAsync()
+            => (await ReadMessageAsync()).RetryCount;
+
+        public async Task<DateTime?> NextAttemptAsync()
+            => (await ReadMessageAsync()).NextAttemptOnUtc;
+
+        private async Task<OutboxMessage> ReadMessageAsync()
+        {
+            await using var scope = _provider.CreateAsyncScope();
+            return await scope.ServiceProvider.GetRequiredService<TestDbContext>().OutboxMessages.AsNoTracking().SingleAsync();
         }
 
         public async Task WaitForPublishedAsync(int count)

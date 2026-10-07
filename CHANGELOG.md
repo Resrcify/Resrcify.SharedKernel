@@ -187,7 +187,8 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   `CleanupOutboxMessagesJob-<DbContext>`. Tests or tools that look a job up by name must use the new name.
 - **Processed outbox messages are deleted after 7 days** by the new hourly cleanup job
   (`processedRetentionInDays`, 0 turns it off).
-- **A new index, `IX_OutboxMessages_Processed`**, backs the cleanup: add an EF migration.
+- **A new index, `IX_OutboxMessages_Processed`**, backs the cleanup, and **a new nullable column,
+  `OutboxMessages.NextAttemptOnUtc`**, holds a lane message's next try: add an EF migration.
 - **`IDeletableEntity.DeletedOnUtc` is `DateTime?`** (it was a `DateTime` holding `DateTime.MinValue` until deleted).
   Add a migration that makes the column nullable and sets never-deleted rows to `NULL`:
   `UPDATE "<Table>" SET "DeletedOnUtc" = NULL WHERE "DeletedOnUtc" = '-infinity' OR "DeletedOnUtc" = '0001-01-01 00:00:00+00';`
@@ -486,9 +487,9 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   (e.g. scatter-gather's), where it used to be processed by both; two lanes of the service's own throw at start-up.
 - **A failed outbox try is counted in the database**, in one statement on a row still unprocessed: two instances no
   longer count two failures as one, nor mark given up a message the other has just published.
-- **The outbox lanes' retry schedule holds across instances**: try `n + 1` isn't due before the event's
-  `OccurredOnUtc` plus the waits of the tries before it, so three instances no longer spend a message's tries in two
-  seconds of an outage. A lane's `MaxRetryCount` of 39 or more no longer overflows the delay (it went on without one).
+- **The outbox lanes' retry schedule holds across instances**: a failed try writes when the next one is due
+  (`NextAttemptOnUtc`), and every instance waits it out, so three instances no longer spend a message's tries in two
+  seconds of an outage, however long the message waited before its first try. A lane's `MaxRetryCount` of 39 or more no longer overflows the delay (it went on without one).
 - **`PostgresOutboxLaneClaim` follows the outbox's column names** (a naming convention, `HasColumnName`); it hard-coded
   `"Id"` and `"ProcessedOnUtc"`.
 - **`AddOutboxProcessing` refuses a `BatchSize` below 1** (and a non-positive interval or retry count), which made a run
