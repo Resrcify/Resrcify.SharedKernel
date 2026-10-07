@@ -12,12 +12,34 @@ internal sealed class ResultResiliencePolicy(
     ResultResilienceOptions options,
     TimeProvider timeProvider)
 {
+    private const string CallStartedKey = "Resrcify.ResultResilience.CallStarted";
+
+    /// <summary>
+    /// When the call started (a <see cref="TimeProvider"/> timestamp), set by <see cref="StartCall"/>. A property, not
+    /// a field: a field of a Polly type would need Polly to load this class (see WebAssemblyTests).
+    /// </summary>
+    public static ResiliencePropertyKey<long> CallStarted => new(CallStartedKey);
+
+    /// <summary>
+    /// The total timeout's generator, so called once as the call starts: notes the start on the context, for
+    /// <see cref="ShouldRetry"/> to tell how much of the total timeout is left.
+    /// </summary>
+    public TimeSpan StartCall(
+        ResilienceContext context)
+    {
+        context.Properties.Set(CallStarted, timeProvider.GetTimestamp());
+        return options.TotalTimeout;
+    }
+
     /// <summary>
     /// A network error, a timed-out attempt, or a response whose status is not in <c>NeverRetry</c> and is in
-    /// <c>AlsoRetry</c> or a failure of a transient error type. The caller's cancellation is never retried.
+    /// <c>AlsoRetry</c> or a failure of a transient error type. The caller's cancellation is never retried, nor a
+    /// response whose <c>Retry-After</c> asks for at least what is left of the total timeout (known from
+    /// <paramref name="context"/>): waiting for it would only end in a timeout, so the caller gets the response now.
     /// </summary>
     public bool ShouldRetry(
-        Outcome<HttpResponseMessage> outcome)
+        Outcome<HttpResponseMessage> outcome,
+        ResilienceContext? context = null)
     {
         if (outcome.Result is not { } response)
             return IsTransientException(outcome.Exception);
@@ -26,7 +48,10 @@ internal sealed class ResultResiliencePolicy(
         if (options.NeverRetry.Contains(status))
             return false;
 
-        return options.AlsoRetry.Contains(status) || IsTransientFailure(response);
+        if (!options.AlsoRetry.Contains(status) && !IsTransientFailure(response))
+            return false;
+
+        return RetryAfter(response) is not { } wait || wait < TimeLeft(context);
     }
 
     /// <summary>What the circuit counts as a failure: what is retried, but not the statuses of <c>AlsoRetry</c>.</summary>
@@ -61,6 +86,17 @@ internal sealed class ResultResiliencePolicy(
             return false;
 
         return HttpResultExtensions.GetErrorType(status).IsTransient();
+    }
+
+    private TimeSpan TimeLeft(
+        ResilienceContext? context)
+    {
+        if (context is null
+            || options.TotalTimeout <= TimeSpan.Zero
+            || !context.Properties.TryGetValue(CallStarted, out var started))
+            return TimeSpan.MaxValue;
+
+        return options.TotalTimeout - timeProvider.GetElapsedTime(started);
     }
 
     private static bool IsTransientException(

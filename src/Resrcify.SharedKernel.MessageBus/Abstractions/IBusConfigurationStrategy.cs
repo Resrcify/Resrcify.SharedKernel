@@ -1,3 +1,4 @@
+using RabbitMQ.Client;
 using Rebus.Config;
 using Resrcify.SharedKernel.MessageBus.Configuration;
 
@@ -16,4 +17,14 @@ public interface IBusConfigurationStrategy
 
     /// <summary>The Rebus options of each bus, e.g. <c>options.RetryStrategy(maxDeliveryAttempts: 10)</c>.</summary>
     void ConfigureOptions(OptionsConfigurer options);
+
+    /// <summary>
+    /// The connection factory of the connections the package makes itself, outside Rebus: the broker watcher (health,
+    /// restarts after an outage) and the check whether a queue another service owns exists. Set here what
+    /// <see cref="ConfigureTransport"/> sets on Rebus' connections beyond <c>RabbitMqConnection</c> (certificates, a
+    /// client certificate, timeouts), or the watcher can't connect and reports RabbitMQ unreachable. Nothing by default.
+    /// </summary>
+    void ConfigureConnectionFactory(ConnectionFactory factory)
+    {
+    }
 }

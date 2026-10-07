@@ -13,9 +13,17 @@ namespace Resrcify.SharedKernel.Abstractions.Caching;
 /// <item><c>SetForAsync(key, value, expiresIn)</c>: kept for a set time from now; reads don't extend it.</item>
 /// <item><c>SetSlidingAsync(key, value, slidingExpiration)</c>: kept while it is read at least that often.</item>
 /// </list>
+/// No entry (nor claim) is kept longer than <see cref="MaxLifetime"/>: a longer lifetime is refused, so "kept until the
+/// next update" can't quietly become "kept forever".
 /// </summary>
 public interface ICachingService
 {
+    /// <summary>
+    /// The longest an entry or a claim may be kept (365 days), whichever way it expires: a longer relative or sliding
+    /// expiry, or an absolute one further away than that, is refused with an <see cref="ArgumentOutOfRangeException"/>.
+    /// </summary>
+    static TimeSpan MaxLifetime => TimeSpan.FromDays(365);
+
     Task<T?> GetAsync<T>(
         string key,
         JsonSerializerOptions? serializerOptions = null,
@@ -38,6 +46,7 @@ public interface ICachingService
     /// clock reading here.
     /// </summary>
     /// <exception cref="ArgumentException">No expiration is given.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">An expiration is further away than <see cref="MaxLifetime"/>.</exception>
     Task SetAsync<T>(
         string key,
         T value,
@@ -150,36 +159,9 @@ public interface ICachingService
             serializerOptions: null,
             cancellationToken: cancellationToken);
 
-    /// <summary>
-    /// Removes the entry cached under <paramref name="key"/>, or releases the claim on it
-    /// (<see cref="TryClaimForAsync"/>).
-    /// </summary>
+    /// <summary>Removes the entry cached under <paramref name="key"/>.</summary>
     Task RemoveAsync(
         string key,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Claims <paramref name="key"/> for <paramref name="expiresIn"/> from now, if nobody holds it: <see langword="true"/>
-    /// when this call claimed it, <see langword="false"/> when a claim on it is already held (it hasn't expired, nor been
-    /// released with <see cref="RemoveAsync"/>). For doing something once: the caller that claims a key does it.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// A claim is a marker, not a cached value. Keep claim keys apart from the keys values are cached under: a claim key is
-    /// only used with <see cref="TryClaimForAsync"/> and <see cref="RemoveAsync"/>, never read with <c>GetAsync</c> or
-    /// overwritten with <c>SetAsync</c> (an implementation may store a claim in a format they don't read).
-    /// </para>
-    /// <para>
-    /// Two callers claiming the same key at once get one <see langword="true"/> between them only as far as the
-    /// implementation makes the claim atomic: across processes, only where the store can set a key that is absent in one
-    /// step (Redis <c>SET key value PX ms NX</c>). <c>DistributedCachingService</c> is atomic within one process only
-    /// (<c>IDistributedCache</c> has no such step).
-    /// </para>
-    /// </remarks>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="expiresIn"/> isn't positive.</exception>
-    Task<bool> TryClaimForAsync(
-        string key,
-        TimeSpan expiresIn,
         CancellationToken cancellationToken = default);
 
     Task<IEnumerable<T?>> GetBulkAsync<T>(

@@ -27,4 +27,20 @@ public sealed class ErrorTypeExtensionsTests
     [InlineData(ErrorType.RateLimit)]
     public void IsTransient_ShouldBeTrue_WhenAnotherTryMayPass(ErrorType type)
         => type.IsTransient().ShouldBeTrue();
+
+    [Fact]
+    public void IsTransientError_ShouldBeTrue_ForAConcurrencyConflict_ThatAnotherTryReadsAgain()
+        => Error.Conflict(ErrorTypeExtensions.ConcurrencyConflictCode, "Changed since it was read.")
+            .IsTransient()
+            .ShouldBeTrue();
+
+    [Fact]
+    public void IsTransientError_ShouldBeFalse_ForAnyOtherConflict()
+        => Error.Conflict("Player.Taken", "The name is taken.").IsTransient().ShouldBeFalse();
+
+    [Theory]
+    [InlineData(ErrorType.Failure, true)]
+    [InlineData(ErrorType.NotFound, false)]
+    public void IsTransientError_ShouldFollowTheType_Otherwise(ErrorType type, bool transient)
+        => new Error("Some.Code", "Some message.", type).IsTransient().ShouldBe(transient);
 }

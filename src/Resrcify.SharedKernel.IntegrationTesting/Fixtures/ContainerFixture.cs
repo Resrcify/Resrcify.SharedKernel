@@ -31,6 +31,10 @@ public abstract class ContainerFixture<TContainer>
         await OnStartedAsync();
     }
 
+    /// <summary>Disposes the container; nothing when it was never built (<see cref="Build"/> threw).</summary>
     public async Task DisposeAsync()
-        => await Container.DisposeAsync();
+    {
+        if (Container is not null)
+            await Container.DisposeAsync();
+    }
 }

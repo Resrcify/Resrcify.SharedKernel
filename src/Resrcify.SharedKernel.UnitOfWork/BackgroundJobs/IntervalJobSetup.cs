@@ -69,16 +69,44 @@ public static class IntervalJobSetup
     /// <c>SendCommandJob-&lt;command type name&gt;</c>.
     /// </summary>
     /// <inheritdoc cref="AddIntervalJob{TJob}" path="/param"/>
+    /// <exception cref="InvalidOperationException">
+    /// <typeparamref name="TCommand"/> returns a value (<c>Result&lt;T&gt;</c>): use
+    /// <see cref="AddIntervalCommandJob{TCommand, TResponse}"/>.
+    /// </exception>
     public static IQuartzBuilder AddIntervalCommandJob<TCommand>(
         this IQuartzBuilder quartz,
         TimeSpan interval,
         TimeSpan? startAfter = null,
         TimeProvider? timeProvider = null)
         where TCommand : IRequest<Result>, new()
-        => quartz.AddIntervalJob<SendCommandJob<TCommand>>(
+    {
+        CommandJobs.EnsureReturns<TCommand, Result>();
+        return quartz.AddIntervalJob<SendCommandJob<TCommand>>(
             interval,
             startAfter,
             timeProvider);
+    }
+
+    /// <summary>
+    /// Sends a new <typeparamref name="TCommand"/> returning <typeparamref name="TResponse"/> (e.g. an
+    /// <c>ICommand&lt;int&gt;</c>, whose result is <c>Result&lt;int&gt;</c>) through the mediator every
+    /// <paramref name="interval"/>, with <see cref="SendCommandJob{TCommand, TResponse}"/>.
+    /// </summary>
+    /// <inheritdoc cref="AddIntervalJob{TJob}" path="/param"/>
+    public static IQuartzBuilder AddIntervalCommandJob<TCommand, TResponse>(
+        this IQuartzBuilder quartz,
+        TimeSpan interval,
+        TimeSpan? startAfter = null,
+        TimeProvider? timeProvider = null)
+        where TCommand : IRequest<TResponse>, new()
+        where TResponse : Result
+    {
+        CommandJobs.EnsureReturns<TCommand, TResponse>();
+        return quartz.AddIntervalJob<SendCommandJob<TCommand, TResponse>>(
+            interval,
+            startAfter,
+            timeProvider);
+    }
 
     /// <summary>
     /// The key <see cref="AddIntervalJob{TJob}"/> gives <typeparamref name="TJob"/>: its type name, with a generic job's

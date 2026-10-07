@@ -76,6 +76,22 @@ public sealed class PublishSubscribeTests(BusFixture bus, ITestOutputHelper outp
     }
 
     [Fact]
+    public async Task Start_WhenAnotherServiceSendsToAnOrderedSubscribersQueue_StartsAndDelivers()
+    {
+        // The owner declares its queue with x-single-active-consumer; a sender declaring it again with Rebus' defaults
+        // was refused (406 inequivalent arg) and failed to start after a minute.
+        var queue = Queue("discord");
+        await using var owner = await EventService.StartSubscriberAsync(bus.RabbitMqConnection, _wireName, queue, InPublishOrder);
+
+        var started = DateTimeOffset.UtcNow;
+        await using var sender = await EventService.StartSenderAsync(bus.RabbitMqConnection, _wireName, queue);
+        await sender.SendAsync(new PlayerRenamedPublished("p1", "Han"));
+
+        (DateTimeOffset.UtcNow - started).ShouldBeLessThan(TimeSpan.FromSeconds(30));
+        await WaitUntilAsync(() => !owner.Log.Handled.IsEmpty);
+    }
+
+    [Fact]
     public async Task Publish_WhenAnEventInPublishOrderKeepsFailing_RetriesItInPlaceThenTheNextOnesFollowInOrder()
     {
         var queue = Queue("shard");

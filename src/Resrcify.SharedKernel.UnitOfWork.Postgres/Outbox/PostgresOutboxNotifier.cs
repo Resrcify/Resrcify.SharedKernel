@@ -1,9 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
@@ -18,8 +20,10 @@ namespace Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox;
 /// </summary>
 /// <remarks>
 /// It runs a plain command on the context's connection, outside EF Core's execution strategy (a retrying strategy would
-/// refuse it inside a transaction it didn't start). A notification that fails outside a transaction is logged and
-/// dropped: the messages are committed, and the outbox's next poll processes them.
+/// refuse it inside a transaction it didn't start). Outside a transaction the save has committed: whatever then goes
+/// wrong (the connection can't be reopened, the pool is exhausted, the caller's token is cancelled) is logged and
+/// dropped, never thrown at a caller whose work is saved; the outbox's next poll processes the messages. Inside a
+/// transaction a failure is thrown, since the notification is part of what that transaction commits.
 /// </remarks>
 internal sealed partial class PostgresOutboxNotifier<TContext>(ILogger<PostgresOutboxNotifier<TContext>> logger)
     : IOutboxSaveObserver
@@ -35,8 +39,28 @@ internal sealed partial class PostgresOutboxNotifier<TContext>(ILogger<PostgresO
         if (context is not TContext)
             return;
 
-        var database = context.Database;
-        var transaction = database.CurrentTransaction?.GetDbTransaction();
+        var transaction = context.Database.CurrentTransaction?.GetDbTransaction();
+        if (transaction is not null)
+        {
+            await NotifyAsync(context.Database, transaction, cancellationToken);
+            return;
+        }
+
+        try
+        {
+            await NotifyAsync(context.Database, transaction: null, cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            LogNotifyFailed(exception, Payload);
+        }
+    }
+
+    private static async Task NotifyAsync(
+        DatabaseFacade database,
+        DbTransaction? transaction,
+        CancellationToken cancellationToken)
+    {
         var connection = database.GetDbConnection();
         var opened = connection.State != ConnectionState.Open;
         if (opened)
@@ -44,10 +68,6 @@ internal sealed partial class PostgresOutboxNotifier<TContext>(ILogger<PostgresO
         try
         {
             await NotifyAsync(connection, transaction, cancellationToken);
-        }
-        catch (DbException exception) when (transaction is null)
-        {
-            LogNotifyFailed(exception, Payload);
         }
         finally
         {
@@ -81,5 +101,5 @@ internal sealed partial class PostgresOutboxNotifier<TContext>(ILogger<PostgresO
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Could not notify the {DbContext} outbox of new messages; its next poll processes them")]
-    private partial void LogNotifyFailed(DbException exception, string dbContext);
+    private partial void LogNotifyFailed(Exception exception, string dbContext);
 }

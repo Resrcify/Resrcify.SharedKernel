@@ -7,6 +7,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Resrcify.SharedKernel.MessageBus.Broker;
 using Resrcify.SharedKernel.MessageBus.Configuration;
 using Resrcify.SharedKernel.MessageBus.RateLimitedQueues;
+using Resrcify.SharedKernel.MessageBus.ScatterGather;
 
 namespace Resrcify.SharedKernel.MessageBus.Diagnostics;
 
@@ -41,8 +42,20 @@ internal sealed class MessageBusHealthCheck(
         var watcher = serviceProvider.GetService<BrokerConnectionWatcher>();
         var connected = watcher?.IsConnected == true;
         data["broker"] = connected ? "connected" : "unreachable";
-        return Task.FromResult(connected
-            ? HealthCheckResult.Healthy("Connected to RabbitMQ.", data)
-            : new HealthCheckResult(context.Registration.FailureStatus, "RabbitMQ is unreachable.", data: data));
+        if (!connected)
+            return Task.FromResult(new HealthCheckResult(context.Registration.FailureStatus, "RabbitMQ is unreachable.", data: data));
+
+        // Started but without a bus: a restart after the broker came back failed, and is being tried again.
+        if (serviceProvider.GetService<ScatterGatherTransport>() is { IsStarted: true } scatterGather)
+        {
+            data["scatter_gather"] = scatterGather.IsRunning ? "running" : "restarting";
+            if (!scatterGather.IsRunning)
+                return Task.FromResult(new HealthCheckResult(
+                    context.Registration.FailureStatus,
+                    "The scatter-gather reply bus isn't running: its restart after RabbitMQ came back failed, and is tried again.",
+                    data: data));
+        }
+
+        return Task.FromResult(HealthCheckResult.Healthy("Connected to RabbitMQ.", data));
     }
 }

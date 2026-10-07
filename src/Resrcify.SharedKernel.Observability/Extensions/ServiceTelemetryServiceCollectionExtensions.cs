@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -17,6 +18,8 @@ namespace Resrcify.SharedKernel.Observability.Extensions;
 
 public static class ServiceTelemetryServiceCollectionExtensions
 {
+    private const string OtlpTracesPath = "v1/traces";
+
     private const string PrometheusExporterType =
         "OpenTelemetry.Exporter.PrometheusAspNetCoreOptions, OpenTelemetry.Exporter.Prometheus.AspNetCore";
 
@@ -96,6 +99,11 @@ public static class ServiceTelemetryServiceCollectionExtensions
         if (options.Tracing)
             builder.WithTracing(tracing => ConfigureTracing(tracing, options, observability?.OtlpEndpointUri));
 
+        if (options.Tracing && options.OtlpExporter && observability?.OtlpEndpointUri is { } otlpEndpoint)
+            services.PostConfigure<OtlpExporterOptions>(
+                ServiceTelemetryOptions.OtlpExporterName,
+                otlp => AppendTracesPathOverHttp(otlp, otlpEndpoint));
+
         if (!options.Metrics)
             return;
 
@@ -124,6 +132,24 @@ public static class ServiceTelemetryServiceCollectionExtensions
                 otlp => otlp.Endpoint = otlpEndpoint);
 
         options.ConfigureTracing?.Invoke(tracing);
+    }
+
+    // An endpoint set in code is used as is, which over HTTP/protobuf (switched on in the named options or through
+    // OTEL_EXPORTER_OTLP_PROTOCOL) would post to the collector's root: give it the signal's path, as the exporter does
+    // for an endpoint it reads from its environment variable. Runs after every Configure, once the protocol is known;
+    // an endpoint the service set itself is left alone.
+    private static void AppendTracesPathOverHttp(
+        OtlpExporterOptions otlp,
+        Uri configuredEndpoint)
+    {
+        if (otlp.Protocol != OtlpExportProtocol.HttpProtobuf || otlp.Endpoint != configuredEndpoint)
+            return;
+
+        var path = otlp.Endpoint.AbsolutePath;
+        if (path.EndsWith(OtlpTracesPath, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        otlp.Endpoint = new UriBuilder(otlp.Endpoint) { Path = $"{path.TrimEnd('/')}/{OtlpTracesPath}" }.Uri;
     }
 
     private static void ConfigureMetrics(

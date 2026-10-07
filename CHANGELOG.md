@@ -24,14 +24,22 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
 - **Packages no longer bring other SharedKernel packages along.** `Web` no longer references `Mediator`;
   `UnitOfWork` no longer references `Mediator` or `DomainDrivenDesign`; `Mediator` no longer references `Caching`.
   Reference every SharedKernel package a project uses directly (a missing-namespace error tells you which).
+- **`Abstractions` no longer brings the ASP.NET Core shared framework** (`Microsoft.AspNetCore.App`), and so neither do
+  `DomainDrivenDesign`, `Caching` or `Mediator`, which reference it: Domain and Application projects reference them,
+  and shouldn't get ASP.NET Core. A library that used `ILogger<T>`, `IOptions<T>` or `IConfiguration` through it
+  fails to compile (CS0234/CS0246): reference `Microsoft.Extensions.Logging.Abstractions`,
+  `Microsoft.Extensions.Options` or `Microsoft.Extensions.Configuration.Abstractions` (or, in a web project,
+  `<FrameworkReference Include="Microsoft.AspNetCore.App" />`). `Web`, `Observability` and `IntegrationTesting` still
+  bring the framework.
 - **Newtonsoft.Json is gone.** `NewtonsoftJsonOutboxSerializer` is removed and no package references Newtonsoft.Json.
   Use `SystemTextJsonOutboxSerializer` (no service used the Newtonsoft one). `Resrcify.SharedKernel.MessageBus` still
   gets Newtonsoft.Json 13.0.4 through Rebus, which depends on it.
 
 #### Results
 
-- **A result's rules are enforced.** A failure needs at least one error and can't contain `Error.None`; a success has
-  no errors. Breaking them throws `ArgumentException` (it used to make a malformed result). Look for
+- **A result's rules are enforced.** A failure needs at least one error and can't contain `Error.None` or `null`; a
+  success has no errors. Breaking them throws `ArgumentException` (it used to make a malformed result); a JSON payload
+  breaking them (`"errors":[null]`) is a `JsonException`. Look for
   `Result.Failure(x.Errors)` where `x` might be a success, and for `Error.None` used as a placeholder error.
 - **`Result.Errors` is an `IReadOnlyList<Error>`** (was `Error[]`), copied when the result is made. `Errors.Length` →
   `Errors.Count`. `Result.Failure` takes an `IReadOnlyList<Error>` (arrays still work). `Match`'s `onFailure`
@@ -53,7 +61,12 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
 - **`HttpResponseMessage.Convert` / `Convert<T>` are `ToResultAsync` / `ToResultAsync<T>`.** They now also return a
   failure instead of throwing when the body isn't what they expect: `Http.<status>` (with the status's error type)
   for a failure without problem details, `Http.EmptyContent` for a 204 or a `null` body, `Http.UnreadableContent` for
-  a success body that isn't JSON.
+  a success body that isn't JSON. The problem details and their errors are read the way SharedKernel writes them,
+  whatever options are passed (those apply to the success body only, so the non-generic `ToResultAsync` takes none);
+  an `errors` entry that is `null` or `Error.None` is dropped.
+- **A status the result pattern doesn't name reads as the request's own fault, not a server failure:** a 408 is a
+  `Timeout`, a 410 a `NotFound`, a 412 a `Conflict`, and any other 4xx (405, 413, 415, 422, …) a `Validation` error,
+  so none but the 408 is transient; they were all `Failure`. A 5xx other than 502 and 504 is still a `Failure`.
 - **A missing or invalid user id claim (`GetUserId`) is `Unauthorized` (401)**; it was `Validation` (400).
 - **`ErrorType.Timeout` problem details are titled "Gateway Timeout"** (the status was already 504).
 
@@ -69,18 +82,25 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   | `SetAsync(key, value, TimeSpan.MaxValue, ...)` (keep it until replaced) | `SetForAsync(key, value, <a real lifetime>, ct)`: see below |
   | `SetAsync(key, value, someDateTimeOffset, ct)` | unchanged |
 
-- **Every cache entry expires.** There is no way to cache without an expiry any more: the implementation refuses one
-  (`ArgumentException`), and `SetForAsync` refuses a lifetime past the last date there is (`TimeSpan.MaxValue`).
+- **Every cache entry expires, within a year.** There is no way to cache without an expiry any more: the implementation
+  refuses one (`ArgumentException`), and any lifetime longer than `ICachingService.MaxLifetime` (365 days), whether
+  relative (`SetForAsync`), sliding (`SetSlidingAsync`), an absolute date further away or a claim, is refused
+  (`ArgumentOutOfRangeException`); `TimeSpan.MaxValue` and `DateTimeOffset.MaxValue` among them. A caching query whose
+  `Expiration` is longer is cached for those 365 days.
   Data kept "until the next update replaces it" (DataProvider's base data and localisation, Sandbox's content
   versions and log settings) needs a lifetime longer than the update interval, and code that reads it must handle
   it being gone (re-fetch, or fail clearly), as it already must when the cache is restarted or evicts.
 - An implementation of `ICachingService` implements
   `SetAsync(key, value, absoluteExpiration, absoluteExpirationRelativeToNow, slidingExpiration, serializerOptions, cancellationToken)`,
   now without defaults, with at least one expiration. `SetForAsync` passes a duration
-  (`absoluteExpirationRelativeToNow`), which the cache measures on its own clock.
-- **`ICachingService` has `TryClaimForAsync(key, expiresIn, cancellationToken)`**, set-if-absent with an expiry. An
-  implementation must provide it, atomically where its store allows (Redis: a Lua script or `SET … PX … NX` on the key
-  `RemoveAsync` deletes). A claim key is used only with `TryClaimForAsync`/`RemoveAsync`.
+  (`absoluteExpirationRelativeToNow`), which the cache measures on its own clock. It refuses a lifetime longer than
+  `ICachingService.MaxLifetime` too.
+- **Claims are an interface of their own, `IClaimStore`** (Abstractions.Caching): `TryClaimForAsync(key, expiresIn)`,
+  set-if-absent with an expiry, and `ReleaseAsync(key)`. `ICachingService` (a JSON cache) doesn't have them, so a cache
+  needn't implement claims it doesn't use. `DistributedCachingService` implements both; the message bus'
+  `SkipDuplicateEvents` claims in the registered `IClaimStore`, or in the registered `ICachingService` when that is one
+  too, so a service registering `DistributedCachingService` as its cache needs nothing more. A claim store over Redis
+  claims with `SET … PX … NX`.
 
 #### Mediator
 
@@ -106,13 +126,29 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
 - **`AddMediator` fails at start-up when a request asks for a missing behavior**: a scanned request implementing
   `ICachingQuery` or `ITransactionalCommand` with no registered behavior constrained to that interface throws
   `InvalidOperationException` (add the behavior, e.g. with `AddStandardBehaviors()`; `cfg.SkipBehaviorCheck()` if
-  yours is registered after `AddMediator`).
+  yours is registered after `AddMediator(cfg => ...)`; with `AddMediator(assemblies)`, register it before). The behavior
+  must run for the request's handler kind: an `ICachingQuery` or `ITransactionalCommand` with a ValueTask handler
+  (`IValueTaskRequestHandler`) needs a ValueTask behavior, since the standard ones run only for Task handlers.
+- **`StandardBehaviorsOptions.InsertBefore` / `InsertAfter` take only `IPipelineBehavior<,>`s** and throw
+  `ArgumentException` for another kind, which could only run elsewhere (an `IRequestPipelineBehavior` inside all of
+  them, a ValueTask one only for ValueTask handlers). `AddOpenBehavior` orders behaviors within their kind.
+- **Several `AddMediator` calls share their logging and unit-of-work options**: the call that configures them wins over
+  the others' defaults, whatever the order (the first call used to win, dropping a later `ConfigureUnitOfWork`), and
+  two calls configuring the same options throw.
 - **A request's exception is logged at `Error` once**, with its stack, by the first behavior it leaves: the
-  unit-of-work behavior for a command ("Request X threw Y; nothing it changed is saved"), the transaction behavior
-  ("…; its transaction is rolled back"), or the logging behavior for a query; the others log a `Debug` line without
-  the stack. A request sent from a handler no longer logs its exception again in the sending request's behaviors. The
+  unit-of-work behavior for a plain command ("Request X threw Y; nothing it changed is saved"), the transaction
+  behavior for a transactional one ("…; its transaction is rolled back", once whatever the retries of a retrying
+  execution strategy), or the logging behavior for a query; the others log a `Debug` line without the stack. A request sent from a handler no longer logs its exception again in the sending request's behaviors. The
   messages "Exception caught in TransactionPipelineBehavior" / "...UnitOfWorkPipelineBehavior" are gone: check log
   filters and alerts matching them. A pipeline without the logging behavior still logs the exception.
+- **A transactional command without a `CommandTimeout` keeps the DbContext's command timeout** (e.g.
+  `Database:CommandTimeoutInSeconds`, or the provider's 30 s); the transaction behavior used to force 30 s. A command
+  that relied on 30 s while its DbContext has a longer timeout gets the longer one: set `CommandTimeout` to keep 30 s.
+- **A failed command's changes are undone in the change tracker.** The unit-of-work behavior runs a command through
+  the new `IUnitOfWork.ExecuteAsync`: when it returns a failure (or its save is refused, or it throws), the entities it
+  added are untracked, those it changed or deleted are put back, and the domain events it raised are dropped, so a
+  later save in the same scope (the outbox marking the event processed, another command) doesn't save half of it.
+  Changes pending before the command are kept.
 
 #### Message bus
 
@@ -171,7 +207,25 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   `StartingAsync`, before anything serves, reads `Migrations:Run` at start-up, and fails the start when a migration
   fails. The old method built a second service provider during registration and migrated synchronously before logging
   was up.
-- **`IUnitOfWork` has `TryCompleteAsync`**; an implementation (a fake or a stub) must implement it.
+- **`IUnitOfWork` has `TryCompleteAsync` and `ExecuteAsync`**; an implementation (a fake or a stub) must implement
+  them. A substitute of `IUnitOfWork` must run the operation `ExecuteAsync` is given (the unit-of-work behavior sends
+  every command through it).
+- **`TryCompleteAsync` stops tracking what the database refused**: after a `Conflict` (a concurrency conflict, a
+  unique violation) or a transient failure, the pending changes are discarded and their domain events dropped, so the
+  scope's next save doesn't send them again. Read the data again to retry.
+- **`ExecuteInTransactionAsync` under a retrying strategy no longer retries when the DbContext tracked entities before
+  the call**: a retry clears the change tracker, which would lose them and still report success. The transient failure
+  is thrown as an `InvalidOperationException` holding it; load the entities inside the operation, or send the command
+  from a fresh scope. Nothing tracked before (the usual case, and the outbox's): retried as before.
+- **`ExecuteInTransactionAsync` inside an open transaction throws when asked for a stricter isolation level** (e.g. a
+  `Serializable` command sent from a handler the outbox runs at read committed); it used to run at the open
+  transaction's level without a word. Send it outside that transaction, or open the outer one at that level.
+- **A command timeout of `TimeSpan.Zero` or `Timeout.InfiniteTimeSpan` means no timeout again** (it became 1 s); a
+  negative one throws.
+- **A concurrency conflict is transient to the message bus**: `PersistenceErrors.Concurrency` stays a `Conflict` (a 409
+  to an HTTP caller), but the bus retries an event whose handler returns it (in a new scope, which reads the data
+  again), and a rate-limited queue no longer answers it as settled. The new `Error.IsTransient()` decides this
+  everywhere (bus retries, log levels, `SettledKeys`); `ErrorType.IsTransient()` is unchanged.
 - **The outbox job drains a backlog in one run**: it keeps reading batches while they come back full, for up to 80% of
   its interval, so a run can last longer than one batch. A test counting what one run processes must expect the whole
   backlog. A message that fails in a run isn't tried again in the same run.
@@ -184,6 +238,8 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
 
 #### Domain-driven design
 
+- **`IAggregateRoot` has `RemoveDomainEvent(domainEvent)`** (the unit of work drops a failed command's events with it);
+  `AggregateRoot<TId>` implements it, a type implementing `IAggregateRoot` itself must too.
 - **`Enumeration<T>` is stricter**: two members with the same value, or names that differ only in case, throw when
   the type is first used. `Register` is removed (members are found by reflection).
 - **`ValueObject` equality is by type as well**: two value objects of different types are never equal, even with
@@ -238,7 +294,8 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
 - **Outbox**: lanes (`IOutboxLaneEvent`), stable message IDs per outbox message (`IOutboxMessageContext`), claims
   for running several instances, lane backoff (5 s doubling to 5 min), the cleanup job.
 - **Results**: `ErrorType.IsTransient()` (`Failure`, `ExternalFailure`, `Timeout`, `RateLimit`: another try may
-  pass), the rule the message bus retries by and the mediator's logging picks its level by;
+  pass) and `Error.IsTransient()` (that, or a concurrency conflict, `ErrorTypeExtensions.ConcurrencyConflictCode`), the
+  rule the message bus retries by and the mediator's logging picks its level by;
   a JSON converter, so a failed `Result` serializes (it used to throw) and old payloads still read;
   `Tap` with a step returning a `Result`; `TryCatch` with a `Func<Exception, Error>`; `ToResult` / `ToResultAsync`
   to turn a fetched value, or its absence, into a result, with the error given (`ToResultAsync(error)`) or made only
@@ -259,7 +316,7 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   stream behaviors.
 - **`ResultFactory.Failure<TResult>(errors)` / `(error)`** (Results): a failed `Result` or `Result<T>` for code generic
   over the result type, built once per type.
-- **`ICachingService.TryClaimForAsync`**; `DistributedCachingService` claims atomically within one process.
+- **`IClaimStore`** (claims, for doing something once); `DistributedCachingService` is one, atomic within one process.
 - **`Resrcify.SharedKernel.Observability`**: one call, `services.AddServiceTelemetry(serviceName, configuration,
   configure?)`, wires a service's telemetry the same way everywhere:
   - OpenTelemetry tracing and metrics: ASP.NET Core (without the `/metrics` and `/health` requests, `UntracedPaths`),
@@ -282,10 +339,11 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   Keep `app.UseExceptionHandler()`.
 - **Web: `httpClientBuilder.AddResultResilience(configure?)`** (on Microsoft.Extensions.Http.Resilience, which the
   service references) retries what the result pattern calls transient: a status whose `ErrorType` `IsTransient()`
-  (5xx, 429), network errors and timed-out attempts; three times by default, exponential with jitter, honouring
+  (5xx, 408, 429), network errors and timed-out attempts; three times by default, exponential with jitter, honouring
   `Retry-After`. Per-attempt timeout (10 s), total timeout (30 s), a circuit breaker; `AlsoRetry` / `NeverRetry` status
-  lists (e.g. `AlsoRetry.Add(404)` where a service retried 404 with Polly). Every wait runs on the container's
-  `TimeProvider`.
+  lists (e.g. `AlsoRetry.Add(404)` where a service retried 404 with Polly). A `Retry-After` at least as long as what
+  is left of the total timeout isn't waited for: the caller gets the 429/503 at once. Every wait runs on the
+  container's `TimeProvider`.
 - **Web: `services.AddResrcifyJwtBearer(configuration)`**: JWT bearer authentication against Resrcify.Identity from
   the `Jwt` section (`Authority`, `Issuer`, `Audience`, validated at start-up): keys from the authority's discovery
   document (JWKS); issuer, audience, lifetime and signature checked; bearer as the default scheme. The service
@@ -307,8 +365,9 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   backoff on the `TimeProvider`) runs the outbox job and wakes the lanes at once, with polling as the safety net.
   Measured: 76 ms from save to handled, against a 10-minute poll.
 - **Unit of work**: `IUnitOfWork.TryCompleteAsync` and `PersistenceErrors` (a concurrency conflict or unique violation
-  is a `Conflict`; a serialization failure or deadlock outside a transaction is a transient `Failure`; anything else
-  still throws); `AddEntityInterceptors()`, `AddOutboxInterceptor()`, `AddSaveChangesInterceptors(provider, withOutbox)`
+  is a `Conflict`; a serialization failure or deadlock outside a transaction is a transient `Failure`, also when the
+  Npgsql strategy wrapped it in an `InvalidOperationException`; anything else still throws);
+  `IUnitOfWork.ExecuteAsync(operation)` (undoes a failed operation's changes in the change tracker); `AddEntityInterceptors()`, `AddOutboxInterceptor()`, `AddSaveChangesInterceptors(provider, withOutbox)`
   (interceptors from the container); `IOutboxSaveObserver`; `OutboxWakeUp<TDbContext>`; `OutboxJobs` is public;
   `AddMigrationsOnStartup<TContext>(configuration)`.
 - **Mediator**: `cfg.ConfigureUnitOfWork(uow => uow.ReturnPersistenceFailures = true)` makes the unit-of-work behavior
@@ -341,12 +400,119 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   own `ConfigurationBuilder` must read `builder.Configuration` to see them. Also `JoinNetwork(network, aliases)` on
   `PostgresContainerFixture` and `RabbitMqContainerFixture`.
 - **Results: `LoggedExceptions`** (`Resrcify.SharedKernel.Results.Diagnostics`): `Claim(exception)`,
-  `IsLogged(exception)` and `DataKey`, the log-once convention the mediator's behaviors and the Web exception handler
-  follow. A service's own log-and-rethrow code joins in by logging at Error only when `Claim` returns true. An
+  `IsLogged(exception)`, `Release(exception)` and `DataKey`, the log-once convention the mediator's behaviors and the
+  Web exception handler follow. A service's own log-and-rethrow code joins in by logging at Error only when `Claim`
+  returns true; whoever handles the exception for good (answers it, records it) calls `Release`, so the same instance
+  thrown again in a later request (a cached faulted task or `Lazy`) is logged at Error again. An
   exception with read-only `Data` is logged everywhere, as before.
 
 ### Fixed
 
+- **Message bus, ordering and the broker:** an ordered subscription numbers its messages in delivery order (the
+  waiting receives resumed in thread order, so events of one key were handled out of publish order under load); events
+  waiting in a partition behind one that goes back to the queue go back too, so they are handled after it, not before
+  its redelivery; the event subscriptions resolve the bus when the service starts, not when the host makes its hosted
+  services, so events aren't handled before the migrations ran; an event is published under its runtime type's name
+  (published through a base type it went to a topic nobody binds); an integration event implementing `IDedupable`
+  gets its stable message ID from its key, so content computed while handling (a time) no longer gives a retried
+  outbox message's event a new ID; a sender no longer fails to start when it declares another service's queue that
+  service declared with `x-single-active-consumer` (an existing destination queue is left alone); the broker watcher
+  connects as the buses do (`RabbitMqConnection.VirtualHost` and `UseTls`, new, and the strategy's new
+  `ConfigureConnectionFactory`), and a refused connection is retried rather than failing the service; a name clash
+  between two publishers is warned once per pair, not on every event. The README no longer promises that the
+  service's own bus restarts at once after a RabbitMQ restart: Rebus resumes it within a minute.
+
+- **Message bus, events:** each in-place retry of a handler runs in a DI scope of its own (a failed try's tracked
+  changes and domain events were saved with the next try: two payouts for one) and a Rebus transaction of its own
+  (what a failed try published went out too, one copy per try, even when the event was dead-lettered); a claim store
+  that is out of reach no longer dead-letters events unhandled (they are handled, without skipping duplicates), and a
+  claim that can't be released is logged instead of losing the redelivery; `SkipDuplicateEvents` refuses a time that
+  isn't positive or is longer than `ICachingService.MaxLifetime`; the wait between tries stops doubling at 4 s, so a
+  strategy with more tries no longer holds an event unacknowledged for minutes (past RabbitMQ's consumer timeout);
+  an exception the mediator logged already is logged at Error once, not again on every try and at the dead-letter.
+
+- **Message bus, scatter-gather:** a stream yields every reply accepted before its timeout, however slowly it is read
+  (the replies still buffered were dropped); a stream can be read once (reading it again re-sent the batch: now it
+  throws); an empty batch is answered at once (it waited the whole timeout); a timeout that can't be met (zero,
+  negative, `Timeout.InfiniteTimeSpan`, over ~49 days) throws before anything is sent; two
+  `IScatterGatherHandler`s with the same event, request and response types both run (only the last did); the reply
+  bus starts before, and stops after, the hosted services registered before it (the outbox lanes gathered before it
+  was up, and at shutdown after it stopped); a restart after RabbitMQ came back that fails is logged and tried again,
+  and the bus' health check reports it, where it was lost and the bus stayed down; the bus' own failure reply carries
+  its error type by name, so two services with different enum settings read it.
+- **Message bus, rate-limited queues:** a bus that fails to start (RabbitMQ unreachable while the gate is healthy) is
+  tried again (5 s doubling to 1 min) instead of faulting the host (which stopped the application, or left the queue
+  unconsumed while reported as consuming); two queues for the same request and response types (a priority queue)
+  each consume with their own handler (one wasn't consumed at all), and a queue name used twice throws; a responder
+  that takes `IEventBus` (or anything needing `IBus`) gets the queue's bus (it threw on every try); a request's
+  deadline is measured on the container's clock, which Rebus now uses too, and never exceeds the request's
+  time-to-live (a test's `FakeTimeProvider` dropped every request); the responder's exception is logged at Error once
+  (`LoggedExceptions`), not again on every try. `IRequestResponder`'s documentation says what a throw does (tried
+  again, then answered `<TRequest>.ResponderFailed`), as the README did.
+
+- **IntegrationTesting: a fixture that failed to start tears down what did start.** A container that was never built
+  (an empty image name) made `DisposeAsync` throw `NullReferenceException`, and `ServiceHostFixture` stopped tearing
+  down at the first failure, leaving the PostgreSQL container and the network behind; every step now runs and their
+  failures are reported together.
+
+- **UnitOfWork.Postgres: the outbox wake-up never fails a save that committed.** Outside a transaction, a notification
+  that can't be sent (the connection can't be reopened, the pool is exhausted, the caller's token is cancelled) is
+  logged and dropped; a reconnect failure used to escape and fail the command after its work was saved. A burst of
+  notifications wakes the outbox once, as documented (it woke once per notification, 50 ms apart, so a listener fell
+  behind above about 20 saves a second).
+- **UnitOfWork.Postgres: each context's outbox is written its own way.** `WithOutbox(o => o.OnConflictDoNothing = true)`
+  on one context used to set the insert strategy for every context (a plain one then failed with `42P10`, or under
+  `RetryOnFailure` with "does not support user-initiated transactions"). Two contexts asking for different serializers
+  throw at registration; the second one was ignored.
+
+- **`AddQuartzJobs` judges an uneven schedule by the fire that is due**: a job is stalled when the fire due after its
+  last one is late by more than `maxSilence(interval)` less one interval, the interval being that fire's own. A
+  business-hours or weekday cron no longer fails all night (it used to apply the 5-minute daytime gap to the 15-hour
+  night); an even schedule is judged as before.
+- **A command job refuses a command that returns a value**: an `ICommand<int>` also passes for an `IRequest<Result>`,
+  so `AddIntervalCommandJob<TCommand>` / `CommandJob<TCommand>` compiled and then failed every run with "No request
+  handler registered". It now throws at registration, naming the form to use: the new
+  `AddIntervalCommandJob<TCommand, TResponse>` / `SendCommandJob<TCommand, TResponse>`. A command job logs an exception
+  the mediator logged already at `Debug`, and releases it (`LoggedExceptions.Release`).
+
+- **`AddOutbox<TDbContext>()` fails as `Degraded` by default**, as documented (it was `Unhealthy`, so a backlog on a
+  `ready`-tagged check took every replica out of service at once). It also fails once the backlog hasn't been measured
+  for three intervals since the monitor started (no database, no outbox table), where it stayed Healthy; and its
+  counts come from one snapshot, so `poison` is never off by a message saved meanwhile (nor negative).
+
+- **The outbox lanes claim with `OutboxOptions.Claim`** (when `AddOutboxLanes` sets none of its own, in either order):
+  they ran unclaimed, so two instances processed (and scatter-gathered) the same lane message.
+- **An event type is in one outbox lane only**: a service's own `OutboxLaneEvent` moves it out of a package's lane
+  (e.g. scatter-gather's), where it used to be processed by both; two lanes of the service's own throw at start-up.
+- **A failed outbox try is counted in the database**, in one statement on a row still unprocessed: two instances no
+  longer count two failures as one, nor mark given up a message the other has just published.
+- **The outbox lanes' retry schedule holds across instances**: try `n + 1` isn't due before the event's
+  `OccurredOnUtc` plus the waits of the tries before it, so three instances no longer spend a message's tries in two
+  seconds of an outage. A lane's `MaxRetryCount` of 39 or more no longer overflows the delay (it went on without one).
+- **`PostgresOutboxLaneClaim` follows the outbox's column names** (a naming convention, `HasColumnName`); it hard-coded
+  `"Id"` and `"ProcessedOnUtc"`.
+- **`AddOutboxProcessing` refuses a `BatchSize` below 1** (and a non-positive interval or retry count), which made a run
+  read empty batches until its time was up; and **schedules the outbox jobs on the clock registered before it** (or
+  `OutboxOptions.TimeProvider`), so a `FakeTimeProvider` drives them as it drives `AddIntervalJob`.
+
+- **The outbox interceptor writes a save's events once, whatever fails.** When its own transaction (an insert strategy
+  writing outside `SaveChanges`, e.g. `OnConflictDoNothing`) failed to commit, a retrying `CompleteAsync` saved nothing
+  and reported success; the change tracker is now put back and the retry writes it all. A save that failed without
+  EF telling interceptors (a concurrency conflict, a cancellation) left its messages tracked (a resolved conflict saved
+  the event twice) or its transaction open (the next save rolled back silently); it is now undone before the next save.
+  Inside a caller's transaction, the rows such a strategy wrote are taken back when the save fails (a savepoint).
+- **The events of one save are published in the order raised.** They shared one `OccurredOnUtc` and the outbox reads
+  by it, with random ids breaking the tie; each now gets its own time, a microsecond apart.
+
+- **A `Result` written with a naming policy reads back** with the same options (`SnakeCaseLower`, `KebabCaseLower`,
+  `SnakeCaseUpper`): reading matched only `IsSuccess`/`Errors`/`Value` as written without one.
+- **A transient failure under a retrying strategy is retried, not hidden by a failed rollback.** When the connection
+  dropped mid-transaction (a failover, a restarted server) or the commit failed, rolling back threw too
+  (`ObjectDisposedException`, "This NpgsqlTransaction has completed") and replaced the transient failure, so
+  `EnableRetryOnFailure` never retried it; the rollback's failure is now dropped. The same on a savepoint.
+- **A nested transactional command that fails undoes what it saved inside its savepoint in the change tracker too**:
+  rows it inserted are untracked, rows it updated or deleted are read again, so the outer transaction no longer writes
+  the rolled-back values back.
 - The validation behavior ran a request's validators at once (unsafe with a shared DbContext) and without the
   cancellation token; it runs them one at a time with the token.
 - DI-time pipeline composition created each request handler three times per request.

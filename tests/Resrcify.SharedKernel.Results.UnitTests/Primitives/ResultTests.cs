@@ -641,4 +641,15 @@ public sealed class ResultTests
     [Fact]
     public void Errors_ShouldBeEmpty_WhenTheResultIsASuccess()
         => Result.Success().Errors.ShouldBeEmpty();
+
+    [Fact]
+    public void Failure_ShouldThrow_WhenTheErrorIsNull()
+    {
+        Should.Throw<ArgumentNullException>(() => Result.Failure((Error)null!));
+        Should.Throw<ArgumentNullException>(() => Result.Failure<int>((Error)null!));
+    }
+
+    [Fact]
+    public void Failure_ShouldThrow_WhenAnErrorInTheListIsNull()
+        => Should.Throw<ArgumentException>(() => Result.Failure([Error.NullValue, null!]));
 }

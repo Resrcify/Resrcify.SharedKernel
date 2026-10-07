@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json;
@@ -48,9 +49,12 @@ public static class HealthResponseWriter
 
         context.Response.ContentType = ContentType;
 
-        await using var writer = new Utf8JsonWriter(context.Response.Body, WriterOptions);
-        WriteReport(writer, report);
-        await writer.FlushAsync(context.RequestAborted);
+        // Written to memory first, then to the response asynchronously: serializing a check's data flushes the
+        // writer synchronously, which Kestrel refuses on the response stream (AllowSynchronousIO is off).
+        var buffer = new ArrayBufferWriter<byte>();
+        await using (var writer = new Utf8JsonWriter(buffer, WriterOptions))
+            WriteReport(writer, report);
+        await context.Response.Body.WriteAsync(buffer.WrittenMemory, context.RequestAborted);
     }
 
     private static void WriteReport(

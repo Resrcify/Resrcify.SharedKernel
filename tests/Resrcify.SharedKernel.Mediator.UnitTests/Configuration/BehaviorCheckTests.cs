@@ -23,7 +23,7 @@ public sealed class BehaviorCheckTests
     {
         var failure = Should.Throw<InvalidOperationException>(() => BehaviorCheck.RunFor(
             new ServiceCollection(),
-            [typeof(CachedQuery), typeof(PlainQuery)],
+            [Task(typeof(CachedQuery)), Task(typeof(PlainQuery))],
             [typeof(LoggingPipelineBehavior<,>)]));
 
         failure.Message.ShouldStartWith("1 request type(s) implement ICachingQuery (CachedQuery)");
@@ -34,7 +34,7 @@ public sealed class BehaviorCheckTests
     public void RunFor_ShouldThrow_WhenATransactionalCommandHasNoTransactionBehavior()
         => Should.Throw<InvalidOperationException>(() => BehaviorCheck.RunFor(
                 new ServiceCollection(),
-                [typeof(TransactionalCommand)],
+                [Task(typeof(TransactionalCommand))],
                 [typeof(CachingPipelineBehavior<,>)]))
             .Message.ShouldContain("TransactionPipelineBehavior");
 
@@ -45,7 +45,7 @@ public sealed class BehaviorCheckTests
 
         Should.NotThrow(() => BehaviorCheck.RunFor(
             new ServiceCollection(),
-            [typeof(CachedQuery), typeof(TransactionalCommand)],
+            [Task(typeof(CachedQuery)), Task(typeof(TransactionalCommand))],
             configuration.OpenBehaviorTypes));
     }
 
@@ -53,7 +53,7 @@ public sealed class BehaviorCheckTests
     public void RunFor_ShouldPass_WhenTheServicesOwnBehaviorIsConstrainedToTheInterface()
         => Should.NotThrow(() => BehaviorCheck.RunFor(
             new ServiceCollection(),
-            [typeof(CachedQuery)],
+            [Task(typeof(CachedQuery))],
             [typeof(OwnCachingBehavior<,>)]));
 
     [Fact]
@@ -62,24 +62,66 @@ public sealed class BehaviorCheckTests
         var services = new ServiceCollection();
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(CachingPipelineBehavior<,>));
 
-        Should.NotThrow(() => BehaviorCheck.RunFor(services, [typeof(CachedQuery)], []));
+        Should.NotThrow(() => BehaviorCheck.RunFor(services, [Task(typeof(CachedQuery))], []));
     }
 
     [Fact]
     public void RunFor_ShouldPass_WhenNoRequestAsksForABehavior()
         => Should.NotThrow(() => BehaviorCheck.RunFor(
             new ServiceCollection(),
-            [typeof(PlainQuery)],
+            [Task(typeof(PlainQuery))],
             []));
 
     [Fact]
-    public void HandledRequestTypes_ShouldBeTheRequestsWithAHandler_WhenAnAssemblyIsScanned()
+    public void RunFor_ShouldThrow_WhenAValueTaskHandledCachingQueryHasOnlyTaskBehaviors()
     {
-        var requestTypes = BehaviorCheck.HandledRequestTypes([typeof(BehaviorCheckTests).Assembly]);
+        var configuration = new MediatorConfiguration().AddStandardBehaviors();
 
-        requestTypes.ShouldContain(type => type.Name == "ComposedRequest");   // has a handler
-        requestTypes.ShouldNotContain(typeof(CachedQuery));                  // has none
+        var failure = Should.Throw<InvalidOperationException>(() => BehaviorCheck.RunFor(
+            new ServiceCollection(),
+            [ValueTask(typeof(CachedQuery))],
+            configuration.OpenBehaviorTypes));
+
+        failure.Message.ShouldContain("ValueTask handler");
     }
+
+    [Fact]
+    public void RunFor_ShouldThrow_WhenATaskHandledCachingQueryHasOnlyAValueTaskBehavior()
+        => Should.Throw<InvalidOperationException>(() => BehaviorCheck.RunFor(
+            new ServiceCollection(),
+            [Task(typeof(CachedQuery))],
+            [typeof(OwnValueTaskCachingBehavior<,>)]));
+
+    [Fact]
+    public void RunFor_ShouldPass_WhenAValueTaskBehaviorHandlesAValueTaskHandledRequest()
+        => Should.NotThrow(() => BehaviorCheck.RunFor(
+            new ServiceCollection(),
+            [ValueTask(typeof(CachedQuery))],
+            [typeof(OwnValueTaskCachingBehavior<,>)]));
+
+    [Fact]
+    public void RunFor_ShouldSayToRegisterBeforeAddMediator_ForTheAssembliesOverload()
+        => Should.Throw<InvalidOperationException>(() => BehaviorCheck.RunFor(
+                new ServiceCollection(),
+                [Task(typeof(CachedQuery))],
+                [],
+                BehaviorCheck.AssembliesRemedy))
+            .Message.ShouldContain("before AddMediator(assemblies)");
+
+    [Fact]
+    public void HandledRequests_ShouldBeTheRequestsWithAHandler_WhenAnAssemblyIsScanned()
+    {
+        var requests = BehaviorCheck.HandledRequests([typeof(BehaviorCheckTests).Assembly]);
+
+        requests.ShouldContain(request => request.Request.Name == "ComposedRequest");   // has a handler
+        requests.ShouldNotContain(request => request.Request == typeof(CachedQuery));   // has none
+    }
+
+    private static (Type Request, BehaviorCheck.PipelineKind Kind) Task(Type request)
+        => (request, BehaviorCheck.PipelineKind.Task);
+
+    private static (Type Request, BehaviorCheck.PipelineKind Kind) ValueTask(Type request)
+        => (request, BehaviorCheck.PipelineKind.ValueTask);
 
     private sealed class CachedQuery : ICachingQuery<int>
     {
@@ -95,6 +137,18 @@ public sealed class BehaviorCheckTests
         public TimeSpan? CommandTimeout => null;
 
         public System.Data.IsolationLevel? IsolationLevel => null;
+    }
+
+    private sealed class OwnValueTaskCachingBehavior<TRequest, TResponse>
+        : IValueTaskPipelineBehavior<TRequest, TResponse>
+        where TRequest : ICachingQuery
+        where TResponse : Result
+    {
+        public ValueTask<TResponse> Handle(
+            TRequest request,
+            ValueTaskRequestHandlerDelegate<TResponse> next,
+            CancellationToken cancellationToken)
+            => next(cancellationToken);
     }
 
     private sealed class OwnCachingBehavior<TRequest, TResponse>

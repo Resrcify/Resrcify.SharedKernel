@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
@@ -74,6 +75,32 @@ public sealed class UnitOfWorkTryCompleteAsyncTests : DbSetupBase
         DbContext.Persons.Add(new Person(SocialSecurityNumber.Create(300000004)));
 
         await Should.ThrowAsync<DbUpdateException>(() => UnitOfWork.TryCompleteAsync());
+    }
+
+    [Fact]
+    public async Task TryCompleteAsync_ShouldStopTrackingTheRefusedChanges_SoTheNextSaveDoesntSendThemAgain()
+    {
+        var saved = new Person(SocialSecurityNumber.Create(300000006), "Saved");
+        DbContext.Persons.Add(saved);
+        await UnitOfWork.CompleteAsync();
+        _failure.Exception = new DbUpdateException("save failed", DbExceptions.WithSqlState("23505"));
+        var refused = new Person(SocialSecurityNumber.Create(300000007), "Refused");
+        DbContext.Persons.Add(refused);
+        saved.Rename("Renamed");
+
+        var result = await UnitOfWork.TryCompleteAsync();
+
+        result.Errors.ShouldHaveSingleItem().ShouldBe(PersistenceErrors.UniqueViolation);
+        DbContext.Entry(refused).State.ShouldBe(EntityState.Detached);
+        DbContext.Entry(saved).State.ShouldBe(EntityState.Unchanged);
+        saved.Name.ShouldBe("Saved");
+        saved.GetDomainEvents().ShouldBeEmpty();
+
+        _failure.Exception = null;
+        DbContext.Persons.Add(new Person(SocialSecurityNumber.Create(300000008), "Next"));
+        await UnitOfWork.CompleteAsync();
+        DbContext.ChangeTracker.Clear();
+        (await DbContext.Persons.Select(person => person.Name).ToListAsync()).Order().ShouldBe(["Next", "Saved"]);
     }
 
     [Fact]

@@ -119,7 +119,26 @@ public sealed class ResultExceptionHandlerTests
         logged.Category.ShouldBe(typeof(ResultExceptionHandler).FullName);
         logged.Exception.ShouldBeOfType<InvalidOperationException>();
         logs.Entries.Count(entry => entry.Level == LogLevel.Error).ShouldBe(1);
-        LoggedExceptions.IsLogged(logged.Exception).ShouldBeTrue();
+        // Answered: the exception's journey ends here, so the mark is released.
+        LoggedExceptions.IsLogged(logged.Exception).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task TryHandleAsync_ShouldLogTheSameExceptionAgain_WhenALaterRequestThrowsItAgain()
+    {
+        // A cached faulted task or Lazy rethrows one instance in every request: each is logged at Error, not only the first.
+        using var logs = new CapturingLoggerProvider();
+        await using var app = await StartAsync(logs: logs);
+        using var client = app.GetTestClient();
+
+        using (await client.GetAsync(new Uri("/cached", UriKind.Relative)))
+        using (await client.GetAsync(new Uri("/cached", UriKind.Relative)))
+        {
+            logs.Entries
+                .Where(entry => entry.Level == LogLevel.Error)
+                .Select(entry => entry.Exception)
+                .ShouldBe([CachedFailure, CachedFailure]);
+        }
     }
 
     /// <summary>
@@ -215,6 +234,7 @@ public sealed class ResultExceptionHandlerTests
             {
                 app.UseExceptionHandler();
                 app.MapGet("/boom", ThrowingEndpoint);
+                app.MapGet("/cached", ThrowingTheCachedFailure);
                 app.MapGet("/failure", () => Result
                     .Failure(Error.Failure(ResultExceptionHandler.ErrorCode, ResultExceptionHandler.ErrorMessage))
                     .ToProblemDetails());
@@ -229,7 +249,7 @@ public sealed class ResultExceptionHandlerTests
                 services.AddLogging(logging => logging.SetMinimumLevel(LogLevel.Debug));
                 services.AddSingleton<ILoggerProvider>(logs);
                 services.AddResultProblemDetails();
-                services.AddScoped(_ => Substitute.For<IUnitOfWork>());
+                services.AddScoped(_ => UnitOfWorkRunningOperations());
                 services.AddMediator(cfg => cfg.AddStandardBehaviors());
                 services.AddTransient<IRequestHandler<ThrowingCommand, Result>, ThrowingCommandHandler>();
             },
@@ -243,6 +263,11 @@ public sealed class ResultExceptionHandlerTests
 
     private static string ThrowingEndpoint()
         => throw new InvalidOperationException(Secret);
+
+    private static readonly InvalidOperationException CachedFailure = new("The cached value failed to load.");
+
+    private static string ThrowingTheCachedFailure()
+        => throw CachedFailure;
 
     // The problem details' members, all but the trace id (which differs per request).
     private static async Task<string> ProblemAsync(
@@ -283,6 +308,17 @@ public sealed class ResultExceptionHandlerTests
             ThrowingCommand request,
             CancellationToken cancellationToken)
             => throw new InvalidOperationException(CommandFailure);
+    }
+
+    // A unit of work that runs what ExecuteAsync is given, as the real one does (the unit-of-work behavior sends every
+    // command through it).
+    private static IUnitOfWork UnitOfWorkRunningOperations()
+    {
+        var unitOfWork = Substitute.For<IUnitOfWork>();
+        unitOfWork
+            .ExecuteAsync(Arg.Any<Func<CancellationToken, Task<Result>>>(), Arg.Any<CancellationToken>())
+            .Returns(call => call.Arg<Func<CancellationToken, Task<Result>>>()(call.Arg<CancellationToken>()));
+        return unitOfWork;
     }
 
     private static DefaultHttpContext Context()

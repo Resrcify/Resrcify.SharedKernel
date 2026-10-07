@@ -15,12 +15,14 @@ public static class ResultResilienceHttpClientBuilderExtensions
 
     /// <summary>
     /// Retries, times out and breaks the circuit around the client's calls, retrying what the result pattern calls
-    /// transient (see <see cref="ResultResilienceOptions"/>): a 5xx or a 429 (after its <c>Retry-After</c>), network
+    /// transient (see <see cref="ResultResilienceOptions"/>): a 5xx, a 408 or a 429 (after its <c>Retry-After</c>), network
     /// errors and timed-out attempts, with exponential, jittered delays. Outermost to innermost: the total timeout,
     /// the retries, the circuit breaker, the attempt timeout. Every wait is on the <see cref="TimeProvider"/>
     /// registered in the container (the system clock otherwise), so tests can drive it with a fake one.
     /// </summary>
     /// <remarks>
+    /// A <c>Retry-After</c> at least as long as what is left of the total timeout isn't waited for: the caller gets
+    /// that response (e.g. a 429) at once, rather than a timeout once the wait has used up the call's time.
     /// The service references <c>Microsoft.Extensions.Http.Resilience</c> itself. After the retries the caller gets the
     /// last response, which <c>ToResultAsync</c> turns into a failure; a timeout or an open circuit throws
     /// (<c>TimeoutRejectedException</c>, <c>BrokenCircuitException</c>), as <c>AddStandardResilienceHandler</c> does.
@@ -50,7 +52,11 @@ public static class ResultResilienceHttpClientBuilderExtensions
         var policy = new ResultResiliencePolicy(options, timeProvider);
         pipeline.TimeProvider = timeProvider;
 
-        pipeline.AddTimeout(new HttpTimeoutStrategyOptions { Timeout = options.TotalTimeout });
+        pipeline.AddTimeout(new HttpTimeoutStrategyOptions
+        {
+            Timeout = options.TotalTimeout,
+            TimeoutGenerator = arguments => ValueTask.FromResult(policy.StartCall(arguments.Context)),
+        });
 
         if (options.MaxRetries > 0)
             pipeline.AddRetry(Retry(options, policy));
@@ -71,7 +77,7 @@ public static class ResultResilienceHttpClientBuilderExtensions
             MaxDelay = options.MaxRetryDelay,
             BackoffType = DelayBackoffType.Exponential,
             UseJitter = options.UseJitter,
-            ShouldHandle = arguments => ValueTask.FromResult(policy.ShouldRetry(arguments.Outcome)),
+            ShouldHandle = arguments => ValueTask.FromResult(policy.ShouldRetry(arguments.Outcome, arguments.Context)),
             // Its own reading of Retry-After, so a date is measured on the TimeProvider's clock.
             ShouldRetryAfterHeader = false,
             DelayGenerator = arguments => ValueTask.FromResult(policy.RetryAfter(arguments.Outcome.Result)),

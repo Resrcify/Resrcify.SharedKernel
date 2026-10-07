@@ -273,6 +273,54 @@ public class DistributedCachingServiceTests
             () => ((ICachingService)_cachingService).SetForAsync("for-key", new Adress("Test", 123), TimeSpan.MaxValue));
 
     [Fact]
+    public async Task SetForAsync_ShouldThrow_WhenTheLifetimeIsLongerThanTheLongestKept()
+        => await Should.ThrowAsync<ArgumentOutOfRangeException>(
+            () => ((ICachingService)_cachingService).SetForAsync(
+                "for-key",
+                new Adress("Test", 123),
+                ICachingService.MaxLifetime + TimeSpan.FromDays(1)));
+
+    [Fact]
+    public async Task SetForAsync_ShouldCache_ForTheLongestKept()
+    {
+        await ((ICachingService)_cachingService).SetForAsync("for-key", new Adress("Test", 123), ICachingService.MaxLifetime);
+
+        await _mockCache.ReceivedWithAnyArgs(1).SetAsync(default!, default!, default!, default);
+    }
+
+    [Theory]
+    [InlineData(366)]
+    [InlineData(-1)]
+    public async Task SetSlidingAsync_ShouldThrowAndCacheNothing_WhenTheWindowIsLongerThanTheLongestKept(int days)
+    {
+        var window = days < 0 ? TimeSpan.MaxValue : TimeSpan.FromDays(days);
+
+        await Should.ThrowAsync<ArgumentOutOfRangeException>(
+            () => ((ICachingService)_cachingService).SetSlidingAsync("sliding-key", new Adress("Test", 123), window));
+
+        await _mockCache.DidNotReceiveWithAnyArgs().SetAsync(default!, default!, default!, default);
+    }
+
+    [Fact]
+    public async Task SetAsync_ShouldThrowAndCacheNothing_WhenTheDateIsFurtherAwayThanTheLongestKept()
+    {
+        await Should.ThrowAsync<ArgumentOutOfRangeException>(
+            () => ((ICachingService)_cachingService).SetAsync("dated-key", new Adress("Test", 123), DateTimeOffset.MaxValue));
+        await Should.ThrowAsync<ArgumentOutOfRangeException>(
+            () => ((ICachingService)_cachingService).SetAsync(
+                "dated-key",
+                new Adress("Test", 123),
+                DateTimeOffset.UtcNow.AddDays(400)));
+
+        await _mockCache.DidNotReceiveWithAnyArgs().SetAsync(default!, default!, default!, default);
+    }
+
+    [Fact]
+    public async Task TryClaimForAsync_ShouldThrow_WhenTheClaimIsLongerThanTheLongestKept()
+        => await Should.ThrowAsync<ArgumentOutOfRangeException>(
+            () => _cachingService.TryClaimForAsync("claim-key", TimeSpan.MaxValue));
+
+    [Fact]
     public async Task SetForAsync_ShouldSerializeWithTheCallersOptions_WhenGivenOptions()
     {
         // Arrange: indentation and escaping are the writer's, so a writer made without the options would drop them.

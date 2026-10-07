@@ -6,9 +6,9 @@ namespace Resrcify.SharedKernel.Web.Resilience;
 /// <summary>
 /// How <c>AddResultResilience</c> retries, times out and breaks the circuit. Which responses are retried follows the
 /// result pattern: a status whose <c>ErrorType</c> (as <c>HttpResponseMessage.ToResultAsync</c> reads it) is
-/// transient (<c>Failure</c>, <c>ExternalFailure</c>, <c>Timeout</c>, <c>RateLimit</c>: a 5xx or a 429), plus
-/// network errors and attempts that timed out. A 400, 401, 403, 404 or 409 is an answer, not retried, unless listed in
-/// <see cref="AlsoRetry"/>.
+/// transient (<c>Failure</c>, <c>ExternalFailure</c>, <c>Timeout</c>, <c>RateLimit</c>: a 5xx, a 408 or a 429), plus
+/// network errors and attempts that timed out. Any other 4xx (400, 404, 409, 422, …) is an answer, not retried, unless
+/// listed in <see cref="AlsoRetry"/>.
 /// </summary>
 public sealed class ResultResilienceOptions
 {
@@ -18,7 +18,10 @@ public sealed class ResultResilienceOptions
     /// <summary>The first retry's delay (default 1 s); each next one doubles it, up to <see cref="MaxRetryDelay"/>.</summary>
     public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(1);
 
-    /// <summary>The longest computed delay between two attempts (default 30 s). A <c>Retry-After</c> isn't capped.</summary>
+    /// <summary>
+    /// The longest computed delay between two attempts (default 30 s). A <c>Retry-After</c> isn't capped by it; one at
+    /// least as long as what is left of <see cref="TotalTimeout"/> isn't waited for, the response is returned instead.
+    /// </summary>
     public TimeSpan MaxRetryDelay { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>Spread the delays randomly (default on), so the clients of a failing service don't retry in step.</summary>

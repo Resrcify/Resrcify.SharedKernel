@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using Resrcify.SharedKernel.Results.Diagnostics;
@@ -72,11 +73,37 @@ public sealed class LoggedExceptionsTests
     [Fact]
     public async Task Claim_ShouldBeTrueOnce_WhenManyClaimTheSameExceptionAtOnce()
     {
-        var exception = new InvalidOperationException("contended");
+        // Many fresh exceptions: the race was on the first use of Exception.Data, which each claims at once.
+        for (var round = 0; round < 200; round++)
+        {
+            var exception = new InvalidOperationException("contended");
+            using var start = new ManualResetEventSlim();
+            var claiming = Enumerable.Range(0, 8)
+                .Select(_ => Task.Run(() =>
+                {
+                    start.Wait();
+                    return LoggedExceptions.Claim(exception);
+                }))
+                .ToArray();
+            start.Set();
 
-        var claims = await Task.WhenAll(Enumerable.Range(0, 64).Select(_ => Task.Run(() => LoggedExceptions.Claim(exception))));
+            var claims = await Task.WhenAll(claiming);
 
-        claims.Count(claimed => claimed).ShouldBe(1);
+            claims.Count(claimed => claimed).ShouldBe(1, $"round {round}");
+        }
+    }
+
+    [Fact]
+    public void Release_ShouldLetTheExceptionBeClaimedAgain_WhenItIsThrownAgainLater()
+    {
+        var exception = new InvalidOperationException("cached failure");
+        LoggedExceptions.Claim(exception);
+
+        LoggedExceptions.Release(exception);
+
+        LoggedExceptions.IsLogged(exception).ShouldBeFalse();
+        LoggedExceptions.Claim(exception).ShouldBeTrue();
+        LoggedExceptions.Claim(exception).ShouldBeFalse();
     }
 
     [Fact]

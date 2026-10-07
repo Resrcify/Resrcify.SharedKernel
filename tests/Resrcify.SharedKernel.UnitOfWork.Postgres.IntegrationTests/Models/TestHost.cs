@@ -102,6 +102,22 @@ internal sealed class TestHost : IAsyncDisposable
         }
     }
 
+    /// <summary>The context's connection string.</summary>
+    public string ConnectionString => Services.GetPostgresConnectionString<TestDbContext>();
+
+    /// <summary>Sends the context's outbox notification <paramref name="times"/> times, each in a transaction of its own
+    /// (PostgreSQL folds equal notifications of one transaction into one).</summary>
+    public async Task NotifyAsync(int times)
+    {
+        await using var connection = new Npgsql.NpgsqlConnection(ConnectionString);
+        await connection.OpenAsync();
+        for (var sent = 0; sent < times; sent++)
+        {
+            await using var notify = new Npgsql.NpgsqlCommand("SELECT pg_notify('resrcify_outbox', 'TestDbContext')", connection);
+            await notify.ExecuteNonQueryAsync();
+        }
+    }
+
     /// <summary>Ends the outbox listener's connection from the server side, as a restart or a failover would.</summary>
     public async Task KillListenerAsync()
     {

@@ -19,6 +19,17 @@ public interface IUnitOfWork : IDisposable
     Task<Result> TryCompleteAsync(
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Runs <paramref name="operation"/> without a transaction of its own, and when it fails (a failed
+    /// <see cref="Result"/> or an exception) undoes in the change tracker what it changed: its entities are put back as
+    /// they were and the domain events it raised are dropped, so a later save in the same scope doesn't save half its
+    /// work. Changes pending before the call are left as they are. Nothing is saved either way.
+    /// </summary>
+    Task<TResponse> ExecuteAsync<TResponse>(
+        Func<CancellationToken, Task<TResponse>> operation,
+        CancellationToken cancellationToken = default)
+        where TResponse : Result;
+
     Task BeginTransactionAsync(
         IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
         TimeSpan? commandTimeout = null,

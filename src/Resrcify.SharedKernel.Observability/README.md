@@ -95,7 +95,10 @@ app.MapServiceMetrics();
 
 `Observability:OtlpEndpoint` is bound to `ObservabilityOptions` and validated at start-up: empty, or an absolute
 `http`/`https` URI. Anything else about the OTLP exporter (protocol, headers) is set on its named options:
-`services.Configure<OtlpExporterOptions>(ServiceTelemetryOptions.OtlpExporterName, otlp => …)`.
+`services.Configure<OtlpExporterOptions>(ServiceTelemetryOptions.OtlpExporterName, otlp => …)`. Switched to HTTP/protobuf
+(there or by `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`), the configured endpoint gets the traces path, so
+`http://tempo.monitoring:4318` posts to `http://tempo.monitoring:4318/v1/traces`; an endpoint set on the named options
+is used as is.
 
 Logs carry `TraceId` and `SpanId` as properties: a JSON formatter writes them, a text template shows them with
 `{TraceId}`. A service using Serilog.Enrichers.Span's `WithSpan` can drop it (a property already set is kept).

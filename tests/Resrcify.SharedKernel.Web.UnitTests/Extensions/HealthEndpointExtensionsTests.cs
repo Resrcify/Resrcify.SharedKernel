@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Net;
@@ -23,6 +24,8 @@ namespace Resrcify.SharedKernel.Web.UnitTests.Extensions;
     Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public sealed class HealthEndpointExtensionsTests
 {
+    private static readonly string[] Queues = ["a", "b"];
+
     [Fact]
     public async Task MapHealthEndpoints_ShouldRunEveryCheck_OnHealth()
     {
@@ -116,6 +119,32 @@ public sealed class HealthEndpointExtensionsTests
         (await GetAsync(app, "/status")).Checks.Length.ShouldBe(3);
         (await GetAsync(app, "/status/readiness")).Checks.ShouldBe(["database"]);
         (await GetAsync(app, "/status/liveness")).Checks.ShouldBe(["jobs"]);
+    }
+
+    [Fact]
+    public async Task MapHealthEndpoints_ShouldWriteEveryChecksData_WhenTheServerRefusesSynchronousWrites()
+    {
+        // TestServer refuses synchronous writes to the response, as Kestrel does; a check's data used to be flushed
+        // synchronously, which aborted the response after its headers.
+        await using var app = await TestHosts.StartAsync(
+            services => services
+                .AddHealthChecks()
+                .AddCheck(
+                    "bus",
+                    () => HealthCheckResult.Healthy(
+                        "consuming",
+                        new Dictionary<string, object> { ["transport"] = "rabbitmq", ["queues"] = Queues }),
+                    [HealthTags.Ready]),
+            app => app.MapHealthEndpoints());
+
+        using var client = app.GetTestClient();
+        using var response = await client.GetAsync(new Uri("/health/ready", UriKind.Relative));
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        var data = body.RootElement.GetProperty("checks").GetProperty("bus").GetProperty("data");
+        data.GetProperty("transport").GetString().ShouldBe("rabbitmq");
+        data.GetProperty("queues").GetArrayLength().ShouldBe(2);
     }
 
     private static Task<WebApplication> StartAsync(

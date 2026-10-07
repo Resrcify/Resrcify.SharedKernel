@@ -10,8 +10,9 @@ namespace Resrcify.SharedKernel.Results.Serialization;
 /// Writes and reads <see cref="Result"/> and <see cref="Result{TValue}"/> as
 /// <c>{ "isSuccess", "isFailure", "errors", "value" }</c> (names follow the serializer's naming policy). A failure is
 /// written without a value, so serializing one doesn't touch <see cref="Result{TValue}.Value"/> (which throws on a
-/// failure). Reading matches names case-insensitively and goes through <c>Result.Success</c> / <c>Result.Failure</c>,
-/// so a payload that breaks a result's rules (a failure without errors) is rejected.
+/// failure). Reading matches names case-insensitively, as written (<c>IsSuccess</c>) or as the naming policy writes them
+/// (<c>is_success</c>), and goes through <c>Result.Success</c> / <c>Result.Failure</c>, so a payload that breaks a
+/// result's rules (a failure without errors, a null error) is rejected.
 /// </summary>
 internal sealed class ResultJsonConverterFactory : JsonConverterFactory
 {
@@ -93,11 +94,11 @@ internal static class ResultJson
             var property = reader.GetString();
             reader.Read();
 
-            if (string.Equals(property, "IsSuccess", StringComparison.OrdinalIgnoreCase))
+            if (Is(property, "IsSuccess", options))
                 isSuccess = reader.GetBoolean();
-            else if (string.Equals(property, "Errors", StringComparison.OrdinalIgnoreCase))
+            else if (Is(property, "Errors", options))
                 errors = JsonSerializer.Deserialize<Error[]>(ref reader, options) ?? [];
-            else if (string.Equals(property, "Value", StringComparison.OrdinalIgnoreCase))
+            else if (Is(property, "Value", options))
                 value = JsonSerializer.Deserialize<TValue>(ref reader, options);
             else
                 reader.Skip();
@@ -107,6 +108,12 @@ internal static class ResultJson
             ? (success, errors)
             : throw new JsonException("A result needs \"isSuccess\".");
     }
+
+    // The name as written by WriteState (through the naming policy), or as is: a payload written without the policy (or
+    // before it was set) still reads.
+    private static bool Is(string? property, string name, JsonSerializerOptions options)
+        => string.Equals(property, name, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(property, Name(name, options), StringComparison.OrdinalIgnoreCase);
 
     // A payload that breaks a result's rules is bad JSON to the caller, not an argument error.
     public static TResult Create<TResult>(Func<TResult> create)

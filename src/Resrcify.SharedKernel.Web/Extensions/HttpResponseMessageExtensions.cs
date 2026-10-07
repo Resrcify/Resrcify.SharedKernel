@@ -15,7 +15,8 @@ namespace Resrcify.SharedKernel.Web.Extensions;
 
 /// <summary>
 /// Reads an <see cref="HttpResponseMessage"/> as a <see cref="Result"/>: the body on success, the problem details'
-/// errors (or one error for the status) on failure.
+/// errors (or one error for the status) on failure. The options given apply to the body; the problem details and
+/// their errors are read as SharedKernel writes them, whatever the options.
 /// </summary>
 public static class HttpResponseMessageExtensions
 {
@@ -34,7 +35,7 @@ public static class HttpResponseMessageExtensions
         CancellationToken cancellationToken = default)
     {
         if (!response.IsSuccessStatusCode)
-            return Result.Failure<T>(await ReadErrorsAsync(response, options, cancellationToken));
+            return Result.Failure<T>(await ReadErrorsAsync(response, cancellationToken));
 
         if (HasNoContent(response))
             return Result.Failure<T>(EmptyContent<T>(response));
@@ -65,20 +66,19 @@ public static class HttpResponseMessageExtensions
 
     public static async Task<Result> ToResultAsync(
         this HttpResponseMessage response,
-        JsonSerializerOptions? options = null,
         CancellationToken cancellationToken = default)
     {
         if (response.IsSuccessStatusCode)
             return Result.Success();
 
-        return Result.Failure(await ReadErrorsAsync(response, options, cancellationToken));
+        return Result.Failure(await ReadErrorsAsync(response, cancellationToken));
     }
 
     // The errors of a failed response: those in its problem details, or else one error for its status,
-    // whatever the body is (empty, an HTML error page from a proxy, problem details without errors).
+    // whatever the body is (empty, an HTML error page from a proxy, problem details without errors). Read with this
+    // class's options, not the caller's: those are chosen for the success body and could misread the errors.
     private static async Task<Error[]> ReadErrorsAsync(
         HttpResponseMessage response,
-        JsonSerializerOptions? options,
         CancellationToken cancellationToken)
     {
         if (HasNoContent(response))
@@ -91,10 +91,10 @@ public static class HttpResponseMessageExtensions
 
             var problemDetails = await JsonSerializer.DeserializeAsync<ProblemDetails>(
                 content,
-                options ?? _options,
+                _options,
                 cancellationToken: cancellationToken);
 
-            return TryExtractErrors(problemDetails, options, out var errors)
+            return TryExtractErrors(problemDetails, out var errors)
                 ? errors
                 : [StatusError(response)];
         }
@@ -123,9 +123,10 @@ public static class HttpResponseMessageExtensions
             $"The response ({(int)response.StatusCode}) had no {typeof(T).Name} in it.",
             ErrorType.ExternalFailure);
 
+    // A null entry or Error.None (as a 3.x server wrote Result.Failure([Error.None])) is no error: dropped, and with
+    // nothing left the status's own error stands in.
     private static bool TryExtractErrors(
         ProblemDetails? details,
-        JsonSerializerOptions? options,
         out Error[] errors)
     {
         errors = [];
@@ -140,20 +141,22 @@ public static class HttpResponseMessageExtensions
         if (errorsObj is not JsonElement json)
             return false;
 
-        var opts = options ?? _options;
-
         if (json.ValueKind == JsonValueKind.Array)
         {
-            errors = json.Deserialize<Error[]>(opts) ?? [];
+            errors = (json.Deserialize<Error?[]>(_options) ?? [])
+                .OfType<Error>()
+                .Where(error => error != Error.None)
+                .ToArray();
             return errors.Length > 0;
         }
 
         if (json.ValueKind == JsonValueKind.Object)
         {
-            var dict = json.Deserialize<Dictionary<string, string[]>>(opts) ?? [];
+            var dict = json.Deserialize<Dictionary<string, string?[]?>>(_options) ?? [];
             errors = dict
+                .Where(kvp => kvp.Value is not null)
                 .SelectMany(
-                    kvp => kvp.Value.Select(
+                    kvp => kvp.Value!.OfType<string>().Select(
                         v => Error.Validation(
                             kvp.Key,
                             v)))

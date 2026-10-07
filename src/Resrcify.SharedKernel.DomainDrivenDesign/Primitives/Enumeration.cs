@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -23,8 +24,9 @@ public abstract class Enumeration<TEnum>
 {
     private static MemberSet<TEnum>? _members;
 
+    /// <summary>The members by value, listed in the order they are declared.</summary>
     public static IReadOnlyDictionary<int, TEnum> Enumerations
-        => GetMembers().ByValue;
+        => GetMembers().InDeclarationOrder;
 
     public int Value { get; protected init; }
     public string Name { get; protected init; }
@@ -39,9 +41,12 @@ public abstract class Enumeration<TEnum>
         int value)
         => GetMembers().ByValue.GetValueOrDefault(value);
 
+    /// <summary>The member named <paramref name="name"/> (ignoring case); <see langword="null"/> for none, or a null name.</summary>
     public static TEnum? FromName(
-        string name)
-        => GetMembers().ByName.GetValueOrDefault(name);
+        string? name)
+        => name is null
+            ? null
+            : GetMembers().ByName.GetValueOrDefault(name);
 
     public static implicit operator int(
         Enumeration<TEnum> e)
@@ -58,7 +63,7 @@ public abstract class Enumeration<TEnum>
     }
 
     public static bool TryFromName(
-        string name,
+        string? name,
         out TEnum? result)
     {
         result = FromName(name);
@@ -111,9 +116,15 @@ public abstract class Enumeration<TEnum>
         ThrowOnDuplicates(values.GroupBy(member => member.Value).Where(group => group.Count() > 1), "value");
         ThrowOnDuplicates(values.GroupBy(member => member.Name, StringComparer.OrdinalIgnoreCase).Where(group => group.Count() > 1), "name");
 
+        // Frozen for the lookups; the listing keeps the declaration order, which a frozen dictionary doesn't (it sorts a
+        // few sparse values and lists more in hash order).
+        var inDeclarationOrder = new OrderedDictionary<int, TEnum>(values.Count);
+        foreach (var member in values)
+            inDeclarationOrder.Add(member.Value, member);
         var members = new MemberSet<TEnum>(
             values.ToFrozenDictionary(member => member.Value),
-            values.ToFrozenDictionary(member => member.Name, StringComparer.OrdinalIgnoreCase));
+            values.ToFrozenDictionary(member => member.Name, StringComparer.OrdinalIgnoreCase),
+            new ReadOnlyDictionary<int, TEnum>(inDeclarationOrder));
         return (members, !fields.Contains(null));
     }
 
@@ -128,5 +139,7 @@ public abstract class Enumeration<TEnum>
 
     private sealed record MemberSet<TMember>(
         FrozenDictionary<int, TMember> ByValue,
-        FrozenDictionary<string, TMember> ByName);
+        FrozenDictionary<string, TMember> ByName,
+        ReadOnlyDictionary<int, TMember> InDeclarationOrder)
+        where TMember : notnull;
 }

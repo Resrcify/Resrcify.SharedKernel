@@ -10,8 +10,12 @@ using Resrcify.SharedKernel.Abstractions.Caching;
 namespace Resrcify.SharedKernel.Caching.Primitives;
 
 
+/// <summary>
+/// <see cref="ICachingService"/> over an <see cref="IDistributedCache"/>, and the <see cref="IClaimStore"/> over the same
+/// cache (claims atomic within one process).
+/// </summary>
 public sealed class DistributedCachingService
-    : ICachingService
+    : ICachingService, IClaimStore
 {
     private const int DefaultBulkBatchSize = 128;
 
@@ -67,11 +71,9 @@ public sealed class DistributedCachingService
             throw new ArgumentException(
                 $"'{key}' has no expiration: cache it with SetForAsync, SetSlidingAsync or an absolute expiration.",
                 nameof(absoluteExpiration));
-        if (absoluteExpirationRelativeToNow > DateTimeOffset.MaxValue - _time.GetUtcNow())
-            throw new ArgumentOutOfRangeException(
-                nameof(absoluteExpirationRelativeToNow),
-                absoluteExpirationRelativeToNow,
-                "The entry would expire after the last date there is: give it a real lifetime (for example days), not TimeSpan.MaxValue.");
+        EnsureWithinMaxLifetime(absoluteExpirationRelativeToNow, nameof(absoluteExpirationRelativeToNow));
+        EnsureWithinMaxLifetime(slidingExpiration, nameof(slidingExpiration));
+        EnsureWithinMaxLifetime(absoluteExpiration - _time.GetUtcNow(), nameof(absoluteExpiration));
 
         byte[] cachedValue = Serialize(value, serializerOptions);
         await _distributedCache.SetAsync(
@@ -90,6 +92,12 @@ public sealed class DistributedCachingService
         => await _distributedCache.RemoveAsync(key, cancellationToken);
 
     /// <inheritdoc/>
+    public Task ReleaseAsync(
+        string key,
+        CancellationToken cancellationToken = default)
+        => RemoveAsync(key, cancellationToken);
+
+    /// <inheritdoc/>
     /// <remarks>
     /// <c>IDistributedCache</c> can't set a key only if it is absent, so this reads and then sets, one claim of a key at a
     /// time in this process: atomic within the process, not across processes sharing the cache (two instances can both
@@ -102,11 +110,7 @@ public sealed class DistributedCachingService
         CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(expiresIn, TimeSpan.Zero);
-        if (expiresIn > DateTimeOffset.MaxValue - _time.GetUtcNow())
-            throw new ArgumentOutOfRangeException(
-                nameof(expiresIn),
-                expiresIn,
-                "The claim would expire after the last date there is: give it a real lifetime.");
+        EnsureWithinMaxLifetime(expiresIn, nameof(expiresIn));
 
         var stripe = ClaimStripes[(uint)StringComparer.Ordinal.GetHashCode(key) % ClaimStripeCount];
         await stripe.WaitAsync(cancellationToken);
@@ -162,6 +166,20 @@ public sealed class DistributedCachingService
     // (indentation, escaping): a writer made here would ignore them.
     private static byte[] Serialize<T>(T value, JsonSerializerOptions? options)
         => JsonSerializer.SerializeToUtf8Bytes(value, options);
+
+    // Every entry expires, and within a bound: a lifetime of TimeSpan.MaxValue (3.x's "keep it") or of centuries would
+    // keep it for good.
+    private static void EnsureWithinMaxLifetime(
+        TimeSpan? lifetime,
+        string parameterName)
+    {
+        if (lifetime > ICachingService.MaxLifetime)
+            throw new ArgumentOutOfRangeException(
+                parameterName,
+                lifetime,
+                $"The entry would be kept longer than {ICachingService.MaxLifetime.TotalDays} days: give it a real " +
+                "lifetime (for example hours or days), not TimeSpan.MaxValue.");
+    }
 
     private static SemaphoreSlim[] CreateClaimStripes()
     {

@@ -71,6 +71,30 @@ public sealed class OutboxHealthCheckTests
         result.Description.ShouldNotBeNull().ShouldContain("hasn't been measured");
     }
 
+    [Fact]
+    public async Task CheckHealthAsync_ShouldFail_WhenTheBacklogWasNeverMeasuredForThreeIntervalsSinceStarting()
+    {
+        await using var host = await CreateAsync();
+        await host.DropOutboxTableAsync();
+        await host.Monitor.StartAsync(CancellationToken.None);
+        try
+        {
+            host.Monitor.StartedAt.ShouldBe(Start);
+            (await CheckAsync(host)).Status.ShouldBe(HealthStatus.Healthy);   // just started
+
+            host.Clock.Advance(TimeSpan.FromSeconds(91));
+            var result = await CheckAsync(host);
+
+            host.Monitor.Latest.ShouldBeNull();
+            result.Status.ShouldBe(HealthStatus.Degraded);
+            result.Description.ShouldNotBeNull().ShouldContain("hasn't been measured since the monitor started");
+        }
+        finally
+        {
+            await host.Monitor.StopAsync(CancellationToken.None);
+        }
+    }
+
     private static Task<HealthCheckResult> CheckAsync(OutboxBacklogTestHost host)
     {
         var check = new OutboxHealthCheck<TestDbContext>(host.Monitor, MaxWaitingAge, host.Clock);

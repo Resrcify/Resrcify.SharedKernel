@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 using Resrcify.SharedKernel.Results.Primitives;
 
 namespace Resrcify.SharedKernel.MessageBus.ScatterGather;
@@ -15,6 +16,13 @@ public sealed record ScatterRequestFailed(IReadOnlyList<ScatterRequestFailed.Err
     public Error[] ToErrors()
         => [.. Errors.Select(error => new Error(error.Code, error.Message, error.Type))];
 
-    /// <summary>One <see cref="Error"/> on the wire.</summary>
-    public sealed record ErrorData(string Code, string Message, ErrorType Type);
+    /// <summary>
+    /// One <see cref="Error"/> on the wire. Its type is written as its name and read as a name or a number, whatever
+    /// enum settings the responder's and the requester's serialization have: the bus' own reply mustn't become
+    /// unreadable because one service writes enums as numbers and the other refuses them.
+    /// </summary>
+    public sealed record ErrorData(
+        string Code,
+        string Message,
+        [property: JsonConverter(typeof(JsonStringEnumConverter<ErrorType>))] ErrorType Type);
 }

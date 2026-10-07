@@ -21,9 +21,12 @@ public static class PersistenceErrors
     /// <summary>The <c>SQLSTATE</c> PostgreSQL uses for a deadlock.</summary>
     public const string DeadlockSqlState = "40P01";
 
-    /// <summary>A row changed (or was deleted) since it was read: its concurrency token no longer matches.</summary>
+    /// <summary>
+    /// A row changed (or was deleted) since it was read: its concurrency token no longer matches. A conflict to an HTTP
+    /// caller (409), but transient (<c>Error.IsTransient()</c>) to the message bus, which retries it in a new scope.
+    /// </summary>
     public static readonly Error Concurrency = Error.Conflict(
-        "Persistence.Concurrency",
+        ErrorTypeExtensions.ConcurrencyConflictCode,
         "The data was changed by someone else since it was read. Read it again and retry.");
 
     /// <summary>The save would duplicate a value that must be unique.</summary>
@@ -76,9 +79,10 @@ public static class PersistenceErrors
     }
 
     /// <summary>
-    /// The <c>SQLSTATE</c> of the database exception behind <paramref name="exception"/>: itself, the cause of a
-    /// <see cref="DbUpdateException"/>, or of a <see cref="RetryLimitExceededException"/> (a retrying execution strategy
-    /// that gave up).
+    /// The <c>SQLSTATE</c> of the database exception behind <paramref name="exception"/>: itself, or the first one among
+    /// its causes, e.g. under a <see cref="DbUpdateException"/>, a <see cref="RetryLimitExceededException"/> (a retrying
+    /// execution strategy that gave up), or the <see cref="InvalidOperationException"/> a non-retrying Npgsql strategy
+    /// wraps a transient failure in.
     /// </summary>
     private static string? FindSqlState(Exception exception)
     {
@@ -86,8 +90,6 @@ public static class PersistenceErrors
         {
             if (current is DbException { SqlState: { } sqlState })
                 return sqlState;
-            if (current is not (DbUpdateException or RetryLimitExceededException))
-                return null;
         }
 
         return null;

@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using Resrcify.SharedKernel.Web.Authentication;
 
 namespace Resrcify.SharedKernel.Web.Extensions;
@@ -34,10 +36,38 @@ public static class ResrcifyJwtBearerServiceCollectionExtensions
                 $"{ResrcifyJwtOptions.SectionName}:{nameof(ResrcifyJwtOptions.Authority)} must be an absolute http(s) URI.")
             .ValidateOnStart();
 
-        services.ConfigureOptions<ConfigureResrcifyJwtBearerOptions>();
+        // A delegate, not a type implementing IConfigureNamedOptions<JwtBearerOptions>: MVC loads every type of this
+        // assembly to find controllers (ApiController), and such a type would need the JwtBearer package in every
+        // controller host, also those that never call this method.
+        services
+            .AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+            .Configure<IOptions<ResrcifyJwtOptions>>(ApplyResrcifyJwt);
 
         return services
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(configure ?? (_ => { }));
+    }
+
+    /// <summary>
+    /// Points the JWT bearer scheme at Resrcify.Identity (<see cref="ResrcifyJwtOptions"/>): signing keys from the
+    /// authority's discovery document (JWKS), and the issuer, audience, lifetime and signature all checked.
+    /// </summary>
+    private static void ApplyResrcifyJwt(
+        JwtBearerOptions options,
+        IOptions<ResrcifyJwtOptions> jwtOptions)
+    {
+        var jwt = jwtOptions.Value;
+
+        options.Authority = jwt.Authority;
+        options.RequireHttpsMetadata = jwt.RequireHttpsMetadata;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwt.Issuer,
+            ValidAudience = jwt.Audience,
+        };
     }
 }

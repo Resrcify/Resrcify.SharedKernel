@@ -87,23 +87,47 @@ public sealed class SubscriptionOptions<TEvent>
         return _partitions[index].RunAsync(handle);
     }
 
-    /// <summary>Runs work one at a time, in the order it reached the partition.</summary>
+    /// <summary>
+    /// Runs work one at a time, in the order it reached the partition. When work leaves by an exception (its event goes
+    /// back to the queue, to be delivered again), the work already waiting behind it goes back too, without running:
+    /// handled now, it would come before the event it followed, whose redelivery is received after it. Requeued in order,
+    /// they come back in order. Work arriving after that runs as usual.
+    /// </summary>
     private sealed class Partition
     {
         private Task _tail = Task.CompletedTask;
+        private long _issued;
+        private long _sendBackThrough;
 
         public async Task RunAsync(Func<Task> work)
         {
+            var ticket = Interlocked.Increment(ref _issued);
             var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var previous = Interlocked.Exchange(ref _tail, done.Task);
             try
             {
                 await previous;
-                await work();
+                if (ticket <= Volatile.Read(ref _sendBackThrough))
+                    throw new SentBackBehindException();
+                await RunWorkAsync(work);
             }
             finally
             {
                 done.SetResult();
+            }
+        }
+
+        private async Task RunWorkAsync(Func<Task> work)
+        {
+            try
+            {
+                await work();
+            }
+            catch
+            {
+                // Everything queued behind it so far follows it back.
+                Volatile.Write(ref _sendBackThrough, Volatile.Read(ref _issued));
+                throw;
             }
         }
     }

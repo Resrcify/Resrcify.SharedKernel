@@ -82,6 +82,13 @@ internal sealed class OutboxBacklogTestHost : IAsyncDisposable
         await context.SaveChangesAsync();
     }
 
+    /// <summary>Drops the outbox table, as a database without the migrations would be: every measurement fails.</summary>
+    public async Task DropOutboxTableAsync()
+    {
+        await using var scope = _provider.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<TestDbContext>().Database.ExecuteSqlRawAsync("DROP TABLE \"OutboxMessages\"");
+    }
+
     public async ValueTask DisposeAsync()
     {
         Monitor.Dispose();

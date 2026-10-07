@@ -35,6 +35,10 @@ internal sealed class PendingBatch(IEnumerable<string> keys, bool retainReplies 
     // Counted here: ConcurrentDictionary.Count takes every one of its locks, on every reply.
     private int _answered;
 
+    // Taken by Record and Close: a reply is either accepted before the batch closes, or late.
+    private readonly Lock _gate = new();
+    private bool _closed;
+
     public Task AllAnswered => _allAnswered.Task;
 
     /// <summary>
@@ -48,17 +52,36 @@ internal sealed class PendingBatch(IEnumerable<string> keys, bool retainReplies 
     {
         if (!_keys.Contains(key))
             return ReplyOutcome.Late;
-        if (!_replies.TryAdd(key, retainReplies ? message : Settled))
-            return ReplyOutcome.Duplicate;
 
-        // Written before it is counted: the reply that completes the count finds every other reply already written.
-        _arrivals?.Writer.TryWrite(new(key, message));
-        if (Interlocked.Increment(ref _answered) == _keys.Count)
+        lock (_gate)
         {
-            _allAnswered.TrySetResult();
+            if (_closed)
+                return ReplyOutcome.Late;
+            if (!_replies.TryAdd(key, retainReplies ? message : Settled))
+                return ReplyOutcome.Duplicate;
+
+            // Written before it is counted: the reply that completes the count finds every other reply already written.
+            _arrivals?.Writer.TryWrite(new(key, message));
+            if (Interlocked.Increment(ref _answered) == _keys.Count)
+            {
+                _allAnswered.TrySetResult();
+                _arrivals?.Writer.TryComplete();
+            }
+            return ReplyOutcome.Accepted;
+        }
+    }
+
+    /// <summary>
+    /// The timeout has passed: later replies are late. The replies accepted so far stay readable from
+    /// <see cref="Arrivals"/>, which ends after them.
+    /// </summary>
+    public void Close()
+    {
+        lock (_gate)
+        {
+            _closed = true;
             _arrivals?.Writer.TryComplete();
         }
-        return ReplyOutcome.Accepted;
     }
 
     public Gathered<TResponse> ToGathered<TResponse>()

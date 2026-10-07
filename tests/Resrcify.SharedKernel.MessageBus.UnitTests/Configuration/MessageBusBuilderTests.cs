@@ -1,3 +1,8 @@
+using Rebus.Transport.InMem;
+using System.Linq;
+using Microsoft.Extensions.Hosting;
+using System.Threading.Tasks;
+using System.Threading;
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
@@ -19,6 +24,32 @@ namespace Resrcify.SharedKernel.MessageBus.UnitTests.Configuration;
 public sealed class MessageBusBuilderTests
 {
     private static readonly RabbitMqConnection Connection = new("localhost", 5672, "guest", "guest");
+
+    [Fact]
+    public void AddScatterGather_ShouldStartTheReplyBusBeforeTheHostedServicesRegisteredEarlier()
+    {
+        // The outbox lanes, registered first, gather through the reply bus: it must be up before them and stop after.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddHostedService<EarlierHostedService>();
+
+        services.AddMessageBus(bus => bus.UseInMemory(new InMemNetwork()).AddScatterGather());
+
+        var hosted = services.Where(descriptor => descriptor.ServiceType == typeof(IHostedService)).ToList();
+        hosted.IndexOf(hosted.Single(descriptor => descriptor.ImplementationType == typeof(EarlierHostedService)))
+            .ShouldBeGreaterThan(0);
+        using var provider = services.BuildServiceProvider();
+        provider.GetServices<IHostedService>().First().ShouldBeOfType<Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterGatherTransport>();
+    }
+
+    private sealed class EarlierHostedService : IHostedService
+    {
+        public Task StartAsync(CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task StopAsync(CancellationToken cancellationToken)
+            => Task.CompletedTask;
+    }
 
     [Fact]
     public void WithInputQueue_ShouldGiveTheServiceItsOwnErrorQueue_WhenSet()

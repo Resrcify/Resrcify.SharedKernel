@@ -8,6 +8,7 @@ using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using Quartz;
 using Resrcify.SharedKernel.Abstractions.Mediator;
+using Resrcify.SharedKernel.Results.Diagnostics;
 using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
@@ -93,8 +94,55 @@ public sealed class CommandJobTests
     }
 
     [Fact]
+    public async Task Execute_ShouldLogADebugLine_WhenTheMediatorLoggedTheExceptionAlready()
+    {
+        var failure = new InvalidOperationException("broken");
+        LoggedExceptions.Claim(failure);   // as the mediator's behaviors do
+        _sender.Send<Result>(Arg.Any<PingCommand>(), Arg.Any<CancellationToken>()).ThrowsAsync(failure);
+
+        await Should.ThrowAsync<JobExecutionException>(() => _job.Execute(Context()).AsTask());
+
+        var entry = _logger.Entries.ShouldHaveSingleItem();
+        entry.Level.ShouldBe(LogLevel.Debug);
+        entry.Exception.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Execute_ShouldLogTheSameExceptionAtErrorAgain_WhenALaterRunThrowsIt()
+    {
+        var cached = new InvalidOperationException("the cached client failed to start");
+        _sender.Send<Result>(Arg.Any<PingCommand>(), Arg.Any<CancellationToken>()).ThrowsAsync(cached);
+
+        Task RunAsync() => _job.Execute(Context()).AsTask();
+        await Should.ThrowAsync<JobExecutionException>(RunAsync);
+        await Should.ThrowAsync<JobExecutionException>(RunAsync);
+
+        _logger.Entries.Select(entry => entry.Level).ShouldBe([LogLevel.Error, LogLevel.Error]);
+    }
+
+    [Fact]
+    public void SendCommandJob_ShouldRefuseACommandReturningAValue_SentAsAResult()
+        => Should.Throw<InvalidOperationException>(
+                () => new SendCommandJob<CountCommand>(_sender, new RecordingLogger<SendCommandJob<CountCommand>>()))
+            .Message.ShouldContain("CountCommand returns Result<Int32>");
+
+    [Fact]
+    public async Task SendCommandJob_ShouldSendACommandReturningAValue_AsItsOwnResultType()
+    {
+        _sender.Send<Result<int>>(Arg.Any<CountCommand>(), Arg.Any<CancellationToken>()).Returns(Result.Success(3));
+        var job = new SendCommandJob<CountCommand, Result<int>>(_sender, new RecordingLogger<SendCommandJob<CountCommand, Result<int>>>());
+
+        await job.Execute(Context());
+
+        await _sender.Received(1).Send<Result<int>>(Arg.Any<CountCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public void CommandJobs_ShouldNotOverlap_AsQuartzSeesThem()
         => JobBuilder.Create<SendCommandJob<PingCommand>>().Build().ConcurrentExecutionDisallowed.ShouldBeTrue();
+
+    /// <summary>A command returning a value: an <c>IRequest&lt;Result&lt;int&gt;&gt;</c>, and so (covariance) an <c>IRequest&lt;Result&gt;</c> too.</summary>
+    private sealed class CountCommand : ICommand<int>;
 
     private void Sends(Result result)
         => _sender.Send<Result>(Arg.Any<PingCommand>(), Arg.Any<CancellationToken>()).Returns(result);

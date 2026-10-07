@@ -115,6 +115,11 @@ services.AddMessageBus(bus => bus
     .AddScatterGather());
 ```
 
+A virtual host other than `/`, or TLS, goes on the connection (`new RabbitMqConnection(...) { VirtualHost = "svc",
+UseTls = true }`), so every connection the package makes uses it: each bus', and the broker watcher's that the health
+check and the restarts after an outage rely on. Certificates and other connection-factory settings go in the
+configuration strategy, in both `ConfigureTransport` (the buses) and `ConfigureConnectionFactory` (the watcher).
+
 `AddScatterGather` opens a reply queue private to this service instance (deleted when the instance goes
 away), so with several instances each one receives only its own replies. Handlers need no registration:
 it follows the mediator's assembly scan (whether `AddMediator` runs before or after it), wires each handler
@@ -328,7 +333,7 @@ services.AddMessageBus(bus => bus
 |---|---|
 | a success | is done |
 | a failure that is the event's fault (every error `NotFound`, `Validation`, `Conflict`, `Unauthorized` or `Forbidden`) | logs it and doesn't retry (`outcome=rejected`): another try would fail the same way |
-| any other failure (`Failure`, `ExternalFailure`, `Timeout`, `RateLimit`) | tries the handler again in place (5 tries, 0.5, 1, 2 and 4 s apart), then moves the event to the service's own `<input queue>.error` (`outcome=error`) |
+| any other failure (`Failure`, `ExternalFailure`, `Timeout`, `RateLimit`), or a concurrency conflict | tries the handler again in place (5 tries, 0.5, 1, 2 and 4 s apart; more tries wait 4 s each), each try in a DI scope and a Rebus transaction of its own (what a failed try changed or published is dropped), then moves the event to the service's own `<input queue>.error` (`outcome=error`) |
 
 An exception is a bug, not an answer, but it's caught and handled like the last row; only a shutdown leaves the event
 for the next instance. A retry starts at the handler that failed, so the ones before it don't run twice. The number of
@@ -340,7 +345,8 @@ tries follows the bus' retry strategy (`options.RetryStrategy(maxDeliveryAttempt
   its `ICachingService` (3 hours by default: an outbox retry or a redelivery comes within minutes; each entry expires
   then). Over an in-memory cache each instance remembers its own; over Redis, the
   whole service does. Without it, handling an event twice must be harmless.
-  The ID is claimed before the handlers run, in one step (`ICachingService.TryClaimForAsync`), and a copy that arrives
+  The ID is claimed before the handlers run, in one step (`IClaimStore.TryClaimForAsync`: the registered claim store,
+  or the registered `ICachingService` when it is one, as `DistributedCachingService` is), and a copy that arrives
   while the event is being handled on the same instance is skipped without asking the cache, so two copies arriving
   together aren't both handled. Across instances that holds as far as the cache claims atomically: Redis with
   `SET NX` does, `DistributedCachingService` only within one process. The claim is released when the event goes to the
@@ -503,7 +509,7 @@ The package's own metrics (`MessageBusDiagnostics.MeterName`):
 | A request outlives its timeout | It expires on the bus (`TimeToBeReceived`) and is never handled. |
 | A responder's health check turns unhealthy | Its queue's bus is shut down, which hands the messages it prefetched back to the other instances. It restarts once healthy. (Pausing the workers would strand them.) |
 | A responder starts failing requests between health checks (e.g. it lost its upstream) | The first failure brings its health check forward (at most once a second), and the failed request goes back to the queue. If unhealthy, it stops consuming within about a second, and the other instances take the requests instead of their tries being used up on this one. |
-| RabbitMQ restarts | Every bus restarts as soon as the broker is back (about a second), instead of after Rebus' own one-minute wait. |
+| RabbitMQ restarts | The scatter-gather reply bus and every rate-limited queue restart as soon as the broker is back (about a second), instead of after Rebus' own one-minute wait. The service's own bus (events, commands) is Rebus' and resumes within that minute: nothing is lost, delivery waits. |
 | A request keeps failing on a responder (5 tries) | It is answered with the last try's errors. A message the bus can't handle at all (unreadable) is logged and dropped instead, not moved to the `error` queue: the requester counts it as unanswered. |
 | A request's requester stops waiting while it is handled | The handler's token is cancelled and the request is dropped unanswered. |
 | A responder stops consuming mid-request (unhealthy, or shutting down) | The handler's token is cancelled and the request goes back to the queue, for another instance. |

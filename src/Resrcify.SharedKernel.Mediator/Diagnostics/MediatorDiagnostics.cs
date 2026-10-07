@@ -72,7 +72,7 @@ public static class MediatorDiagnostics
             activity?.SetTag("mediator.outcome", FailureOutcome);
             activity?.SetTag("mediator.error.code", error.Code);
             activity?.SetTag("mediator.error.type", error.Type.ToString());
-            if (failure.Errors.Any(e => e.Type.IsTransient()))
+            if (failure.Errors.Any(e => e.IsTransient()))
                 activity?.SetStatus(ActivityStatusCode.Error, error.Code);
             RecordDuration(requestType, error.Type.ToString(), elapsed);
             return;

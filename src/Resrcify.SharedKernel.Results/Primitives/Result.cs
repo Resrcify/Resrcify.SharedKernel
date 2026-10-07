@@ -17,6 +17,9 @@ public class Result
         bool isSuccess,
         Error error)
     {
+        // A null error isn't "no error" (that is Error.None): every reader of a failure's errors dereferences them.
+        ArgumentNullException.ThrowIfNull(error);
+
         if (isSuccess &&
             error != Error.None)
             throw new InvalidOperationException();
@@ -48,6 +51,9 @@ public class Result
 
         if (!isSuccess && Array.IndexOf(copy, Error.None) >= 0)
             throw new ArgumentException("A failed result's errors can't include Error.None.", nameof(errors));
+
+        if (Array.IndexOf(copy, null) >= 0)
+            throw new ArgumentException("A result's errors can't include null.", nameof(errors));
 
         IsSuccess = isSuccess;
         Errors = copy;

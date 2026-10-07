@@ -178,6 +178,52 @@ public sealed partial class ServiceTelemetryServiceCollectionExtensionsTests
     }
 
     [Theory]
+    [InlineData("http://tempo.monitoring:4318", "http://tempo.monitoring:4318/v1/traces")]
+    [InlineData("http://tempo.monitoring:4318/", "http://tempo.monitoring:4318/v1/traces")]
+    [InlineData("http://collector/otlp", "http://collector/otlp/v1/traces")]
+    [InlineData("http://tempo.monitoring:4318/v1/traces", "http://tempo.monitoring:4318/v1/traces")]
+    public void AddServiceTelemetry_ShouldPostTracesToTheirPath_WhenTheExporterIsSwitchedToHttp(
+        string endpoint,
+        string expected)
+    {
+        var services = new ServiceCollection();
+        services.AddServiceTelemetry(
+            Telemetry.ServiceName,
+            Telemetry.Configuration(new() { ["Observability:OtlpEndpoint"] = endpoint }));
+        services.Configure<OtlpExporterOptions>(
+            ServiceTelemetryOptions.OtlpExporterName,
+            otlp => otlp.Protocol = OtlpExportProtocol.HttpProtobuf);
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<IOptionsMonitor<OtlpExporterOptions>>()
+            .Get(ServiceTelemetryOptions.OtlpExporterName)
+            .Endpoint
+            .ShouldBe(new Uri(expected));
+    }
+
+    [Fact]
+    public void AddServiceTelemetry_ShouldKeepTheServicesOwnEndpoint_WhenItSetsOneOverHttp()
+    {
+        var services = new ServiceCollection();
+        services.AddServiceTelemetry(
+            Telemetry.ServiceName,
+            Telemetry.Configuration(new() { ["Observability:OtlpEndpoint"] = "http://tempo.monitoring:4318" }));
+        services.Configure<OtlpExporterOptions>(
+            ServiceTelemetryOptions.OtlpExporterName,
+            otlp =>
+            {
+                otlp.Protocol = OtlpExportProtocol.HttpProtobuf;
+                otlp.Endpoint = new Uri("http://gateway/traces");
+            });
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<IOptionsMonitor<OtlpExporterOptions>>()
+            .Get(ServiceTelemetryOptions.OtlpExporterName)
+            .Endpoint
+            .ShouldBe(new Uri("http://gateway/traces"));
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     public void AddServiceTelemetry_ShouldNotExportOverOtlp_WhenNoEndpointIsSet(

@@ -9,15 +9,18 @@ using Quartz;
 namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 
 /// <summary>
-/// Whether every scheduled Quartz job still fires: a job that hasn't fired or finished (see
-/// <see cref="JobHeartbeatRegistry"/>) for longer than <c>maxSilence(interval)</c> fails the check. A job's interval is
-/// read from its triggers (the time between their next two fires), so it covers simple and cron schedules alike;
-/// a job without a repeating, active trigger (paused, finished, a one-off) isn't checked.
+/// Whether every scheduled Quartz job still fires: a job whose next fire after its last one (see
+/// <see cref="JobHeartbeatRegistry"/>) is overdue by more than its allowance fails the check. The allowance is
+/// <c>maxSilence(interval)</c> less one interval, the interval being the gap from that fire to the one after it, so
+/// uneven schedules (business hours, weekdays, fixed times) are judged by the fire that is actually due, not by the
+/// short gaps of another part of the day. A job without a repeating, active trigger (paused, finished, a one-off)
+/// isn't checked.
 /// </summary>
 /// <remarks>
 /// Meant for <c>/health/live</c>: a scheduler that stopped firing is fixed by a restart, which re-arms it. Before a
 /// job's first fire its silence counts from when it was due to start (the process start, or its trigger's start time
-/// when later), so a start-up delay isn't a stall.
+/// when later), so a start-up delay isn't a stall. On an even schedule this is "silent for longer than
+/// <c>maxSilence(interval)</c>".
 /// </remarks>
 internal sealed class QuartzJobsHealthCheck(
     JobHeartbeatRegistry registry,
@@ -40,17 +43,18 @@ internal sealed class QuartzJobsHealthCheck(
         var data = new Dictionary<string, object>(StringComparer.Ordinal);
         foreach (var job in await scheduler.GetJobKeys(GroupMatcher<JobKey>.AnyGroup(), cancellationToken))
         {
-            if (await ScheduleOfAsync(scheduler, job, now, cancellationToken) is not { } schedule)
+            var lastBeat = registry.LastBeat(job);
+            if (await DueFireOfAsync(scheduler, job, lastBeat, cancellationToken) is not { } due)
                 continue;
 
-            var since = registry.LastBeat(job) ?? Later(registry.StartedAt, schedule.FirstFire);
-            var silence = now - since;
-            var limit = maxSilence(schedule.Interval);
+            var silence = now - (lastBeat ?? due.Since);
             data[job.ToString()] = Math.Round(Math.Max(0, silence.TotalSeconds));
-            if (silence > limit)
+            var limit = maxSilence(due.Interval);
+            var allowance = limit > due.Interval ? limit - due.Interval : TimeSpan.Zero;
+            if (now - due.At > allowance)
                 stalled.Add(string.Create(
                     CultureInfo.InvariantCulture,
-                    $"{job} last fired {silence:g} ago (every {schedule.Interval:g}, limit {limit:g})"));
+                    $"{job} last fired {silence:g} ago, was due {now - due.At:g} ago (every {due.Interval:g}, limit {limit:g})"));
         }
 
         return stalled.Count == 0
@@ -61,39 +65,39 @@ internal sealed class QuartzJobsHealthCheck(
                 data: data);
     }
 
-    /// <summary>The shortest interval among the job's repeating, active triggers, and the earliest start among them.</summary>
-    private static async Task<JobSchedule?> ScheduleOfAsync(
+    /// <summary>
+    /// The earliest fire the job's repeating, active triggers have due after its last beat (or, before its first, after
+    /// it was due to start), with the gap to the fire after it.
+    /// </summary>
+    private async Task<DueFire?> DueFireOfAsync(
         IScheduler scheduler,
         JobKey job,
-        DateTimeOffset now,
+        DateTimeOffset? lastBeat,
         CancellationToken cancellationToken)
     {
-        JobSchedule? schedule = null;
+        DueFire? earliest = null;
         foreach (var trigger in await scheduler.GetTriggersOfJob(job, cancellationToken))
         {
             var state = await scheduler.GetTriggerState(trigger.Key, cancellationToken);
             if (state is TriggerState.Paused or TriggerState.Complete or TriggerState.None)
                 continue;
-            if (trigger.GetFireTimeAfter(now) is not { } next || trigger.GetFireTimeAfter(next) is not { } afterNext)
+
+            // Before a first fire: from the start, including a fire right at it.
+            var since = lastBeat ?? Later(registry.StartedAt, trigger.StartTimeUtc);
+            var after = lastBeat ?? since.AddTicks(-1);
+            if (trigger.GetFireTimeAfter(after) is not { } at || trigger.GetFireTimeAfter(at) is not { } next)
                 continue;
 
-            var found = new JobSchedule(afterNext - next, trigger.StartTimeUtc);
-            schedule = schedule is null ? found : Tightest(schedule, found);
+            if (earliest is null || at < earliest.At)
+                earliest = new DueFire(at, next - at, since);
         }
 
-        return schedule;
+        return earliest;
     }
-
-    /// <summary>The shorter interval and the earlier start of two triggers' schedules.</summary>
-    private static JobSchedule Tightest(
-        JobSchedule first,
-        JobSchedule second)
-        => new(
-            first.Interval < second.Interval ? first.Interval : second.Interval,
-            first.FirstFire < second.FirstFire ? first.FirstFire : second.FirstFire);
 
     private static DateTimeOffset Later(DateTimeOffset first, DateTimeOffset second)
         => first > second ? first : second;
 
-    private sealed record JobSchedule(TimeSpan Interval, DateTimeOffset FirstFire);
+    /// <summary>When the job is due to fire next, the gap to the fire after that, and since when it has been silent.</summary>
+    private sealed record DueFire(DateTimeOffset At, TimeSpan Interval, DateTimeOffset Since);
 }

@@ -154,6 +154,12 @@ public class HttpResponseMessageExtensionsTests
     [InlineData(HttpStatusCode.GatewayTimeout, ErrorType.Timeout)]
     [InlineData((HttpStatusCode)429, ErrorType.RateLimit)]
     [InlineData(HttpStatusCode.InternalServerError, ErrorType.Failure)]
+    [InlineData(HttpStatusCode.ServiceUnavailable, ErrorType.Failure)]
+    [InlineData(HttpStatusCode.RequestTimeout, ErrorType.Timeout)]
+    [InlineData(HttpStatusCode.Gone, ErrorType.NotFound)]
+    [InlineData(HttpStatusCode.PreconditionFailed, ErrorType.Conflict)]
+    [InlineData(HttpStatusCode.MethodNotAllowed, ErrorType.Validation)]
+    [InlineData(HttpStatusCode.UnprocessableEntity, ErrorType.Validation)]
     public async Task ToResultAsyncT_ShouldReturnAnErrorForTheStatus_WhenHttpResponseMessageDoesntContainErrors(HttpStatusCode httpStatusCode, ErrorType errorType)
     {
         //Arrange
@@ -409,4 +415,78 @@ public class HttpResponseMessageExtensionsTests
         result.Errors.ShouldHaveSingleItem().Code.ShouldBe("Http.UnreadableContent");
         result.Errors[0].Type.ShouldBe(ErrorType.ExternalFailure);
     }
+
+    [Theory]
+    [InlineData("[{\"code\":\"\",\"message\":\"\",\"type\":0}]")]
+    [InlineData("[null]")]
+    [InlineData("[]")]
+    public async Task ToResultAsyncT_ShouldReturnTheStatusError_WhenTheErrorsHoldNoError(
+        string errors)
+    {
+        using var message = ProblemResponse(HttpStatusCode.NotFound, errors);
+
+        var result = await message.ToResultAsync<string>();
+
+        result.Errors.ShouldHaveSingleItem().Code.ShouldBe("Http.404");
+        result.Errors[0].Type.ShouldBe(ErrorType.NotFound);
+    }
+
+    [Fact]
+    public async Task ToResultAsync_ShouldDropTheEmptyErrors_WhenOthersAreThere()
+    {
+        using var message = ProblemResponse(
+            HttpStatusCode.NotFound,
+            "[null,{\"code\":\"\",\"message\":\"\",\"type\":0},{\"code\":\"Player.NotFound\",\"message\":\"No such player\",\"type\":\"NotFound\"}]");
+
+        var result = await message.ToResultAsync();
+
+        result.Errors.ShouldHaveSingleItem().ShouldBe(Error.NotFound("Player.NotFound", "No such player"));
+    }
+
+    [Fact]
+    public async Task ToResultAsyncT_ShouldSkipANullValidationList_WhenTheErrorsAreByField()
+    {
+        using var message = ProblemResponse(HttpStatusCode.BadRequest, "{\"Name\":null,\"Age\":[\"Too young\",null]}");
+
+        var result = await message.ToResultAsync<string>();
+
+        result.Errors.ShouldHaveSingleItem().ShouldBe(Error.Validation("Age", "Too young"));
+    }
+
+    [Theory]
+    [MemberData(nameof(CallerOptions))]
+    public async Task ToResultAsyncT_ShouldReadTheErrorsAsSharedKernelWritesThem_WhateverTheCallersOptions(
+        JsonSerializerOptions options)
+    {
+        var error = Error.NotFound("Player.NotFound", "No such player");
+        var problemDetails = (ProblemHttpResult)Result.Failure(error).ToProblemDetails();
+        using var message = new HttpResponseMessage(HttpStatusCode.NotFound)
+        {
+            Content = new StringContent(
+                JsonSerializer.Serialize(problemDetails.ProblemDetails, _options), Encoding.UTF8, "application/json")
+        };
+
+        var result = await message.ToResultAsync<string>(options);
+
+        result.Errors.ShouldHaveSingleItem().ShouldBe(error);
+    }
+
+    public static TheoryData<JsonSerializerOptions> CallerOptions()
+        => new()
+        {
+            new JsonSerializerOptions(),
+            new JsonSerializerOptions(JsonSerializerDefaults.Web),
+            new JsonSerializerOptions { Converters = { new JsonStringEnumConverter(allowIntegerValues: false) } },
+        };
+
+    private static HttpResponseMessage ProblemResponse(
+        HttpStatusCode status,
+        string errors)
+        => new(status)
+        {
+            Content = new StringContent(
+                $"{{\"title\":\"Problem\",\"status\":{(int)status},\"errors\":{errors}}}",
+                Encoding.UTF8,
+                "application/problem+json")
+        };
 }

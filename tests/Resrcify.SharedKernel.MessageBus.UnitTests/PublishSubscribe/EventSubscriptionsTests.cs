@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Rebus.Transport.InMem;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
+using Resrcify.SharedKernel.MessageBus.Extensions;
 using Resrcify.SharedKernel.MessageBus.UnitTests.Support;
 using Shouldly;
 using Xunit;
@@ -16,6 +17,38 @@ namespace Resrcify.SharedKernel.MessageBus.UnitTests.PublishSubscribe;
     Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public sealed class EventSubscriptionsTests
 {
+    [Fact]
+    public void HostedServices_ShouldNotStartTheBus_WhenTheHostMakesThem()
+    {
+        // The host makes every hosted service before any starts (and before migrations run at StartingAsync): making
+        // the subscriptions mustn't build the bus, which would consume events against a schema not migrated yet.
+        var strategy = new CountingStrategy();
+        var services = new ServiceCollection();
+        services.AddLogging().AddSingleton(new PayoutLog());
+        services.AddMessageBus(bus => bus
+            .UseInMemory(new InMemNetwork())
+            .UseConfigurationStrategy(strategy)
+            .WithInputQueue($"subscriber-{Guid.NewGuid():N}")
+            .AddEventHandlers(typeof(EventSubscriptionsTests).Assembly));
+        using var provider = services.BuildServiceProvider();
+
+        provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>().ShouldNotBeEmpty();
+
+        strategy.BusesConfigured.ShouldBe(0);
+    }
+
+    private sealed class CountingStrategy : Resrcify.SharedKernel.MessageBus.Abstractions.IBusConfigurationStrategy
+    {
+        public int BusesConfigured { get; private set; }
+
+        public void ConfigureTransport(Rebus.Config.RabbitMqOptionsBuilder transport)
+        {
+        }
+
+        public void ConfigureOptions(Rebus.Config.OptionsConfigurer options)
+            => BusesConfigured++;
+    }
+
     [Fact]
     public async Task StartAsync_ShouldUnsubscribe_WhenTheServiceRemovesASubscription()
     {

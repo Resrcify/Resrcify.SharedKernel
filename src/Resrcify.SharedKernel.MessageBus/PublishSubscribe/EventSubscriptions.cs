@@ -17,8 +17,12 @@ namespace Resrcify.SharedKernel.MessageBus.PublishSubscribe;
 /// subscription is a binding on the broker that outlives the service, so subscribing again is harmless and a
 /// removed handler's subscription stays until the binding is removed.
 /// </summary>
+/// <remarks>
+/// The bus is resolved when the service starts, not when this is made: the host makes every hosted service before any
+/// starts, and resolving <see cref="IBus"/> starts the bus, which would consume events before the migrations
+/// (<c>AddMigrationsOnStartup</c>, at <c>StartingAsync</c>) had run.
+/// </remarks>
 internal sealed partial class EventSubscriptions(
-    IBus bus,
     MessageBusSettings settings,
     IEnumerable<SubscribedEvent> subscribedEvents,
     IServiceProvider serviceProvider,
@@ -33,11 +37,12 @@ internal sealed partial class EventSubscriptions(
         if (settings.InputQueue is null)
             throw new InvalidOperationException(
                 "Handling integration events needs an input queue to receive them on: call WithInputQueue(\"<service name>\").");
-        if (settings.RememberHandledEventsFor is not null && serviceProvider.GetService<ICachingService>() is null)
+        if (settings.RememberHandledEventsFor is not null && ClaimStores.Of(serviceProvider) is null)
             throw new InvalidOperationException(
-                "SkipDuplicateEvents remembers handled events in the service's ICachingService: register one " +
-                "(e.g. AddDistributedMemoryCache() and AddSingleton<ICachingService, DistributedCachingService>()).");
+                "SkipDuplicateEvents claims the events it handles in an IClaimStore: register one, or an ICachingService " +
+                "that is one (e.g. AddDistributedMemoryCache() and AddSingleton<ICachingService, DistributedCachingService>()).");
 
+        var bus = serviceProvider.GetRequiredService<IBus>();
         foreach (var topic in settings.RemovedSubscriptions)
         {
             await bus.Advanced.Topics.Unsubscribe(topic);

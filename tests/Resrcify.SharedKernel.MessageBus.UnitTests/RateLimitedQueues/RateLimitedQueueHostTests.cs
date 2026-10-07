@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Rebus.Transport.InMem;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
+using Resrcify.SharedKernel.MessageBus.Extensions;
+using Resrcify.SharedKernel.MessageBus.RateLimitedQueues;
 using Resrcify.SharedKernel.MessageBus.UnitTests.Support;
 using Resrcify.SharedKernel.Results.Primitives;
 using Shouldly;
@@ -46,6 +49,73 @@ public sealed class RateLimitedQueueHostTests
 
         gathered.UnansweredKeys.Count.ShouldBe(2);
         calls.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task AddRateLimitedQueue_ShouldConsumeEachQueueWithItsOwnHandler_WhenTwoShareTheRequestTypes()
+    {
+        var network = new InMemNetwork();
+        var regular = $"guild-{Guid.NewGuid():N}";
+        var priority = $"guild-priority-{Guid.NewGuid():N}";
+        using var responder = await InMemoryServices.StartAsync(
+            network,
+            bus => bus
+                .AddRateLimitedQueue<SlowRequest, SlowResponse, RegularHandler>(regular)
+                .AddRateLimitedQueue<SlowRequest, SlowResponse, PriorityHandler>(priority));
+        using var regularRequester = await InMemoryServices.StartAsync(network, bus => bus.AddRequest<SlowRequest, SlowResponse>(regular).AddScatterGather());
+        using var priorityRequester = await InMemoryServices.StartAsync(network, bus => bus.AddRequest<SlowRequest, SlowResponse>(priority).AddScatterGather());
+
+        var fromRegular = await regularRequester.Services.GetRequiredService<IScatterGatherClient>()
+            .RequestAsync<SlowRequest, SlowResponse>(new SlowRequest("a"), TimeSpan.FromSeconds(5));
+        var fromPriority = await priorityRequester.Services.GetRequiredService<IScatterGatherClient>()
+            .RequestAsync<SlowRequest, SlowResponse>(new SlowRequest("b"), TimeSpan.FromSeconds(5));
+
+        fromRegular.Value.Key.ShouldBe("regular a");
+        fromPriority.Value.Key.ShouldBe("priority b");
+        responder.Services.GetServices<IQueueConsumer>().Select(queue => queue.QueueName).ShouldBe([regular, priority], ignoreOrder: true);
+    }
+
+    [Fact]
+    public void AddRateLimitedQueue_ShouldThrow_WhenAQueueNameIsUsedTwice()
+        => Should.Throw<InvalidOperationException>(() => new ServiceCollection().AddMessageBus(bus => bus
+            .UseInMemory(new InMemNetwork())
+            .AddRateLimitedQueue<SlowRequest, SlowResponse, RegularHandler>("guild")
+            .AddRateLimitedQueue<SlowRequest, SlowResponse, PriorityHandler>("guild")));
+
+    [Fact]
+    public async Task HandleAsync_ShouldGiveTheResponderTheQueuesBus_WhenItTakesTheEventBus()
+    {
+        var network = new InMemNetwork();
+        var queue = $"publishing-{Guid.NewGuid():N}";
+        using var responder = await InMemoryServices.StartAsync(
+            network,
+            bus => bus.AddRateLimitedQueue<SlowRequest, SlowResponse, PublishingHandler>(queue));
+        using var requester = await InMemoryServices.StartAsync(network, bus => bus.AddRequest<SlowRequest, SlowResponse>(queue).AddScatterGather());
+
+        var reply = await requester.Services.GetRequiredService<IScatterGatherClient>()
+            .RequestAsync<SlowRequest, SlowResponse>(new SlowRequest("a"), TimeSpan.FromSeconds(5));
+
+        // It threw ("Couldn't find IBus in the incoming step context") on every try, and was answered ResponderFailed.
+        reply.IsSuccess.ShouldBeTrue();
+        reply.Value.Key.ShouldBe("published a");
+    }
+
+    internal sealed class RegularHandler : IRequestResponder<SlowRequest, SlowResponse>
+    {
+        public Task<Result<SlowResponse>> HandleAsync(SlowRequest request, CancellationToken cancellationToken = default)
+            => Task.FromResult(Result.Success(new SlowResponse($"regular {request.Key}")));
+    }
+
+    internal sealed class PriorityHandler : IRequestResponder<SlowRequest, SlowResponse>
+    {
+        public Task<Result<SlowResponse>> HandleAsync(SlowRequest request, CancellationToken cancellationToken = default)
+            => Task.FromResult(Result.Success(new SlowResponse($"priority {request.Key}")));
+    }
+
+    internal sealed class PublishingHandler(IEventBus events) : IRequestResponder<SlowRequest, SlowResponse>
+    {
+        public Task<Result<SlowResponse>> HandleAsync(SlowRequest request, CancellationToken cancellationToken = default)
+            => Task.FromResult(Result.Success(new SlowResponse(events is null ? "none" : $"published {request.Key}")));
     }
 
     internal sealed record SlowRequest(string Key);

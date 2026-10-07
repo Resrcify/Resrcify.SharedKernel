@@ -109,6 +109,10 @@ public static class HttpResultExtensions
                _ => StatusCodes.Status500InternalServerError
            };
 
+    /// <summary>
+    /// The error type a status stands for. Any other 4xx is about the request itself (<see cref="ErrorType.Validation"/>,
+    /// not transient); any other status is a <see cref="ErrorType.Failure"/>.
+    /// </summary>
     internal static ErrorType GetErrorType(int statusCode)
         => statusCode switch
         {
@@ -116,10 +120,14 @@ public static class HttpResultExtensions
             StatusCodes.Status401Unauthorized => ErrorType.Unauthorized,
             StatusCodes.Status403Forbidden => ErrorType.Forbidden,
             StatusCodes.Status404NotFound => ErrorType.NotFound,
+            StatusCodes.Status410Gone => ErrorType.NotFound,
             StatusCodes.Status409Conflict => ErrorType.Conflict,
+            StatusCodes.Status412PreconditionFailed => ErrorType.Conflict,
+            StatusCodes.Status408RequestTimeout => ErrorType.Timeout,
             StatusCodes.Status504GatewayTimeout => ErrorType.Timeout,
             StatusCodes.Status429TooManyRequests => ErrorType.RateLimit,
             StatusCodes.Status502BadGateway => ErrorType.ExternalFailure,
+            >= 400 and < 500 => ErrorType.Validation,
             _ => ErrorType.Failure
         };
 

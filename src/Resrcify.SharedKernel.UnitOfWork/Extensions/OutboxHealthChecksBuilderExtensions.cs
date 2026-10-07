@@ -17,7 +17,9 @@ public static class OutboxHealthChecksBuilderExtensions
     /// <summary>
     /// Checks that <typeparamref name="TDbContext"/>'s outbox keeps up: it fails when its oldest waiting message has
     /// waited longer than <paramref name="maxWaitingAge"/> (5 minutes by default; keep it above the processing
-    /// interval), or when the backlog can't be measured. Needs <c>AddOutboxProcessing&lt;TDbContext&gt;</c>.
+    /// interval), or when the backlog can't be measured. It fails as <see cref="HealthStatus.Degraded"/> unless
+    /// <paramref name="failureStatus"/> says otherwise: a backlog is a reason to alert, not to take every replica out of
+    /// service at once (<c>/health/ready</c> answers 200 for Degraded). Needs <c>AddOutboxProcessing&lt;TDbContext&gt;</c>.
     /// </summary>
     /// <example><c>services.AddHealthChecks().AddOutbox&lt;ShardDbContext&gt;(tags: ["ready"]);</c></example>
     public static IHealthChecksBuilder AddOutbox<TDbContext>(
@@ -40,7 +42,7 @@ public static class OutboxHealthChecksBuilderExtensions
                         $"The outbox health check needs AddOutboxProcessing<{typeof(TDbContext).Name}>() first."),
                 age,
                 provider.GetService<TimeProvider>() ?? TimeProvider.System),
-            failureStatus,
+            failureStatus ?? HealthStatus.Degraded,
             tags));
     }
 }

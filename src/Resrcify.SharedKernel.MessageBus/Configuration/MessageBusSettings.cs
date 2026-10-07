@@ -6,15 +6,18 @@ using System.Reflection;
 using System.Text.Json;
 using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
+using RabbitMQ.Client;
 using Rebus.Config;
 using Rebus.Pipeline;
 using Rebus.Pipeline.Receive;
 using Rebus.Pipeline.Send;
 using Rebus.Serialization;
 using Rebus.Serialization.Json;
+using Rebus.Time;
 using Rebus.Transport;
 using Rebus.Transport.InMem;
 using Resrcify.SharedKernel.MessageBus.Abstractions;
+using Resrcify.SharedKernel.MessageBus.Broker;
 using Resrcify.SharedKernel.MessageBus.PublishSubscribe;
 using Resrcify.SharedKernel.MessageBus.ScatterGather;
 using Resrcify.SharedKernel.MessageBus.Serialization;
@@ -33,6 +36,9 @@ internal sealed class MessageBusSettings
     private readonly ConcurrentDictionary<Type, object> _subscriptions = new();
     private readonly HashSet<string> _removedSubscriptions = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, string> _publishersByEvent = new(StringComparer.Ordinal);
+
+    // The (event, publisher) clashes already reported.
+    private readonly ConcurrentDictionary<(string Event, string Publisher), byte> _reportedClashes = new();
 
     private JsonSerializerOptions? _jsonOptions;
     private IReadOnlyDictionary<string, Type>? _typesByWireName;
@@ -160,12 +166,15 @@ internal sealed class MessageBusSettings
 
     /// <summary>
     /// Records that <paramref name="publisher"/> published <paramref name="wireName"/>: the service that published it
-    /// first, if another one did (two services publishing events of the same name), else <see langword="null"/>.
+    /// first, if another one did (two services publishing events of the same name), else <see langword="null"/>. A pair
+    /// is reported once: the clash is the same on every event, and a warning per event would flood the logs.
     /// </summary>
     public string? OtherPublisherOf(string wireName, string publisher)
     {
         var first = _publishersByEvent.GetOrAdd(wireName, publisher);
-        return string.Equals(first, publisher, StringComparison.Ordinal) ? null : first;
+        if (string.Equals(first, publisher, StringComparison.Ordinal))
+            return null;
+        return _reportedClashes.TryAdd((wireName, publisher), 0) ? first : null;
     }
 
     /// <summary>The service's error queue: where its input queue's messages go after they kept failing.</summary>
@@ -209,9 +218,13 @@ internal sealed class MessageBusSettings
     /// and gzip of bodies of <see cref="CompressAboveBytes"/> or more. The compression is wire-compatible with Rebus'
     /// <c>EnableCompression</c> both ways, at the fastest level (<see cref="MessageCompression"/>).
     /// </summary>
-    public void ConfigureEveryBus(OptionsConfigurer options)
+    public void ConfigureEveryBus(OptionsConfigurer options, IServiceProvider provider)
     {
         options.EnableDiagnosticSources();
+        // Rebus' clock (a message's sent time, its expiry) is the container's, as every other clock here: with a
+        // FakeTimeProvider a request's deadline is measured on one clock, not the sender's real one against a fake now.
+        var time = provider.GetService<TimeProvider>() ?? TimeProvider.System;
+        options.Register<IRebusTime>(_ => new TimeProviderRebusTime(time));
         options.Decorate<IPipeline>(context => WithCompression(context.Get<IPipeline>()));
     }
 
@@ -230,6 +243,43 @@ internal sealed class MessageBusSettings
                 typeof(SerializeOutgoingMessageStep));
 
         return injector;
+    }
+
+    /// <summary>
+    /// A connection factory for the connections the package makes itself (the broker watcher, the destination-queue
+    /// check): the service's connection (its virtual host and TLS included), then the strategy's
+    /// <c>ConfigureConnectionFactory</c>.
+    /// </summary>
+    public ConnectionFactory CreateConnectionFactory(IServiceProvider provider, string clientName)
+    {
+        var factory = new ConnectionFactory
+        {
+            Uri = new Uri(ResolveConnection(provider).ConnectionString),
+            ClientProvidedName = clientName,
+        };
+        ResolveConfigurationStrategy(provider).ConfigureConnectionFactory(factory);
+        return factory;
+    }
+
+    /// <summary>
+    /// Declares the queues this bus sends to, so a message sent before the receiving service first ran isn't lost. A
+    /// queue that exists already is left alone: its owner declared it with its own arguments (an ordered subscription's
+    /// <c>x-single-active-consumer</c>), and declaring it again with others would fail this bus' start.
+    /// </summary>
+    public void DeclareDestinations(ITransport transport, IServiceProvider provider)
+    {
+        if (Destinations.Count == 0)
+            return;
+        if (IsInMemory)
+        {
+            foreach (var destination in Destinations.Values)
+                transport.CreateQueue(destination);
+            return;
+        }
+
+        var existing = DestinationQueues.Existing(this, provider, [.. Destinations.Values]);
+        foreach (var destination in Destinations.Values.Where(destination => !existing.Contains(destination)))
+            transport.CreateQueue(destination);
     }
 
     public IBusConfigurationStrategy ResolveConfigurationStrategy(IServiceProvider provider)

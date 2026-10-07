@@ -150,17 +150,24 @@ public sealed class PostgresServiceCollectionExtensionsTests
 
         var interceptors = Interceptors(scope.ServiceProvider.GetRequiredService<TestDbContext>());
 
-        interceptors.ShouldContain(provider.GetRequiredService<InsertOutboxMessagesInterceptor>());
+        // The context's own interceptor, not the shared one: its insert strategy is this context's.
+        interceptors.ShouldContain(provider.GetRequiredService<PostgresOutboxInterceptor<TestDbContext>>().Interceptor);
+        interceptors.OfType<InsertOutboxMessagesInterceptor>().ShouldHaveSingleItem();
         provider.GetRequiredService<IOutboxSerializer>().ShouldBeOfType<SystemTextJsonOutboxSerializer>();
         provider.GetService<IOutboxInsertStrategy>().ShouldBeNull();
     }
 
     [Fact]
-    public async Task WithOutbox_ShouldInsertWithOnConflictDoNothing_WhenAsked()
+    public async Task WithOutbox_ShouldInsertWithOnConflictDoNothing_OnThatContextOnly_WhenAsked()
     {
         await using var provider = Build(Settings(), db => db.WithOutbox(outbox => outbox.OnConflictDoNothing = true));
+        await using var scope = provider.CreateAsyncScope();
 
-        provider.GetRequiredService<IOutboxInsertStrategy>().ShouldBeOfType<PostgresOnConflictOutboxInsertStrategy>();
+        // Not service-wide (every other context's outbox would insert with ON CONFLICT too): in the context's own
+        // interceptor. Its effect on a real save is covered by the Postgres integration tests.
+        provider.GetService<IOutboxInsertStrategy>().ShouldBeNull();
+        Interceptors(scope.ServiceProvider.GetRequiredService<TestDbContext>())
+            .ShouldContain(provider.GetRequiredService<PostgresOutboxInterceptor<TestDbContext>>().Interceptor);
     }
 
     [Fact]

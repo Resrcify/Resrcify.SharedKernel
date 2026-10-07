@@ -255,6 +255,34 @@ public sealed class ServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void AddMediator_ShouldKeepTheConfiguredOptions_WhenAnotherCallLeavesThemDefault()
+    {
+        var services = new ServiceCollection();
+
+        services.AddMediator(_ => { });
+        services.AddMediator(config => config
+            .ConfigureUnitOfWork(unitOfWork => unitOfWork.ReturnPersistenceFailures = true)
+            .ConfigureLogging(logging => logging.RequestLevel = Microsoft.Extensions.Logging.LogLevel.Debug));
+        services.AddMediator(_ => { });
+
+        using var provider = services.BuildServiceProvider();
+        provider.GetRequiredService<UnitOfWorkPipelineOptions>().ReturnPersistenceFailures.ShouldBeTrue();
+        provider.GetRequiredService<LoggingPipelineOptions>().RequestLevel.ShouldBe(Microsoft.Extensions.Logging.LogLevel.Debug);
+        services.Count(descriptor => descriptor.ServiceType == typeof(UnitOfWorkPipelineOptions)).ShouldBe(1);
+    }
+
+    [Fact]
+    public void AddMediator_ShouldThrow_WhenTwoCallsConfigureTheSameOptions()
+    {
+        var services = new ServiceCollection();
+        services.AddMediator(config => config.ConfigureUnitOfWork(unitOfWork => unitOfWork.ReturnPersistenceFailures = true));
+
+        Should.Throw<InvalidOperationException>(() => services.AddMediator(
+                config => config.ConfigureUnitOfWork(unitOfWork => unitOfWork.ReturnPersistenceFailures = false)))
+            .Message.ShouldContain("ConfigureUnitOfWork");
+    }
+
+    [Fact]
     public void AddMediator_ShouldRegisterUnitOfWorkOptionsThatThrow_ByDefault()
     {
         var services = new ServiceCollection();

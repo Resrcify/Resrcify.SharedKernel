@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Rebus.Bus;
 using Rebus.Messages;
+using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 using Resrcify.SharedKernel.MessageBus.Configuration;
@@ -22,8 +23,11 @@ namespace Resrcify.SharedKernel.MessageBus.PublishSubscribe;
 /// Published while the outbox handles a domain event, an event's message ID comes from the outbox message, its name
 /// and its content (<see cref="IOutboxMessageContext.NextStableId"/>): a retried outbox message publishes it again
 /// under the same ID, so subscribers that skip duplicates (<c>SkipDuplicateEvents</c>) handle it once. A redelivery
-/// keeps its ID anyway.
+/// keeps its ID anyway. An event whose content is computed while handling (a time from the clock) differs on a retry,
+/// and so gets a new ID: give it <see cref="IDedupable"/> (its subject, e.g. the shard id), and its ID comes from that
+/// key instead of its content.
 /// </para>
+/// <para>The topic is the event's own wire name (its runtime type's), however the caller declared it.</para>
 /// <para>Every event carries its publisher's service name, so subscribers can tell when two services publish an event of the same name.</para>
 /// </remarks>
 internal sealed class EventBus(IBus bus, MessageBusSettings settings, IOutboxMessageContext? outboxMessage = null) : IEventBus
@@ -36,7 +40,9 @@ internal sealed class EventBus(IBus bus, MessageBusSettings settings, IOutboxMes
     {
         ArgumentNullException.ThrowIfNull(integrationEvent);
         cancellationToken.ThrowIfCancellationRequested();
-        var topic = settings.WireNameOf(typeof(TEvent));
+        // The runtime type, as Rebus names the message: published through a base class or an interface, the event
+        // would otherwise go to a topic nobody binds and be dropped.
+        var topic = settings.WireNameOf(integrationEvent.GetType());
         var headers = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [PublisherHeader] = settings.ServiceName,
@@ -50,9 +56,13 @@ internal sealed class EventBus(IBus bus, MessageBusSettings settings, IOutboxMes
 
     // The topic plus a fingerprint of the content: a handler publishing several events of one name gets each its
     // own ID however they interleave (published in parallel, their order changes from try to try), and only events
-    // with the same content share a counter, where a swap doesn't matter.
+    // with the same content share a counter, where a swap doesn't matter. An event that names its subject
+    // (IDedupable) is fingerprinted by that instead, so content computed while handling doesn't change its ID.
     internal static string StableIdKind(string topic, object integrationEvent)
     {
+        if (integrationEvent is IDedupable dedupable)
+            return $"{topic}@{dedupable.DedupKey}";
+
         byte[] content;
         try
         {

@@ -71,6 +71,42 @@ public sealed class SubscriptionOptionsTests
         ran.ShouldBeTrue();
     }
 
+    [Fact]
+    public async Task RunAsync_ShouldSendTheEventsWaitingBehindAFailedOneBack_SoTheyComeBackAfterIt()
+    {
+        var options = new SubscriptionOptions<Payout>().HandleInPartitions(payout => payout.ShardId);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handled = new ConcurrentQueue<int>();
+
+        // A1 fails (goes back to the queue); A2 waits behind it. Handled now, A2 would come before A1's redelivery.
+        var first = options.RunAsync(new Payout(1, 1), async () =>
+        {
+            await release.Task;
+            throw new InvalidOperationException("The claim store timed out.");
+        });
+        var second = options.RunAsync(new Payout(1, 2), () =>
+        {
+            handled.Enqueue(2);
+            return Task.CompletedTask;
+        });
+        release.SetResult();
+
+        await Should.ThrowAsync<InvalidOperationException>(() => first);
+        await Should.ThrowAsync<SentBackBehindException>(() => second);
+        handled.ShouldBeEmpty();
+
+        // Redelivered in order: both are handled, the first first.
+        await options.RunAsync(new Payout(1, 1), () => Enqueue(handled, 1));
+        await options.RunAsync(new Payout(1, 2), () => Enqueue(handled, 2));
+        handled.ShouldBe([1, 2]);
+    }
+
+    private static Task Enqueue(ConcurrentQueue<int> handled, int sequence)
+    {
+        handled.Enqueue(sequence);
+        return Task.CompletedTask;
+    }
+
     internal sealed record Payout(int ShardId, int Sequence);
 
     private sealed class ConcurrencyTracker

@@ -39,14 +39,16 @@ public sealed class LoggedExceptionsTests
 
         var error = _logs.Entries.Where(entry => entry.Level == LogLevel.Error).ShouldHaveSingleItem();
         error.Exception.ShouldBeSameAs(thrown);
-        error.Category.ShouldContain(nameof(UnitOfWorkPipelineBehavior<,>));
+        // A transactional command's exception is logged by the transaction behavior, once whatever its attempts: the
+        // unit-of-work behavior inside it runs once per attempt under a retrying strategy.
+        error.Category.ShouldContain(nameof(TransactionPipelineBehavior<,>));
         error.Message.ShouldContain(nameof(ThrowingTransactionCommand));
 
-        // The transaction and logging behaviors still say what happened, without the stack.
+        // The unit-of-work and logging behaviors still say what happened, without the stack.
         _logs.Entries
             .Where(entry => entry.Level == LogLevel.Debug && entry.Exception is null)
             .Select(entry => entry.Category)
-            .ShouldContain(category => category.Contains(nameof(TransactionPipelineBehavior<,>), StringComparison.Ordinal));
+            .ShouldContain(category => category.Contains(nameof(UnitOfWorkPipelineBehavior<,>), StringComparison.Ordinal));
         _logs.Entries
             .Where(entry => entry.Level == LogLevel.Debug && entry.Exception is null)
             .Select(entry => entry.Category)
@@ -91,7 +93,7 @@ public sealed class LoggedExceptionsTests
 
     private ServiceProvider BuildProvider(Action<StandardBehaviorsOptions> standard)
     {
-        var unitOfWork = Substitute.For<IUnitOfWork>();
+        var unitOfWork = Substitute.For<IUnitOfWork>().RunningOperations<Result>();
         unitOfWork
             .ExecuteInTransactionAsync(
                 Arg.Any<Func<CancellationToken, Task<Result>>>(),

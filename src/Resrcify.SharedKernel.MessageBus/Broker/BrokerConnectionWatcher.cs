@@ -15,10 +15,18 @@ namespace Resrcify.SharedKernel.MessageBus.Broker;
 /// reachable for the first time after start-up failed to reach it).
 /// </summary>
 /// <remarks>
+/// <para>
 /// Rebus re-subscribes a queue's consumer after its connection drops, but if the broker is still unreachable at
 /// that moment (a restart takes a few seconds) it waits a fixed minute before trying again, so the queue is not
-/// consumed for that minute. The buses this package runs restart when the broker is back, which subscribes again
-/// at once.
+/// consumed for that minute. The buses this package runs itself (the scatter-gather reply bus, each rate-limited
+/// queue) restart when the broker is back, which subscribes again at once; the service's own bus is Rebus' and resumes
+/// within that minute, with no message lost.
+/// </para>
+/// <para>
+/// It connects as the buses do: the service's <c>RabbitMqConnection</c> (its virtual host and TLS), then the
+/// configuration strategy's <c>ConfigureConnectionFactory</c>. Any failure to connect (unreachable, refused, a
+/// virtual host the user may not use) is tried again every second rather than stopping the service.
+/// </para>
 /// </remarks>
 internal sealed partial class BrokerConnectionWatcher(
     MessageBusSettings settings,
@@ -39,14 +47,10 @@ internal sealed partial class BrokerConnectionWatcher(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var time = serviceProvider.GetService<TimeProvider>() ?? TimeProvider.System;
-        var factory = new ConnectionFactory
-        {
-            Uri = new Uri(settings.ResolveConnection(serviceProvider).ConnectionString),
-            AutomaticRecoveryEnabled = true,
-            NetworkRecoveryInterval = RetryInterval,
-            TopologyRecoveryEnabled = false,
-            ClientProvidedName = "messagebus-broker-watcher",
-        };
+        var factory = settings.CreateConnectionFactory(serviceProvider, "messagebus-broker-watcher");
+        factory.AutomaticRecoveryEnabled = true;
+        factory.NetworkRecoveryInterval = RetryInterval;
+        factory.TopologyRecoveryEnabled = false;
 
         var failedFirst = false;
         while (_connection is null)
@@ -55,8 +59,10 @@ internal sealed partial class BrokerConnectionWatcher(
             {
                 _connection = await factory.CreateConnectionAsync(stoppingToken);
             }
-            catch (BrokerUnreachableException)
+            catch (Exception exception) when (!stoppingToken.IsCancellationRequested && exception is not OutOfMemoryException)
             {
+                if (!failedFirst)
+                    LogCantConnect(exception);
                 failedFirst = true;
                 if (!await DelayAsync(time, stoppingToken))
                     return;
@@ -102,6 +108,9 @@ internal sealed partial class BrokerConnectionWatcher(
             return false;
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Can't connect to RabbitMQ; trying again every second")]
+    private partial void LogCantConnect(Exception exception);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Lost the connection to RabbitMQ: {Reason}")]
     private partial void LogLost(string reason);

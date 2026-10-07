@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Data;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -35,12 +38,24 @@ internal sealed partial class OutboxBacklogMonitor<TDbContext>(
 {
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
     private OutboxBacklog? _latest;
+    private StrongBox<DateTimeOffset>? _startedAt;
 
     /// <summary>The last measurement; <see langword="null"/> until the first one.</summary>
     public OutboxBacklog? Latest => Volatile.Read(ref _latest);
 
+    /// <summary>When the monitor started measuring; <see langword="null"/> before it has.</summary>
+    public DateTimeOffset? StartedAt => Volatile.Read(ref _startedAt)?.Value;
+
     /// <summary>How often the backlog is measured.</summary>
     public TimeSpan Interval => settings.Interval;
+
+    // Noted as the host starts it (ExecuteAsync runs on a thread of its own), so a health check right after start-up
+    // already knows when measuring began.
+    public override Task StartAsync(CancellationToken cancellationToken)
+    {
+        Volatile.Write(ref _startedAt, new StrongBox<DateTimeOffset>(_time.GetUtcNow()));
+        return base.StartAsync(cancellationToken);
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -85,9 +100,32 @@ internal sealed partial class OutboxBacklogMonitor<TDbContext>(
         var laneTypes = provider.GetService<OutboxLaneRegistry>()?.LaneEventTypes ?? [];
         var laneMaxRetryCount = provider.GetService<OutboxLaneSettings<TDbContext>>()?.Options.MaxRetryCount
             ?? settings.MaxRetryCount;
-        var maxRetryCount = settings.MaxRetryCount;
 
-        var messages = provider.GetRequiredService<TDbContext>()
+        var dbContext = provider.GetRequiredService<TDbContext>();
+        // One snapshot for the four counts: read one after another without it, a message saved or processed between two
+        // of them made the given-up count off by it (even negative). Under the execution strategy, so a retrying one
+        // (which refuses a transaction begun outside it) works.
+        return await dbContext.Database
+            .CreateExecutionStrategy()
+            .ExecuteAsync(
+                async token =>
+                {
+                    await using var snapshot = await dbContext.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
+                    var backlog = await CountAsync(dbContext, laneTypes, laneMaxRetryCount, token);
+                    await snapshot.CommitAsync(token);
+                    return backlog;
+                },
+                cancellationToken);
+    }
+
+    private async Task<OutboxBacklog> CountAsync(
+        TDbContext dbContext,
+        IReadOnlyList<string> laneTypes,
+        int laneMaxRetryCount,
+        CancellationToken cancellationToken)
+    {
+        var maxRetryCount = settings.MaxRetryCount;
+        var messages = dbContext
             .Set<OutboxMessage>()
             .AsNoTracking();
         var unprocessed = messages.Where(m => m.ProcessedOnUtc == null);
@@ -111,7 +149,7 @@ internal sealed partial class OutboxBacklogMonitor<TDbContext>(
         // or the retry limit was lowered since).
         return new OutboxBacklog(
             waitingCount,
-            givenUpCount + unprocessedCount - waitingCount,
+            Math.Max(0, givenUpCount + unprocessedCount - waitingCount),
             oldestAge > TimeSpan.Zero ? oldestAge : TimeSpan.Zero,
             now);
     }

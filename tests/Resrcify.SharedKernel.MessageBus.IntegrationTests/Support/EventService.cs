@@ -52,8 +52,17 @@ internal sealed class EventService : IAsyncDisposable
             },
             log);
 
+    /// <summary>A service that sends <see cref="PlayerRenamedPublished"/> straight to <paramref name="queue"/> (a command).</summary>
+    public static Task<EventService> StartSenderAsync(RabbitMqConnection connection, string wireName, string queue)
+        => StartAsync(bus => bus
+            .UseRabbitMq(connection)
+            .AddMessage<PlayerRenamedPublished>(wireName, sendTo: queue));
+
     public Task PublishAsync(PlayerRenamedPublished renamed)
         => _host.Services.GetRequiredService<IEventBus>().PublishAsync(renamed);
+
+    public Task SendAsync(PlayerRenamedPublished renamed)
+        => _host.Services.GetRequiredService<Rebus.Bus.IBus>().Send(renamed);
 
     public async ValueTask DisposeAsync()
     {

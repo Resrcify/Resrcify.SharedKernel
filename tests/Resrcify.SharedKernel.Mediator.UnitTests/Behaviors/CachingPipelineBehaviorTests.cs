@@ -118,6 +118,31 @@ public class CachingPipelineBehaviorTests
             .ShouldBe(response);
     }
 
+    [Fact]
+    public async Task Handle_ShouldCacheForTheLongestKept_WhenExpirationIsLonger()
+    {
+        // 3.x's TimeSpan.MaxValue meant "keep it": kept for the longest a cache keeps anything, not refused after the
+        // handler ran.
+        var request = new MockCachingQuery("valid-key", TimeSpan.MaxValue);
+        var response = Result.Success();
+        var handled = 0;
+        Task<Result> next(CancellationToken cancellationToken = default)
+        {
+            handled++;
+            return Task.FromResult(response);
+        }
+        _cachingService.GetAsync<Result>(request.CacheKey!, Arg.Any<CancellationToken>())!
+            .Returns(Task.FromResult<Result>(null!));
+
+        var result = await _behavior.Handle(request, next, CancellationToken.None);
+
+        result.ShouldBe(response);
+        handled.ShouldBe(1);
+        await _cachingService
+            .Received(1)
+            .SetForAsync(request.CacheKey!, response, ICachingService.MaxLifetime, CancellationToken.None);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]

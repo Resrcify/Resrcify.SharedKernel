@@ -222,7 +222,8 @@ innermost: the total timeout (30 s), the retries, the circuit breaker, the attem
   that timed out. Not a 400, 401, 403, 404 or 409: those are answers. Never the caller's cancellation.
 - **`AlsoRetry`** adds statuses (e.g. 404 from an upstream that is still catching up); **`NeverRetry`** removes
   them, and wins over `AlsoRetry`.
-- **`Retry-After`** (a delay or a date) on a retried response is waited instead of the computed delay.
+- **`Retry-After`** (a delay or a date) on a retried response is waited instead of the computed delay; one at least
+  as long as what is left of `TotalTimeout` isn't waited for, and the caller gets that response (e.g. a 429) at once.
 - **The circuit breaker** opens when 10 % of at least 100 calls in 30 s fail transiently (`AlsoRetry` statuses don't
   count), for 5 s; `CircuitBreaker = false` turns it off.
 - **Time** is the `TimeProvider` in the container: every delay, timeout and `Retry-After` date runs on a

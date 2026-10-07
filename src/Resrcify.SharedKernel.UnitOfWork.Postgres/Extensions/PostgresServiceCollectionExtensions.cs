@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,6 +10,7 @@ using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
+using Resrcify.SharedKernel.UnitOfWork.Interceptors;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 using Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration;
 using Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox;
@@ -54,7 +56,7 @@ public static class PostgresServiceCollectionExtensions
         services.AddConnection<TContext>(configuration, builder);
         services.AddEntityInterceptors();
         if (builder.Outbox is { } outbox)
-            services.AddOutboxWriting(outbox);
+            services.AddOutboxWriting<TContext>(outbox);
         if (builder.WakeUp is { } wakeUp)
             services.AddOutboxWakeUp<TContext>(builder, wakeUp);
 
@@ -62,7 +64,11 @@ public static class PostgresServiceCollectionExtensions
         services.AddDbContext<TContext>((provider, options) =>
         {
             builder.Apply(options, provider.GetRequiredService<PostgresConnection<TContext>>().ConnectionString);
-            options.AddSaveChangesInterceptors(provider, withOutbox: builder.Outbox is not null);
+            options.AddSaveChangesInterceptors(provider, withOutbox: false);
+            // This context's own outbox interceptor: its insert strategy is this context's (OnConflictDoNothing on one
+            // context mustn't write another's outbox with ON CONFLICT, which needs that context's unique index).
+            if (builder.Outbox is not null)
+                options.AddInterceptors(provider.GetRequiredService<PostgresOutboxInterceptor<TContext>>().Interceptor);
         });
         return services;
     }
@@ -98,13 +104,40 @@ public static class PostgresServiceCollectionExtensions
         services.TryAddSingleton<PostgresConnection<TContext>>();
     }
 
-    private static void AddOutboxWriting(
+    private static void AddOutboxWriting<TContext>(
         this IServiceCollection services,
         PostgresOutboxOptions outbox)
+        where TContext : DbContext
     {
+        EnsureOneSerializer<TContext>(services, outbox.Serializer);
         services.AddOutboxInterceptor(outbox.Serializer);
-        if (outbox.OnConflictDoNothing)
-            services.TryAddSingleton<IOutboxInsertStrategy, PostgresOnConflictOutboxInsertStrategy>();
+        services.RemoveAll<PostgresOutboxInterceptor<TContext>>();
+        services.AddSingleton(provider => new PostgresOutboxInterceptor<TContext>(new InsertOutboxMessagesInterceptor(
+            provider.GetRequiredService<IOutboxSerializer>(),
+            outbox.OnConflictDoNothing
+                ? new PostgresOnConflictOutboxInsertStrategy()
+                : provider.GetService<IOutboxInsertStrategy>(),
+            provider.GetService<TimeProvider>(),
+            provider.GetServices<IOutboxSaveObserver>())));
+    }
+
+    // Every outbox job reads with the one registered IOutboxSerializer, so every context must write with it: a second,
+    // different one would write messages the jobs can't read.
+    private static void EnsureOneSerializer<TContext>(
+        IServiceCollection services,
+        IOutboxSerializer? serializer)
+        where TContext : DbContext
+    {
+        if (serializer is null)
+            return;
+
+        var registered = services.FirstOrDefault(descriptor => descriptor.ServiceType == typeof(IOutboxSerializer));
+        var registeredType = registered?.ImplementationInstance?.GetType() ?? registered?.ImplementationType;
+        if (registered is not null && !ReferenceEquals(registered.ImplementationInstance, serializer) && registeredType != serializer.GetType())
+            throw new InvalidOperationException(
+                $"{typeof(TContext).Name}'s outbox asks for {serializer.GetType().Name}, but {registeredType?.Name ?? "another serializer"} "
+                + "is registered already (by another context's outbox, or AddOutboxProcessing): the outbox jobs read every "
+                + "message with that one. Give every context the same serializer.");
     }
 
     private static void AddOutboxWakeUp<TContext>(

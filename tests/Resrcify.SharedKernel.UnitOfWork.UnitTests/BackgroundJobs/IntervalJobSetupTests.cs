@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using Quartz;
+using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
 using Shouldly;
@@ -100,4 +101,17 @@ public sealed class IntervalJobSetupTests
         services.AddQuartz(configure);
         return services.BuildServiceProvider();
     }
+
+    [Fact]
+    public void AddIntervalCommandJob_ShouldThrowAtRegistration_ForACommandReturningAValue()
+        => Should.Throw<InvalidOperationException>(() => new ServiceCollection().AddQuartz(quartz =>
+                quartz.AddIntervalCommandJob<CountingCommand>(TimeSpan.FromMinutes(1))))
+            .Message.ShouldContain("AddIntervalCommandJob<CountingCommand, Result<Int32>>");
+
+    [Fact]
+    public void AddIntervalCommandJob_ShouldRegister_ACommandReturningAValue_WithItsResultType()
+        => Should.NotThrow(() => new ServiceCollection().AddQuartz(quartz =>
+            quartz.AddIntervalCommandJob<CountingCommand, Result<int>>(TimeSpan.FromMinutes(1))));
+
+    private sealed class CountingCommand : Resrcify.SharedKernel.Abstractions.Mediator.ICommand<int>;
 }

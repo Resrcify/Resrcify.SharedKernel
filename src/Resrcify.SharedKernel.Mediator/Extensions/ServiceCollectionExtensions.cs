@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.Mediator.Publishing;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,7 +28,7 @@ public static class ServiceCollectionExtensions
         MediatorConfigurationValidation.ValidateMediatorLifetime(mediatorLifetime, nameof(mediatorLifetime));
 
         services.RegisterMediatorTypes(assemblies);
-        BehaviorCheck.Run(services, assemblies, configuredBehaviorTypes: []);
+        BehaviorCheck.Run(services, assemblies, configuredBehaviorTypes: [], BehaviorCheck.AssembliesRemedy);
 
         return services.AddMediatorRuntime(
             NotificationPublishStrategy.Sequential,
@@ -45,7 +46,11 @@ public static class ServiceCollectionExtensions
 
         services.RegisterMediatorTypes(configuration.Assemblies);
         if (configuration.ChecksBehaviors)
-            BehaviorCheck.Run(services, configuration.Assemblies, configuration.OpenBehaviorTypes);
+            BehaviorCheck.Run(
+                services,
+                configuration.Assemblies,
+                configuration.OpenBehaviorTypes,
+                BehaviorCheck.ConfigurationRemedy);
 
         foreach (var behaviorRegistration in configuration.OpenBehaviorRegistrations)
         {
@@ -64,15 +69,49 @@ public static class ServiceCollectionExtensions
         foreach (var processorRegistration in configuration.ProcessorRegistrations)
             services.TryAddEnumerable(processorRegistration);
 
-        // How the logging behavior logs: the configured options (the behavior's defaults when not configured).
-        services.TryAddSingleton(configuration.LoggingOptions);
-        // How the unit-of-work behavior saves: throwing (the default) or returning persistence failures as results.
-        services.TryAddSingleton(configuration.UnitOfWorkOptions);
+        // How the logging behavior logs, and how the unit-of-work behavior saves (throwing, the default, or returning
+        // persistence failures as results): the options configured in any AddMediator call, defaults otherwise.
+        RegisterOptions(services, configuration.LoggingOptions, configuration.LoggingConfigured, nameof(MediatorConfiguration.ConfigureLogging));
+        RegisterOptions(services, configuration.UnitOfWorkOptions, configuration.UnitOfWorkConfigured, nameof(MediatorConfiguration.ConfigureUnitOfWork));
 
         return services.AddMediatorRuntime(
             configuration.NotificationPublishStrategy,
             configuration.UseDiTimePipelineComposition,
             configuration.MediatorLifetime);
+    }
+
+    // The options instances an AddMediator call configured (not just defaulted), so a later call can tell them apart.
+    private static readonly ConditionalWeakTable<object, object> ConfiguredOptions = [];
+
+    // Several AddMediator calls (e.g. one per layer) share one options instance per kind: the one a call configured wins
+    // over another's defaults, whichever comes first. Two calls configuring it can't both win: that throws, rather than
+    // silently dropping one (a ReturnPersistenceFailures set and then lost turns a 409 into a 500).
+    private static void RegisterOptions<TOptions>(
+        IServiceCollection services,
+        TOptions options,
+        bool configured,
+        string configureMethod)
+        where TOptions : class
+    {
+        var existing = services.FirstOrDefault(descriptor => descriptor.ServiceType == typeof(TOptions));
+        if (existing is null)
+        {
+            services.AddSingleton(options);
+        }
+        else if (configured)
+        {
+            if (existing.ImplementationInstance is { } earlier
+                && !ReferenceEquals(earlier, options)
+                && ConfiguredOptions.TryGetValue(earlier, out _))
+                throw new InvalidOperationException(
+                    $"Two AddMediator calls both call cfg.{configureMethod}: configure {typeof(TOptions).Name} in one " +
+                    "of them only.");
+            services.Remove(existing);
+            services.AddSingleton(options);
+        }
+
+        if (configured)
+            ConfiguredOptions.AddOrUpdate(options, options);
     }
 
     // Handlers only. Behaviors and processors run only when registered explicitly (AddOpenBehavior,

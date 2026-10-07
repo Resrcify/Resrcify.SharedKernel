@@ -31,6 +31,21 @@ public sealed class MessageBusSettingsTests
 {
     private static readonly string Large = new('x', 100_000);
 
+    /// <summary>A container with nothing in it: the bus' clock falls back to the system clock.</summary>
+    private static readonly IServiceProvider EmptyServices = new ServiceCollection().BuildServiceProvider();
+
+    [Fact]
+    public void OtherPublisherOf_ShouldReportEachClashingPublisherOnce_WhenItKeepsPublishing()
+    {
+        var settings = new MessageBusSettings();
+
+        settings.OtherPublisherOf("PayoutRotated", "shard").ShouldBeNull();
+        settings.OtherPublisherOf("PayoutRotated", "sentinel").ShouldBe("shard");
+        settings.OtherPublisherOf("PayoutRotated", "sentinel").ShouldBeNull();   // warned every event before
+        settings.OtherPublisherOf("PayoutRotated", "tournament").ShouldBe("shard");
+        settings.OtherPublisherOf("PayoutRotated", "shard").ShouldBeNull();
+    }
+
     [Fact]
     public async Task ConfigureEveryBus_ShouldCompressALargeMessage_AndNotASmallOne()
     {
@@ -93,7 +108,7 @@ public sealed class MessageBusSettingsTests
         using var receiver = Configure.With(receiverActivator)
             .Logging(logging => logging.None())
             .Transport(transport => transport.UseInMemoryTransport(network, queue))
-            .Options(new MessageBusSettings().ConfigureEveryBus)
+            .Options(options => new MessageBusSettings().ConfigureEveryBus(options, EmptyServices))
             .Start();
         using var senderActivator = new BuiltinHandlerActivator();
         using var sender = Configure.With(senderActivator)
@@ -133,7 +148,7 @@ public sealed class MessageBusSettingsTests
             .Logging(logging => logging.None())
             .Transport(transport => transport.UseInMemoryTransportAsOneWayClient(network))
             .Routing(routing => routing.TypeBased().Map<Blob>(queue))
-            .Options(new MessageBusSettings { CompressAboveBytes = 1024 }.ConfigureEveryBus)
+            .Options(options => new MessageBusSettings { CompressAboveBytes = 1024 }.ConfigureEveryBus(options, EmptyServices))
             .Start();
 
         await sender.Send(new Blob(Large));

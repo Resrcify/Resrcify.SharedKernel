@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Storage;
 using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
@@ -20,9 +21,15 @@ namespace Resrcify.SharedKernel.UnitOfWork.Interceptors;
 /// <list type="bullet">
 /// <item>A transaction of its own is started only when there are messages and the insert strategy writes them outside
 /// EF's save (<see cref="IOutboxInsertStrategy.InsertsOutsideSaveChanges"/>); the default strategy doesn't, so a plain
-/// save also works under a retrying execution strategy.</item>
-/// <item>Events are cleared from their aggregates only once the save has succeeded. A failed save keeps them, rolls back
-/// its own transaction and stops tracking the messages it added, so a retried save writes each event once.</item>
+/// save also works under a retrying execution strategy. Inside a transaction that is already open, such a strategy's
+/// rows are written after a savepoint, so a failed save takes them back.</item>
+/// <item>Events are cleared from their aggregates only once the save has committed. A failed save keeps them, rolls back
+/// what it wrote and stops tracking the messages it added, so a retried save writes each event once; that includes a
+/// failure EF doesn't report to interceptors (a concurrency conflict, a cancellation), undone when the context next
+/// saves. When this save's own transaction fails to commit, the change tracker is put back as it was before the save
+/// (EF had already accepted its changes), so a retrying execution strategy writes it all again.</item>
+/// <item>The events of one save are given increasing <see cref="OutboxMessage.OccurredOnUtc"/> times (a microsecond
+/// apart, in the order raised), so the outbox, which reads in that order, publishes them in that order.</item>
 /// <item>Saving domain events needs <c>SaveChangesAsync</c>: the synchronous <c>SaveChanges</c> throws rather than drop them.</item>
 /// <item>Once a save wrote messages, the <paramref name="observers"/> are told (see <see cref="IOutboxSaveObserver"/>).</item>
 /// <item>One instance serves every context and save (it keeps no state of its own), so it can be a singleton: built by
@@ -36,6 +43,8 @@ public sealed class InsertOutboxMessagesInterceptor(
     IEnumerable<IOutboxSaveObserver>? observers = null)
     : SaveChangesInterceptor
 {
+    private static readonly TimeSpan BetweenEvents = TimeSpan.FromMicroseconds(1);
+
     private readonly IOutboxInsertStrategy _insertStrategy = insertStrategy ?? new DefaultOutboxInsertStrategy();
     private readonly IOutboxSaveObserver[] _observers = observers is null ? [] : [.. observers];
 
@@ -57,7 +66,10 @@ public sealed class InsertOutboxMessagesInterceptor(
         CancellationToken cancellationToken = default)
     {
         if (eventData.Context is { } context)
+        {
+            await UndoUnfinishedSaveAsync(context).ConfigureAwait(false);
             await PrepareAsync(eventData, context, cancellationToken).ConfigureAwait(false);
+        }
         return await base.SavingChangesAsync(eventData, result, cancellationToken).ConfigureAwait(false);
     }
 
@@ -69,24 +81,34 @@ public sealed class InsertOutboxMessagesInterceptor(
         if (eventData.Context is { } context && _saves.TryGetValue(context, out var save))
         {
             _saves.Remove(context);
+            await CommitAsync(context, save, cancellationToken).ConfigureAwait(false);
             foreach (var aggregate in save.Aggregates)
                 aggregate.ClearDomainEvents();
-            if (save.Transaction is { } transaction)
-            {
-                try
-                {
-                    await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-                }
-                finally
-                {
-                    await transaction.DisposeAsync().ConfigureAwait(false);
-                }
-            }
 
             await NotifyObserversAsync(context, save.Messages, cancellationToken).ConfigureAwait(false);
         }
 
         return await base.SavedChangesAsync(eventData, result, cancellationToken).ConfigureAwait(false);
+    }
+
+    public override async Task SaveChangesFailedAsync(
+        DbContextErrorEventData eventData,
+        CancellationToken cancellationToken = default)
+    {
+        if (eventData.Context is { } context)
+            await UndoUnfinishedSaveAsync(context).ConfigureAwait(false);
+
+        await base.SaveChangesFailedAsync(eventData, cancellationToken).ConfigureAwait(false);
+    }
+
+    public override async Task SaveChangesCanceledAsync(
+        DbContextEventData eventData,
+        CancellationToken cancellationToken = default)
+    {
+        if (eventData.Context is { } context)
+            await UndoUnfinishedSaveAsync(context).ConfigureAwait(false);
+
+        await base.SaveChangesCanceledAsync(eventData, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task NotifyObserversAsync(
@@ -99,19 +121,6 @@ public sealed class InsertOutboxMessagesInterceptor(
 
         foreach (var observer in _observers)
             await observer.MessagesSavedAsync(context, messages, cancellationToken).ConfigureAwait(false);
-    }
-
-    public override async Task SaveChangesFailedAsync(
-        DbContextErrorEventData eventData,
-        CancellationToken cancellationToken = default)
-    {
-        if (eventData.Context is { } context && _saves.TryGetValue(context, out var save))
-        {
-            _saves.Remove(context);
-            await UndoAsync(context, save).ConfigureAwait(false);
-        }
-
-        await base.SaveChangesFailedAsync(eventData, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task PrepareAsync(
@@ -133,8 +142,8 @@ public sealed class InsertOutboxMessagesInterceptor(
                 return;
             }
 
-            if (_insertStrategy.InsertsOutsideSaveChanges && context.Database.CurrentTransaction is null)
-                save.Transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+            if (_insertStrategy.InsertsOutsideSaveChanges)
+                await GuardOutsideWritesAsync(saving, context, save, cancellationToken).ConfigureAwait(false);
 
             save.Messages = messages;
             await _insertStrategy.InsertAsync(context, messages, cancellationToken).ConfigureAwait(false);
@@ -148,7 +157,74 @@ public sealed class InsertOutboxMessagesInterceptor(
         }
     }
 
-    /// <summary>Rolls back this save's own transaction, and stops tracking the messages it added; the events stay.</summary>
+    // Rows the strategy writes itself must go when the save fails. Outside a transaction they are written in one of
+    // this save's own (and the change tracker is noted, to put back should its commit fail); inside one, after a
+    // savepoint, since EF's own savepoint is taken after them and the caller's transaction would otherwise keep them.
+    private static async Task GuardOutsideWritesAsync(
+        DbContextEventData saving,
+        DbContext context,
+        SaveInProgress save,
+        CancellationToken cancellationToken)
+    {
+        if (context.Database.CurrentTransaction is not { } outer)
+        {
+            save.Pending = PendingEntry.Capture(saving, context);
+            save.Transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (!outer.SupportsSavepoints)
+            return;
+
+        save.Outer = outer;
+        save.Savepoint = $"outbox_{Guid.NewGuid():N}";
+        await outer.CreateSavepointAsync(save.Savepoint, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task CommitAsync(
+        DbContext context,
+        SaveInProgress save,
+        CancellationToken cancellationToken)
+    {
+        if (save.Outer is { } outer && save.Savepoint is { } savepoint)
+        {
+            await outer.ReleaseSavepointAsync(savepoint, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        if (save.Transaction is not { } transaction)
+            return;
+
+        try
+        {
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // EF accepted the save's changes before this commit: as they are, a retried save would write nothing and
+            // report success. Put them back, so it writes them (and, the events kept, their messages) again.
+            PendingEntry.Restore(context, save.Pending);
+            throw;
+        }
+        finally
+        {
+            await transaction.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    // A save whose failure EF didn't report (a concurrency conflict, a cancellation) left its messages tracked and its
+    // transaction or savepoint open: undone before the context saves again, so nothing of it is written twice.
+    private static async Task UndoUnfinishedSaveAsync(
+        DbContext context)
+    {
+        if (!_saves.TryGetValue(context, out var unfinished))
+            return;
+
+        _saves.Remove(context);
+        await UndoAsync(context, unfinished).ConfigureAwait(false);
+    }
+
+    /// <summary>Rolls back what this save wrote itself, and stops tracking the messages it added; the events stay.</summary>
     private static async Task UndoAsync(DbContext context, SaveInProgress save)
     {
         foreach (var message in save.Messages)
@@ -158,11 +234,12 @@ public sealed class InsertOutboxMessagesInterceptor(
                 entry.State = EntityState.Detached;
         }
 
-        if (save.Transaction is not { } transaction)
-            return;
         try
         {
-            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            if (save.Outer is { } outer && save.Savepoint is { } savepoint)
+                await outer.RollbackToSavepointAsync(savepoint, CancellationToken.None).ConfigureAwait(false);
+            else if (save.Transaction is { } transaction)
+                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception rollbackFailure) when (rollbackFailure is InvalidOperationException or System.Data.Common.DbException)
         {
@@ -170,7 +247,8 @@ public sealed class InsertOutboxMessagesInterceptor(
         }
         finally
         {
-            await transaction.DisposeAsync().ConfigureAwait(false);
+            if (save.Transaction is { } transaction)
+                await transaction.DisposeAsync().ConfigureAwait(false);
         }
     }
 
@@ -207,7 +285,9 @@ public sealed class InsertOutboxMessagesInterceptor(
             outboxMessages.Add(new OutboxMessage
             {
                 Id = Guid.NewGuid(),
-                OccurredOnUtc = now,
+                // A microsecond apart (the precision PostgreSQL keeps), in the order raised: the outbox reads by
+                // OccurredOnUtc, and the ids are random, so equal times would publish in no particular order.
+                OccurredOnUtc = now + BetweenEvents * outboxMessages.Count,
                 Type = domainEvent.GetType().FullName!,
                 Content = serializer.Serialize(domainEvent),
                 DedupKey = dedupKey
@@ -244,6 +324,65 @@ public sealed class InsertOutboxMessagesInterceptor(
 
         public List<OutboxMessage> Messages { get; set; } = [];
 
+        /// <summary>This save's own transaction, begun when the strategy writes outside the save and none was open.</summary>
         public IDbContextTransaction? Transaction { get; set; }
+
+        /// <summary>The transaction already open, and the savepoint taken in it before the strategy wrote.</summary>
+        public IDbContextTransaction? Outer { get; set; }
+
+        public string? Savepoint { get; set; }
+
+        /// <summary>The entries the save writes, as they were before it, for a commit of its own that fails.</summary>
+        public List<PendingEntry> Pending { get; set; } = [];
+    }
+
+    /// <summary>An entry a save writes, as it was before: its state, original values and modified properties.</summary>
+    private sealed record PendingEntry(
+        object Entity,
+        EntityState State,
+        PropertyValues OriginalValues,
+        string[] ModifiedProperties)
+    {
+        public static List<PendingEntry> Capture(
+            DbContextEventData saving,
+            DbContext context)
+            => [.. SaveChangesEntries
+                .Where<object>(
+                    saving,
+                    context,
+                    entry => entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+                .Select(entry => new PendingEntry(
+                    entry.Entity,
+                    entry.State,
+                    entry.OriginalValues.Clone(),
+                    [.. entry.Properties.Where(property => property.IsModified).Select(property => property.Metadata.Name)]))];
+
+        // Back as before the save: added again, modified again (with the values read, so a concurrency token still
+        // matches the row, which the rollback left as it was), deleted again.
+        public static void Restore(
+            DbContext context,
+            List<PendingEntry> pending)
+        {
+            foreach (var before in pending)
+            {
+                var entry = context.Entry(before.Entity);
+                if (before.State == EntityState.Added)
+                {
+                    entry.State = EntityState.Added;
+                    continue;
+                }
+
+                entry.State = EntityState.Unchanged;
+                entry.OriginalValues.SetValues(before.OriginalValues);
+                if (before.State == EntityState.Deleted)
+                {
+                    entry.State = EntityState.Deleted;
+                    continue;
+                }
+
+                foreach (var property in before.ModifiedProperties)
+                    entry.Property(property).IsModified = true;
+            }
+        }
     }
 }

@@ -36,8 +36,34 @@ public sealed class OutboxLanesHostTests
     [InlineData(6, 160)]
     [InlineData(7, 300)]
     [InlineData(20, 300)]
+    [InlineData(39, 300)]
+    [InlineData(100, 300)]
+    [InlineData(int.MaxValue, 300)]
     public void RetryDelay_ShouldDoubleFromFiveSecondsUpToFiveMinutes_WhenAMessageKeepsFailing(int failures, int seconds)
         => OutboxLanesHost<TestDbContext>.RetryDelay(failures).ShouldBe(TimeSpan.FromSeconds(seconds));
+
+    [Theory]
+    [InlineData(0, 0, true)]
+    [InlineData(1, 4, false)]
+    [InlineData(1, 5, true)]
+    [InlineData(2, 14, false)]
+    [InlineData(2, 15, true)]
+    public void DueForItsNextTry_ShouldWaitTheBackoffOfItsTriesSoFar_MeasuredFromWhenTheEventOccurred(
+        int retryCount,
+        int secondsSinceItOccurred,
+        bool due)
+    {
+        // Kept in the database (RetryCount, OccurredOnUtc), so every instance running the lanes waits it out.
+        var now = new DateTime(2026, 10, 7, 12, 0, 0, DateTimeKind.Utc);
+        var message = new OutboxMessage
+        {
+            Id = Guid.NewGuid(),
+            RetryCount = retryCount,
+            OccurredOnUtc = now.AddSeconds(-secondsSinceItOccurred),
+        };
+
+        OutboxLanesHost<TestDbContext>.DueForItsNextTry(now, maxRetryCount: 3).Compile()(message).ShouldBe(due);
+    }
 
     /// <summary>The clock never moves in these tests: a lane that waited for its poll would never get there.</summary>
     [Fact]

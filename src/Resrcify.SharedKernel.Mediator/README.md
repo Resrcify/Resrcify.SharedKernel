@@ -126,7 +126,7 @@ public static class DependencyInjection
 Then consume via constructor injection:
 
 ```csharp
-using Resrcify.SharedKernel.Mediator.Abstractions;
+using Resrcify.SharedKernel.Abstractions.Mediator;
 
 public sealed class MyEndpoint(
     ISender sender)
@@ -167,7 +167,7 @@ Mediator contracts are in `src/Resrcify.SharedKernel.Abstractions/Mediator` (nam
 #### Query example
 
 ```csharp
-using Resrcify.SharedKernel.Mediator.Abstractions;
+using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.Results.Primitives;
 
 public sealed record GetUserByIdQuery(
@@ -197,7 +197,7 @@ Result<UserDto> result = await sender.Send(
 #### Command example
 
 ```csharp
-using Resrcify.SharedKernel.Mediator.Abstractions;
+using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.Results.Primitives;
 
 public sealed record RenameUserCommand(
@@ -249,7 +249,7 @@ public sealed class FastPingQueryHandler
 Use notifications for fan-out processing (0..n handlers).
 
 ```csharp
-using Resrcify.SharedKernel.Mediator.Abstractions;
+using Resrcify.SharedKernel.Abstractions.Mediator;
 
 public sealed record UserCreatedNotification(Guid UserId) : INotification;
 
@@ -281,7 +281,7 @@ Use stream requests for large or incremental data results.
 
 ```csharp
 using System.Runtime.CompilerServices;
-using Resrcify.SharedKernel.Mediator.Abstractions;
+using Resrcify.SharedKernel.Abstractions.Mediator;
 
 public sealed record GetNumbersStream(int Count)
     : IStreamRequest<int>;
@@ -326,10 +326,13 @@ The package includes the following built-in behaviors in `src/Resrcify.SharedKer
     - Uses `ICachingService` and `ICachingQuery` (`CacheKey`, `Expiration`). A successful result is cached for `Expiration` from the time it was cached (an absolute expiry: reads don't extend it).
     - Constraint: `TRequest : ICachingQuery`, `TResponse : Result`.
 - `TransactionPipelineBehavior<TRequest, TResponse>`
-    - Wraps command execution in unit-of-work transaction.
+    - Wraps command execution in unit-of-work transaction, at the command's `IsolationLevel` (read committed when
+      `null`) and `CommandTimeout` (the DbContext's own when `null`).
     - Constraint: `TRequest : ITransactionalCommand`, `TResponse : Result`.
 - `UnitOfWorkPipelineBehavior<TRequest, TResponse>`
-    - Calls `IUnitOfWork.CompleteAsync` on successful command result.
+    - Calls `IUnitOfWork.CompleteAsync` on successful command result. Runs the command through
+      `IUnitOfWork.ExecuteAsync`, so when it fails (or its save is refused, or it throws) what it changed is undone in
+      the change tracker and a later save in the scope doesn't save half of it.
     - With `cfg.ConfigureUnitOfWork(uow => uow.ReturnPersistenceFailures = true)`, saves with
       `IUnitOfWork.TryCompleteAsync` instead and returns its failure as the command's result (`ResultFactory.Failure`):
       a concurrency conflict or a duplicate is a `Conflict` (409), a serialization failure or a deadlock outside a
@@ -339,9 +342,9 @@ The package includes the following built-in behaviors in `src/Resrcify.SharedKer
 
 The logging, transaction and unit-of-work behaviors log a handler's exception (not a cancellation the caller asked
 for) and let it through unchanged, so callers can catch it by type. It is logged at `Error`, with its stack, **once**:
-by the first of them it passes on its way out, which is the innermost (the unit-of-work behavior for a command: "Request
-X threw Y; nothing it changed is saved"; the transaction behavior: "...; its transaction is rolled back"; the logging
-behavior for a query). The behaviors it passes after that log a `Debug` line without the stack (the logging behavior's
+by the first of them it passes on its way out, which is the innermost (the unit-of-work behavior for a plain command:
+"Request X threw Y; nothing it changed is saved"; the transaction behavior for a transactional one, once whatever the
+retries of a retrying execution strategy: "...; its transaction is rolled back"; the logging behavior for a query). The behaviors it passes after that log a `Debug` line without the stack (the logging behavior's
 has the request's time). The first marks the exception (`LoggedExceptions.Claim` from Results, which sets
 `Exception.Data["Resrcify.SharedKernel.Logged"]`), so a request sent from a handler doesn't log its exception again in
 the sending request's behaviors, a pipeline without the logging behavior still logs it, and the Web package's
@@ -383,7 +386,13 @@ cfg.AddStandardBehaviors(standard => standard
 ```
 
 `InsertBefore` works the same way. A behavior inserted next to one left out keeps its place. Inserted behaviors are
-transient.
+transient, and must be `IPipelineBehavior<,>`s like the standard ones: an `IRequestPipelineBehavior` always runs inside
+every `IPipelineBehavior`, and a ValueTask behavior only for ValueTask handlers, so inserting one throws (add it with
+`AddOpenBehavior`).
+
+Several `AddMediator` calls (e.g. one per layer) share the logging and unit-of-work options: whichever call configures
+them (`ConfigureLogging`, `ConfigureUnitOfWork`) wins over the others' defaults, and two calls configuring the same
+options throw.
 
 ### The behavior check
 
@@ -393,7 +402,10 @@ says so. `AddMediator` therefore throws `InvalidOperationException` when a scann
 has no registered behavior that handles it: one whose request type parameter is constrained to that interface
 (`CachingPipelineBehavior` and `TransactionPipelineBehavior` are; so may a service's own). It sees the behaviors added
 to the configuration and those registered in the container before `AddMediator`; if yours is registered after,
-call `cfg.SkipBehaviorCheck()`.
+call `cfg.SkipBehaviorCheck()` (with `AddMediator(assemblies)`, which takes no configuration, register it before, or
+switch to `AddMediator(cfg => ...)`). The behavior must also run for the request's handler: a `Task` handler
+(`IRequestHandler`) runs only Task behaviors, a ValueTask handler (`IValueTaskRequestHandler`) only ValueTask ones, so
+an `ICachingQuery` with a ValueTask handler and only the standard behaviors fails the check.
 
 ### Logging options
 
@@ -463,23 +475,26 @@ Behaviors and pre/post processors are registered only as added (`AddOpenBehavior
 
 ### Runtime dispatch phase
 
-`Mediator` uses compiled generic dispatch delegates + runtime caches to avoid repeated reflection work after warm-up.
+`Mediator` uses compiled generic dispatch delegates, so a call does no reflection after warm-up. The mediator is
+transient: it keeps only the last runtime it built for each kind of call (send, publish, stream), reused when its next
+call has the same types (e.g. a job sending one command per item).
 
 - **Send path** (`Runtime/Mediator.Send.cs` + `Runtime/Mediator.SendRuntimes.cs`)
     - Resolves `ValueTask` handler first if available, otherwise task-based handler.
     - Executes pre-processors -> pipeline -> handler -> post-processors.
-    - Caches runtime instances by `(RequestType, ResponseType)`.
+    - Keeps the last send runtime (one slot).
 - **Publish path** (`Runtime/Mediator.Publish.cs` + `Runtime/Mediator.PublishRuntime.cs`)
     - Resolves all handlers for a notification type.
     - Uses selected strategy (`Sequential` or `Parallel`).
-    - Caches runtime per notification type.
+    - Keeps the last publish runtime (one slot).
 - **Stream path** (`Runtime/Mediator.Stream.cs` + `Runtime/Mediator.StreamRuntime.cs`)
     - Resolves stream handler and stream pipeline behaviors.
-    - Caches runtime instances by `(RequestType, ResponseType)`.
+    - Keeps the last stream runtime (one slot).
 
 ### Missing handler behavior
 
-If a request/stream handler is missing, mediator throws `InvalidOperationException` and caches the message for fast-fail next calls.
+If a request/stream handler is missing, the mediator throws `InvalidOperationException` ("No request handler
+registered for ..."), on every call: nothing about the failure is cached.
 
 ## Choosing runtime options
 

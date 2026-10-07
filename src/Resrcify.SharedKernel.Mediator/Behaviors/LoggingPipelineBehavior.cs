@@ -100,7 +100,7 @@ public class LoggingPipelineBehavior<TRequest, TResponse>
     /// else (a failure, an upstream's failure, a timeout, a rate limit): something may be wrong.
     /// </summary>
     private static LogLevel FailureLevel(Result result)
-        => result.IsFailure && result.Errors.Any(error => error.Type.IsTransient())
+        => result.IsFailure && result.Errors.Any(error => error.IsTransient())
             ? LogLevel.Warning
             : LogLevel.Information;
 

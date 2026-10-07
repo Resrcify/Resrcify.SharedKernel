@@ -139,6 +139,22 @@ await unitOfWork.ExecuteInTransactionAsync(
     cancellationToken: cancellationToken);
 ```
 
+Under a retrying strategy a transient failure (a deadlock, a serialization failure, a dropped connection, a failed
+commit) runs the operation again on a cleared change tracker. That is only safe when the operation's entities are all
+its own: when the DbContext tracked entities **before** the call, the failure is thrown instead (an
+`InvalidOperationException` holding it), since a retry would lose them and still report success. Load what the
+operation changes inside it.
+
+Called while a transaction is already open (a command sent from a domain event handler the outbox runs), it joins
+that transaction on a savepoint. A failure undoes the operation's work in the database and in the change tracker (rows
+it inserted are untracked, rows it updated or deleted read again). It runs at the open transaction's isolation level
+and throws when asked for a stricter one. A command timeout of `TimeSpan.Zero` or `Timeout.InfiniteTimeSpan` means no
+timeout.
+
+`ExecuteAsync(operation)` runs an operation without a transaction of its own and, when it fails (a failed result or an
+exception), undoes in the change tracker what it changed and drops the domain events it raised, so a later save in the
+scope doesn't save half of it; the mediator's unit-of-work behavior sends every command through it.
+
 ### Persistence failures as results
 
 `TryCompleteAsync` saves like `CompleteAsync` and returns, instead of throwing, the failures a caller can answer
@@ -151,8 +167,12 @@ await unitOfWork.ExecuteInTransactionAsync(
 | `40001` (a serialization failure), outside a transaction | `Persistence.SerializationFailure` | `Failure` (transient) |
 | `40P01` (a deadlock), outside a transaction | `Persistence.Deadlock` | `Failure` (transient) |
 
-Anything else still throws. The `SQLSTATE` is read from the BCL's `DbException.SqlState`, through
-`DbUpdateException` and `RetryLimitExceededException`, so no provider is referenced. A serialization failure or a
+Anything else still throws. After a refused save the pending changes are discarded (and their events dropped), so
+the scope's next save doesn't send them again: read the data again to retry. The `SQLSTATE` is read from the BCL's
+`DbException.SqlState`, anywhere among the exception's causes (under `DbUpdateException`,
+`RetryLimitExceededException`, or the `InvalidOperationException` a non-retrying Npgsql strategy wraps a transient
+failure in), so no provider is referenced. `Persistence.Concurrency` is a `Conflict` to an HTTP caller, but
+`Error.IsTransient()` counts it as transient, so the message bus retries it in a new scope. A serialization failure or a
 deadlock **inside** a transaction throws: it aborted the whole transaction, so only the transaction's owner can try
 again (`ExecuteInTransactionAsync` under a retrying strategy does). The mediator's unit-of-work behavior uses it when
 asked (`cfg.ConfigureUnitOfWork(uow => uow.ReturnPersistenceFailures = true)`), returning the failure as the

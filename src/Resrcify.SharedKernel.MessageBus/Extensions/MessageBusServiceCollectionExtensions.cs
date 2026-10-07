@@ -117,11 +117,10 @@ public static class MessageBusServiceCollectionExtensions
                     options.Decorate<ITransport>(context =>
                     {
                         var transport = context.Get<ITransport>();
-                        foreach (var queue in settings.Destinations.Values)
-                            transport.CreateQueue(queue);
+                        settings.DeclareDestinations(transport, provider);
                         return transport;
                     });
-                    settings.ConfigureEveryBus(options);
+                    settings.ConfigureEveryBus(options, provider);
                     strategy.ConfigureOptions(options);
                 });
         });

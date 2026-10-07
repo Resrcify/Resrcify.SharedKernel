@@ -138,7 +138,7 @@ public class TransactionPipelineBehaviorTests
     }
 
     [Fact]
-    public async Task Handle_UsesDefaultIsolationAndTimeout_WhenCommandLeavesThemNull()
+    public async Task Handle_UsesReadCommittedAndTheContextsTimeout_WhenCommandLeavesThemNull()
     {
         // Arrange
         _command.CommandTimeout.Returns((TimeSpan?)null);
@@ -155,7 +155,7 @@ public class TransactionPipelineBehaviorTests
             .ExecuteInTransactionAsync(
                 Arg.Any<Func<CancellationToken, Task<Result>>>(),
                 IsolationLevel.ReadCommitted,
-                TimeSpan.FromSeconds(30),
+                null,
                 Arg.Any<CancellationToken>());
     }
 

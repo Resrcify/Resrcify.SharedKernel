@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Rebus.Transport.InMem;
 using Resrcify.SharedKernel.Abstractions.Caching;
+using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 using Resrcify.SharedKernel.Caching.Primitives;
@@ -31,6 +32,29 @@ public sealed class EventBusTests
     public void StableIdKind_ShouldDiffer_WhenTheContentDiffers()
         => EventBus.StableIdKind("PayoutRotated", new PayoutRotated("shard-1", 1))
             .ShouldNotBe(EventBus.StableIdKind("PayoutRotated", new PayoutRotated("shard-2", 1)));
+
+    [Fact]
+    public void StableIdKind_ShouldIgnoreContentComputedWhileHandling_WhenTheEventNamesItsSubject()
+        => EventBus.StableIdKind("RankChanged", new RankChanged("shard-1", TimeSpan.FromMinutes(90)))
+            .ShouldBe(EventBus.StableIdKind("RankChanged", new RankChanged("shard-1", TimeSpan.FromMinutes(89))));
+
+    [Fact]
+    public void StableIdKind_ShouldDiffer_WhenTheSubjectsDiffer()
+        => EventBus.StableIdKind("RankChanged", new RankChanged("shard-1", TimeSpan.Zero))
+            .ShouldNotBe(EventBus.StableIdKind("RankChanged", new RankChanged("shard-2", TimeSpan.Zero)));
+
+    [Fact]
+    public async Task PublishAsync_ShouldPublishUnderTheEventsOwnName_WhenTheCallerDeclaresABaseType()
+    {
+        using var metrics = new MetricsCapture();
+        using var publisher = await InMemoryServices.StartAsync(new InMemNetwork(), _ => { });
+
+        object integrationEvent = new BaseTyped(1);
+        await publisher.Services.GetRequiredService<IEventBus>().PublishAsync(integrationEvent);
+
+        // Under "Object", which nobody binds, it was dropped.
+        metrics.Count("messagebus.events.published event=BaseTyped via_outbox=false").ShouldBe(1);
+    }
 
     [Fact]
     public void StableIdKind_ShouldFallBackToTheTopic_WhenTheContentCannotBeSerialized()
@@ -108,4 +132,12 @@ public sealed class EventBusTests
     }
 
     private sealed record OutboxTagged(int Sequence);
+
+    private sealed record BaseTyped(int Sequence);
+
+    /// <summary>An event with a field computed from the clock while handling; its subject is the shard.</summary>
+    private sealed record RankChanged(string ShardId, TimeSpan TimeUntilPayout) : IDedupable
+    {
+        public string DedupKey => ShardId;
+    }
 }

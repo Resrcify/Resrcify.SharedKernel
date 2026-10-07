@@ -110,7 +110,7 @@ public sealed class ScatterGatherTests
     {
         var handler = new PingHandler();
         var transport = new FakeScatterGatherTransport(key => new Pong("pong " + key));
-        var adapter = new ScatterGatherNotificationHandler<PingRequested, Ping, Pong>(handler, transport);
+        var adapter = new ScatterGatherNotificationHandler<PingRequested, Ping, Pong>([handler], transport);
 
         await adapter.Handle(new PingRequested(2), CancellationToken.None);
 
@@ -119,11 +119,25 @@ public sealed class ScatterGatherTests
     }
 
     [Fact]
+    public async Task Handle_ShouldRunEveryHandler_WhenTwoHaveTheSameEventRequestAndResponse()
+    {
+        var syncRanks = new PingHandler();
+        var recordHistory = new PingHandler();
+        var transport = new FakeScatterGatherTransport(key => new Pong("pong " + key));
+        var adapter = new ScatterGatherNotificationHandler<PingRequested, Ping, Pong>([syncRanks, recordHistory], transport);
+
+        await adapter.Handle(new PingRequested(2), CancellationToken.None);
+
+        syncRanks.Gathered!.Results.Count.ShouldBe(2);
+        recordHistory.Gathered!.Results.Count.ShouldBe(2);
+    }
+
+    [Fact]
     public async Task Handle_ShouldGatherWithoutSending_WhenThereAreNoRequests()
     {
         var handler = new PingHandler();
         var transport = new FakeScatterGatherTransport(key => new Pong("pong " + key));
-        var adapter = new ScatterGatherNotificationHandler<PingRequested, Ping, Pong>(handler, transport);
+        var adapter = new ScatterGatherNotificationHandler<PingRequested, Ping, Pong>([handler], transport);
 
         await adapter.Handle(new PingRequested(0), CancellationToken.None);
 

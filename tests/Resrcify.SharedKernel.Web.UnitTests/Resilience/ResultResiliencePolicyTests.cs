@@ -33,6 +33,12 @@ public sealed class ResultResiliencePolicyTests
     [InlineData(403, false)]
     [InlineData(404, false)]
     [InlineData(409, false)]
+    [InlineData(405, false)]
+    [InlineData(410, false)]
+    [InlineData(412, false)]
+    [InlineData(413, false)]
+    [InlineData(415, false)]
+    [InlineData(422, false)]
     [InlineData(200, false)]
     [InlineData(204, false)]
     [InlineData(304, false)]
@@ -92,6 +98,41 @@ public sealed class ResultResiliencePolicyTests
         using var response = new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
 
         Policy().CountsAgainstTheCircuit(Outcome.FromResult(response)).ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData(10, 29, true)]
+    [InlineData(10, 30, false)]
+    [InlineData(25, 15, false)]
+    [InlineData(25, 4, true)]
+    public void ShouldRetry_ShouldWaitARetryAfter_OnlyWhenItEndsBeforeTheTotalTimeout(
+        int elapsedSeconds,
+        int retryAfterSeconds,
+        bool retried)
+    {
+        var context = ResilienceContextPool.Shared.Get();
+        try
+        {
+            context.Properties.Set(ResultResiliencePolicy.CallStarted, _time.GetTimestamp());
+            _time.Advance(TimeSpan.FromSeconds(elapsedSeconds));
+            using var response = RateLimited(new RetryConditionHeaderValue(TimeSpan.FromSeconds(retryAfterSeconds)));
+
+            Policy(options => options.TotalTimeout = TimeSpan.FromSeconds(40))
+                .ShouldRetry(Outcome.FromResult(response), context)
+                .ShouldBe(retried);
+        }
+        finally
+        {
+            ResilienceContextPool.Shared.Return(context);
+        }
+    }
+
+    [Fact]
+    public void ShouldRetry_ShouldWaitAnyRetryAfter_WhenTheCallsStartIsUnknown()
+    {
+        using var response = RateLimited(new RetryConditionHeaderValue(TimeSpan.FromDays(3)));
+
+        Policy().ShouldRetry(Outcome.FromResult(response)).ShouldBeTrue();
     }
 
     [Fact]

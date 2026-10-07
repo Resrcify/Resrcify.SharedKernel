@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -49,10 +50,17 @@ public static class OutboxServiceCollectionExtensions
 
         var options = new OutboxOptions();
         configure?.Invoke(options);
+        // A batch of 0 would never come back short, so a run would keep reading until its time is up.
+        ArgumentOutOfRangeException.ThrowIfLessThan(options.BatchSize, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(options.ProcessIntervalInSeconds, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(options.MaxRetryCount, 1);
+        ArgumentOutOfRangeException.ThrowIfNegative(options.DelayInSecondsBeforeStart);
+        ArgumentOutOfRangeException.ThrowIfNegative(options.ProcessedRetentionInDays);
+        var time = options.TimeProvider ?? RegisteredTimeProvider(services) ?? TimeProvider.System;
 
         services.TryAddSingleton(serializer);
         // The clock outbox processing, cleanup and the lanes read; replace it (e.g. with FakeTimeProvider) in tests.
-        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton(time);
         services.TryAddScoped<IUnitOfWork, UnitOfWork<TDbContext>>();
         services.AddOutboxMessageContext();
 
@@ -65,7 +73,8 @@ public static class OutboxServiceCollectionExtensions
             options.DelayInSecondsBeforeStart,
             options.MaxRetryCount,
             options.ProcessedRetentionInDays,
-            options.Claim));
+            options.Claim,
+            time));
 
         // The backlog monitor behind the outbox.messages.* gauges and the outbox health check (AddOutbox<TDbContext>).
         ArgumentOutOfRangeException.ThrowIfLessThan(options.BacklogCheckIntervalInSeconds, 1);
@@ -75,10 +84,17 @@ public static class OutboxServiceCollectionExtensions
         services.TryAddSingleton<OutboxBacklogMonitor<TDbContext>>();
         services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<OutboxBacklogMonitor<TDbContext>>());
 
-        // Outbox lanes (e.g. scatter-gather) with defaults, unless AddOutboxLanes tuned them already.
+        // Outbox lanes (e.g. scatter-gather) with defaults, unless AddOutboxLanes tuned them already; either way they
+        // claim with the outbox's claim when they have none of their own (several instances run the lanes too).
         if (!services.HasOutboxLanes<TDbContext>())
             services.AddOutboxLanes<TDbContext>();
+        else
+            services.ClaimOutboxLanesWith<TDbContext>(options.Claim);
 
         return services;
     }
+
+    private static TimeProvider? RegisteredTimeProvider(IServiceCollection services)
+        => services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(TimeProvider))?.ImplementationInstance
+            as TimeProvider;
 }

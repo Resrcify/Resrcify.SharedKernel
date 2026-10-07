@@ -44,6 +44,12 @@ internal sealed partial class PostgresOutboxListener<TContext>(
     private readonly OutboxWakeUpOptions _options = settings.Options;
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
     private readonly string _context = typeof(TContext).Name;
+    /// <summary>How long a drain waits for a notification already on its way before taking the burst as read.</summary>
+    private const int DrainWaitMilliseconds = 1;
+
+    /// <summary>The most notifications one drain reads, so a flood can't keep the outbox from being woken.</summary>
+    private const int MaxDrained = 10_000;
+
     private TimeSpan _reconnectDelay = settings.Options.ReconnectDelay;
     private int _notified;
 
@@ -91,7 +97,20 @@ internal sealed partial class PostgresOutboxListener<TContext>(
 
             if (_options.Debounce > TimeSpan.Zero)
                 await Task.Delay(_options.Debounce, _time, stoppingToken);
+            // A wait reads one notification: read the rest of the burst now, so it wakes the outbox once.
+            await DrainAsync(listener, stoppingToken);
+            Interlocked.Exchange(ref _notified, 0);
             await WakeAsync(stoppingToken);
+        }
+    }
+
+    /// <summary>Reads the notifications that arrived meanwhile, without waiting for more.</summary>
+    private static async Task DrainAsync(NpgsqlConnection listener, CancellationToken stoppingToken)
+    {
+        for (var drained = 0; drained < MaxDrained; drained++)
+        {
+            if (!await listener.WaitAsync(DrainWaitMilliseconds, stoppingToken))
+                return;
         }
     }
 

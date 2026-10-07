@@ -51,6 +51,9 @@ public sealed partial class ResultExceptionHandler(
         }
 
         LogUnhandledOnce(httpContext, exception);
+        // Answered: this journey of the exception ends here, so the same instance thrown in a later request (a cached
+        // faulted task) is logged at Error again.
+        LoggedExceptions.Release(exception);
 
         await ProblemFor(exception).ExecuteAsync(httpContext);
         return true;

@@ -1,7 +1,10 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Npgsql;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 using Resrcify.SharedKernel.UnitOfWork.Postgres.IntegrationTests.Fixtures;
@@ -94,6 +97,11 @@ public sealed class PostgresOutboxListenerTests(
     {
         await using var host = await TestHost.CreateAsync(postgres, db => db.WithOutbox().WithOutboxWakeUp());
         await host.StartAndListenAsync();
+        // A listener of the test's own: it sees any NOTIFY the save sends, wherever it was sent.
+        await using var observer = new NpgsqlConnection(host.ConnectionString);
+        await observer.OpenAsync();
+        await using (var listen = new NpgsqlCommand("LISTEN resrcify_outbox", observer))
+            await listen.ExecuteNonQueryAsync();
         var shard = new Shard(Guid.NewGuid(), "rolled back");
         shard.Rename("never committed");
 
@@ -106,7 +114,41 @@ public sealed class PostgresOutboxListenerTests(
             await transaction.RollbackAsync();
         }
 
+        (await observer.WaitAsync(1000)).ShouldBeFalse();   // no notification: it was part of what rolled back
+        await using (var scope = host.Services.CreateAsyncScope())
+            (await scope.ServiceProvider.GetRequiredService<TestDbContext>().OutboxMessages.CountAsync()).ShouldBe(0);
         var handled = host.Tracker.HandledAsync(shard.Id);
-        (await Task.WhenAny(handled, Task.Delay(TimeSpan.FromSeconds(2)))).ShouldNotBe(handled);
+        (await Task.WhenAny(handled, Task.Delay(TimeSpan.FromSeconds(1)))).ShouldNotBe(handled);
+    }
+
+    [Fact]
+    public async Task ABurstOfNotifications_ShouldWakeTheOutboxOnce()
+    {
+        using var wakeUps = new WakeUpLog();
+        await using var host = await TestHost.CreateAsync(
+            postgres,
+            db => db.WithOutbox().WithOutboxWakeUp(),
+            services => services.AddLogging(logging => logging.SetMinimumLevel(LogLevel.Debug).AddProvider(wakeUps)));
+        await host.StartAndListenAsync();
+        await WaitUntilAsync(() => wakeUps.Count >= 1);   // the wake-up every connect gives
+        var afterConnect = wakeUps.Count;
+
+        await host.NotifyAsync(times: 100);
+        await Task.Delay(TimeSpan.FromSeconds(2));
+
+        // One wake-up per notification, a debounce apart, would still be waking now (100 x 50 ms).
+        output.WriteLine($"{wakeUps.CountAfter(afterConnect)} wake-up(s) for 100 notifications");
+        wakeUps.CountAfter(afterConnect).ShouldBeInRange(1, 3);
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        var deadline = TimeProvider.System.GetUtcNow() + TimeSpan.FromSeconds(10);
+        while (!condition())
+        {
+            if (TimeProvider.System.GetUtcNow() > deadline)
+                throw new TimeoutException("The condition wasn't met in time.");
+            await Task.Delay(TimeSpan.FromMilliseconds(20));
+        }
     }
 }

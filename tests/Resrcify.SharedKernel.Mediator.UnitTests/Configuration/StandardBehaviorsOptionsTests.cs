@@ -62,10 +62,31 @@ public sealed class StandardBehaviorsOptionsTests
         => Should.Throw<ArgumentException>(
             () => new StandardBehaviorsOptions().InsertAfter(StandardBehavior.Validation, typeof(string)));
 
+    [Theory]
+    [InlineData(typeof(NormalizingRequestBehavior<,>))]
+    [InlineData(typeof(ValueTaskOnlyBehavior<,>))]
+    public void InsertBefore_ShouldThrow_WhenTheBehaviorCantRunBetweenTheStandardOnes(Type behaviorType)
+        => Should.Throw<ArgumentException>(
+                () => new StandardBehaviorsOptions().InsertBefore(StandardBehavior.Validation, behaviorType))
+            .Message.ShouldContain("isn't an IPipelineBehavior<,>");
+
     [Fact]
     public void Without_ShouldThrow_WhenTheBehaviorIsNotAStandardOne()
         => Should.Throw<ArgumentOutOfRangeException>(
             () => new StandardBehaviorsOptions().Without((StandardBehavior)42));
+
+    private sealed class NormalizingRequestBehavior<TRequest, TResponse> : IRequestPipelineBehavior<TRequest, TResponse>
+        where TRequest : IRequest<TResponse>
+    {
+        public Task<TResponse> Handle(TRequest request, RequestExecutionDelegate<TRequest, TResponse> next, CancellationToken cancellationToken)
+            => next(request, cancellationToken);
+    }
+
+    private sealed class ValueTaskOnlyBehavior<TRequest, TResponse> : IValueTaskPipelineBehavior<TRequest, TResponse>
+    {
+        public ValueTask<TResponse> Handle(TRequest request, ValueTaskRequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
+            => next(cancellationToken);
+    }
 
     private sealed class OutermostBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     {

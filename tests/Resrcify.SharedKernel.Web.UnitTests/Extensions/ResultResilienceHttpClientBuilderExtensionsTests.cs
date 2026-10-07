@@ -147,6 +147,43 @@ public sealed class ResultResilienceHttpClientBuilderExtensionsTests
     }
 
     [Fact]
+    public async Task AddResultResilience_ShouldReturnTheRateLimitAtOnce_WhenItsRetryAfterOutlastsTheTotalTimeout()
+    {
+        using var upstream = new ScriptedHandler(_time, (call, _) => Task.FromResult(call == 1
+            ? RateLimited(new RetryConditionHeaderValue(TimeSpan.FromHours(3)))
+            : new HttpResponseMessage(HttpStatusCode.OK)));
+        using var provider = Provider(upstream, options => options.TotalTimeout = TimeSpan.FromHours(2));
+        var started = _time.GetUtcNow();
+
+        using var response = await SendAsync(provider);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+        upstream.Calls.ShouldBe(1);
+        (_time.GetUtcNow() - started).ShouldBeLessThan(TimeSpan.FromHours(1));
+    }
+
+    [Fact]
+    public async Task AddResultResilience_ShouldNotWaitARetryAfter_WhenEarlierRetriesUsedUpTheTimeItNeeds()
+    {
+        using var upstream = new ScriptedHandler(_time, (call, _) => Task.FromResult(call switch
+        {
+            1 => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable),
+            2 => RateLimited(new RetryConditionHeaderValue(TimeSpan.FromMinutes(90))),
+            _ => new HttpResponseMessage(HttpStatusCode.OK),
+        }));
+        using var provider = Provider(upstream, options =>
+        {
+            options.RetryDelay = TimeSpan.FromMinutes(45);
+            options.TotalTimeout = TimeSpan.FromHours(2);
+        });
+
+        using var response = await SendAsync(provider);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
+        upstream.Calls.ShouldBe(2);
+    }
+
+    [Fact]
     public async Task AddResultResilience_ShouldRetry_WhenTheNetworkFails()
     {
         using var upstream = new ScriptedHandler(_time, (call, _) => call == 1

@@ -12,6 +12,7 @@ using Resrcify.SharedKernel.Abstractions.Caching;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
 using Resrcify.SharedKernel.Caching.Primitives;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
+using Resrcify.SharedKernel.MessageBus.Extensions;
 using Resrcify.SharedKernel.MessageBus.UnitTests.Support;
 using Resrcify.SharedKernel.Results.Primitives;
 using Shouldly;
@@ -209,6 +210,119 @@ public sealed class IntegrationEventDispatcherTests
         }
     }
 
+    [Fact]
+    public async Task Handle_ShouldRunEachTryInAScopeOfItsOwn_SoAFailedTrysWorkIsntSavedWithTheNext()
+    {
+        var (log, subscriber, publisher) = await StartRetriedAsync();
+        using (subscriber)
+        using (publisher)
+        {
+            await publisher.Services.GetRequiredService<IEventBus>().PublishAsync(new RetriedEvent("e1"));
+            await InMemoryServices.WaitUntilAsync(() => log.Attempts == 2);
+            await InMemoryServices.WaitUntilAsync(() => log.ChangesSeenBySuccess > 0);
+
+            log.ChangesSeenBySuccess.ShouldBe(1);   // 2 when the second try reused the first one's scope
+        }
+    }
+
+    [Fact]
+    public async Task Handle_ShouldDropWhatAFailedTryPublished_AndSendWhatTheSuccessfulOnePublished()
+    {
+        var (log, subscriber, publisher) = await StartRetriedAsync();
+        using (subscriber)
+        using (publisher)
+        {
+            await publisher.Services.GetRequiredService<IEventBus>().PublishAsync(new RetriedEvent("e1"));
+            await InMemoryServices.WaitUntilAsync(() => log.Attempts == 2);
+            await InMemoryServices.WaitUntilAsync(() => !log.SideEffects.IsEmpty);
+            await Task.Delay(TimeSpan.FromMilliseconds(500));
+
+            log.SideEffects.Count.ShouldBe(1);   // 2: the failed try's went out with the next one's
+        }
+    }
+
+    [Fact]
+    public async Task Handle_ShouldStillHandleTheEvent_WhenTheClaimStoreIsOutOfReach()
+    {
+        var log = new PayoutLog();
+        using var metrics = new MetricsCapture();
+        var (subscriber, publisher) = await StartAsync(log, skipDuplicates: true, new UnreachableClaimStore());
+        using (subscriber)
+        using (publisher)
+        {
+            await PublishAsOutboxMessageAsync(publisher, Guid.NewGuid(), new PayoutRotated("shard-1", 1));
+
+            // It was sent back until dead-lettered without being handled.
+            await InMemoryServices.WaitUntilAsync(() => log.Handled.Count == 1);
+            metrics.Count("messagebus.events.handled event=PayoutRotated outcome=success").ShouldBe(1);
+        }
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(400 * 24 * 60 * 60)]
+    public void SkipDuplicateEvents_ShouldThrow_WhenTheTimeCantBeRemembered(int seconds)
+        => Should.Throw<ArgumentOutOfRangeException>(() => new ServiceCollection().AddMessageBus(bus => bus
+            .UseInMemory(new InMemNetwork())
+            .SkipDuplicateEvents(seconds < 0 ? Timeout.InfiniteTimeSpan : TimeSpan.FromSeconds(seconds))));
+
+    [Theory]
+    [InlineData(1, 500)]
+    [InlineData(4, 4000)]
+    [InlineData(5, 4000)]
+    [InlineData(13, 4000)]
+    public void RetryDelay_ShouldDoubleUpToFourSeconds_WhateverTheNumberOfTries(int failedAttempt, int milliseconds)
+        => Resrcify.SharedKernel.MessageBus.PublishSubscribe.IntegrationEventDispatcher<PayoutRotated>.RetryDelay(failedAttempt)
+            .ShouldBe(TimeSpan.FromMilliseconds(milliseconds));
+
+    private static async Task<(RetryLog Log, IHost Subscriber, IHost Publisher)> StartRetriedAsync()
+    {
+        var network = new InMemNetwork();
+        var log = new RetryLog();
+        var subscriber = await InMemoryServices.StartAsync(
+            network,
+            bus => bus.WithInputQueue($"subscriber-{Guid.NewGuid():N}").AddEventHandlers(typeof(IntegrationEventDispatcherTests).Assembly),
+            services => services.AddSingleton(log).AddScoped<TryWork>());
+        var publisher = await InMemoryServices.StartAsync(network, _ => { });
+        return (log, subscriber, publisher);
+    }
+
+    /// <summary>A claim store that is down: every claim throws, as Redis timing out does.</summary>
+    private sealed class UnreachableClaimStore
+        : ICachingService, IClaimStore
+    {
+        public Task<T?> GetAsync<T>(string key, JsonSerializerOptions? serializerOptions = null, CancellationToken cancellationToken = default)
+            where T : class
+            => Task.FromResult<T?>(null);
+
+        public Task SetAsync<T>(
+            string key,
+            T value,
+            DateTimeOffset? absoluteExpiration,
+            TimeSpan? absoluteExpirationRelativeToNow,
+            TimeSpan? slidingExpiration,
+            JsonSerializerOptions? serializerOptions,
+            CancellationToken cancellationToken)
+            where T : class
+            => Task.CompletedTask;
+
+        public Task RemoveAsync(string key, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task<bool> TryClaimForAsync(string key, TimeSpan expiresIn, CancellationToken cancellationToken = default)
+            => Task.FromException<bool>(new TimeoutException("The cache didn't answer."));
+
+        public Task ReleaseAsync(string key, CancellationToken cancellationToken = default)
+            => Task.FromException(new TimeoutException("The cache didn't answer."));
+
+        public Task<IEnumerable<T?>> GetBulkAsync<T>(
+            IEnumerable<string> keys,
+            JsonSerializerOptions? serializerOptions = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(Enumerable.Empty<T?>());
+    }
+
     private static async Task<(ScriptLog Log, InMemNetwork Network, IHost Subscriber, IHost Publisher, string ErrorQueue)> StartScriptedAsync()
     {
         var network = new InMemNetwork();
@@ -262,7 +376,7 @@ public sealed class IntegrationEventDispatcherTests
 
     /// <summary>A cache whose claims always succeed, as two instances' claims can when the cache isn't atomic.</summary>
     private sealed class ClaimsEveryKeyCache
-        : ICachingService
+        : ICachingService, IClaimStore
     {
         public Task<T?> GetAsync<T>(string key, JsonSerializerOptions? serializerOptions = null, CancellationToken cancellationToken = default)
             where T : class
@@ -284,6 +398,9 @@ public sealed class IntegrationEventDispatcherTests
 
         public Task<bool> TryClaimForAsync(string key, TimeSpan expiresIn, CancellationToken cancellationToken = default)
             => Task.FromResult(true);
+
+        public Task ReleaseAsync(string key, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
 
         public Task<IEnumerable<T?>> GetBulkAsync<T>(
             IEnumerable<string> keys,

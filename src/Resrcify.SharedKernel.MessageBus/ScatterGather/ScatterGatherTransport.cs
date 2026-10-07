@@ -32,6 +32,11 @@ namespace Resrcify.SharedKernel.MessageBus.ScatterGather;
 /// Not exclusive: RabbitMQ ties an exclusive queue to one connection, and Rebus uses more than one.
 /// Also the service's <see cref="IScatterGatherClient"/>.
 /// </summary>
+/// <remarks>
+/// A timeout must be positive and at most <see cref="MaxTimeout"/>; an empty batch is answered at once. When the broker
+/// comes back the reply bus is restarted; a restart that fails is logged and tried again (1 s doubling to 30 s), and
+/// <see cref="IsRunning"/> (in the bus' health check) is false until one succeeds.
+/// </remarks>
 internal sealed partial class ScatterGatherTransport(
     MessageBusSettings settings,
     TimeProvider time,
@@ -39,12 +44,27 @@ internal sealed partial class ScatterGatherTransport(
     ILogger<ScatterGatherTransport> logger)
     : IScatterGatherClient, IHostedService, IDisposable
 {
+    /// <summary>The longest timeout a gather takes: a longer one couldn't be timed (nor set as a message's expiry).</summary>
+    public static readonly TimeSpan MaxTimeout = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
+
+    private static readonly TimeSpan FirstRestartDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan MaxRestartDelay = TimeSpan.FromSeconds(30);
+
     private readonly ConcurrentDictionary<Guid, PendingBatch> _pending = new();
     private readonly Lock _gate = new();
+    private readonly CancellationTokenSource _stopping = new();
     private Action? _unsubscribeFromBroker;
     private string? _queue;
     private BuiltinHandlerActivator? _activator;
     private IBus? _bus;
+    private bool _started;
+    private int _disposed;
+
+    /// <summary>Whether the reply bus runs; false between a failed restart and a successful one.</summary>
+    public bool IsRunning => Volatile.Read(ref _bus) is not null;
+
+    /// <summary>Whether the transport was started (and not stopped): it is then meant to run.</summary>
+    public bool IsStarted => Volatile.Read(ref _started);
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
@@ -54,7 +74,10 @@ internal sealed partial class ScatterGatherTransport(
             CultureInfo.InvariantCulture,
             $"{settings.InputQueue ?? "scatter"}.replies.{Environment.MachineName}-{Guid.NewGuid():N}");
         lock (_gate)
+        {
             StartBus();
+            _started = true;
+        }
         if (serviceProvider.GetService<BrokerConnectionWatcher>() is { } watcher)
         {
             watcher.Recovered += OnBrokerRecovered;
@@ -75,33 +98,91 @@ internal sealed partial class ScatterGatherTransport(
         _unsubscribeFromBroker?.Invoke();
         _unsubscribeFromBroker = null;
         lock (_gate)
+        {
+            _started = false;
             StopBus();
+        }
+        if (Interlocked.Exchange(ref _disposed, 1) == 1)
+            return;
+        _stopping.Cancel();
+        _stopping.Dispose();
     }
 
     /// <summary>The broker is back: restart the bus, so its consumer subscribes at once (see <see cref="BrokerConnectionWatcher"/>).</summary>
     private void OnBrokerRecovered()
-        => _ = Task.Run(() =>
+    {
+        CancellationToken stopping;
+        try
         {
-            lock (_gate)
+            stopping = _stopping.Token;
+        }
+        catch (ObjectDisposedException)
+        {
+            return;   // stopped meanwhile
+        }
+
+        _ = Task.Run(() => RestartAsync(stopping), CancellationToken.None);
+    }
+
+    // Until a restart succeeds or the transport stops: one that fails (the broker is up but a queue can't be declared
+    // yet) would otherwise leave no bus, and every gather failing, until the next recovery or a pod restart.
+    private async Task RestartAsync(CancellationToken stopping)
+    {
+        var delay = FirstRestartDelay;
+        while (!stopping.IsCancellationRequested)
+        {
+            try
             {
-                if (_activator is null)
-                    return;   // stopped
-                StopBus();
-                StartBus();
+                lock (_gate)
+                {
+                    if (!_started)
+                        return;
+                    StopBus();
+                    StartBus();
+                }
+                LogRestarted(_queue!);
+                return;
             }
-            LogRestarted(_queue!);
-        });
+            catch (Exception exception) when (exception is not OutOfMemoryException)
+            {
+                LogRestartFailed(exception, _queue!, delay.TotalSeconds);
+            }
+
+            try
+            {
+                await Task.Delay(delay, time, stopping);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            delay = delay * 2 < MaxRestartDelay ? delay * 2 : MaxRestartDelay;
+        }
+    }
 
     private void StartBus()
     {
         var strategy = settings.ResolveConfigurationStrategy(serviceProvider);
-        _activator = new BuiltinHandlerActivator();
-        _activator.Handle<object>((_, context, message) =>
+        var activator = new BuiltinHandlerActivator();
+        activator.Handle<object>((_, context, message) =>
         {
             Record(context.Headers, message);
             return Task.CompletedTask;
         });
-        _bus = Configure.With(_activator)
+        try
+        {
+            _bus = ConfigureBus(activator, strategy);
+            _activator = activator;
+        }
+        catch
+        {
+            activator.Dispose();
+            throw;
+        }
+    }
+
+    private IBus ConfigureBus(BuiltinHandlerActivator activator, IBusConfigurationStrategy strategy)
+        => Configure.With(activator)
             .Logging(logging => logging.Use(new RebusLoggerFactory(serviceProvider.GetRequiredService<ILoggerFactory>())))
             .Transport(transport => settings.ConfigureTransport(transport, serviceProvider, _queue, strategy, rabbitMq => rabbitMq
                 .InputQueueOptions(options => options.SetDurable(false).SetAutoDelete(true))
@@ -120,16 +201,14 @@ internal sealed partial class ScatterGatherTransport(
                 options.Decorate<ITransport>(context =>
                 {
                     var transport = context.Get<ITransport>();
-                    foreach (var destination in settings.Destinations.Values)
-                        transport.CreateQueue(destination);
+                    settings.DeclareDestinations(transport, serviceProvider);
                     return transport;
                 });
-                settings.ConfigureEveryBus(options);
+                settings.ConfigureEveryBus(options, serviceProvider);
                 options.Register<IErrorHandler>(_ => new DropUnreadableReplyErrorHandler(logger));
                 strategy.ConfigureOptions(options);
             })
             .Start();
-    }
 
     private void StopBus()
     {
@@ -147,6 +226,7 @@ internal sealed partial class ScatterGatherTransport(
         where TResponse : class
     {
         ArgumentNullException.ThrowIfNull(request);
+        EnsureTimeout(timeout);
         const string key = "request";
         var gathered = await GatherAsync<TRequest, TResponse>(
             new Dictionary<string, TRequest>(StringComparer.Ordinal) { [key] = request },
@@ -163,6 +243,10 @@ internal sealed partial class ScatterGatherTransport(
         where TResponse : class
     {
         ArgumentNullException.ThrowIfNull(requests);
+        EnsureTimeout(timeout);
+        if (requests.Count == 0)
+            return Gathered<TResponse>.Empty;
+
         var (batchId, pending) = Register(requests.Keys, retainReplies: true);
         var started = time.GetTimestamp();
         try
@@ -202,7 +286,31 @@ internal sealed partial class ScatterGatherTransport(
         where TResponse : class
     {
         ArgumentNullException.ThrowIfNull(requests);
-        return StreamRepliesAsync<TRequest, TResponse>(requests, timeout, cancellationToken);
+        EnsureTimeout(timeout);
+        // Sent when enumerated, so once only: a second enumeration would send the whole batch again.
+        return new SingleUseAsyncEnumerable<IScatterReply<TResponse>>(
+            requests.Count == 0
+                ? EmptyStream<TResponse>()
+                : StreamRepliesAsync<TRequest, TResponse>(requests, timeout, cancellationToken));
+    }
+
+    /// <summary>
+    /// Throws for a timeout that can't be met: zero or negative (<see cref="Timeout.InfiniteTimeSpan"/> included,
+    /// which would become a negative message expiry), or longer than <see cref="MaxTimeout"/>. Checked before anything
+    /// is sent.
+    /// </summary>
+    private static void EnsureTimeout(TimeSpan timeout)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(timeout, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(timeout, MaxTimeout);
+    }
+
+#pragma warning disable CS1998 // An empty stream: nothing to await.
+    private static async IAsyncEnumerable<IScatterReply<TResponse>> EmptyStream<TResponse>()
+#pragma warning restore CS1998
+        where TResponse : class
+    {
+        yield break;
     }
 
     private async IAsyncEnumerable<IScatterReply<TResponse>> StreamRepliesAsync<TRequest, TResponse>(
@@ -222,10 +330,11 @@ internal sealed partial class ScatterGatherTransport(
         {
             await SendAsync(batchId, requests, timeout);
 
-            // The timeout runs on the TimeProvider's clock (a fake clock ends a gather too).
+            // The timeout runs on the TimeProvider's clock (a fake clock ends a gather too). It closes the batch: the
+            // replies accepted before it are still read, however long the caller takes over each.
             using var timedOut = new CancellationTokenSource(timeout, time);
-            using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timedOut.Token);
-            while (await NextArrivalAsync(pending, timeoutSource.Token, cancellationToken) is { } arrival)
+            await using var closeOnTimeout = timedOut.Token.Register(pending.Close);
+            while (await NextArrivalAsync(pending, cancellationToken) is { } arrival)
             {
                 var reply = PendingBatch.ToReply<TResponse>(arrival);
                 items = items.Add(reply.Result);
@@ -272,23 +381,18 @@ internal sealed partial class ScatterGatherTransport(
         await sending.CompleteAsync();
     }
 
-    /// <summary>The next reply, or <see langword="null"/> once every item has answered or the timeout has passed.</summary>
+    /// <summary>
+    /// The next reply, or <see langword="null"/> once every item has answered or the batch closed (its timeout passed)
+    /// and every reply accepted before has been read.
+    /// </summary>
     private static async Task<KeyValuePair<string, object>?> NextArrivalAsync(
         PendingBatch pending,
-        CancellationToken timeout,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            while (await pending.Arrivals.WaitToReadAsync(timeout))
-                if (pending.Arrivals.TryRead(out var arrival))
-                    return arrival;
-            return null;
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            return null;   // timed out
-        }
+        while (await pending.Arrivals.WaitToReadAsync(cancellationToken))
+            if (pending.Arrivals.TryRead(out var arrival))
+                return arrival;
+        return null;
     }
 
     private void Record(IReadOnlyDictionary<string, string> headers, object message)
@@ -306,4 +410,7 @@ internal sealed partial class ScatterGatherTransport(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Restarted the scatter-gather reply bus on {Queue} after RabbitMQ came back")]
     private partial void LogRestarted(string queue);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "Could not restart the scatter-gather reply bus on {Queue}; it tries again in {DelaySeconds} s")]
+    private partial void LogRestartFailed(Exception exception, string queue, double delaySeconds);
 }

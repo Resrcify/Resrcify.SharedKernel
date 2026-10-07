@@ -29,6 +29,12 @@ public sealed class MediatorConfiguration
 
     public ServiceLifetime MediatorLifetime { get; private set; } = ServiceLifetime.Transient;
 
+    /// <summary>Whether <see cref="ConfigureLogging"/> was called (its options then replace another call's defaults).</summary>
+    internal bool LoggingConfigured { get; private set; }
+
+    /// <summary>Whether <see cref="ConfigureUnitOfWork"/> was called.</summary>
+    internal bool UnitOfWorkConfigured { get; private set; }
+
     /// <summary>How <see cref="LoggingPipelineBehavior{TRequest, TResponse}"/> logs (see <see cref="ConfigureLogging"/>).</summary>
     public LoggingPipelineOptions LoggingOptions { get; } = new();
 
@@ -66,8 +72,10 @@ public sealed class MediatorConfiguration
     /// <summary>
     /// Adds an open generic behavior (<see cref="IPipelineBehavior{TRequest, TResponse}"/>,
     /// <see cref="IRequestPipelineBehavior{TRequest, TResponse}"/>, their ValueTask forms, or
-    /// <see cref="IStreamPipelineBehavior{TRequest, TResponse}"/>) after those added before it: the first added is the
-    /// outermost.
+    /// <see cref="IStreamPipelineBehavior{TRequest, TResponse}"/>) after those of its kind added before it: the first
+    /// added is the outermost of its kind. The kinds don't interleave: every <see cref="IPipelineBehavior{TRequest, TResponse}"/>
+    /// runs outside every <see cref="IRequestPipelineBehavior{TRequest, TResponse}"/> (likewise for the ValueTask
+    /// forms), and a ValueTask behavior runs only for a ValueTask handler, a Task one only for a Task handler.
     /// </summary>
     public MediatorConfiguration AddOpenBehavior(Type behaviorType)
         => AddOpenBehavior(behaviorType, ServiceLifetime.Transient);
@@ -105,6 +113,7 @@ public sealed class MediatorConfiguration
     {
         ArgumentNullException.ThrowIfNull(configure);
         configure(LoggingOptions);
+        LoggingConfigured = true;
         return this;
     }
 
@@ -116,6 +125,7 @@ public sealed class MediatorConfiguration
     {
         ArgumentNullException.ThrowIfNull(configure);
         configure(UnitOfWorkOptions);
+        UnitOfWorkConfigured = true;
         return this;
     }
 

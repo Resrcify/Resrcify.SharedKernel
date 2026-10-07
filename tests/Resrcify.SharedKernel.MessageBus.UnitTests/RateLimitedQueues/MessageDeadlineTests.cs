@@ -28,6 +28,34 @@ public sealed class MessageDeadlineTests
         deadline.ShouldBe(sent.AddSeconds(50));
     }
 
+    [Theory]
+    [InlineData(-26 * 365 * 24.0, 50)]   // this clock years behind the sender's (a test's FakeTimeProvider)
+    [InlineData(0.0, 50)]
+    public void Remaining_ShouldNeverExceedTheTimeToLive_WhenTheClocksDisagree(double hoursFromSent, int expectedSeconds)
+    {
+        var sent = new DateTimeOffset(2026, 10, 5, 12, 0, 0, TimeSpan.Zero);
+        var headers = new Dictionary<string, string>
+        {
+            [Headers.SentTime] = sent.ToString("O"),
+            [Headers.TimeToBeReceived] = "00:00:50",
+        };
+
+        MessageDeadline.Remaining(headers, sent.AddHours(hoursFromSent)).ShouldBe(TimeSpan.FromSeconds(expectedSeconds));
+    }
+
+    [Fact]
+    public void Remaining_ShouldBeWhatIsLeft_WhenTheRequestWaited()
+    {
+        var sent = new DateTimeOffset(2026, 10, 5, 12, 0, 0, TimeSpan.Zero);
+        var headers = new Dictionary<string, string>
+        {
+            [Headers.SentTime] = sent.ToString("O"),
+            [Headers.TimeToBeReceived] = "00:00:50",
+        };
+
+        MessageDeadline.Remaining(headers, sent.AddSeconds(20)).ShouldBe(TimeSpan.FromSeconds(30));
+    }
+
     [Fact]
     public void TryRead_ShouldReturnFalse_WhenTheMessageHasNoTimeToLive()
         => MessageDeadline.TryRead(

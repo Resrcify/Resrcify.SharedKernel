@@ -29,7 +29,7 @@
     - Sliding expiration (`TimeSpan`)
     - Absolute expiration (`DateTimeOffset`)
     - Bulk retrieval by keys (`GetBulkAsync<T>`)
-    - Claims (`TryClaimForAsync`): set a key only if nobody holds it
+    - Claims (`IClaimStore.TryClaimForAsync`): set a key only if nobody holds it
 - Values serialized with the caller's `JsonSerializerOptions` (indentation and escaping too).
 
 ## Prerequisites
@@ -124,14 +124,15 @@ IEnumerable<UserDto?> cachedUsers = await cachingService.GetBulkAsync<UserDto>(
 ### Claim a key (do something once)
 
 ```csharp
-if (await cachingService.TryClaimForAsync("payouts:sent:42", TimeSpan.FromHours(3), cancellationToken))
+// IClaimStore claims (DistributedCachingService is one)
+if (await claims.TryClaimForAsync("payouts:sent:42", TimeSpan.FromHours(3), cancellationToken))
 {
-    // this caller holds the claim; release it with RemoveAsync if the work must be retried
+    // this caller holds the claim; release it with ReleaseAsync if the work must be retried
 }
 ```
 
-A claim is a marker, not a value: use a claim key only with `TryClaimForAsync` and `RemoveAsync`, never with
-`GetAsync`/`SetAsync`. `DistributedCachingService` claims atomically **within one process** only (`IDistributedCache`
+A claim is a marker, not a value: claims are a separate interface (`IClaimStore`) from the cache, and a claim key is
+never read with `GetAsync` or written with `SetAsync`. `DistributedCachingService` claims atomically **within one process** only (`IDistributedCache`
 can't set a key only if it is absent): two instances sharing a cache can both claim a key. An `ICachingService` over
 Redis can claim across processes with `SET key value PX <ms> NX`.
 

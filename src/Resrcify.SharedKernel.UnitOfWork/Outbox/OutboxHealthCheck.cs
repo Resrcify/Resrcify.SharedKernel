@@ -26,10 +26,10 @@ internal sealed class OutboxHealthCheck<TDbContext>(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
-        if (monitor.Latest is not { } backlog)
-            return Task.FromResult(HealthCheckResult.Healthy("The outbox backlog hasn't been measured yet."));
-
         var now = time.GetUtcNow();
+        if (monitor.Latest is not { } backlog)
+            return Task.FromResult(NeverMeasured(context, now));
+
         var sinceMeasured = now - backlog.MeasuredAt;
         // The oldest message has kept waiting since it was measured (unless it was processed meanwhile).
         var oldestAge = backlog.Waiting > 0 ? backlog.OldestWaitingAge + sinceMeasured : TimeSpan.Zero;
@@ -56,5 +56,20 @@ internal sealed class OutboxHealthCheck<TDbContext>(
         return Task.FromResult(HealthCheckResult.Healthy(
             $"{backlog.Waiting} outbox messages wait, {backlog.Poison} gave up.",
             data));
+    }
+
+    // Not measured yet is fine for a moment after start-up, not for three intervals: the database is unreachable or the
+    // outbox table missing (no migrations), and every measurement so far failed.
+    private HealthCheckResult NeverMeasured(
+        HealthCheckContext context,
+        DateTimeOffset now)
+    {
+        if (monitor.StartedAt is not { } started || now - started <= 3 * monitor.Interval)
+            return HealthCheckResult.Healthy("The outbox backlog hasn't been measured yet.");
+
+        return new HealthCheckResult(
+            context.Registration.FailureStatus,
+            $"The outbox backlog hasn't been measured since the monitor started {now - started:g} ago: is the database "
+            + "reachable, and the outbox table there?");
     }
 }

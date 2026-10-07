@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,12 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 /// when one of its messages finishes (a slot freed) or the outbox is woken (<see cref="OutboxWakeUp{TDbContext}"/>).
 /// The regular outbox job skips these event types.
 /// </summary>
+/// <remarks>
+/// A failed message is tried again after 5 s, then 10 s, 20 s, … up to 5 min. That schedule is kept in the database,
+/// not only in this instance: try <c>n + 1</c> isn't due before the event's <c>OccurredOnUtc</c> plus the waits of
+/// the <c>n</c> tries before it, so several instances running the lanes don't spend a message's tries in a few
+/// seconds of an outage. Each instance also waits after a try of its own.
+/// </remarks>
 internal sealed partial class OutboxLanesHost<TDbContext>(
     OutboxLaneRegistry registry,
     OutboxLaneSettings<TDbContext> settings,
@@ -103,6 +110,7 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
                     m.RetryCount < options.MaxRetryCount &&
                     eventTypes.Contains(m.Type) &&
                     !busy.Contains(m.Id))
+                .Where(DueForItsNextTry(now.UtcDateTime, options.MaxRetryCount))
                 .OrderBy(m => m.OccurredOnUtc)
                 .Take(freeSlots)
                 .Select(m => new OutboxMessageToProcess(m.Id, m.Type, m.Content, m.RetryCount, m.OccurredOnUtc))
@@ -160,8 +168,41 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
     /// <summary>5 s after the first failure, then 10 s, 20 s, … up to <see cref="MaxRetryDelay"/>.</summary>
     internal static TimeSpan RetryDelay(int failures)
     {
-        var delay = FirstRetryDelay * Math.Pow(2, Math.Max(0, failures - 1));
+        // Doubled at most until past the cap: 5 s doubled 39 times overflows a TimeSpan.
+        var delay = FirstRetryDelay;
+        for (var doubled = 1; doubled < failures && delay < MaxRetryDelay; doubled++)
+            delay *= 2;
         return delay < MaxRetryDelay ? delay : MaxRetryDelay;
+    }
+
+    /// <summary>The waits of a message's first <paramref name="failures"/> tries, end to end.</summary>
+    internal static TimeSpan TotalRetryDelay(int failures)
+    {
+        var total = TimeSpan.Zero;
+        for (var failure = 1; failure <= failures; failure++)
+            total += RetryDelay(failure);
+        return total;
+    }
+
+    // A message never tried, or one whose waits since the event occurred have passed: RetryCount = n is due once
+    // OccurredOnUtc + TotalRetryDelay(n) <= now. One comparison per retry count (MaxRetryCount is small).
+    internal static Expression<Func<OutboxMessage, bool>> DueForItsNextTry(DateTime nowUtc, int maxRetryCount)
+    {
+        var message = Expression.Parameter(typeof(OutboxMessage), "m");
+        var retryCount = Expression.Property(message, nameof(OutboxMessage.RetryCount));
+        var occurredOnUtc = Expression.Property(message, nameof(OutboxMessage.OccurredOnUtc));
+        Expression due = Expression.Equal(retryCount, Expression.Constant(0));
+        for (var failures = 1; failures < maxRetryCount; failures++)
+        {
+            var notBefore = nowUtc - TotalRetryDelay(failures);
+            due = Expression.OrElse(
+                due,
+                Expression.AndAlso(
+                    Expression.Equal(retryCount, Expression.Constant(failures)),
+                    Expression.LessThanOrEqual(occurredOnUtc, Expression.Constant(notBefore))));
+        }
+
+        return Expression.Lambda<Func<OutboxMessage, bool>>(due, message);
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Outbox lane {Lane} started for {EventTypes} event type(s), {MaxConcurrency} at a time")]

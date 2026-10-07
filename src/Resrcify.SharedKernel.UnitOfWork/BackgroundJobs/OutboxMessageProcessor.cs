@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -118,7 +119,7 @@ internal static class OutboxMessageProcessor<TDbContext>
         if (failure is not null)
         {
             var givesUp = message.RetryCount + 1 >= maxRetryCount;
-            await RecordFailureAsync(scopeFactory, message, failure, givesUp ? time : null, cancellationToken);
+            await RecordFailureAsync(scopeFactory, message, failure, maxRetryCount, time, cancellationToken);
             Record(message, givesUp ? "gave_up" : "retrying", time.GetElapsedTime(started), wait: null);
             return OutboxProcessOutcome.Failed;
         }
@@ -151,31 +152,36 @@ internal static class OutboxMessageProcessor<TDbContext>
     // The row stays unprocessed and is retried, until its last try fails: then it is
     // marked given up (OutboxMessage.GivenUpProcessedOnUtc), which takes it out of the
     // unprocessed rows the polls read.
+    //
+    // One statement, counted in the database: the claim's lock is gone by now (its
+    // transaction rolled back), so another instance may be trying the same message.
+    // Counting from this try's snapshot would lose a try, and an unconditional update
+    // could mark given up a message the other instance has just published.
     private static async Task RecordFailureAsync(
         IServiceScopeFactory scopeFactory,
         OutboxMessageToProcess message,
         Exception exception,
-        TimeProvider? givenUpBy,
+        int maxRetryCount,
+        TimeProvider time,
         CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
-        var stub = new OutboxMessage { Id = message.Id };
-        context.Attach(stub);
-        stub.RetryCount = message.RetryCount + 1;
-        if (givenUpBy is null)
-        {
-            stub.Error = exception.ToString();
-        }
-        else
-        {
-            stub.ProcessedOnUtc = OutboxMessage.GivenUpProcessedOnUtc;
-            stub.Error = string.Create(
-                CultureInfo.InvariantCulture,
-                $"Gave up at {givenUpBy.GetUtcNow().UtcDateTime:O} after {stub.RetryCount} tries. {exception}");
-        }
+        var error = exception.ToString();
+        var givenUpError = string.Create(
+            CultureInfo.InvariantCulture,
+            $"Gave up at {time.GetUtcNow().UtcDateTime:O} after {maxRetryCount} tries. {error}");
+        var givenUpOn = OutboxMessage.GivenUpProcessedOnUtc;
 
-        await context.SaveChangesAsync(cancellationToken);
+        await context
+            .Set<OutboxMessage>()
+            .Where(row => row.Id == message.Id && row.ProcessedOnUtc == null)
+            .ExecuteUpdateAsync(
+                set => set
+                    .SetProperty(row => row.RetryCount, row => row.RetryCount + 1)
+                    .SetProperty(row => row.ProcessedOnUtc, row => row.RetryCount + 1 >= maxRetryCount ? givenUpOn : null)
+                    .SetProperty(row => row.Error, row => row.RetryCount + 1 >= maxRetryCount ? givenUpError : error),
+                cancellationToken);
     }
 }

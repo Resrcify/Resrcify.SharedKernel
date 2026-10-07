@@ -34,11 +34,12 @@ public class TransactionPipelineBehavior<TRequest, TResponse>
         {
             // ExecuteInTransactionAsync commits only on a successful Result, rolls
             // back on a failure Result or an exception, and always disposes the
-            // transaction.
+            // transaction. Without a CommandTimeout of its own the command keeps the
+            // DbContext's (e.g. Database:CommandTimeoutInSeconds).
             return await _unitOfWork.ExecuteInTransactionAsync(
                 token => next(token),
                 request.IsolationLevel ?? System.Data.IsolationLevel.ReadCommitted,
-                request.CommandTimeout ?? TimeSpan.FromSeconds(30),
+                request.CommandTimeout,
                 cancellationToken);
         }
         catch (Exception ex) when (LogUnlessCancelled(ex, cancellationToken))

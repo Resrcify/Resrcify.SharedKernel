@@ -72,11 +72,12 @@ public class CachingPipelineBehavior<TRequest, TResponse>
         if (result.IsSuccess)
         {
             // Kept for Expiration from now: a result that is read often still expires on time (a sliding
-            // expiry would be kept alive by its readers).
+            // expiry would be kept alive by its readers). A longer Expiration than a cache keeps anything (3.x's
+            // TimeSpan.MaxValue, "keep it") is kept for that long: the most there is.
             await _cachingService.SetForAsync(
                 request.CacheKey,
                 result,
-                request.Expiration,
+                request.Expiration > ICachingService.MaxLifetime ? ICachingService.MaxLifetime : request.Expiration,
                 cancellationToken);
         }
 

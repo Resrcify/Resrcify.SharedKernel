@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Networks;
@@ -129,15 +130,35 @@ public abstract class ServiceHostFixture<TProgram>
         ConfigureSettings(_settings);
     }
 
+    // Every step runs whatever the one before did (a container that failed to build, a host that failed to stop), so
+    // nothing started is left behind; their failures are reported together.
     async Task IAsyncLifetime.DisposeAsync()
     {
-        await DisposeAsync();
+        var failures = new List<Exception>();
+        await RunAsync(async () => await DisposeAsync(), failures);
         if (RabbitMq is not null)
-            await RabbitMq.DisposeAsync();
+            await RunAsync(RabbitMq.DisposeAsync, failures);
         if (Postgres is not null)
-            await Postgres.DisposeAsync();
+            await RunAsync(Postgres.DisposeAsync, failures);
         if (Network is not null)
-            await Network.DeleteAsync();
+            await RunAsync(() => Network.DeleteAsync(), failures);
+
+        if (failures.Count == 1)
+            ExceptionDispatchInfo.Throw(failures[0]);
+        if (failures.Count > 1)
+            throw new AggregateException("Tearing the service host down failed.", failures);
+    }
+
+    private static async Task RunAsync(Func<Task> step, List<Exception> failures)
+    {
+        try
+        {
+            await step();
+        }
+        catch (Exception failure)
+        {
+            failures.Add(failure);
+        }
     }
 
     protected sealed override IDictionary<string, string?> EnvOverrides()

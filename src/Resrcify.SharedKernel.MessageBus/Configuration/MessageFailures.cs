@@ -8,9 +8,9 @@ namespace Resrcify.SharedKernel.MessageBus.Configuration;
 internal static class MessageFailures
 {
     /// <summary>
-    /// Every error is about the message itself (none <see cref="ErrorTypeExtensions.IsTransient"/>): another try would
-    /// fail the same way. Anything else may pass next time.
+    /// Every error is about the message itself (none <see cref="ErrorTypeExtensions.IsTransient(Error)"/>, so not a
+    /// concurrency conflict either): another try would fail the same way. Anything else may pass next time.
     /// </summary>
     public static bool AreTheMessagesFault(IReadOnlyList<Error> errors)
-        => errors.Count > 0 && !errors.Any(error => error.Type.IsTransient());
+        => errors.Count > 0 && !errors.Any(error => error.IsTransient());
 }

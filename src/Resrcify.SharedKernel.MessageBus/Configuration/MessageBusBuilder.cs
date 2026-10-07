@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -7,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Rebus.Config;
 using Rebus.Handlers;
 using Rebus.Transport.InMem;
+using Resrcify.SharedKernel.Abstractions.Caching;
 using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
 using Resrcify.SharedKernel.Results.Primitives;
@@ -227,7 +229,14 @@ public sealed class MessageBusBuilder
     /// </summary>
     public MessageBusBuilder SkipDuplicateEvents(TimeSpan? rememberFor = null)
     {
-        Settings.RememberHandledEventsFor = rememberFor ?? TimeSpan.FromHours(3);
+        var remember = rememberFor ?? TimeSpan.FromHours(3);
+        // A claim that expires at once, never, or after the cache keeps anything would dead-letter every event.
+        if (remember <= TimeSpan.Zero || remember > ICachingService.MaxLifetime)
+            throw new ArgumentOutOfRangeException(
+                nameof(rememberFor),
+                rememberFor,
+                $"Handled events are remembered for a positive time no longer than {ICachingService.MaxLifetime.TotalDays} days.");
+        Settings.RememberHandledEventsFor = remember;
         return this;
     }
 
@@ -291,7 +300,12 @@ public sealed class MessageBusBuilder
             provider,
             provider.GetRequiredService<ILogger<ScatterGatherTransport>>()));
         Services.AddSingleton<IScatterGatherClient>(provider => provider.GetRequiredService<ScatterGatherTransport>());
-        Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<ScatterGatherTransport>());
+        // Before every hosted service registered so far: the host starts them in order and stops them in reverse, so
+        // the reply bus is up before the outbox lanes gather (even when AddOutboxProcessing came first) and still up
+        // while they finish their gathers at shutdown.
+        Services.Insert(
+            FirstHostedServiceIndex(Services),
+            ServiceDescriptor.Singleton<IHostedService>(provider => provider.GetRequiredService<ScatterGatherTransport>()));
         return this;
     }
 
@@ -320,7 +334,9 @@ public sealed class MessageBusBuilder
         var options = new RateLimitedQueueOptions();
         configure?.Invoke(options);
         Services.AddScoped<IRequestResponder<TRequest, TResponse>, THandler>();
-        return AddQueueHost<TRequest, TResponse>(queueName, options);
+        Services.TryAddScoped<THandler>();
+        // This queue's own handler: two queues for the same request type each answer with theirs.
+        return AddQueueHost<TRequest, TResponse>(queueName, options, provider => provider.GetRequiredService<THandler>());
     }
 
     /// <summary>
@@ -340,26 +356,52 @@ public sealed class MessageBusBuilder
         ArgumentNullException.ThrowIfNull(toMediatorRequest);
         var options = new RateLimitedQueueOptions();
         configure?.Invoke(options);
-        Services.AddScoped<IRequestResponder<TRequest, TResponse>>(provider => new MediatorRequestResponder<TRequest, TResponse>(
-            provider.GetRequiredService<ISender>(),
-            toMediatorRequest));
-        return AddQueueHost<TRequest, TResponse>(queueName: null, options);
+        return AddQueueHost<TRequest, TResponse>(
+            queueName: null,
+            options,
+            provider => new MediatorRequestResponder<TRequest, TResponse>(provider.GetRequiredService<ISender>(), toMediatorRequest));
     }
 
-    private MessageBusBuilder AddQueueHost<TRequest, TResponse>(string? queueName, RateLimitedQueueOptions options)
+    // One host per queue, keyed by its name: two queues for the same request and response types (a priority queue
+    // next to the regular one) each get their own bus, limit and responder, and both are started.
+    private MessageBusBuilder AddQueueHost<TRequest, TResponse>(
+        string? queueName,
+        RateLimitedQueueOptions options,
+        Func<IServiceProvider, IRequestResponder<TRequest, TResponse>> responderFactory)
         where TRequest : class
         where TResponse : class
     {
+        var name = queueName ?? Settings.WireNameOf(typeof(TRequest));
+        if (Services.Any(descriptor => descriptor.ImplementationInstance is RateLimitedQueueName registered && registered.Name == name))
+            throw new InvalidOperationException($"The rate-limited queue {name} is registered twice: give each queue its own name.");
+
         Settings.Receive(typeof(TRequest));
         Services.TryAddSingleton<HealthGates>();
-        Services.AddSingleton(provider => new RateLimitedQueueHost<TRequest, TResponse>(
-            queueName ?? Settings.WireNameOf(typeof(TRequest)),
+        Services.AddSingleton(new RateLimitedQueueName(name));
+        Services.AddKeyedSingleton(name, (provider, _) => new RateLimitedQueueHost<TRequest, TResponse>(
+            name,
             options,
             Settings,
             provider,
+            responderFactory,
             provider.GetRequiredService<ILogger<RateLimitedQueueHost<TRequest, TResponse>>>()));
-        Services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<RateLimitedQueueHost<TRequest, TResponse>>());
-        Services.AddSingleton<IQueueConsumer>(provider => provider.GetRequiredService<RateLimitedQueueHost<TRequest, TResponse>>());
+        Services.AddSingleton<IHostedService>(provider => provider.GetRequiredKeyedService<RateLimitedQueueHost<TRequest, TResponse>>(name));
+        Services.AddSingleton<IQueueConsumer>(provider => provider.GetRequiredKeyedService<RateLimitedQueueHost<TRequest, TResponse>>(name));
         return this;
+    }
+
+    /// <summary>
+    /// The index of the first hosted service registered so far (the end when none is): what is inserted there starts
+    /// before them all and stops after them.
+    /// </summary>
+    private static int FirstHostedServiceIndex(IServiceCollection services)
+    {
+        for (var index = 0; index < services.Count; index++)
+        {
+            if (services[index].ServiceType == typeof(IHostedService))
+                return index;
+        }
+
+        return services.Count;
     }
 }

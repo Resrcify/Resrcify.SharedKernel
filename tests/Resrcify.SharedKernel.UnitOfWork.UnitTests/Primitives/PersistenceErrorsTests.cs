@@ -32,7 +32,10 @@ public sealed class PersistenceErrorsTests
         { "retries given up", new RetryLimitExceededException("gave up", Save(Database("40001"))), false, "Persistence.SerializationFailure" },
         { "another constraint", Save(Database("23503")), false, null },
         { "no SQLSTATE", Save(Database(null)), false, null },
-        { "a database error wrapped in something else", new InvalidOperationException("wrapped", Database("23505")), false, null },
+        { "a database error wrapped in something else", new InvalidOperationException("wrapped", Database("23505")), false, "Persistence.UniqueViolation" },
+        { "a deadlock the Npgsql strategy wrapped", new InvalidOperationException("likely transient", Save(Database("40P01"))), false, "Persistence.Deadlock" },
+        { "a serialization failure the Npgsql strategy wrapped", new InvalidOperationException("likely transient", Database("40001")), false, "Persistence.SerializationFailure" },
+        { "a wrapped deadlock in a transaction", new InvalidOperationException("likely transient", Database("40P01")), true, null },
         { "anything else", new InvalidOperationException("broken"), false, null },
     };
 

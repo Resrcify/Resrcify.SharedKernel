@@ -22,7 +22,7 @@ namespace Resrcify.SharedKernel.Mediator.UnitTests.Behaviors;
 public class UnitOfWorkPipelineBehaviorTests
 {
     private readonly UnitOfWorkPipelineBehavior<ICommand, Result> _behavior;
-    private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>();
+    private readonly IUnitOfWork _unitOfWork = Substitute.For<IUnitOfWork>().RunningOperations<Result>();
     private readonly ILogger<UnitOfWorkPipelineBehavior<ICommand, Result>> _logger = Substitute.For<ILogger<UnitOfWorkPipelineBehavior<ICommand, Result>>>();
     private readonly RequestHandlerDelegate<Result> _next = Substitute.For<RequestHandlerDelegate<Result>>();
     private readonly ICommand _command = Substitute.For<ICommand>();
@@ -146,7 +146,7 @@ public class UnitOfWorkPipelineBehaviorTests
     {
         // Arrange
         var conflict = Error.Conflict("Persistence.UniqueViolation", "taken");
-        var unitOfWork = Substitute.For<IUnitOfWork>();
+        var unitOfWork = Substitute.For<IUnitOfWork>().RunningOperations<Result<Guid>>();
         unitOfWork.TryCompleteAsync(Arg.Any<CancellationToken>()).Returns(Result.Failure(conflict));
         var behavior = new UnitOfWorkPipelineBehavior<ICommand<Guid>, Result<Guid>>(
             unitOfWork,
@@ -181,6 +181,47 @@ public class UnitOfWorkPipelineBehaviorTests
         // Assert
         response.ShouldBeSameAs(result);
         await _unitOfWork.Received(1).TryCompleteAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldRunTheCommandThroughExecuteAsync_SoWhatAFailureChangedIsUndone()
+    {
+        // Arrange
+        var failure = Result.Failure(Error.NullValue);
+        _next.Invoke(Arg.Any<CancellationToken>()).Returns(failure);
+
+        // Act
+        var response = await _behavior.Handle(_command, _next, CancellationToken.None);
+
+        // Assert
+        response.ShouldBe(failure);
+        await _unitOfWork.Received(1).ExecuteAsync(
+            Arg.Any<Func<CancellationToken, Task<Result>>>(),
+            CancellationToken.None);
+        await _unitOfWork.DidNotReceive().CompleteAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Handle_ShouldLeaveATransactionalCommandsException_ToTheTransactionBehaviorAroundIt()
+    {
+        // Arrange — under a retrying strategy this behavior runs once per attempt; a retried attempt isn't an error.
+        var logger = Substitute.For<ILogger<UnitOfWorkPipelineBehavior<ITransactionCommand, Result>>>();
+        logger.IsEnabled(Arg.Any<LogLevel>()).Returns(true);
+        var behavior = new UnitOfWorkPipelineBehavior<ITransactionCommand, Result>(_unitOfWork, logger);
+        var exception = new InvalidOperationException("attempt failed");
+        _next.When(n => n.Invoke(Arg.Any<CancellationToken>())).Do(_ => throw exception);
+
+        // Act
+        async Task Act() => await behavior.Handle(Substitute.For<ITransactionCommand>(), _next, CancellationToken.None);
+
+        // Assert
+        (await Should.ThrowAsync<InvalidOperationException>(Act)).ShouldBeSameAs(exception);
+        LoggedExceptions.IsLogged(exception).ShouldBeFalse();
+        logger
+            .ReceivedCalls()
+            .Where(call => call.GetMethodInfo().Name == nameof(ILogger.Log))
+            .Select(call => (LogLevel)call.GetArguments()[0]!)
+            .ShouldBe([LogLevel.Debug]);
     }
 
     [Fact]

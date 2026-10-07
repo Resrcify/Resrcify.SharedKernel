@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.Mediator.Behaviors;
 
 namespace Resrcify.SharedKernel.Mediator.Configuration;
@@ -40,16 +42,23 @@ public sealed class StandardBehaviorsOptions
     }
 
     /// <summary>
-    /// Puts <paramref name="behaviorTypes"/> (open generic behaviors, as <c>AddOpenBehavior</c> takes; transient) just
-    /// before <paramref name="anchor"/>, in the order given.
+    /// Puts <paramref name="behaviorTypes"/> (open generic <see cref="IPipelineBehavior{TRequest, TResponse}"/>s, as the
+    /// standard ones are; transient) just before <paramref name="anchor"/>, in the order given.
     /// </summary>
+    /// <exception cref="ArgumentException">
+    /// A type isn't an <see cref="IPipelineBehavior{TRequest, TResponse}"/>: another kind can't run between the standard
+    /// behaviors (see <see cref="MediatorConfiguration.AddOpenBehavior(Type)"/>); add it with <c>AddOpenBehavior</c>.
+    /// </exception>
     public StandardBehaviorsOptions InsertBefore(StandardBehavior anchor, params Type[] behaviorTypes)
         => Insert(_before, anchor, behaviorTypes);
 
     /// <summary>
-    /// Puts <paramref name="behaviorTypes"/> (open generic behaviors, as <c>AddOpenBehavior</c> takes; transient) just
-    /// after <paramref name="anchor"/>, in the order given.
+    /// Puts <paramref name="behaviorTypes"/> (open generic <see cref="IPipelineBehavior{TRequest, TResponse}"/>s, as the
+    /// standard ones are; transient) just after <paramref name="anchor"/>, in the order given.
     /// </summary>
+    /// <exception cref="ArgumentException">
+    /// A type isn't an <see cref="IPipelineBehavior{TRequest, TResponse}"/> (see <see cref="InsertBefore"/>).
+    /// </exception>
     public StandardBehaviorsOptions InsertAfter(StandardBehavior anchor, params Type[] behaviorTypes)
         => Insert(_after, anchor, behaviorTypes);
 
@@ -77,7 +86,10 @@ public sealed class StandardBehaviorsOptions
         ValidateStandardBehavior(anchor);
         ArgumentNullException.ThrowIfNull(behaviorTypes);
         foreach (var behaviorType in behaviorTypes)
+        {
             MediatorConfigurationValidation.ValidateOpenBehaviorType(behaviorType);
+            EnsureRunsAmongTheStandardBehaviors(behaviorType);
+        }
 
         if (!inserted.TryGetValue(anchor, out var types))
         {
@@ -87,6 +99,23 @@ public sealed class StandardBehaviorsOptions
 
         types.AddRange(behaviorTypes);
         return this;
+    }
+
+    // The standard behaviors are IPipelineBehaviors; the runtime runs the request behaviors (IRequestPipelineBehavior)
+    // inside all of them and the ValueTask ones only for ValueTask handlers, so such a type would land elsewhere than
+    // asked, silently.
+    private static void EnsureRunsAmongTheStandardBehaviors(Type behaviorType)
+    {
+        var runsAmongThem = behaviorType
+            .GetInterfaces()
+            .Any(implemented => implemented.IsGenericType
+                && implemented.GetGenericTypeDefinition() == typeof(IPipelineBehavior<,>));
+        if (!runsAmongThem)
+            throw new ArgumentException(
+                $"{behaviorType.Name} isn't an IPipelineBehavior<,>, so it can't run between the standard behaviors " +
+                "(an IRequestPipelineBehavior runs inside all of them, a ValueTask behavior only for ValueTask " +
+                "handlers). Make it an IPipelineBehavior<,>, or add it with cfg.AddOpenBehavior.",
+                nameof(behaviorType));
     }
 
     private static List<Type> InsertedAt(

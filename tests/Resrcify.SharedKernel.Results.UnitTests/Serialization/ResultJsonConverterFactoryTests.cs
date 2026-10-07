@@ -76,6 +76,37 @@ public sealed class ResultJsonConverterFactoryTests
         => Should.Throw<JsonException>(
             () => JsonSerializer.Deserialize<Result<Player>>("""{"isSuccess":false,"errors":[]}""", Web));
 
+    [Theory]
+    [MemberData(nameof(NamingPolicies))]
+    public void Deserialize_ShouldRoundTrip_WithTheNamingPolicyItWasWrittenWith(JsonNamingPolicy policy)
+    {
+        var options = new JsonSerializerOptions { PropertyNamingPolicy = policy };
+
+        var success = JsonSerializer.Deserialize<Result<Player>>(
+            JsonSerializer.Serialize(Result.Success(new Player("Han")), options),
+            options)!;
+        var failure = JsonSerializer.Deserialize<Result>(
+            JsonSerializer.Serialize(Result.Failure(Error.NotFound("Player.NotFound", "No player.")), options),
+            options)!;
+
+        success.Value.ShouldBe(new Player("Han"));
+        failure.Errors.ShouldHaveSingleItem().Code.ShouldBe("Player.NotFound");
+    }
+
+    public static TheoryData<JsonNamingPolicy> NamingPolicies()
+        => new()
+        {
+            JsonNamingPolicy.SnakeCaseLower,
+            JsonNamingPolicy.SnakeCaseUpper,
+            JsonNamingPolicy.KebabCaseLower,
+            JsonNamingPolicy.CamelCase,
+        };
+
+    [Fact]
+    public void Deserialize_ShouldThrowAJsonException_WhenAnErrorIsNull()
+        => Should.Throw<JsonException>(
+            () => JsonSerializer.Deserialize<Result>("""{"isSuccess":false,"errors":[null]}""", Web));
+
     [Fact]
     public void Deserialize_ShouldThrowAJsonException_WhenIsSuccessIsMissing()
         => Should.Throw<JsonException>(

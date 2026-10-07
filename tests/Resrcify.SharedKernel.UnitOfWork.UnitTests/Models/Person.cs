@@ -22,4 +22,11 @@ internal class Person
     public DateTime CreatedOnUtc { get; set; }
     public DateTime ModifiedOnUtc { get; set; }
     public List<Child> Children { get; } = [];
+
+    /// <summary>Renames the person and raises a <see cref="TestDomainEvent"/> saying so.</summary>
+    public void Rename(string name)
+    {
+        Name = name;
+        RaiseDomainEvent(new TestDomainEvent(Guid.NewGuid(), name));
+    }
 }
