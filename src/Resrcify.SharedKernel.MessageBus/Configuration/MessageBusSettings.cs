@@ -226,6 +226,8 @@ internal sealed class MessageBusSettings
         var time = provider.GetService<TimeProvider>() ?? TimeProvider.System;
         options.Register<IRebusTime>(_ => new TimeProviderRebusTime(time));
         options.Decorate<IPipeline>(context => WithCompression(context.Get<IPipeline>()));
+        foreach (var instrumentation in provider.GetServices<IBusInstrumentation>())
+            instrumentation.Configure(options);
     }
 
     private PipelineStepInjector WithCompression(IPipeline pipeline)

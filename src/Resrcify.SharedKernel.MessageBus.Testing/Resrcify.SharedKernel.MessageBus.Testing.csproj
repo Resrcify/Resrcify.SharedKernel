@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <PackageId>Resrcify.SharedKernel.MessageBus.Testing</PackageId>
+    <Title>Resrcify.SharedKernel.MessageBus.Testing</Title>
+    <Description>Test harness for Resrcify.SharedKernel.MessageBus: switches a service's buses to an in-memory network, records what they publish, send, consume and fail, waits until every bus is idle, injects failures and stands in for other services' request queues.</Description>
+    <Summary>Test harness for Resrcify.SharedKernel.MessageBus: in-memory network, awaitable recordings, idle waits, fault injection and stand-in responders.</Summary>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Stand-in responders run in hosts of their own. -->
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Resrcify.SharedKernel.MessageBus\Resrcify.SharedKernel.MessageBus.csproj" />
+  </ItemGroup>
+</Project>

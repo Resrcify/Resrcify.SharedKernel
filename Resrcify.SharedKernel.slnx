@@ -11,6 +11,7 @@
     <Project Path="src/Resrcify.SharedKernel.DomainDrivenDesign/Resrcify.SharedKernel.DomainDrivenDesign.csproj" />
     <Project Path="src/Resrcify.SharedKernel.Mediator/Resrcify.SharedKernel.Mediator.csproj" />
     <Project Path="src/Resrcify.SharedKernel.MessageBus/Resrcify.SharedKernel.MessageBus.csproj" />
+    <Project Path="src/Resrcify.SharedKernel.MessageBus.Testing/Resrcify.SharedKernel.MessageBus.Testing.csproj" />
     <Project Path="src/Resrcify.SharedKernel.Observability/Resrcify.SharedKernel.Observability.csproj" />
     <Project Path="src/Resrcify.SharedKernel.Repository/Resrcify.SharedKernel.Repository.csproj" />
     <Project Path="src/Resrcify.SharedKernel.Results/Resrcify.SharedKernel.Results.csproj" />

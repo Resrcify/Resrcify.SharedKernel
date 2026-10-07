@@ -8,6 +8,7 @@ using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
 using Quartz;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
+using Resrcify.SharedKernel.UnitOfWork.Outbox;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
 using Shouldly;
 using Xunit;
@@ -128,6 +129,74 @@ public sealed class OutboxWakeUpTests
         var waiting = lane.WaitAsync(TimeSpan.FromMinutes(1), new FakeTimeProvider(), CancellationToken.None);
         await Task.Delay(TimeSpan.FromMilliseconds(50));
         waiting.IsCompleted.ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task DrainAsync_ShouldReturn_OnceTheJobProcessedEveryMessage()
+    {
+        await using var harness = await DrainHarnessAsync(withScheduler: true);
+        await harness.SeedAsync(Message(), Message(), Message());
+
+        await harness.Services.GetRequiredService<OutboxWakeUp<TestDbContext>>().DrainAsync(TimeSpan.FromSeconds(10));
+
+        (await harness.GetMessagesAsync()).ShouldAllBe(message => message.ProcessedOnUtc != null);
+    }
+
+    [Fact]
+    public async Task DrainAsync_ShouldNotWaitForAMessage_WhoseNextTryIsLater()
+    {
+        // Nothing processes this outbox: only a message that isn't due lets the drain return.
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.Zero));
+        await using var harness = await DrainHarnessAsync(withScheduler: false, clock);
+        var later = Message();
+        later.NextAttemptOnUtc = clock.GetUtcNow().UtcDateTime.AddMinutes(1);
+        await harness.SeedAsync(later);
+
+        await Should.NotThrowAsync(
+            () => harness.Services.GetRequiredService<OutboxWakeUp<TestDbContext>>().DrainAsync(TimeSpan.FromSeconds(1)));
+    }
+
+    [Fact]
+    public async Task DrainAsync_ShouldThrow_WhenNothingProcessesTheOutbox()
+    {
+        await using var harness = await DrainHarnessAsync(withScheduler: false);
+        await harness.SeedAsync(Message());
+
+        var timeout = await Should.ThrowAsync<TimeoutException>(
+            () => harness.Services.GetRequiredService<OutboxWakeUp<TestDbContext>>().DrainAsync(TimeSpan.FromMilliseconds(200)));
+
+        timeout.Message.ShouldContain("1 TestDbContext outbox message(s) were still due");
+    }
+
+    // The scheduler, when there is one, runs the real job on each trigger.
+    private async Task<OutboxJobTestHarness> DrainHarnessAsync(bool withScheduler, FakeTimeProvider? clock = null)
+    {
+        clock ??= new FakeTimeProvider(new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.Zero));
+        var harness = await OutboxJobTestHarness.CreateAsync(
+            clock,
+            services =>
+            {
+                services.AddLogging().AddSingleton<TimeProvider>(clock).AddSingleton<OutboxWakeUp<TestDbContext>>();
+                if (withScheduler)
+                    services.AddSingleton(Factory());
+            });
+        // The run is awaited inside the trigger, so runs never overlap on the test's single SQLite connection.
+        _scheduler
+            .When(async scheduler => await scheduler.TriggerJob(Job, null, Arg.Any<CancellationToken>()))
+            .Do(_ => harness.Job.Execute(OutboxJobTestHarness.JobContext()).AsTask().GetAwaiter().GetResult());
+        return harness;
+    }
+
+    private static OutboxMessage Message()
+    {
+        var domainEvent = new TestDomainEvent(Guid.NewGuid(), "drained");
+        return new OutboxMessage
+        {
+            Id = Guid.NewGuid(),
+            Type = typeof(TestDomainEvent).FullName!,
+            Content = new SystemTextJsonOutboxSerializer().Serialize(domainEvent),
+            OccurredOnUtc = new DateTime(2026, 10, 7, 11, 0, 0, DateTimeKind.Utc),
+        };
     }
 
     private OutboxWakeUp<TestDbContext> Create()

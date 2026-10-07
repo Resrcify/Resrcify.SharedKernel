@@ -46,6 +46,9 @@ internal sealed partial class BrokerConnectionWatcher(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // Switched to the in-memory network after it was registered (the test harness): there is no broker to watch.
+        if (settings.IsInMemory)
+            return;
         var time = serviceProvider.GetService<TimeProvider>() ?? TimeProvider.System;
         var factory = settings.CreateConnectionFactory(serviceProvider, "messagebus-broker-watcher");
         factory.AutomaticRecoveryEnabled = true;

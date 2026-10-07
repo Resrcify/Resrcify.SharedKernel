@@ -265,6 +265,14 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
 
 ### Added
 
+- **`Resrcify.SharedKernel.MessageBus.Testing`, a test harness for the message bus.** `AddMessageBusTestHarness()`
+  switches every bus of a service to an in-memory network (whatever transport it was given) and records what they
+  published, sent, consumed, failed and dead-lettered, with waits that complete when the message arrives
+  (`harness.Published.WaitForAsync<T>(match)`). `WaitUntilIdleAsync()` returns once no bus is handling a message and no
+  queue holds one; `network.StartResponderAsync<TRequest, TResponse>(...)` stands in for another service's rate-limited
+  queue; `FailNext<T>(deliveries)` and `FailStart(queue)` inject failures.
+- **`OutboxWakeUp<TDbContext>.DrainAsync()`** for tests: wakes the outbox until no unprocessed message is due, so a
+  test needn't poll for its handlers to have run.
 - **`IGathered.SettledKeys`**: the items with a definite answer (a result, or a failure that is the request's fault),
   for an all-or-nothing gather that must not apply when an item's responder gave up.
 - **`ForwardEvent<TEvent>(...)`** on the message bus builder: hands an integration event to the mediator as a

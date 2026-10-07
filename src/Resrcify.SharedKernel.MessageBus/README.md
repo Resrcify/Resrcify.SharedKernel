@@ -376,6 +376,10 @@ services.AddMessageBus(bus =>
 To test several services together, give their hosts the same network: `var network = new InMemNetwork();` then
 `bus.UseInMemory(network)` in each.
 
+For tests, the **`Resrcify.SharedKernel.MessageBus.Testing`** package does this for a service configured for RabbitMQ
+(`services.AddMessageBusTestHarness(network)`), and records what every bus published, sent, consumed and failed, waits
+until all are idle, injects failures and stands in for other services' queues. See its README.
+
 ## Checking that two copies of a message agree
 
 Each service keeps its own class for a message it shares, so nothing notices when one copy drifts (a renamed

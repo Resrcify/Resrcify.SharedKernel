@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Quartz;
+using Resrcify.SharedKernel.UnitOfWork.Outbox;
 
 namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 
@@ -25,6 +26,11 @@ public sealed partial class OutboxWakeUp<TDbContext>(
     ILogger<OutboxWakeUp<TDbContext>> logger)
     where TDbContext : DbContext
 {
+    /// <summary>How long <see cref="DrainAsync"/> waits unless told otherwise.</summary>
+    public static TimeSpan DefaultDrainTimeout => TimeSpan.FromSeconds(30);
+
+    private static TimeSpan DrainCheckEvery => TimeSpan.FromMilliseconds(20);
+
     private readonly ConcurrentDictionary<WakeSignal, byte> _lanes = new();
     private int _runPending;
 
@@ -35,6 +41,46 @@ public sealed partial class OutboxWakeUp<TDbContext>(
             lane.Set();
 
         await TriggerJobAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// For tests: wakes the outbox until no unprocessed message is due. Returns once every message saved so far, and
+    /// every one their handlers saved in turn, was processed or gave up, or waits for a later try (a lane message's
+    /// <see cref="OutboxMessage.NextAttemptOnUtc"/>; advance the clock for those). The processing job's retries run at
+    /// once, since each wake-up runs it. Throws a <see cref="TimeoutException"/> when messages are still due after
+    /// <paramref name="timeout"/> (real time), e.g. when nothing in this host processes the outbox.
+    /// </summary>
+    public async Task DrainAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+    {
+        var limit = timeout ?? DefaultDrainTimeout;
+        var time = provider.GetService<TimeProvider>() ?? TimeProvider.System;
+        var started = TimeProvider.System.GetTimestamp();
+        while (true)
+        {
+            await WakeAsync(cancellationToken);
+            var due = await CountDueAsync(time.GetUtcNow().UtcDateTime, cancellationToken);
+            if (due == 0)
+                return;
+            if (TimeProvider.System.GetElapsedTime(started) > limit)
+                throw new TimeoutException(
+                    $"{due} {typeof(TDbContext).Name} outbox message(s) were still due after {limit.TotalSeconds} s. " +
+                    "Does this host process the outbox (AddOutboxProcessing, AddOutboxLanes)?");
+            await Task.Delay(DrainCheckEvery, cancellationToken);
+        }
+    }
+
+    // Unprocessed and not waiting for a later try. A message being processed counts: its handlers' messages are saved in
+    // the same transaction that marks it processed, so the count never reaches 0 between the two.
+    private async Task<int> CountDueAsync(DateTime nowUtc, CancellationToken cancellationToken)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        return await scope.ServiceProvider
+            .GetRequiredService<TDbContext>()
+            .Set<OutboxMessage>()
+            .CountAsync(
+                message => message.ProcessedOnUtc == null
+                    && (message.NextAttemptOnUtc == null || message.NextAttemptOnUtc <= nowUtc),
+                cancellationToken);
     }
 
     /// <summary>Called by the job when a run starts: a wake-up after this triggers another run.</summary>

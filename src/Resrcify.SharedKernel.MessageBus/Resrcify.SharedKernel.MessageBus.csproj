@@ -25,6 +25,8 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Resrcify.SharedKernel.MessageBus.UnitTests" />
     <InternalsVisibleTo Include="Resrcify.SharedKernel.MessageBus.IntegrationTests" />
+    <!-- The test harness hooks into every bus (IBusInstrumentation) and switches the settings to the in-memory network. -->
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.MessageBus.Testing" />
     <!-- The compression benchmark compares the internal gzip with Rebus' own. -->
     <InternalsVisibleTo Include="Resrcify.SharedKernel.PerformanceTests" />
   </ItemGroup>

@@ -351,6 +351,11 @@ hasn't started, another wake-up doesn't queue one more. On PostgreSQL, `WithOutb
 calls it when a save commits outbox messages, through a `NOTIFY`; anything else can call `WakeAsync()` too. An
 `IOutboxSaveObserver` registered in the container is told whenever a save wrote outbox messages.
 
+In tests, `await wakeUp.DrainAsync()` wakes the outbox until no unprocessed message is due: every message saved so
+far, and every one its handlers saved in turn, was processed or gave up (a lane message waiting for a later try isn't
+waited for). It throws a `TimeoutException` when messages are still due after the timeout (30 s by default), e.g.
+when the host doesn't process the outbox.
+
 ### Cleaning up processed messages
 
 Processed messages are deleted after **7 days** by an hourly job (`CleanupOutboxMessagesJob`), in batches of 5,000,

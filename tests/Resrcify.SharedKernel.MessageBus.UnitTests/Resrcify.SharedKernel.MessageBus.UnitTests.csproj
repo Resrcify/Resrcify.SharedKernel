@@ -26,6 +26,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Abstractions\Resrcify.SharedKernel.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.MessageBus\Resrcify.SharedKernel.MessageBus.csproj" />
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.MessageBus.Testing\Resrcify.SharedKernel.MessageBus.Testing.csproj" />
     <!-- SkipDuplicateEvents remembers handled events in an ICachingService (DistributedCachingService). -->
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Caching\Resrcify.SharedKernel.Caching.csproj" />
     <!-- The tests drive the mediator scan that AddScatterGather follows. -->
