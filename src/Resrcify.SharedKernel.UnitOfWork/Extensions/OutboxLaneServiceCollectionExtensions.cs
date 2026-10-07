@@ -34,6 +34,7 @@ public static class OutboxLaneServiceCollectionExtensions
         services.AddSingleton(new OutboxLaneSettings<TDbContext>(options));
         services.TryAddSingleton<OutboxLaneRegistry>();
         services.TryAddSingleton<OutboxWakeUp<TDbContext>>();
+        services.TryAddScoped<OutboxAdministration<TDbContext>>();
         services.AddOutboxMessageContext();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OutboxLanesHost<TDbContext>>());
         return services;

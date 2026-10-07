@@ -279,6 +279,10 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   A request repeating an `Idempotency-Key` gets the first one's response (kept 24 hours in `ICachingService`), 409
   while the first is still handled (`IClaimStore`), and 422 when the key was used for a different request. Server
   errors aren't kept, so the client can retry.
+- **Outbox administration**: `OutboxAdministration<TDbContext>` (registered with the outbox) summarizes what waits,
+  retries and gave up per event type and lane, lists the messages that gave up, shows one with its content, and tries
+  one or all of them again. The new **Resrcify.SharedKernel.UnitOfWork.Web** package maps it to admin endpoints:
+  `app.MapOutboxAdministration<AppDbContext>().RequireAuthorization(...)` (authenticated callers only by default).
 - **`OutboxWakeUp<TDbContext>.DrainAsync()`** for tests: wakes the outbox until no unprocessed message is due, so a
   test needn't poll for its handlers to have run.
 - **`IGathered.SettledKeys`**: the items with a definite answer (a result, or a failure that is the request's fault),

@@ -82,6 +82,7 @@ public static class OutboxServiceCollectionExtensions
             options.MaxRetryCount,
             TimeSpan.FromSeconds(options.BacklogCheckIntervalInSeconds)));
         services.TryAddSingleton<OutboxBacklogMonitor<TDbContext>>();
+        services.TryAddScoped<OutboxAdministration<TDbContext>>();
         services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<OutboxBacklogMonitor<TDbContext>>());
 
         // Outbox lanes (e.g. scatter-gather) with defaults, unless AddOutboxLanes tuned them already; either way they

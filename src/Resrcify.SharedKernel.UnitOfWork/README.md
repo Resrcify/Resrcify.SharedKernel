@@ -334,8 +334,10 @@ and `RetryCount` is incremented (in a lane, `NextAttemptOnUtc` is set to when it
 waits out). When its last try (`MaxRetryCount`, or its lane's) fails, the message **gives up**:
 its `ProcessedOnUtc` is set to `OutboxMessage.GivenUpProcessedOnUtc` (9999-12-31) and `Error` starts with
 `Gave up at <time> after <n> tries.`. That takes it out of the unprocessed rows (and their index), so the polls no
-longer read past it, and the cleanup keeps it for inspection. To try it again:
-`UPDATE "OutboxMessages" SET "ProcessedOnUtc" = NULL, "RetryCount" = 0 WHERE "Id" = '<id>'`.
+longer read past it, and the cleanup keeps it for inspection. To see and try again the messages that gave up,
+`OutboxAdministration<TDbContext>` (scoped, registered with the outbox) lists them and retries one or all; the
+**Resrcify.SharedKernel.UnitOfWork.Web** package maps it to admin endpoints (`app.MapOutboxAdministration<AppDbContext>()`).
+By hand: `UPDATE "OutboxMessages" SET "ProcessedOnUtc" = NULL, "RetryCount" = 0 WHERE "Id" = '<id>'`.
 
 A run **drains a backlog**: while a batch comes back full it reads the next one, so 70 waiting messages with a batch
 of 20 are handled in one run (four reads) instead of four runs. It stops starting batches after 80% of the trigger's
