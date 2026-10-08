@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -36,13 +38,16 @@ namespace Resrcify.SharedKernel.UnitOfWork.Interceptors;
 /// the container (<c>AddOutboxInterceptor</c>), it takes the registered serializer, insert strategy, clock and observers.</item>
 /// </list>
 /// </remarks>
-public sealed class InsertOutboxMessagesInterceptor(
+public sealed partial class InsertOutboxMessagesInterceptor(
     IOutboxSerializer serializer,
     IOutboxInsertStrategy? insertStrategy = null,
     TimeProvider? timeProvider = null,
-    IEnumerable<IOutboxSaveObserver>? observers = null)
+    IEnumerable<IOutboxSaveObserver>? observers = null,
+    ILogger<InsertOutboxMessagesInterceptor>? logger = null)
     : SaveChangesInterceptor
 {
+    private readonly ILogger _logger = logger ?? (ILogger)NullLogger.Instance;
+
     private static readonly TimeSpan BetweenEvents = TimeSpan.FromMicroseconds(1);
 
     private readonly IOutboxInsertStrategy _insertStrategy = insertStrategy ?? new DefaultOutboxInsertStrategy();
@@ -119,9 +124,31 @@ public sealed class InsertOutboxMessagesInterceptor(
         if (messages.Count == 0)
             return;
 
+        // Inside the caller's transaction nothing is committed yet: an observer's failure fails the save, and the
+        // transaction rolls back with it. Outside one the save has committed: failing it now would have the caller try
+        // again what is already saved, so the failure is logged instead.
+        var committed = context.Database.CurrentTransaction is null;
         foreach (var observer in _observers)
-            await observer.MessagesSavedAsync(context, messages, cancellationToken).ConfigureAwait(false);
+        {
+            if (!committed)
+            {
+                await observer.MessagesSavedAsync(context, messages, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            try
+            {
+                await observer.MessagesSavedAsync(context, messages, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException)
+            {
+                LogObserverFailed(exception, observer.GetType().Name, context.GetType().Name);
+            }
+        }
     }
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Outbox save observer {Observer} failed after a {DbContext} save committed; the save stands")]
+    private partial void LogObserverFailed(Exception exception, string observer, string dbContext);
 
     private async Task PrepareAsync(
         DbContextEventData saving,

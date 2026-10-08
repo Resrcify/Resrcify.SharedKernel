@@ -37,6 +37,7 @@ internal sealed class OutboxHealthCheck<TDbContext>(
         {
             ["waiting"] = backlog.Waiting,
             ["poison"] = backlog.Poison,
+            ["waiting_for_later_try"] = backlog.WaitingForLaterTry,
             ["oldest_waiting_age_seconds"] = Math.Round(oldestAge.TotalSeconds),
             ["measured_seconds_ago"] = Math.Round(sinceMeasured.TotalSeconds),
         };
@@ -44,7 +45,7 @@ internal sealed class OutboxHealthCheck<TDbContext>(
         if (sinceMeasured > 3 * monitor.Interval)
             return Task.FromResult(new HealthCheckResult(
                 context.Registration.FailureStatus,
-                $"The outbox backlog hasn't been measured for {sinceMeasured:g}: is the database reachable?",
+                $"The outbox backlog hasn't been measured for {sinceMeasured:g}: is the database reachable, and its outbox table migrated?",
                 data: data));
 
         if (oldestAge > maxWaitingAge)
@@ -70,6 +71,6 @@ internal sealed class OutboxHealthCheck<TDbContext>(
         return new HealthCheckResult(
             context.Registration.FailureStatus,
             $"The outbox backlog hasn't been measured since the monitor started {now - started:g} ago: is the database "
-            + "reachable, and the outbox table there?");
+            + "reachable, and the outbox table there and migrated (SharedKernel 4.0 adds OutboxMessages.NextAttemptOnUtc)?");
     }
 }

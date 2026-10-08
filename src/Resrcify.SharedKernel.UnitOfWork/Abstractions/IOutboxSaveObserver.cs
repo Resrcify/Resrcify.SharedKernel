@@ -12,7 +12,8 @@ namespace Resrcify.SharedKernel.UnitOfWork.Abstractions;
 /// </summary>
 /// <remarks>
 /// It is called once the save succeeded, on the save's connection: inside the caller's transaction when there is one
-/// (so whatever it writes commits or rolls back with the save), otherwise after the save committed.
+/// (so whatever it writes commits or rolls back with the save, and its exception fails the save), otherwise after the
+/// save committed (its exception is then logged, not thrown: the save stands).
 /// </remarks>
 public interface IOutboxSaveObserver
 {

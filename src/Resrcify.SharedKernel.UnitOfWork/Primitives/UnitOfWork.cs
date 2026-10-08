@@ -234,6 +234,8 @@ public sealed class UnitOfWork<TDbContext> : IUnitOfWork
         CancellationToken cancellationToken)
         where TResponse : Result
     {
+        var before = TrackedState.Capture(_context);
+        using var saved = new SavedInside(_context.ChangeTracker);
         await using var transaction = await _context.Database.BeginTransactionAsync(
             isolationLevel,
             cancellationToken);
@@ -251,6 +253,7 @@ public sealed class UnitOfWork<TDbContext> : IUnitOfWork
             else
             {
                 await transaction.RollbackAsync(cancellationToken);
+                await UndoRolledBackAsync(before, saved, cancellationToken);
             }
 
             return response;
@@ -353,6 +356,22 @@ public sealed class UnitOfWork<TDbContext> : IUnitOfWork
         }
     }
 
+    // After the transaction rolled back on a failed result: what the operation changed and didn't save is reverted (and
+    // the events it raised dropped), so the scope's next save doesn't write it outside the transaction; what it saved
+    // is put back as the database has it again. Changes pending before the call are kept.
+    private async Task UndoRolledBackAsync(
+        TrackedState before,
+        SavedInside saved,
+        CancellationToken cancellationToken)
+    {
+        var written = saved.Entries;
+        saved.Dispose();
+        before.UndoChangesSince(_context);
+        // The operation's own save wrote the caller's pending changes too; rolled back, they are pending again.
+        await PutBackAsTheDatabaseHasItAsync([.. written.Where(pair => !before.WasPending(pair.Key))], cancellationToken);
+        before.RestorePending(_context);
+    }
+
     // After a rollback to the savepoint: the pending changes are discarded, and what the operation saved inside it
     // (now undone in the database) is put back as the database has it: inserted rows untracked, updated or deleted rows
     // read again.
@@ -363,6 +382,14 @@ public sealed class UnitOfWork<TDbContext> : IUnitOfWork
         var written = saved.Entries;
         saved.Dispose();
         DiscardPendingChanges();
+        await PutBackAsTheDatabaseHasItAsync(written, cancellationToken);
+    }
+
+    // Rows written inside a transaction since rolled back: inserted ones untracked, updated or deleted ones read again.
+    private async Task PutBackAsTheDatabaseHasItAsync(
+        List<KeyValuePair<object, EntityState>> written,
+        CancellationToken cancellationToken)
+    {
         foreach (var (entity, savedAs) in written)
         {
             var entry = _context.Entry(entity);
@@ -423,11 +450,11 @@ public sealed class UnitOfWork<TDbContext> : IUnitOfWork
     /// </summary>
     private sealed class TrackedState
     {
-        private readonly HashSet<object> _pending;
+        private readonly Dictionary<object, Pending> _pending;
         private readonly Dictionary<IAggregateRoot, IReadOnlyList<IDomainEvent>> _events;
 
         private TrackedState(
-            HashSet<object> pending,
+            Dictionary<object, Pending> pending,
             Dictionary<IAggregateRoot, IReadOnlyList<IDomainEvent>> events)
         {
             _pending = pending;
@@ -437,16 +464,28 @@ public sealed class UnitOfWork<TDbContext> : IUnitOfWork
         public static TrackedState Capture(
             DbContext context)
         {
-            var pending = new HashSet<object>(ReferenceEqualityComparer.Instance);
+            var pending = new Dictionary<object, Pending>(ReferenceEqualityComparer.Instance);
             var events = new Dictionary<IAggregateRoot, IReadOnlyList<IDomainEvent>>(ReferenceEqualityComparer.Instance);
             foreach (var entry in context.ChangeTracker.Entries())
             {
-                if (entry.State != EntityState.Unchanged)
-                    pending.Add(entry.Entity);
+                if (entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+                    pending[entry.Entity] = Pending.Of(entry);
                 if (entry.Entity is IAggregateRoot aggregate)
                     events[aggregate] = aggregate.GetDomainEvents();
             }
             return new TrackedState(pending, events);
+        }
+
+        public bool WasPending(object entity)
+            => _pending.ContainsKey(entity);
+
+        // Every entity pending before, back as it was then: state, values and modified properties (a save inside a
+        // transaction since rolled back wrote it, and the operation may have changed it further).
+        public void RestorePending(
+            DbContext context)
+        {
+            foreach (var (entity, before) in _pending)
+                before.Restore(context.Entry(entity));
         }
 
         // An entity pending before keeps its changes: the operation's own changes to it can't be told apart from them.
@@ -455,7 +494,7 @@ public sealed class UnitOfWork<TDbContext> : IUnitOfWork
         {
             foreach (var entry in context.ChangeTracker.Entries().ToList())
             {
-                if (!_pending.Contains(entry.Entity))
+                if (!_pending.ContainsKey(entry.Entity))
                     Revert(entry);
                 if (entry.Entity is IAggregateRoot aggregate)
                     DropEventsRaisedSince(aggregate);
@@ -474,6 +513,42 @@ public sealed class UnitOfWork<TDbContext> : IUnitOfWork
             var raisedBefore = new HashSet<IDomainEvent>(before, ReferenceEqualityComparer.Instance);
             foreach (var raised in aggregate.GetDomainEvents().Where(raised => !raisedBefore.Contains(raised)))
                 aggregate.RemoveDomainEvent(raised);
+        }
+
+        private sealed record Pending(
+            EntityState State,
+            PropertyValues OriginalValues,
+            PropertyValues CurrentValues,
+            string[] ModifiedProperties)
+        {
+            public static Pending Of(EntityEntry entry)
+                => new(
+                    entry.State,
+                    entry.OriginalValues.Clone(),
+                    entry.CurrentValues.Clone(),
+                    [.. entry.Properties.Where(property => property.IsModified).Select(property => property.Metadata.Name)]);
+
+            public void Restore(EntityEntry entry)
+            {
+                // An added entity keeps what a save gave it (a generated key): it is inserted again.
+                if (State == EntityState.Added)
+                {
+                    entry.State = EntityState.Added;
+                    return;
+                }
+
+                entry.State = EntityState.Unchanged;
+                entry.OriginalValues.SetValues(OriginalValues);
+                entry.CurrentValues.SetValues(CurrentValues);
+                if (State == EntityState.Deleted)
+                {
+                    entry.State = EntityState.Deleted;
+                    return;
+                }
+
+                foreach (var property in ModifiedProperties)
+                    entry.Property(property).IsModified = true;
+            }
         }
     }
 

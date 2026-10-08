@@ -89,6 +89,14 @@ internal sealed class OutboxBacklogTestHost : IAsyncDisposable
         await scope.ServiceProvider.GetRequiredService<TestDbContext>().Database.ExecuteSqlRawAsync("DROP TABLE \"OutboxMessages\"");
     }
 
+    /// <summary>Drops the column SharedKernel 4.0 adds, as an outbox table not migrated to it would be.</summary>
+    public async Task DropNextAttemptColumnAsync()
+    {
+        await using var scope = _provider.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<TestDbContext>().Database.ExecuteSqlRawAsync(
+            "ALTER TABLE \"OutboxMessages\" DROP COLUMN \"NextAttemptOnUtc\"");
+    }
+
     public async ValueTask DisposeAsync()
     {
         Monitor.Dispose();

@@ -441,6 +441,15 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
 
 ### Fixed
 
+- **A failed `ExecuteInTransactionAsync` no longer leaves its changes for the next save.** The rollback undid them in
+  the database, but they stayed tracked (and their domain events raised): the scope's next save wrote them outside the
+  transaction that refused them. They are now reverted, rows saved inside the transaction put back as the database has
+  them, and the caller's changes from before the call kept as they were. (The mediator's pipeline was safe: its
+  unit-of-work behavior already undid a failed command.)
+- **An outbox save observer failing after the save committed no longer fails the save** (the caller would try again
+  what is saved): it is logged. Inside the caller's transaction it still fails the save, which rolls back with it.
+- **An outbox table not migrated to 4.0 turns the outbox health check unhealthy**: the backlog measurement reads
+  `NextAttemptOnUtc` too (and reports `waiting_for_later_try`), instead of only every lane's poll failing.
 - **Message bus, ordering and the broker:** an ordered subscription numbers its messages in delivery order (the
   waiting receives resumed in thread order, so events of one key were handled out of publish order under load); events
   waiting in a partition behind one that goes back to the queue go back too, so they are handled after it, not before

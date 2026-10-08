@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
@@ -118,7 +119,8 @@ public static class PostgresServiceCollectionExtensions
                 ? new PostgresOnConflictOutboxInsertStrategy()
                 : provider.GetService<IOutboxInsertStrategy>(),
             provider.GetService<TimeProvider>(),
-            provider.GetServices<IOutboxSaveObserver>())));
+            provider.GetServices<IOutboxSaveObserver>(),
+            provider.GetService<ILogger<InsertOutboxMessagesInterceptor>>())));
     }
 
     // Every outbox job reads with the one registered IOutboxSerializer, so every context must write with it: a second,

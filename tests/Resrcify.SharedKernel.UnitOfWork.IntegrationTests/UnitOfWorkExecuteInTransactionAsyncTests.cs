@@ -114,6 +114,44 @@ public sealed class UnitOfWorkExecuteInTransactionAsyncTests
     }
 
     [Fact]
+    public async Task ExecuteInTransactionAsync_ShouldUndoTheOperationsChanges_WhenItFails_SoALaterSaveDoesNotWriteThem()
+    {
+        // A failed operation's changes, saved or not, used to stay tracked after the rollback: the scope's next save
+        // wrote them (and the events raised) outside the transaction that refused them.
+        await using var database = await DatabaseAsync();
+        var seededId = await database.SeedAsync("start");
+        var pendingId = await database.SeedAsync("pending");
+        await using var scope = database.Services.CreateAsyncScope();
+        var (context, unitOfWork) = Resolve(scope);
+        var pendingBefore = await context.Aggregates.SingleAsync(a => a.Id == pendingId);
+        pendingBefore.ChangeName("pending+before");
+        var savedInside = new TestAggregate(Guid.NewGuid(), "saved-inside");
+        var addedInside = new TestAggregate(Guid.NewGuid(), "added-inside");
+        TestAggregate? changedInside = null;
+
+        var result = await unitOfWork.ExecuteInTransactionAsync(
+            async token =>
+            {
+                context.Aggregates.Add(savedInside);
+                await context.SaveChangesAsync(token);
+                changedInside = await context.Aggregates.SingleAsync(a => a.Id == seededId, token);
+                changedInside.ChangeName("changed-inside");
+                context.Aggregates.Add(addedInside);
+                return Result.Failure(Failed);
+            });
+
+        result.IsFailure.ShouldBeTrue();
+        context.Entry(savedInside).State.ShouldBe(EntityState.Detached);
+        context.Entry(addedInside).State.ShouldBe(EntityState.Detached);
+        context.Entry(changedInside!).State.ShouldBe(EntityState.Unchanged);
+        changedInside!.Name.ShouldBe("start");
+        changedInside.GetDomainEvents().ShouldBeEmpty();
+        context.Entry(pendingBefore).State.ShouldBe(EntityState.Modified);   // the caller's, kept
+        await context.SaveChangesAsync();
+        (await database.NamesAsync()).ShouldBe(["pending+before", "start"], ignoreOrder: true);
+    }
+
+    [Fact]
     public async Task ExecuteInTransactionAsync_ShouldPutBackWhatASavepointSaved_WhenTheNestedOperationFails()
     {
         await using var database = await DatabaseAsync();

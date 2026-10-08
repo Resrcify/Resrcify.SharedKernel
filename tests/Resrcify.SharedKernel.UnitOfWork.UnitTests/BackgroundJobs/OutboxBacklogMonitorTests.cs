@@ -55,6 +55,33 @@ public sealed class OutboxBacklogMonitorTests
     }
 
     [Fact]
+    public async Task MeasureOnceAsync_ShouldFail_WhenTheOutboxTableIsNotMigrated()
+    {
+        // Every lane poll fails on such a table; the measurement failing too is what turns the health check unhealthy.
+        await using var host = await OutboxBacklogTestHost.CreateAsync();
+        await host.SeedAsync(OutboxBacklogTestHost.Message(TimeSpan.FromMinutes(1)));
+        await host.DropNextAttemptColumnAsync();
+
+        await host.Monitor.MeasureOnceAsync(CancellationToken.None);
+
+        host.Monitor.Latest.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task MeasureOnceAsync_ShouldCountTheMessagesALaneTriesLater()
+    {
+        await using var host = await OutboxBacklogTestHost.CreateAsync();
+        var later = OutboxBacklogTestHost.Message(TimeSpan.FromMinutes(1), retryCount: 1);
+        later.NextAttemptOnUtc = OutboxBacklogTestHost.Start.UtcDateTime.AddSeconds(30);
+        await host.SeedAsync(later, OutboxBacklogTestHost.Message(TimeSpan.FromMinutes(2)));
+
+        await host.Monitor.MeasureOnceAsync(CancellationToken.None);
+
+        host.Monitor.Latest.ShouldNotBeNull().Waiting.ShouldBe(2);
+        host.Monitor.Latest.WaitingForLaterTry.ShouldBe(1);
+    }
+
+    [Fact]
     public async Task MeasureOnceAsync_ShouldReportNoBacklog_WhenEverythingIsProcessed()
     {
         await using var host = await CreateAsync();

@@ -140,8 +140,12 @@ internal sealed partial class OutboxBacklogMonitor<TDbContext>(
         var unprocessedCount = await unprocessed.LongCountAsync(cancellationToken);
         var givenUpCount = await givenUp.LongCountAsync(cancellationToken);
         var oldestOccurredOnUtc = await waiting.MinAsync(m => (DateTime?)m.OccurredOnUtc, cancellationToken);
-
         var now = _time.GetUtcNow();
+        // Also reads the NextAttemptOnUtc column: an outbox table not migrated to it fails the measurement (and the
+        // health check says so) instead of only every lane's poll failing.
+        var nowUtc = now.UtcDateTime;
+        var laterTryCount = await waiting.LongCountAsync(m => m.NextAttemptOnUtc > nowUtc, cancellationToken);
+
         var oldestAge = oldestOccurredOnUtc is { } occurred
             ? now.UtcDateTime - DateTime.SpecifyKind(occurred, DateTimeKind.Utc)
             : TimeSpan.Zero;
@@ -151,7 +155,8 @@ internal sealed partial class OutboxBacklogMonitor<TDbContext>(
             waitingCount,
             Math.Max(0, givenUpCount + unprocessedCount - waitingCount),
             oldestAge > TimeSpan.Zero ? oldestAge : TimeSpan.Zero,
-            now);
+            now,
+            laterTryCount);
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Could not measure the {DbContext} outbox's backlog; the last measurement goes stale")]
