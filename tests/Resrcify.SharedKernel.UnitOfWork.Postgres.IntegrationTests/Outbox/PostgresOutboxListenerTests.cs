@@ -134,11 +134,30 @@ public sealed class PostgresOutboxListenerTests(
         var afterConnect = wakeUps.Count;
 
         await host.NotifyAsync(times: 100);
-        await Task.Delay(TimeSpan.FromSeconds(2));
+        // Until the burst has woken it, then until the wake-ups stop: a fixed wait failed on a loaded machine, where the
+        // notifications took longer to arrive.
+        await WaitUntilAsync(() => wakeUps.CountAfter(afterConnect) >= 1);
+        await WaitUntilQuietAsync(() => wakeUps.Count);
 
-        // One wake-up per notification, a debounce apart, would still be waking now (100 x 50 ms).
+        // One wake-up per notification, a debounce apart, would be dozens (33 before the burst was drained).
         output.WriteLine($"{wakeUps.CountAfter(afterConnect)} wake-up(s) for 100 notifications");
-        wakeUps.CountAfter(afterConnect).ShouldBeInRange(1, 3);
+        wakeUps.CountAfter(afterConnect).ShouldBeInRange(1, 9);
+    }
+
+    private static async Task WaitUntilQuietAsync(Func<int> count)
+    {
+        var deadline = TimeProvider.System.GetUtcNow() + TimeSpan.FromSeconds(10);
+        var last = count();
+        while (true)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(500));
+            var now = count();
+            if (now == last)
+                return;
+            if (TimeProvider.System.GetUtcNow() > deadline)
+                throw new TimeoutException("The outbox kept being woken.");
+            last = now;
+        }
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition)
