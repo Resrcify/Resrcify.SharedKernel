@@ -22,8 +22,8 @@ public sealed class StandardBehaviorsOptionsTests
         => new StandardBehaviorsOptions().BehaviorTypes().ShouldBe(
         [
             typeof(LoggingPipelineBehavior<,>),
-            typeof(ValidationPipelineBehavior<,>),
             typeof(IdempotencyPipelineBehavior<,>),
+            typeof(ValidationPipelineBehavior<,>),
             typeof(TransactionPipelineBehavior<,>),
             typeof(UnitOfWorkPipelineBehavior<,>),
             typeof(CachingPipelineBehavior<,>),
@@ -41,10 +41,10 @@ public sealed class StandardBehaviorsOptionsTests
         [
             typeof(OutermostBehavior<,>),
             typeof(LoggingPipelineBehavior<,>),
+            typeof(IdempotencyPipelineBehavior<,>),
             typeof(ValidationPipelineBehavior<,>),
             typeof(FirstOwnBehavior<,>),
             typeof(SecondOwnBehavior<,>),
-            typeof(IdempotencyPipelineBehavior<,>),
             typeof(TransactionPipelineBehavior<,>),
             typeof(UnitOfWorkPipelineBehavior<,>),
         ]);

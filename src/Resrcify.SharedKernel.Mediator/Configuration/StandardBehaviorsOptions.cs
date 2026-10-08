@@ -23,9 +23,11 @@ public sealed class StandardBehaviorsOptions
     private static readonly StandardBehavior[] Order =
     [
         StandardBehavior.Logging,
-        StandardBehavior.Validation,
-        // Outside the transaction and the unit of work: a result is kept only once committed, and a repeat opens neither.
+        // Before validation: a repeat gets the first answer, though a rule that reads the data ("the shard must not
+        // exist yet") would refuse it now. And outside the transaction and the unit of work: a result is kept only once
+        // committed, and a repeat opens neither.
         StandardBehavior.Idempotency,
+        StandardBehavior.Validation,
         StandardBehavior.Transaction,
         StandardBehavior.UnitOfWork,
         StandardBehavior.Caching,

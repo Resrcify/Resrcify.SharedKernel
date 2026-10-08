@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using FluentValidation;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
@@ -77,6 +78,25 @@ public sealed class IdempotencyPipelineBehaviorTests
 
         repeated.Value.ShouldBe(first.Value);
         reused.Errors.ShouldHaveSingleItem().ShouldBe(IdempotencyErrors.KeyReused);
+        _handled.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task ARepeat_ShouldGetTheFirstAnswer_ThoughAValidationRuleReadingTheDataWouldRefuseItNow()
+    {
+        // "The shard must not exist yet": true for the first request, false for its retry, which must still get the
+        // first answer. Validation used to run first and refuse the retry.
+        await using var services = Services(configure: collection =>
+            collection.AddSingleton<IValidator<CreateShard>>(new MustNotExistYet(_handled)));
+
+        var first = await SendAsync(services, new CreateShard("Main", "key-1"));
+        var repeated = await SendAsync(services, new CreateShard("Main", "key-1"));
+        var withoutAKey = await SendAsync(services, new CreateShard("Main", Key: null));
+
+        first.IsSuccess.ShouldBeTrue();
+        repeated.IsSuccess.ShouldBeTrue();
+        repeated.Value.ShouldBe(first.Value);
+        withoutAKey.IsFailure.ShouldBeTrue();   // a new request is still validated
         _handled.Count.ShouldBe(1);
     }
 
@@ -207,13 +227,32 @@ public sealed class IdempotencyPipelineBehaviorTests
     }
 
     [Fact]
+    public async Task ACacheThatIsAClaimStoreToo_ShouldBeEnough_WithoutRegisteringItAsOne()
+    {
+        // As a service registers it: services.AddSingleton<ICachingService, DistributedCachingService>().
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(_handled);
+        services.AddScoped(_ => Substitute.For<IUnitOfWork>().RunningOperations<Result<ShardView>>());
+        services.AddSingleton<ICachingService>(new DistributedCachingService(new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()))));
+        services.AddMediator(cfg => cfg.AddStandardBehaviors(options => options.Without(StandardBehavior.Caching)));
+        services.AddTransient<IRequestHandler<CreateShard, Result<ShardView>>, CreatingHandler<CreateShard>>();
+        await using var provider = services.BuildServiceProvider();
+
+        await SendAsync(provider, new CreateShard("Main", "key-1"));
+        await SendAsync(provider, new CreateShard("Main", "key-1"));
+
+        _handled.Count.ShouldBe(1);
+    }
+
+    [Fact]
     public async Task AKeyWithoutACacheAndClaimStore_ShouldSaySoWhenSent()
     {
         await using var services = Services(withStore: false);
 
         var failure = await Should.ThrowAsync<InvalidOperationException>(() => SendAsync(services, new CreateShard("Main", "key-1")));
 
-        failure.Message.ShouldContain("needs an ICachingService and an IClaimStore");
+        failure.Message.ShouldContain("needs an ICachingService that is also an IClaimStore");
     }
 
     [Fact]
@@ -233,9 +272,14 @@ public sealed class IdempotencyPipelineBehaviorTests
         return await scope.ServiceProvider.GetRequiredService<ISender>().Send(request);
     }
 
-    private ServiceProvider Services(IUnitOfWork? unitOfWork = null, bool withStore = true, DistributedCachingService? store = null)
+    private ServiceProvider Services(
+        IUnitOfWork? unitOfWork = null,
+        bool withStore = true,
+        DistributedCachingService? store = null,
+        Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
+        configure?.Invoke(services);
         services.AddLogging();
         services.AddSingleton(_handled);
         services.AddScoped(_ => unitOfWork ?? Substitute.For<IUnitOfWork>().RunningOperations<Result<ShardView>>().RunningOperations<Result>());
@@ -281,6 +325,15 @@ public sealed class IdempotencyPipelineBehaviorTests
     }
 
     public sealed record RenameShard(string? IdempotencyKey) : ICommand, IIdempotentRequest;
+
+    /// <summary>A rule that reads the data: refuses a shard once one was created.</summary>
+    internal sealed class MustNotExistYet : AbstractValidator<CreateShard>
+    {
+        public MustNotExistYet(Handled handled)
+            => RuleFor(command => command.Name)
+                .Must(_ => handled.Count == 0)
+                .WithMessage("Shard already exist.");
+    }
 
     public sealed class Handled
     {

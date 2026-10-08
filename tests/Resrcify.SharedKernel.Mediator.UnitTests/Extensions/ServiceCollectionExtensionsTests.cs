@@ -185,9 +185,9 @@ public sealed class ServiceCollectionExtensionsTests
             .ShouldBe(
             [
                 typeof(LoggingPipelineBehavior<,>),
+                typeof(IdempotencyPipelineBehavior<,>),
                 typeof(ValidationPipelineBehavior<,>),
                 typeof(ScopedOpenBehavior<,>),
-                typeof(IdempotencyPipelineBehavior<,>),
                 typeof(TransactionPipelineBehavior<,>),
                 typeof(UnitOfWorkPipelineBehavior<,>),
             ]);

@@ -378,7 +378,7 @@ once it is added like this.
 Our services run the same chain; `AddStandardBehaviors` adds it, after any behavior added before:
 
 ```csharp
-cfg.AddStandardBehaviors();   // Logging -> Validation -> Idempotency -> Transaction -> UnitOfWork -> Caching
+cfg.AddStandardBehaviors();   // Logging -> Idempotency -> Validation -> Transaction -> UnitOfWork -> Caching
 ```
 
 Leave one out, or put the service's own behaviors in place:
@@ -387,7 +387,7 @@ Leave one out, or put the service's own behaviors in place:
 cfg.AddStandardBehaviors(standard => standard
     .InsertAfter(StandardBehavior.Validation, typeof(GuestAuthPipelineBehavior<,>), typeof(SingleFlightPipelineBehavior<,>))
     .Without(StandardBehavior.Caching));
-// Logging -> Validation -> GuestAuth -> SingleFlight -> Idempotency -> Transaction -> UnitOfWork
+// Logging -> Idempotency -> Validation -> GuestAuth -> SingleFlight -> Transaction -> UnitOfWork
 ```
 
 `InsertBefore` works the same way. A behavior inserted next to one left out keeps its place. Inserted behaviors are
@@ -464,11 +464,14 @@ public sealed record CreateShardCommand(string Name) : ICommand<ShardDto>, IIdem
 | with a blank or too long key | `IdempotencyErrors.InvalidKey` (a Validation failure, 400) |
 
 A failure another try may pass (a transient one) isn't kept, nor is a handler that threw: a repeat runs again. The
-behavior runs outside the transaction and the unit of work, so a result is kept only once committed and a repeat opens
+behavior runs before validation, so a repeat gets the first answer though a rule that reads the data ("the shard must
+not exist yet") would refuse it now; and outside the transaction and the unit of work, so a result is kept only once
+committed and a repeat opens
 neither. Keys are kept per request type and `IdempotencyScope`; "a different request" is told by the request's JSON
 (without its key and scope), so a property whose order isn't kept (a `HashSet`) can make a true repeat look like a
-different request: use a list (or sort it) in an idempotent request. It needs an `ICachingService` and an `IClaimStore` (the Caching package's
-`DistributedCachingService` is both); a request sent with a key without them throws, saying so.
+different request: use a list (or sort it) in an idempotent request. It needs an `ICachingService` that is also an `IClaimStore` (the Caching package's
+`DistributedCachingService` is both, so registering it as the cache is enough), or an `IClaimStore` registered next to
+it; a request sent with a key without them throws, saying so.
 
 ```csharp
 cfg.ConfigureIdempotency(idempotency =>

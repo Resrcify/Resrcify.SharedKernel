@@ -25,8 +25,10 @@ namespace Resrcify.SharedKernel.Mediator.Behaviors;
 /// <see cref="IdempotencyErrors.KeyReused"/> (Unprocessable, 422).</item>
 /// <item>A failure another try may pass (a transient one) isn't kept, nor is a handler that threw: a repeat runs again.</item>
 /// </list>
-/// It runs before the transaction and the unit of work (a standard behavior, after validation), so it keeps a result only
-/// once it is committed, and a repeat opens no transaction. Keys are kept per request type and
+/// It runs before validation (a standard behavior, right after logging), so a repeat gets the first answer though a
+/// validation rule that reads the data would refuse it now ("the shard must not exist yet"), and a repeat of a request
+/// refused by validation gets the same refusal. And it runs outside the transaction and the unit of work, so it keeps a
+/// result only once it is committed, and a repeat opens no transaction. Keys are kept per request type and
 /// <see cref="IIdempotentRequest.IdempotencyScope"/>.
 /// </remarks>
 public sealed partial class IdempotencyPipelineBehavior<TRequest, TResponse>(
@@ -52,11 +54,14 @@ public sealed partial class IdempotencyPipelineBehavior<TRequest, TResponse>(
             return ResultFactory.Failure<TResponse>(IdempotencyErrors.InvalidKey(_options.MaxKeyLength));
 
         var cache = services.GetService<ICachingService>();
-        var claims = services.GetService<IClaimStore>();
+        // The registered claim store, or the cache when it is one too (as DistributedCachingService is), so a service
+        // that registered its cache needs nothing more.
+        var claims = services.GetService<IClaimStore>() ?? cache as IClaimStore;
         if (cache is null || claims is null)
             throw new InvalidOperationException(
-                $"{typeof(TRequest).Name} was sent with an idempotency key, which needs an ICachingService and an " +
-                "IClaimStore registered (the Caching package's DistributedCachingService over an IDistributedCache is both).");
+                $"{typeof(TRequest).Name} was sent with an idempotency key, which needs an ICachingService that is also " +
+                "an IClaimStore (the Caching package's DistributedCachingService over an IDistributedCache is both), or " +
+                "an IClaimStore registered next to it.");
 
         var storeKey = $"idempotency:{typeof(TRequest).FullName}:{request.IdempotencyScope}:{key}";
         var fingerprint = IdempotencyFingerprint.Of(request);

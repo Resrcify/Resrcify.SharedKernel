@@ -37,6 +37,9 @@ public abstract class ConventionalPresentationTests : BaseArchitectureTest
     private const string MapEndpointMethodName = "MapEndpoint";
     private const string MediatorNamespace = "Resrcify.SharedKernel.Abstractions.Mediator";
 
+    // The request endpoints (MapGetRequest, MapPostRequest, ...) send through the mediator for the endpoint.
+    private const string RequestEndpointsType = "Resrcify.SharedKernel.Web.Extensions.RequestEndpointExtensions";
+
     [SkippableFact]
     public virtual void Endpoints_Should_ImplementIEndpoint()
     {
@@ -70,6 +73,10 @@ public abstract class ConventionalPresentationTests : BaseArchitectureTest
             .Evaluate();
     }
 
+    /// <summary>
+    /// Every endpoint goes through the mediator: it sends with <c>ISender</c> itself, or maps a request endpoint
+    /// (<c>MapPostRequest</c>, …), which sends for it.
+    /// </summary>
     [SkippableFact]
     public virtual void Endpoints_Should_DependOnMediator()
     {
@@ -80,7 +87,7 @@ public abstract class ConventionalPresentationTests : BaseArchitectureTest
             .That()
             .HaveNameEndingWith("Endpoint", StringComparison.Ordinal)
             .Should()
-            .HaveDependencyOn(MediatorNamespace)
+            .HaveDependencyOnAny(MediatorNamespace, RequestEndpointsType)
             .Evaluate();
     }
 

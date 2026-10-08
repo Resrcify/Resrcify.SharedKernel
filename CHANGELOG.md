@@ -291,7 +291,8 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   OpenAPI. A delegate returning anything else fails when the endpoint is mapped.
 - **Idempotent requests** (Resrcify.SharedKernel.Mediator): a request implementing `IIdempotentRequest` and sent
   again with its `IdempotencyKey` is answered with the first result instead of being handled again, however it
-  arrives (HTTP, a consumer, a job). The new standard behavior `StandardBehavior.Idempotency` (between validation and
+  arrives (HTTP, a consumer, a job). The new standard behavior `StandardBehavior.Idempotency` (right after logging: before validation, so a repeat gets
+  the first answer though a rule reading the data would refuse it now, and before
   the transaction, so a result is kept only once committed) keeps results 24 hours (`ICachingService`) and holds the
   key while the first is handled (`IClaimStore`): a repeat meanwhile is a Conflict (409), the key used for a different
   request Unprocessable (422). Transient failures aren't kept. `IdempotencyScope` keeps keys per caller;
@@ -448,6 +449,11 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
 
 ### Fixed
 
+- **Found trying the 4.0 APIs in Shard:** idempotency runs before validation (a retry of "create the shard" was
+  refused by the rule "the shard must not exist yet" instead of getting the first answer); it takes a cache that is
+  also a claim store (`DistributedCachingService` registered as `ICachingService`) without registering it as one; the
+  architecture rule "endpoints depend on the mediator" accepts the request endpoints (`MapPostRequest`, …); and a test
+  stand-in's queue takes options (`StartResponderAsync(..., queueOptions: q => q.PerSecond = 100)`).
 - **`RabbitMqConnection.ToString()` no longer prints the password.** As a record it printed every property, the
   password and the connection string holding it included, so logging it (or an exception message with it) leaked them.
 - **A failed `ExecuteInTransactionAsync` no longer leaves its changes for the next save.** The rollback undid them in

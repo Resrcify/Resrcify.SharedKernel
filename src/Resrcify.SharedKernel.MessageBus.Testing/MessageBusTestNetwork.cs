@@ -10,6 +10,7 @@ using Rebus.Transport.InMem;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
 using Resrcify.SharedKernel.MessageBus.Configuration;
 using Resrcify.SharedKernel.MessageBus.Extensions;
+using Resrcify.SharedKernel.MessageBus.RateLimitedQueues;
 using Resrcify.SharedKernel.Results.Primitives;
 
 namespace Resrcify.SharedKernel.MessageBus.Testing;
@@ -74,10 +75,12 @@ public sealed class MessageBusTestNetwork
     /// The stand-in's own bus settings, e.g. the wire names the real service gives the messages
     /// (<c>AddMessage&lt;T&gt;(wireName)</c>).
     /// </param>
+    /// <param name="queueOptions">The stand-in queue's options, e.g. its rate (<c>queue =&gt; queue.PerSecond = 100</c>).</param>
     public async Task<MessageBusStandIn> StartResponderAsync<TRequest, TResponse>(
         Func<TRequest, CancellationToken, Task<Result<TResponse>>> respond,
         string? queue = null,
-        Action<MessageBusBuilder>? configure = null)
+        Action<MessageBusBuilder>? configure = null,
+        Action<RateLimitedQueueOptions>? queueOptions = null)
         where TRequest : class
         where TResponse : class
     {
@@ -88,7 +91,7 @@ public sealed class MessageBusTestNetwork
         {
             bus.UseInMemory(Network);
             configure?.Invoke(bus);
-            bus.AddRateLimitedQueue<TRequest, TResponse, StandInResponder<TRequest, TResponse>>(queue);
+            bus.AddRateLimitedQueue<TRequest, TResponse, StandInResponder<TRequest, TResponse>>(queue, queueOptions);
         });
         builder.Services.AddMessageBusTestHarness(this);
         var host = builder.Build();
