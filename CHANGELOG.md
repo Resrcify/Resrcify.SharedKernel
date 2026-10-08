@@ -271,10 +271,12 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   (`harness.Published.WaitForAsync<T>(match)`). `WaitUntilIdleAsync()` returns once no bus is handling a message and no
   queue holds one; `network.StartResponderAsync<TRequest, TResponse>(...)` stands in for another service's rate-limited
   queue; `FailNext<T>(deliveries)` and `FailStart(queue)` inject failures.
-- **Endpoints for a mediator command or query in one call** (Resrcify.SharedKernel.Web): `MapGetQuery`,
-  `MapPostCommand`, `MapPutCommand`, `MapPatchCommand`, `MapDeleteCommand` and `MapCommand(method, ...)` bind the
-  request (`[AsParameters]`), send the command or query, answer 200/204 or problem details, and declare their
-  responses for OpenAPI.
+- **Endpoints for a mediator request** (Resrcify.SharedKernel.Web): `MapGetRequest`, `MapPostRequest`,
+  `MapPutRequest`, `MapPatchRequest`, `MapDeleteRequest` and `MapRequest(pattern, methods, ...)`. The delegate is an
+  ordinary Minimal-API handler returning any request answered with a `Result` (a command, a query, one of your own);
+  the endpoint sends it and answers 200 with the value or 204, `onSuccess`'s typed result (201, 202, part of the
+  value), or problem details (`onFailure`, or `RequestEndpointOptions` for the app), and declares its responses for
+  OpenAPI. A delegate returning anything else fails when the endpoint is mapped.
 - **Idempotency keys** (Resrcify.SharedKernel.Web): `app.UseIdempotency()` and `WithIdempotency()` on an endpoint.
   A request repeating an `Idempotency-Key` gets the first one's response (kept 24 hours in `ICachingService`), 409
   while the first is still handled (`IClaimStore`), and 422 when the key was used for a different request. Server

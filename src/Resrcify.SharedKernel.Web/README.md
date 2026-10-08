@@ -16,7 +16,7 @@
     - [Convert result to problem details](#convert-result-to-problem-details)
     - [Use Match in controllers](#use-match-in-controllers)
     - [Functional endpoint flow](#functional-endpoint-flow)
-    - [Endpoints for a command or query in one call](#endpoints-for-a-command-or-query-in-one-call)
+    - [Endpoints for a mediator request](#endpoints-for-a-mediator-request)
     - [Idempotency keys](#idempotency-keys)
     - [Read an HTTP response as a result](#read-an-http-response-as-a-result)
     - [Unhandled exceptions: the same problem details](#unhandled-exceptions-the-same-problem-details)
@@ -30,8 +30,8 @@
 
 - `ApiController` base type in `Primitives/`.
 - Result-to-HTTP conversion extensions in `Extensions/`.
-- `MapGetQuery` / `MapPostCommand` / `MapPutCommand` / `MapPatchCommand` / `MapDeleteCommand`: a Minimal-API endpoint
-  that sends a mediator command or query, in one call, with its OpenAPI responses.
+- `MapGetRequest` / `MapPostRequest` / `MapPutRequest` / `MapPatchRequest` / `MapDeleteRequest`: a Minimal-API endpoint
+  that sends the mediator request its delegate returns and answers with its result, with its OpenAPI responses.
 - `UseIdempotency()` + `WithIdempotency()`: a request repeating an `Idempotency-Key` gets the first one's response.
 - Consistent mapping from `ErrorType` to HTTP problem responses.
 - `AddResultProblemDetails()`: unhandled exceptions answered with the same problem details as a failed result.
@@ -138,44 +138,55 @@ return await Result
         onFailure: ToProblemDetails);
 ```
 
-### Endpoints for a command or query in one call
+### Endpoints for a mediator request
 
-The flow above is the body of most endpoints. `MapGetQuery`, `MapPostCommand`, `MapPutCommand`, `MapPatchCommand`
-and `MapDeleteCommand` write it for you: the request is bound with `[AsParameters]` (route values, query string,
-headers and body as properties of one record), turned into the command or query, sent through `ISender`, and the
-result is answered as 200 with the value (204 for a command without one) or as problem details. Each declares its
-responses for OpenAPI (the success response and problem details for 400, 404, 409 and 500), and returns the
-`RouteHandlerBuilder`, so naming, tags, authorization and the API version chain as usual.
+The flow above is the body of most endpoints. `MapGetRequest`, `MapPostRequest`, `MapPutRequest`, `MapPatchRequest`,
+`MapDeleteRequest` and `MapRequest(pattern, methods, ...)` write it for you. The delegate is an ordinary Minimal-API
+handler that returns the request: its parameters bind as usual (route values, query string, headers, body,
+`[AsParameters]`, services, `HttpContext`, a `CancellationToken`), and it may be async. The endpoint sends the request
+through `ISender` and answers:
+
+| The request is answered with | Success | Failure |
+|---|---|---|
+| `Result<T>` (`IQuery<T>`, `ICachingQuery<T>`, `ICommand<T>`, `ITransactionCommand<T>`, …) | 200 with the value | problem details |
+| `Result` (`ICommand`, `ITransactionCommand`, …) | 204 | problem details |
+
+Any request answered with a `Result` works, a type of your own implementing `IRequest<Result>` or
+`IRequest<Result<T>>` too, and it goes through the mediator's whole pipeline (validation, caching, transactions). A
+delegate returning anything else fails when the endpoint is mapped, not when it is called.
 
 ```csharp
-internal sealed record AddShardMemberRequest(
-    [FromRoute] Guid ShardId,
-    [FromRoute] long AllyCode,
-    [FromBody] AddShardMemberCommandRequest Body);
-
-app.MapPostCommand<AddShardMemberRequest, AddShardMemberCommand>(
-        ApiEndpoints.Shards.AddShardMember,
-        request => new(request.ShardId, request.AllyCode, request.Body.Alignment, request.Body.Emoji))
+app.MapPostRequest(ApiEndpoints.Shards.AddShardMember,
+        (Guid shardId, long allyCode, AddShardMemberBody body) => new AddShardMemberCommand(shardId, allyCode, body.Emoji))
     .WithName("Shards.AddShardMember")
     .WithTags(ApiEndpoints.Shards.Tag)
     .WithApiVersionSet(ApiVersioning.VersionSet)
     .HasApiVersion(new ApiVersion(1, 0));
 
-// A query, answering with part of its result.
-app.MapGetQuery<ShardRoute, GetShardByIdQuery, GetShardByIdResponse, ShardDto>(
-    ApiEndpoints.Shards.GetShard,
-    request => new(request.ShardId),
-    response => response.Shard);
-
-// A query that takes nothing from the request.
-app.MapGetQuery<GetAllActiveShardsQuery, GetAllActiveShardsResponse>(ApiEndpoints.Shards.GetAll, () => new());
+app.MapGetRequest(ApiEndpoints.Shards.GetShard, (Guid shardId) => new GetShardByIdQuery(shardId));
+app.MapPostRequest(ApiEndpoints.Shards.Search, (SearchBody body) => new SearchShardsQuery(body.Name));   // a query by POST
+app.MapGetRequest(ApiEndpoints.Shards.GetAll, () => new GetAllActiveShardsQuery());
 ```
 
-A command with a result (`ICommand<TResponse>`) takes the response type too:
-`MapPostCommand<TRequest, TCommand, TResponse>`. For a verb without a helper, `MapCommand(method, ...)`. Settings shared
-by a group of endpoints (tags, the version set, authorization) go on an ASP.NET route group:
-`var shards = app.MapGroup("").WithTags("Shards").RequireAuthorization();` then `shards.MapPostCommand<...>(...)`.
-An endpoint answering something else (201 with a location, a file) is written by hand with the flow above.
+**Other answers.** `onSuccess` replaces 200/204: a delegate taking the value (or nothing) and returning an `IResult`. A
+`TypedResults` type describes itself for OpenAPI:
+
+```csharp
+app.MapPostRequest(ApiEndpoints.Shards.Create, (CreateShardBody body) => new CreateShardCommand(body.Name),
+    onSuccess: (ShardDto shard) => TypedResults.Created($"/shards/{shard.Id}", shard));          // 201
+app.MapPostRequest(ApiEndpoints.Jobs.Run, (string job) => new RunJobCommand(job),
+    onSuccess: () => TypedResults.Accepted("/jobs"));                                           // 202
+app.MapGetRequest(ApiEndpoints.Shards.GetShard, (Guid shardId) => new GetShardByIdQuery(shardId),
+    onSuccess: (GetShardByIdResponse response) => TypedResults.Ok(response.Shard));              // part of the result
+```
+
+`onFailure` replaces problem details for one endpoint; for the whole app, configure `RequestEndpointOptions`:
+`services.Configure<RequestEndpointOptions>(options => options.OnFailure = ...)`. Its `ProblemStatusCodes` (400, 404,
+409 and 500) are the problems every endpoint declares for OpenAPI; add an endpoint's own with `ProducesProblem`.
+
+The endpoints return the `RouteHandlerBuilder`, so naming, tags, authorization and the API version chain as usual, and
+they work in route groups. A filter added to an endpoint runs inside it and may answer instead (a validation filter's
+problem, say). The request itself is never described as a response.
 
 ### Idempotency keys
 
@@ -187,7 +198,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseIdempotency();   // after authentication: keys are per user
 
-app.MapPostCommand<CreateShardRequest, CreateShardCommand, ShardDto>(ApiEndpoints.Shards.Create, request => new(...))
+app.MapPostRequest(ApiEndpoints.Shards.Create, (CreateShardBody body) => new CreateShardCommand(body.Name))
     .WithIdempotency();   // or WithIdempotency(requireKey: true): 400 without the header
 ```
 
