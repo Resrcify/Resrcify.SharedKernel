@@ -466,7 +466,8 @@ public sealed record CreateShardCommand(string Name) : ICommand<ShardDto>, IIdem
 A failure another try may pass (a transient one) isn't kept, nor is a handler that threw: a repeat runs again. The
 behavior runs outside the transaction and the unit of work, so a result is kept only once committed and a repeat opens
 neither. Keys are kept per request type and `IdempotencyScope`; "a different request" is told by the request's JSON
-(without its key and scope). It needs an `ICachingService` and an `IClaimStore` (the Caching package's
+(without its key and scope), so a property whose order isn't kept (a `HashSet`) can make a true repeat look like a
+different request: use a list (or sort it) in an idempotent request. It needs an `ICachingService` and an `IClaimStore` (the Caching package's
 `DistributedCachingService` is both); a request sent with a key without them throws, saying so.
 
 ```csharp
