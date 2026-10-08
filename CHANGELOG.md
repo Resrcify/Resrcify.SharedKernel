@@ -10,6 +10,13 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
 
 ### Breaking changes
 
+- **`MediatorConfiguration` no longer exposes its state**: `Assemblies`, `OpenBehaviorTypes`,
+  `OpenBehaviorRegistrations` (and the `OpenBehaviorRegistration` type), `NotificationPublishStrategy`,
+  `UseDiTimePipelineComposition`, `MediatorLifetime`, `ChecksBehaviors` and the `LoggingOptions` / `UnitOfWorkOptions` /
+  `IdempotencyOptions` objects are internal. Configure through its methods (`ConfigureLogging(...)`,
+  `ConfigureUnitOfWork(...)`, `UseMediatorLifetime(...)`, …): an options object set directly wasn't marked configured, so
+  another `AddMediator` call's defaults could win over it.
+- **`DomainEventConverter` is sealed.**
 #### Packages and namespaces
 
 - **`Resrcify.SharedKernel.Messaging` is now `Resrcify.SharedKernel.Mediator`.** Replace the package, then rename

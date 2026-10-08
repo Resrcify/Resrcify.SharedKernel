@@ -13,7 +13,7 @@ namespace Resrcify.SharedKernel.UnitOfWork.Converters;
 /// The format is <c>{"$type":"&lt;assembly-qualified name&gt;", ...the event's own properties}</c>; rows already in an
 /// outbox keep reading. Type names are resolved once per name (a name that resolves to nothing is remembered too).
 /// </remarks>
-public class DomainEventConverter
+public sealed class DomainEventConverter
     : JsonConverter<IDomainEvent>
 {
     private const string TypeProperty = "$type";

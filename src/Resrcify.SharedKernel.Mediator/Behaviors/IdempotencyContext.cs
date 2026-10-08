@@ -8,7 +8,7 @@ namespace Resrcify.SharedKernel.Mediator.Behaviors;
 /// The requests of this scope answered with an earlier result (scoped, registered with the mediator). Marked per request
 /// instance, so a request a handler sends in turn doesn't mark the one it was sent for.
 /// </summary>
-public sealed class IdempotencyContext : IIdempotencyContext
+internal sealed class IdempotencyContext : IIdempotencyContext
 {
     private readonly Lock _gate = new();
     private readonly HashSet<object> _replayed = new(ReferenceEqualityComparer.Instance);

@@ -16,18 +16,18 @@ public sealed class MediatorConfiguration
     private readonly List<ServiceDescriptor> _processorRegistrations = [];
 
     /// <summary>The assemblies whose handlers are registered (behaviors and processors are registered explicitly).</summary>
-    public IReadOnlyCollection<Assembly> Assemblies => _assemblies;
+    internal IReadOnlyCollection<Assembly> Assemblies => _assemblies;
 
-    public IReadOnlyCollection<Type> OpenBehaviorTypes => _openBehaviorTypes;
+    internal IReadOnlyCollection<Type> OpenBehaviorTypes => _openBehaviorTypes;
 
     /// <summary>The behaviors to register, in order: the first is the outermost.</summary>
-    public IReadOnlyCollection<OpenBehaviorRegistration> OpenBehaviorRegistrations => _openBehaviorRegistrations;
+    internal IReadOnlyCollection<OpenBehaviorRegistration> OpenBehaviorRegistrations => _openBehaviorRegistrations;
 
-    public NotificationPublishStrategy NotificationPublishStrategy { get; private set; } = NotificationPublishStrategy.Sequential;
+    internal NotificationPublishStrategy NotificationPublishStrategy { get; private set; } = NotificationPublishStrategy.Sequential;
 
-    public bool UseDiTimePipelineComposition { get; private set; }
+    internal bool UseDiTimePipelineComposition { get; private set; }
 
-    public ServiceLifetime MediatorLifetime { get; private set; } = ServiceLifetime.Transient;
+    internal ServiceLifetime MediatorLifetime { get; private set; } = ServiceLifetime.Transient;
 
     /// <summary>Whether <see cref="ConfigureLogging"/> was called (its options then replace another call's defaults).</summary>
     internal bool LoggingConfigured { get; private set; }
@@ -39,20 +39,20 @@ public sealed class MediatorConfiguration
     internal bool IdempotencyConfigured { get; private set; }
 
     /// <summary>How <see cref="LoggingPipelineBehavior{TRequest, TResponse}"/> logs (see <see cref="ConfigureLogging"/>).</summary>
-    public LoggingPipelineOptions LoggingOptions { get; } = new();
+    internal LoggingPipelineOptions LoggingOptions { get; } = new();
 
     /// <summary>How <see cref="UnitOfWorkPipelineBehavior{TRequest, TResponse}"/> saves (see <see cref="ConfigureUnitOfWork"/>).</summary>
-    public UnitOfWorkPipelineOptions UnitOfWorkOptions { get; } = new();
+    internal UnitOfWorkPipelineOptions UnitOfWorkOptions { get; } = new();
 
     /// <summary>How <see cref="IdempotencyPipelineBehavior{TRequest, TResponse}"/> keeps results (see <see cref="ConfigureIdempotency"/>).</summary>
-    public IdempotencyPipelineOptions IdempotencyOptions { get; } = new();
+    internal IdempotencyPipelineOptions IdempotencyOptions { get; } = new();
 
     /// <summary>
     /// Whether <c>AddMediator</c> checks that every request asking for a behavior by its interface (an
     /// <see cref="ICachingQuery"/>, an <see cref="ITransactionalCommand"/>) has one registered (see
     /// <see cref="SkipBehaviorCheck"/>).
     /// </summary>
-    public bool ChecksBehaviors { get; private set; } = true;
+    internal bool ChecksBehaviors { get; private set; } = true;
 
     /// <summary>The pre- and post-processors to register, in order.</summary>
     internal IReadOnlyList<ServiceDescriptor> ProcessorRegistrations => _processorRegistrations;
