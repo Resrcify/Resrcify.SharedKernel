@@ -118,6 +118,43 @@ public sealed class RequestEndpointExtensionsTests
     }
 
     [Fact]
+    public async Task TheRequestsCancellation_ShouldReachTheMediator_WhenTheClientGivesUp()
+    {
+        // The mediator gets the request's own token (HttpContext.RequestAborted): a client that disconnects cancels it.
+        var reached = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _sender.Send(Arg.Any<IRequest<Result<ShardView>>>(), Arg.Any<CancellationToken>())
+            .Returns(async call =>
+            {
+                var token = call.Arg<CancellationToken>();
+                reached.SetResult(token);
+                // Bounded: with a token that is never cancelled the request still ends, and the test fails, not hangs.
+                await Task.Delay(TimeSpan.FromSeconds(10), token);
+                return Result.Success(Main);
+            });
+        await using var app = await StartAsync(endpoints => endpoints.MapGetRequest("/slow", () => new GetShard(KnownShard)));
+        using var giveUp = new CancellationTokenSource();
+
+        var call = app.GetTestClient().GetAsync(new Uri("/slow", UriKind.Relative), giveUp.Token);
+        var token = await reached.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        token.IsCancellationRequested.ShouldBeFalse();
+        await giveUp.CancelAsync();
+
+        await Should.ThrowAsync<OperationCanceledException>(() => call);
+        await Should.NotThrowAsync(() => WaitUntilCancelledAsync(token));
+    }
+
+    private static async Task WaitUntilCancelledAsync(CancellationToken token)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!token.IsCancellationRequested)
+        {
+            if (DateTime.UtcNow > deadline)
+                throw new TimeoutException("The mediator's token wasn't cancelled.");
+            await Task.Delay(20, CancellationToken.None);   // polls the token itself
+        }
+    }
+
+    [Fact]
     public async Task AFailure_ShouldBeProblemDetails_UnlessTheEndpointOrTheOptionsAnswerOtherwise()
     {
         var notFound = new Error("Shard.NotFound", "No such shard", ErrorType.NotFound);
