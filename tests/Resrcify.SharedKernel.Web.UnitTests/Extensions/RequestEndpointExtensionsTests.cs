@@ -205,6 +205,23 @@ public sealed class RequestEndpointExtensionsTests
     }
 
     [Fact]
+    public async Task AReplayedRequest_ShouldBeMarkedReplayed()
+    {
+        _sender.Send(Arg.Any<IRequest<Result<ShardView>>>(), Arg.Any<CancellationToken>()).Returns(Result.Success(Main));
+        var idempotency = Substitute.For<IIdempotencyContext>();
+        idempotency.WasReplayed(Arg.Is<object>(request => request.Equals(new CreateShard("Replayed")))).Returns(true);
+        await using var app = await StartAsync(
+            endpoints => endpoints.MapPostRequest("/shards", (NameBody body) => new CreateShard(body.Name)),
+            services => services.AddSingleton(idempotency));
+
+        using var replayed = await app.GetTestClient().PostAsJsonAsync("/shards", new NameBody("Replayed"));
+        using var handled = await app.GetTestClient().PostAsJsonAsync("/shards", new NameBody("New"));
+
+        replayed.Headers.GetValues(IdempotencyHeaders.Replayed).ShouldBe(["true"]);
+        handled.Headers.Contains(IdempotencyHeaders.Replayed).ShouldBeFalse();
+    }
+
+    [Fact]
     public async Task ADelegateNotReturningARequest_ShouldThrowWhenMapped()
     {
         var failure = await Should.ThrowAsync<ArgumentException>(() => StartAsync(

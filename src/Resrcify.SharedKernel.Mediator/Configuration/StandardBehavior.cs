@@ -20,4 +20,6 @@ public enum StandardBehavior
 
     /// <summary><c>CachingPipelineBehavior</c>: answers an <c>ICachingQuery</c> from the cache, and caches its result.</summary>
     Caching,
+
+    Idempotency,
 }

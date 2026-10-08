@@ -29,6 +29,7 @@ The contracts live in `Resrcify.SharedKernel.Abstractions.Mediator`, so the Doma
     - [The behavior check](#the-behavior-check)
     - [Logging options](#logging-options)
     - [Unit-of-work options](#unit-of-work-options)
+    - [Idempotent requests](#idempotent-requests)
     - [Pre- and post-processors](#pre--and-post-processors)
   - [Tracing and metrics](#tracing-and-metrics)
   - [How it works internally](#how-it-works-internally)
@@ -322,6 +323,10 @@ The package includes the following built-in behaviors in `src/Resrcify.SharedKer
 - `ValidationPipelineBehavior<TRequest, TResponse>`
     - Runs the request's `FluentValidation.IValidator<TRequest>`s one at a time (they often share a scoped DbContext) and returns a validation `Result` failure when invalid.
     - Constraint: `TResponse : Result`.
+- `IdempotencyPipelineBehavior<TRequest, TResponse>`
+    - Answers an `IIdempotentRequest` sent again with its `IdempotencyKey` with the first one's result instead of
+      handling it again (see [Idempotent requests](#idempotent-requests)).
+    - Constraint: `TRequest : IIdempotentRequest`, `TResponse : Result`.
 - `CachingPipelineBehavior<TRequest, TResponse>`
     - Uses `ICachingService` and `ICachingQuery` (`CacheKey`, `Expiration`). A successful result is cached for `Expiration` from the time it was cached (an absolute expiry: reads don't extend it).
     - Constraint: `TRequest : ICachingQuery`, `TResponse : Result`.
@@ -373,7 +378,7 @@ once it is added like this.
 Our services run the same chain; `AddStandardBehaviors` adds it, after any behavior added before:
 
 ```csharp
-cfg.AddStandardBehaviors();   // Logging -> Validation -> Transaction -> UnitOfWork -> Caching
+cfg.AddStandardBehaviors();   // Logging -> Validation -> Idempotency -> Transaction -> UnitOfWork -> Caching
 ```
 
 Leave one out, or put the service's own behaviors in place:
@@ -382,7 +387,7 @@ Leave one out, or put the service's own behaviors in place:
 cfg.AddStandardBehaviors(standard => standard
     .InsertAfter(StandardBehavior.Validation, typeof(GuestAuthPipelineBehavior<,>), typeof(SingleFlightPipelineBehavior<,>))
     .Without(StandardBehavior.Caching));
-// Logging -> Validation -> GuestAuth -> SingleFlight -> Transaction -> UnitOfWork
+// Logging -> Validation -> GuestAuth -> SingleFlight -> Idempotency -> Transaction -> UnitOfWork
 ```
 
 `InsertBefore` works the same way. A behavior inserted next to one left out keeps its place. Inserted behaviors are
@@ -397,7 +402,7 @@ options throw.
 ### The behavior check
 
 Some requests ask for a behavior by an interface: an `ICachingQuery` must be cached, an `ITransactionalCommand` must
-run in a transaction. Without the behavior they still run, just not cached or not in a transaction, and nothing
+run in a transaction, an `IIdempotentRequest` must honour its key. Without the behavior they still run, just not cached or not in a transaction, and nothing
 says so. `AddMediator` therefore throws `InvalidOperationException` when a scanned request implementing one of them
 has no registered behavior that handles it: one whose request type parameter is constrained to that interface
 (`CachingPipelineBehavior` and `TransactionPipelineBehavior` are; so may a service's own). It sees the behaviors added
@@ -434,6 +439,43 @@ package answers with a 409, instead of throwing a `DbUpdateException` (a 500). T
 throws: it aborted the whole transaction, so the transaction behavior's execution strategy (with retries on) runs the
 command again; the transaction behavior needs no option of its own, since it rolls back on the failure the
 unit-of-work behavior inside it returns.
+
+### Idempotent requests
+
+A request implementing `IIdempotentRequest` and sent with an `IdempotencyKey` is handled once: sent again with the key
+(a client's retry, a message delivered twice), it is answered with the first result. However it arrives, an HTTP
+endpoint (the `Idempotency-Key` header), a consumer (its message ID) or a job.
+
+```csharp
+public sealed record CreateShardCommand(string Name) : ICommand<ShardDto>, IIdempotentRequest
+{
+    public string? IdempotencyKey { get; init; }
+    public string? IdempotencyScope { get; init; }   // optional: whose keys (a user's ID), so one can't replay another's
+}
+```
+
+| Sent | Answer |
+|---|---|
+| without a key | handled as usual |
+| the first time with a key | handled; the result is kept (`ICachingService`, 24 hours) while the key is held (`IClaimStore`) |
+| again, after the first finished | the kept result, without handling it; `IIdempotencyContext.WasReplayed(request)` is true |
+| again, while the first is handled | `IdempotencyErrors.InProgress` (a Conflict, 409) |
+| again, with a different request | `IdempotencyErrors.KeyReused` (Unprocessable, 422) |
+| with a blank or too long key | `IdempotencyErrors.InvalidKey` (a Validation failure, 400) |
+
+A failure another try may pass (a transient one) isn't kept, nor is a handler that threw: a repeat runs again. The
+behavior runs outside the transaction and the unit of work, so a result is kept only once committed and a repeat opens
+neither. Keys are kept per request type and `IdempotencyScope`; "a different request" is told by the request's JSON
+(without its key and scope). It needs an `ICachingService` and an `IClaimStore` (the Caching package's
+`DistributedCachingService` is both); a request sent with a key without them throws, saying so.
+
+```csharp
+cfg.ConfigureIdempotency(idempotency =>
+{
+    idempotency.Expiration = TimeSpan.FromHours(1);          // how long a result is kept (default 24 hours)
+    idempotency.InProgressTimeout = TimeSpan.FromMinutes(5); // the longest a request holds its key (default 1 minute)
+});
+```
 
 ### Pre- and post-processors
 

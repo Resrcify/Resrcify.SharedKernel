@@ -35,11 +35,17 @@ public sealed class MediatorConfiguration
     /// <summary>Whether <see cref="ConfigureUnitOfWork"/> was called.</summary>
     internal bool UnitOfWorkConfigured { get; private set; }
 
+    /// <summary>Whether <see cref="ConfigureIdempotency"/> was called.</summary>
+    internal bool IdempotencyConfigured { get; private set; }
+
     /// <summary>How <see cref="LoggingPipelineBehavior{TRequest, TResponse}"/> logs (see <see cref="ConfigureLogging"/>).</summary>
     public LoggingPipelineOptions LoggingOptions { get; } = new();
 
     /// <summary>How <see cref="UnitOfWorkPipelineBehavior{TRequest, TResponse}"/> saves (see <see cref="ConfigureUnitOfWork"/>).</summary>
     public UnitOfWorkPipelineOptions UnitOfWorkOptions { get; } = new();
+
+    /// <summary>How <see cref="IdempotencyPipelineBehavior{TRequest, TResponse}"/> keeps results (see <see cref="ConfigureIdempotency"/>).</summary>
+    public IdempotencyPipelineOptions IdempotencyOptions { get; } = new();
 
     /// <summary>
     /// Whether <c>AddMediator</c> checks that every request asking for a behavior by its interface (an
@@ -126,6 +132,21 @@ public sealed class MediatorConfiguration
         ArgumentNullException.ThrowIfNull(configure);
         configure(UnitOfWorkOptions);
         UnitOfWorkConfigured = true;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets how <see cref="IdempotencyPipelineBehavior{TRequest, TResponse}"/> keeps results, e.g.
+    /// <c>cfg.ConfigureIdempotency(idempotency =&gt; idempotency.Expiration = TimeSpan.FromHours(1))</c>.
+    /// </summary>
+    public MediatorConfiguration ConfigureIdempotency(Action<IdempotencyPipelineOptions> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+        configure(IdempotencyOptions);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(IdempotencyOptions.Expiration, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(IdempotencyOptions.InProgressTimeout, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThan(IdempotencyOptions.MaxKeyLength, 1);
+        IdempotencyConfigured = true;
         return this;
     }
 

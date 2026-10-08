@@ -282,10 +282,15 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   the endpoint sends it and answers 200 with the value or 204, `onSuccess`'s typed result (201, 202, part of the
   value), or problem details (`onFailure`, or `RequestEndpointOptions` for the app), and declares its responses for
   OpenAPI. A delegate returning anything else fails when the endpoint is mapped.
-- **Idempotency keys** (Resrcify.SharedKernel.Web): `app.UseIdempotency()` and `WithIdempotency()` on an endpoint.
-  A request repeating an `Idempotency-Key` gets the first one's response (kept 24 hours in `ICachingService`), 409
-  while the first is still handled (`IClaimStore`), and 422 when the key was used for a different request. Server
-  errors aren't kept, so the client can retry.
+- **Idempotent requests** (Resrcify.SharedKernel.Mediator): a request implementing `IIdempotentRequest` and sent
+  again with its `IdempotencyKey` is answered with the first result instead of being handled again, however it
+  arrives (HTTP, a consumer, a job). The new standard behavior `StandardBehavior.Idempotency` (between validation and
+  the transaction, so a result is kept only once committed) keeps results 24 hours (`ICachingService`) and holds the
+  key while the first is handled (`IClaimStore`): a repeat meanwhile is a Conflict (409), the key used for a different
+  request Unprocessable (422). Transient failures aren't kept. `IdempotencyScope` keeps keys per caller;
+  `cfg.ConfigureIdempotency(...)` sets the expiry. The behavior check fails the registration of an idempotent request
+  without the behavior. Over HTTP, `IdempotencyHeaders.Key` names the header and the request endpoints mark a replayed
+  answer `Idempotency-Replayed: true` (`IIdempotencyContext`).
 - **Outbox administration**: `OutboxAdministration<TDbContext>` (registered with the outbox) summarizes what waits,
   retries and gave up per event type and lane, lists the messages that gave up, shows one with its content, and tries
   one or all of them again. The new **Resrcify.SharedKernel.UnitOfWork.Web** package maps it to admin endpoints:

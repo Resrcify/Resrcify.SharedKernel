@@ -39,6 +39,10 @@ namespace Resrcify.SharedKernel.Web.Extensions;
 /// and problem details for <see cref="RequestEndpointOptions.ProblemStatusCodes"/>. The request itself is never
 /// described as a response. A filter added to the endpoint runs inside this one and may answer instead (validation).
 /// </para>
+/// <para>
+/// An <see cref="IIdempotentRequest"/> answered with an earlier result (sent again with its key) is marked
+/// <c>Idempotency-Replayed: true</c> (<see cref="IdempotencyHeaders"/>).
+/// </para>
 /// </remarks>
 /// <example>
 /// <code>
@@ -133,7 +137,9 @@ public static class RequestEndpointExtensions
                 var http = context.HttpContext;
                 if (request is null)
                     throw new InvalidOperationException($"The endpoint {http.Request.Method} {pattern} returned no request to send.");
-                return await responder.RespondAsync(http.RequestServices.GetRequiredService<ISender>(), request, http.RequestAborted);
+                var answer = await responder.RespondAsync(http.RequestServices.GetRequiredService<ISender>(), request, http.RequestAborted);
+                IdempotencyHeaders.MarkIfReplayed(http, request);
+                return answer;
             });
 
         // ASP.NET describes the delegate's return value as the 200 response: it is the request, never sent back.

@@ -32,7 +32,8 @@
 - Result-to-HTTP conversion extensions in `Extensions/`.
 - `MapGetRequest` / `MapPostRequest` / `MapPutRequest` / `MapPatchRequest` / `MapDeleteRequest`: a Minimal-API endpoint
   that sends the mediator request its delegate returns and answers with its result, with its OpenAPI responses.
-- `UseIdempotency()` + `WithIdempotency()`: a request repeating an `Idempotency-Key` gets the first one's response.
+- `IdempotencyHeaders`: the `Idempotency-Key` header for the mediator's idempotent requests, and the
+  `Idempotency-Replayed` mark the request endpoints put on a replayed answer.
 - Consistent mapping from `ErrorType` to HTTP problem responses.
 - `AddResultProblemDetails()`: unhandled exceptions answered with the same problem details as a failed result.
 - `MapHealthEndpoints()`: `/health`, `/health/ready` and `/health/live`, anonymous, with a JSON response writer.
@@ -190,30 +191,26 @@ problem, say). The request itself is never described as a response.
 
 ### Idempotency keys
 
-A client that retries a request (a timeout, a dropped connection) can send an `Idempotency-Key` header, and a repeat
-gets the first request's response instead of being handled again.
+Idempotency is the mediator's (`IIdempotentRequest`, see the Mediator package): it works however a request arrives.
+Over HTTP, the endpoint passes the client's `Idempotency-Key` header to the request, and a repeat is answered with the
+first result: the same 200/201/204, marked `Idempotency-Replayed: true` by the request endpoints.
 
 ```csharp
-app.UseAuthentication();
-app.UseAuthorization();
-app.UseIdempotency();   // after authentication: keys are per user
+public sealed record CreateShardCommand(string Name) : ICommand<ShardDto>, IIdempotentRequest
+{
+    public string? IdempotencyKey { get; init; }
+    public string? IdempotencyScope { get; init; }   // whose keys: the user's ID
+}
 
-app.MapPostRequest(ApiEndpoints.Shards.Create, (CreateShardBody body) => new CreateShardCommand(body.Name))
-    .WithIdempotency();   // or WithIdempotency(requireKey: true): 400 without the header
+app.MapPostRequest(ApiEndpoints.Shards.Create,
+    (CreateShardBody body, [FromHeader(Name = IdempotencyHeaders.Key)] string? key, ClaimsPrincipal user) =>
+        new CreateShardCommand(body.Name) { IdempotencyKey = key, IdempotencyScope = user.GetUserId().Value.ToString() },
+    onSuccess: (ShardDto shard) => TypedResults.Created($"/shards/{shard.Id}", shard));
 ```
 
-- The first request with a key holds it while it is handled (`IClaimStore`); a repeat meanwhile is answered **409**
-  with `Retry-After`.
-- Its response (status, content type, `Location`, body) is kept for 24 hours (`ICachingService`) and replayed to a
-  repeat, marked `Idempotency-Replayed: true`.
-- A key repeated with a different request (method, path, query or body) is answered **422**.
-- A response of 500 or more isn't kept, nor is one whose handling threw: the client can try again with the same key.
-- Without the header the request is handled as usual, unless the endpoint requires a key.
-
-It needs an `ICachingService` and an `IClaimStore` in the container: the Caching package's distributed cache is both,
-and so is a cache of the service's own that implements both. `UseIdempotency(options => ...)` sets the header name,
-how long responses are kept (`Expiration`), how long a request may hold its key (`InProgressTimeout`, 1 minute) and the
-longest key.
+A repeat while the first is still handled is answered 409, a key used for a different request 422, and a blank or too
+long key 400. An endpoint of your own marks a replay with `IdempotencyHeaders.MarkIfReplayed(httpContext, request)`
+after sending. A key the endpoint must have is a validation rule on the request (`RuleFor(c => c.IdempotencyKey).NotEmpty()`).
 
 ### Read an HTTP response as a result
 

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Resrcify.SharedKernel.Abstractions.Mediator;
+using Resrcify.SharedKernel.Mediator.Behaviors;
 using Resrcify.SharedKernel.Mediator.Publishing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -73,6 +74,10 @@ public static class ServiceCollectionExtensions
         // persistence failures as results): the options configured in any AddMediator call, defaults otherwise.
         RegisterOptions(services, configuration.LoggingOptions, configuration.LoggingConfigured, nameof(MediatorConfiguration.ConfigureLogging));
         RegisterOptions(services, configuration.UnitOfWorkOptions, configuration.UnitOfWorkConfigured, nameof(MediatorConfiguration.ConfigureUnitOfWork));
+        RegisterOptions(services, configuration.IdempotencyOptions, configuration.IdempotencyConfigured, nameof(MediatorConfiguration.ConfigureIdempotency));
+        // Which requests of a scope were answered with an earlier result: the HTTP endpoints read it.
+        services.TryAddScoped<IdempotencyContext>();
+        services.TryAddScoped<IIdempotencyContext>(provider => provider.GetRequiredService<IdempotencyContext>());
 
         return services.AddMediatorRuntime(
             configuration.NotificationPublishStrategy,

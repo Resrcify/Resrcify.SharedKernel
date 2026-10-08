@@ -24,6 +24,8 @@ public sealed class StandardBehaviorsOptions
     [
         StandardBehavior.Logging,
         StandardBehavior.Validation,
+        // Outside the transaction and the unit of work: a result is kept only once committed, and a repeat opens neither.
+        StandardBehavior.Idempotency,
         StandardBehavior.Transaction,
         StandardBehavior.UnitOfWork,
         StandardBehavior.Caching,
@@ -131,6 +133,7 @@ public sealed class StandardBehaviorsOptions
             StandardBehavior.Transaction => typeof(TransactionPipelineBehavior<,>),
             StandardBehavior.UnitOfWork => typeof(UnitOfWorkPipelineBehavior<,>),
             StandardBehavior.Caching => typeof(CachingPipelineBehavior<,>),
+            StandardBehavior.Idempotency => typeof(IdempotencyPipelineBehavior<,>),
             _ => throw new ArgumentOutOfRangeException(nameof(behavior), behavior, "Not a standard behavior."),
         };
 

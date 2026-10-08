@@ -187,6 +187,7 @@ public sealed class ServiceCollectionExtensionsTests
                 typeof(LoggingPipelineBehavior<,>),
                 typeof(ValidationPipelineBehavior<,>),
                 typeof(ScopedOpenBehavior<,>),
+                typeof(IdempotencyPipelineBehavior<,>),
                 typeof(TransactionPipelineBehavior<,>),
                 typeof(UnitOfWorkPipelineBehavior<,>),
             ]);

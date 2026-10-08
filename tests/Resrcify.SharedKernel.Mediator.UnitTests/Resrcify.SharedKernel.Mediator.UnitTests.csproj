@@ -19,6 +19,7 @@
     <PackageReference Include="Shouldly" />
     <PackageReference Include="NSubstitute"/>
     <PackageReference Include="Microsoft.Extensions.Caching.Abstractions"/>
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="FluentValidation"/>
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
@@ -27,6 +28,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Abstractions\Resrcify.SharedKernel.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Mediator\Resrcify.SharedKernel.Mediator.csproj" />
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Caching\Resrcify.SharedKernel.Caching.csproj" />
   </ItemGroup>
 
 </Project>

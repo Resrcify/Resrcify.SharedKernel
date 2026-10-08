@@ -23,6 +23,7 @@ public sealed class StandardBehaviorsOptionsTests
         [
             typeof(LoggingPipelineBehavior<,>),
             typeof(ValidationPipelineBehavior<,>),
+            typeof(IdempotencyPipelineBehavior<,>),
             typeof(TransactionPipelineBehavior<,>),
             typeof(UnitOfWorkPipelineBehavior<,>),
             typeof(CachingPipelineBehavior<,>),
@@ -43,6 +44,7 @@ public sealed class StandardBehaviorsOptionsTests
             typeof(ValidationPipelineBehavior<,>),
             typeof(FirstOwnBehavior<,>),
             typeof(SecondOwnBehavior<,>),
+            typeof(IdempotencyPipelineBehavior<,>),
             typeof(TransactionPipelineBehavior<,>),
             typeof(UnitOfWorkPipelineBehavior<,>),
         ]);
