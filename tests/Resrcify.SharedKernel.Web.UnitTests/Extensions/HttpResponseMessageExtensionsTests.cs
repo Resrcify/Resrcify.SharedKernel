@@ -109,6 +109,7 @@ public class HttpResponseMessageExtensionsTests
     [InlineData(HttpStatusCode.Forbidden, ErrorType.Forbidden)]
     [InlineData(HttpStatusCode.NotFound, ErrorType.NotFound)]
     [InlineData(HttpStatusCode.Conflict, ErrorType.Conflict)]
+    [InlineData(HttpStatusCode.UnprocessableEntity, ErrorType.Unprocessable)]
     [InlineData(HttpStatusCode.BadGateway, ErrorType.ExternalFailure)]
     [InlineData(HttpStatusCode.GatewayTimeout, ErrorType.Timeout)]
     [InlineData((HttpStatusCode)429, ErrorType.RateLimit)]
@@ -150,6 +151,7 @@ public class HttpResponseMessageExtensionsTests
     [InlineData(HttpStatusCode.Forbidden, ErrorType.Forbidden)]
     [InlineData(HttpStatusCode.NotFound, ErrorType.NotFound)]
     [InlineData(HttpStatusCode.Conflict, ErrorType.Conflict)]
+    [InlineData(HttpStatusCode.UnprocessableEntity, ErrorType.Unprocessable)]
     [InlineData(HttpStatusCode.BadGateway, ErrorType.ExternalFailure)]
     [InlineData(HttpStatusCode.GatewayTimeout, ErrorType.Timeout)]
     [InlineData((HttpStatusCode)429, ErrorType.RateLimit)]
@@ -159,7 +161,6 @@ public class HttpResponseMessageExtensionsTests
     [InlineData(HttpStatusCode.Gone, ErrorType.NotFound)]
     [InlineData(HttpStatusCode.PreconditionFailed, ErrorType.Conflict)]
     [InlineData(HttpStatusCode.MethodNotAllowed, ErrorType.Validation)]
-    [InlineData(HttpStatusCode.UnprocessableEntity, ErrorType.Validation)]
     public async Task ToResultAsyncT_ShouldReturnAnErrorForTheStatus_WhenHttpResponseMessageDoesntContainErrors(HttpStatusCode httpStatusCode, ErrorType errorType)
     {
         //Arrange
@@ -263,6 +264,7 @@ public class HttpResponseMessageExtensionsTests
     [InlineData(HttpStatusCode.Forbidden, ErrorType.Forbidden)]
     [InlineData(HttpStatusCode.NotFound, ErrorType.NotFound)]
     [InlineData(HttpStatusCode.Conflict, ErrorType.Conflict)]
+    [InlineData(HttpStatusCode.UnprocessableEntity, ErrorType.Unprocessable)]
     [InlineData(HttpStatusCode.BadGateway, ErrorType.ExternalFailure)]
     [InlineData(HttpStatusCode.GatewayTimeout, ErrorType.Timeout)]
     [InlineData((HttpStatusCode)429, ErrorType.RateLimit)]
@@ -302,6 +304,7 @@ public class HttpResponseMessageExtensionsTests
     [InlineData(HttpStatusCode.Forbidden, ErrorType.Forbidden)]
     [InlineData(HttpStatusCode.NotFound, ErrorType.NotFound)]
     [InlineData(HttpStatusCode.Conflict, ErrorType.Conflict)]
+    [InlineData(HttpStatusCode.UnprocessableEntity, ErrorType.Unprocessable)]
     [InlineData(HttpStatusCode.BadGateway, ErrorType.ExternalFailure)]
     [InlineData(HttpStatusCode.GatewayTimeout, ErrorType.Timeout)]
     [InlineData((HttpStatusCode)429, ErrorType.RateLimit)]

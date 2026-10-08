@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Resrcify.SharedKernel.Results.Primitives;
+using Resrcify.SharedKernel.Results.Serialization;
 
 namespace Resrcify.SharedKernel.Web.Extensions;
 
@@ -26,7 +27,8 @@ public static class HttpResponseMessageExtensions
         NumberHandling = JsonNumberHandling.AllowReadingFromString,
         PropertyNameCaseInsensitive = true,
         AllowTrailingCommas = true,
-        Converters = { new JsonStringEnumConverter() }
+        // An error type this version doesn't know (a newer service's) reads as a Failure instead of failing the read.
+        Converters = { new ErrorTypeJsonConverter(), new JsonStringEnumConverter() }
     };
 
     public static async Task<Result<T>> ToResultAsync<T>(

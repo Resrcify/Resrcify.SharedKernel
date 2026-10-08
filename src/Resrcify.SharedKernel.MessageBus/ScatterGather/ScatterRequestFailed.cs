@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Serialization;
 using Resrcify.SharedKernel.Results.Primitives;
+using Resrcify.SharedKernel.Results.Serialization;
 
 namespace Resrcify.SharedKernel.MessageBus.ScatterGather;
 
@@ -19,10 +20,11 @@ public sealed record ScatterRequestFailed(IReadOnlyList<ScatterRequestFailed.Err
     /// <summary>
     /// One <see cref="Error"/> on the wire. Its type is written as its name and read as a name or a number, whatever
     /// enum settings the responder's and the requester's serialization have: the bus' own reply mustn't become
-    /// unreadable because one service writes enums as numbers and the other refuses them.
+    /// unreadable because one service writes enums as numbers and the other refuses them, nor because a newer service
+    /// answers with a type this one doesn't know (read as a <see cref="ErrorType.Failure"/>).
     /// </summary>
     public sealed record ErrorData(
         string Code,
         string Message,
-        [property: JsonConverter(typeof(JsonStringEnumConverter<ErrorType>))] ErrorType Type);
+        [property: JsonConverter(typeof(ErrorTypeJsonConverter))] ErrorType Type);
 }

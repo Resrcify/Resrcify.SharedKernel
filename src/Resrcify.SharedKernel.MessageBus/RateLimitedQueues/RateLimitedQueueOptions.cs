@@ -48,7 +48,7 @@ public sealed class RateLimitedQueueOptions
     /// <summary>
     /// Answers a failure when every error is about the request itself (<see cref="ErrorType.NotFound"/>,
     /// <see cref="ErrorType.Validation"/>, <see cref="ErrorType.Conflict"/>, <see cref="ErrorType.Unauthorized"/>,
-    /// <see cref="ErrorType.Forbidden"/>): another attempt would fail the same way. Anything else (a failure, an
+    /// <see cref="ErrorType.Forbidden"/>, <see cref="ErrorType.Unprocessable"/>): another attempt would fail the same way. Anything else (a failure, an
     /// upstream's failure, a timeout, a rate limit) may pass, so it is retried.
     /// </summary>
     public static bool AnswerFailureWhenItsTheRequestsFault(IReadOnlyList<Error> errors)

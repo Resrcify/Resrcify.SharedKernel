@@ -301,7 +301,7 @@ innermost: the total timeout (30 s), the retries, the circuit breaker, the attem
 - **What is retried** (3 times by default, `MaxRetries`; 1 s doubling to at most 30 s, with jitter): a response whose
   status `ToResultAsync` reads as a transient `ErrorType` (`Failure`, `ExternalFailure`, `Timeout`, `RateLimit`: a
   5xx, a 429, and any other status it doesn't map, such as 408), a network error (`HttpRequestException`), an attempt
-  that timed out. Not a 400, 401, 403, 404 or 409: those are answers. Never the caller's cancellation.
+  that timed out. Not a 400, 401, 403, 404, 409 or 422: those are answers. Never the caller's cancellation.
 - **`AlsoRetry`** adds statuses (e.g. 404 from an upstream that is still catching up); **`NeverRetry`** removes
   them, and wins over `AlsoRetry`.
 - **`Retry-After`** (a delay or a date) on a retried response is waited instead of the computed delay; one at least

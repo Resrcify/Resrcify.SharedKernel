@@ -88,6 +88,14 @@ public class Error
             code,
             message,
             ErrorType.Failure);
+
+    public static Error Unprocessable(
+        string code,
+        string message)
+        => new(
+            code,
+            message,
+            ErrorType.Unprocessable);
     public Error(
         string code,
         string message,

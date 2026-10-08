@@ -15,8 +15,8 @@ public static class ErrorTypeExtensions
     /// Whether an error of this type may pass on another try (<see cref="ErrorType.Failure"/>,
     /// <see cref="ErrorType.ExternalFailure"/>, <see cref="ErrorType.Timeout"/>, <see cref="ErrorType.RateLimit"/>).
     /// The others (<see cref="ErrorType.NotFound"/>, <see cref="ErrorType.Validation"/>,
-    /// <see cref="ErrorType.Conflict"/>, <see cref="ErrorType.Unauthorized"/>, <see cref="ErrorType.Forbidden"/>) are
-    /// about the request itself: another try with the same request fails the same way.
+    /// <see cref="ErrorType.Conflict"/>, <see cref="ErrorType.Unauthorized"/>, <see cref="ErrorType.Forbidden"/>,
+    /// <see cref="ErrorType.Unprocessable"/>) are about the request itself: another try with the same request fails the same way.
     /// </summary>
     /// <remarks>
     /// The message bus retries by it, the mediator's logging picks its level by it, and a requester uses it to tell a

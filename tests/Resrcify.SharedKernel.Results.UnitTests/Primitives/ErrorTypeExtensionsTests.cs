@@ -17,6 +17,7 @@ public sealed class ErrorTypeExtensionsTests
     [InlineData(ErrorType.Conflict)]
     [InlineData(ErrorType.Unauthorized)]
     [InlineData(ErrorType.Forbidden)]
+    [InlineData(ErrorType.Unprocessable)]
     public void IsTransient_ShouldBeFalse_WhenAnotherTryWouldFailTheSameWay(ErrorType type)
         => type.IsTransient().ShouldBeFalse();
 

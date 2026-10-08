@@ -265,6 +265,11 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
 
 ### Added
 
+- **`ErrorType.Unprocessable`** (`Error.Unprocessable(code, message)`): a well-formed request that breaks a rule of the
+  operation, answered **422** (problem details) and read back from a 422. Not transient: the message bus and the
+  resilience policy treat it as an answer. A 422 from another service used to read as `Validation`.
+- **`ErrorTypeJsonConverter`**: error types are read by name or number, and one this version doesn't know (a newer
+  service's) reads as `Failure` instead of failing the read. Used by the bus' failure replies and `ToResultAsync`.
 - **`Resrcify.SharedKernel.MessageBus.Testing`, a test harness for the message bus.** `AddMessageBusTestHarness()`
   switches every bus of a service to an in-memory network (whatever transport it was given) and records what they
   published, sent, consumed, failed and dead-lettered, with waits that complete when the message arrives

@@ -64,6 +64,7 @@ public class HttpResultExtensionsTests
     [InlineData(ErrorType.Forbidden, StatusCodes.Status403Forbidden, "Forbidden", "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.3")]
     [InlineData(ErrorType.NotFound, StatusCodes.Status404NotFound, "Not Found", "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.4")]
     [InlineData(ErrorType.Conflict, StatusCodes.Status409Conflict, "Conflict", "https://datatracker.ietf.org/doc/html/rfc7231#section-6.5.8")]
+    [InlineData(ErrorType.Unprocessable, StatusCodes.Status422UnprocessableEntity, "Unprocessable Content", "https://datatracker.ietf.org/doc/html/rfc9110#section-15.5.21")]
     [InlineData(ErrorType.Timeout, StatusCodes.Status504GatewayTimeout, "Gateway Timeout", "https://datatracker.ietf.org/doc/html/rfc7231#section-6.6.5")]
     [InlineData(ErrorType.RateLimit, StatusCodes.Status429TooManyRequests, "Too Many Requests", "https://datatracker.ietf.org/doc/html/rfc6585#section-4")]
     [InlineData(ErrorType.ExternalFailure, StatusCodes.Status502BadGateway, "Bad Gateway", "https://datatracker.ietf.org/doc/html/rfc7231#section-6.6.3")]

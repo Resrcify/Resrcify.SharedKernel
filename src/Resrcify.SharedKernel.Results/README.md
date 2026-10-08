@@ -27,8 +27,9 @@
     - `Result<TValue>`
     - `Error`
     - `ErrorType`, with `IsTransient()`: `Failure`, `ExternalFailure`, `Timeout` and `RateLimit` may pass next time;
-      `NotFound`, `Validation`, `Conflict`, `Unauthorized` and `Forbidden` are about the request (another try fails
-      the same way). The message bus
+      `NotFound`, `Validation`, `Conflict`, `Unauthorized`, `Forbidden` and `Unprocessable` (well formed, but it breaks
+      a rule of the operation: HTTP 422) are about the request (another try fails the same way). `ErrorTypeJsonConverter`
+      reads a type this version doesn't know as `Failure`, so a newer service's errors stay readable. The message bus
       retries by it, the mediator's logging picks its level by it.
 - Factory and composition helpers:
     - `Success(...)`, `Failure(...)`, `Create(...)`
