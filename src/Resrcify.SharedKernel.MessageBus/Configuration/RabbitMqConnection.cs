@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Text;
 
 namespace Resrcify.SharedKernel.MessageBus.Configuration;
 
@@ -22,4 +23,13 @@ public sealed record RabbitMqConnection(
         => string.Create(
             CultureInfo.InvariantCulture,
             $"{(UseTls ? "amqps" : "amqp")}://{Uri.EscapeDataString(Username)}:{Uri.EscapeDataString(Password)}@{Host}:{Port}/{Uri.EscapeDataString(VirtualHost)}");
+
+    // Printed (ToString, a log, an exception message) without the password: a record prints every property, the
+    // password and the connection string holding it included.
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append(CultureInfo.InvariantCulture, $"Host = {Host}, Port = {Port}, Username = {Username}, Password = ***, ");
+        builder.Append(CultureInfo.InvariantCulture, $"VirtualHost = {VirtualHost}, UseTls = {UseTls}");
+        return true;
+    }
 }

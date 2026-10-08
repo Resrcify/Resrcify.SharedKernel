@@ -17,6 +17,18 @@ namespace Resrcify.SharedKernel.MessageBus.UnitTests.Configuration;
 public sealed class RabbitMqConnectionTests
 {
     [Fact]
+    public void ToString_ShouldNotShowThePassword()
+    {
+        // A record prints every property: logged, the password (and the connection string holding it) leaked.
+        var printed = new RabbitMqConnection("rabbitmq", 5672, "shard", "s3cr3t-p4ss") { VirtualHost = "titan" }.ToString();
+
+        printed.ShouldNotContain("s3cr3t-p4ss");
+        printed.ShouldContain("Password = ***");
+        printed.ShouldContain("Host = rabbitmq");
+        printed.ShouldContain("VirtualHost = titan");
+    }
+
+    [Fact]
     public void ConnectionString_ShouldUseTheDefaultVirtualHost_WhenNoneIsSet()
         => new RabbitMqConnection("rabbit", 5672, "user", "p@ss").ConnectionString
             .ShouldBe("amqp://user:p%40ss@rabbit:5672/%2F");

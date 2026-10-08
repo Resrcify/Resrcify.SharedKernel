@@ -441,6 +441,8 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
 
 ### Fixed
 
+- **`RabbitMqConnection.ToString()` no longer prints the password.** As a record it printed every property, the
+  password and the connection string holding it included, so logging it (or an exception message with it) leaked them.
 - **A failed `ExecuteInTransactionAsync` no longer leaves its changes for the next save.** The rollback undid them in
   the database, but they stayed tracked (and their domain events raised): the scope's next save wrote them outside the
   transaction that refused them. They are now reverted, rows saved inside the transaction put back as the database has
