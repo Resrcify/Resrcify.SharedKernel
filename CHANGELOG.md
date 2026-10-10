@@ -145,6 +145,12 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   yours is registered after `AddMediator(cfg => ...)`; with `AddMediator(assemblies)`, register it before). The behavior
   must run for the request's handler kind: an `ICachingQuery` or `ITransactionalCommand` with a ValueTask handler
   (`IValueTaskRequestHandler`) needs a ValueTask behavior, since the standard ones run only for Task handlers.
+  **⚠️ Handle each `ICachingQuery` deliberately; don't just register the behavior.** In 3.x one without the behavior
+  was never cached, silently, so registering it now turns caching on for the first time. Before you do, check every
+  such query: its `CacheKey` carries all its parameters (a fixed key answers every caller with the first one's
+  result), its `Expiration` is a staleness the feature can live with, and its response serializes to JSON (the
+  distributed cache stores JSON; a Discord `Embed` doesn't). A query that was never meant to be cached becomes a plain
+  `IQuery` (Discord's seven did: they had never been cached).
 - **`StandardBehaviorsOptions.InsertBefore` / `InsertAfter` take only `IPipelineBehavior<,>`s** and throw
   `ArgumentException` for another kind, which could only run elsewhere (an `IRequestPipelineBehavior` inside all of
   them, a ValueTask one only for ValueTask handlers). `AddOpenBehavior` orders behaviors within their kind.

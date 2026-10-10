@@ -571,8 +571,11 @@ When enabled, `DiComposedSendRuntime<,>` / `DiComposedStreamRuntime<,>` are buil
     - The scan registers handlers only: add it with `AddOpenBehavior` / `AddRequestPreProcessor` /
       `AddRequestPostProcessor`, or register a closed one in the container.
 - **"... request type(s) implement ICachingQuery ..., but no registered pipeline behavior handles ICachingQuery"**
-    - Add the caching behavior (`AddStandardBehaviors()` includes it), or, if it is registered after `AddMediator`,
-      call `SkipBehaviorCheck()`.
+    - Coming from 3.x, these queries were never cached: registering the behavior turns caching on. Decide per query:
+      to cache it, check its `CacheKey` carries all its parameters, its `Expiration` is acceptable and its response
+      serializes to JSON; otherwise make it a plain `IQuery`.
+    - Then add the caching behavior (`AddStandardBehaviors()` includes it), or, if it is registered after
+      `AddMediator`, call `SkipBehaviorCheck()`.
 - **Caching behavior never hits cache**
     - Ensure request implements `ICachingQuery` and sets a non-empty `CacheKey`.
 - **Transaction/unit-of-work behavior not applied**
