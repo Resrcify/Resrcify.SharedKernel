@@ -55,6 +55,7 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   `IReadOnlyList<Error>` (arrays, lists and `ImmutableArray` all work). `Match`'s `onFailure` receives an
   `ImmutableArray<Error>`: a method group taking `Error[]` must take `ImmutableArray<Error>`. Shouldly's
   `ShouldBeEquivalentTo` compares types, so `Errors.ShouldBeEquivalentTo(array)` fails; use `ShouldBe(array)`.
+  It is a struct and never null: drop `Errors.ShouldNotBeNull()` (no longer compiles) and `Errors is null` checks.
 - **`Error` → `string` is explicit.** Write `(string)error` or, better, `error.Code`.
 - **The `Create` extensions are removed**; they did exactly what `Map` does. `.Create(f)` → `.Map(f)`.
 - **`Match(func, error)`, which returned a `Result`, is now `Map(func, error)`.** It maps a success and replaces a
