@@ -1,4 +1,3 @@
-#nullable enable
 Resrcify.SharedKernel.ArchitectureTesting.Extensions.NetArchTestExtensions
 Resrcify.SharedKernel.ArchitectureTesting.Helpers.BaseArchitectureTest
 Resrcify.SharedKernel.ArchitectureTesting.Helpers.BaseArchitectureTest.BaseArchitectureTest() -> void

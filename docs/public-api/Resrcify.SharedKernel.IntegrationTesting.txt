@@ -1,4 +1,3 @@
-#nullable enable
 Resrcify.SharedKernel.IntegrationTesting.Factories.IntegrationFactoryBase<TProgram>
 Resrcify.SharedKernel.IntegrationTesting.Factories.IntegrationFactoryBase<TProgram>.IntegrationFactoryBase() -> void
 Resrcify.SharedKernel.IntegrationTesting.Factories.ServiceHostFixture<TProgram>

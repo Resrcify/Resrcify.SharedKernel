@@ -1,4 +1,3 @@
-#nullable enable
 Resrcify.SharedKernel.MessageBus.Abstractions.IBusConfigurationStrategy
 Resrcify.SharedKernel.MessageBus.Abstractions.IBusConfigurationStrategy.ConfigureConnectionFactory(RabbitMQ.Client.ConnectionFactory! factory) -> void
 Resrcify.SharedKernel.MessageBus.Abstractions.IBusConfigurationStrategy.ConfigureOptions(Rebus.Config.OptionsConfigurer! options) -> void

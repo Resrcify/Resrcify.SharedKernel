@@ -1,4 +1,3 @@
-#nullable enable
 Resrcify.SharedKernel.Results.Diagnostics.LoggedExceptions
 Resrcify.SharedKernel.Results.Primitives.Error
 Resrcify.SharedKernel.Results.Primitives.Error.Code.get -> string!

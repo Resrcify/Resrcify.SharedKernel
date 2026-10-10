@@ -1,4 +1,3 @@
-#nullable enable
 Resrcify.SharedKernel.MessageBus.Testing.MessageBusStandIn
 Resrcify.SharedKernel.MessageBus.Testing.MessageBusStandIn.DisposeAsync() -> System.Threading.Tasks.ValueTask
 Resrcify.SharedKernel.MessageBus.Testing.MessageBusStandIn.Harness.get -> Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestHarness!

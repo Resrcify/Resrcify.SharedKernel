@@ -1,4 +1,3 @@
-#nullable enable
 Resrcify.SharedKernel.DomainDrivenDesign.Primitives.AggregateRoot<TId>
 Resrcify.SharedKernel.DomainDrivenDesign.Primitives.AggregateRoot<TId>.AggregateRoot(TId id) -> void
 Resrcify.SharedKernel.DomainDrivenDesign.Primitives.AggregateRoot<TId>.ClearDomainEvents() -> void

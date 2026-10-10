@@ -2,14 +2,19 @@
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
   <!--
-    The packages' public API, listed per project (the analyzer picks the two files up itself): PublicAPI.Shipped.txt (released) and PublicAPI.Unshipped.txt (added
-    since). A public member added, removed or changed without its line fails the build (RS0016 / RS0017), so an API
-    change is always a visible diff. On a release, move the Unshipped lines into Shipped.
+    The public API report (docs/public-api): only when tools/Update-PublicApiDocs.ps1 asks for it. The packages' normal
+    build doesn't run the analyzer, so a public API change never fails it. The script gives each project empty API
+    lists, so every public member is reported, and collects them from each project's SARIF log.
   -->
-  <ItemGroup>
+  <ItemGroup Condition="'$(PublicApiReport)' == 'true'">
     <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
+    <AdditionalFiles Include="$(PublicApiReportDir)/PublicAPI.Shipped.txt" />
+    <AdditionalFiles Include="$(PublicApiReportDir)/PublicAPI.Unshipped.txt" />
   </ItemGroup>
+  <PropertyGroup Condition="'$(PublicApiReport)' == 'true'">
+    <ErrorLog>$(PublicApiReportDir)/$(MSBuildProjectName).sarif,version=2.1</ErrorLog>
+  </PropertyGroup>
 </Project>

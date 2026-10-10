@@ -1,4 +1,3 @@
-#nullable enable
 Resrcify.SharedKernel.Web.Abstractions.IEndpoint
 Resrcify.SharedKernel.Web.Abstractions.IEndpoint.MapEndpoint(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app) -> void
 Resrcify.SharedKernel.Web.Authentication.ResrcifyJwtOptions

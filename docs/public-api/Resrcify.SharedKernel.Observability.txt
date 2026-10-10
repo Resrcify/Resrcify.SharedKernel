@@ -1,4 +1,3 @@
-#nullable enable
 Resrcify.SharedKernel.Observability.Configuration.ObservabilityOptions
 Resrcify.SharedKernel.Observability.Configuration.ObservabilityOptions.ObservabilityOptions() -> void
 Resrcify.SharedKernel.Observability.Configuration.ObservabilityOptions.OtlpEndpoint.get -> string?

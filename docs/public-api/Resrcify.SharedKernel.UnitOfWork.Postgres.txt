@@ -1,4 +1,3 @@
-#nullable enable
 Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder
 Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder.ConfigureConnection(System.Action<Npgsql.NpgsqlConnectionStringBuilder!>! configure) -> Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder!
 Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder.ConfigureDbContext(System.Action<Microsoft.EntityFrameworkCore.DbContextOptionsBuilder!>! configure) -> Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder!
