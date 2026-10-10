@@ -30,10 +30,16 @@ internal sealed class EventService : IAsyncDisposable
 
     public EventLog Log { get; }
 
-    public static Task<EventService> StartPublisherAsync(RabbitMqConnection connection, string wireName)
-        => StartAsync(bus => bus
-            .UseRabbitMq(connection)
-            .AddMessage<PlayerRenamedPublished>(wireName));
+    public static Task<EventService> StartPublisherAsync(
+        RabbitMqConnection connection,
+        string wireName,
+        Action<MessageBusBuilder>? configure = null)
+        => StartAsync(bus =>
+        {
+            bus.UseRabbitMq(connection)
+                .AddMessage<PlayerRenamedPublished>(wireName);
+            configure?.Invoke(bus);
+        });
 
     public static Task<EventService> StartSubscriberAsync(
         RabbitMqConnection connection,

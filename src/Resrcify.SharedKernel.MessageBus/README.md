@@ -502,6 +502,7 @@ The package's own metrics (`MessageBusDiagnostics.MeterName`):
 | Situation | What happens |
 |---|---|
 | The unit of work that raised the event rolls back | Nothing is sent. |
+| The broker refuses a publish or send (a queue that rejects when full, a node lost mid-send) | It throws: publisher confirms are on, so an outbox retries the message rather than marking it sent. A configuration strategy can turn them off (`SetPublisherConfirms(false)`). |
 | Every item answers | `GatherAsync` runs as soon as the last reply arrives. |
 | Some items never answer | `GatherAsync` runs at the handler's `Timeout`, with them in `UnansweredKeys`. |
 | A responder returns a failure | The item is in `Failures` with the responder's errors, without waiting for the timeout. |

@@ -209,6 +209,10 @@ internal sealed class MessageBusSettings
         var options = inputQueue is null
             ? transport.UseRabbitMqAsOneWayClient(connectionString)
             : transport.UseRabbitMq(connectionString, inputQueue);
+        // Publisher confirms (Rebus' default too; set here so the guarantee doesn't rest on it): a send or publish returns
+        // once the broker has the message and throws when it refuses it, so an outbox retries instead of marking it
+        // sent. A configuration strategy can turn them off (SetPublisherConfirms(false)).
+        options.SetPublisherConfirms(true);
         rabbitMq?.Invoke(options);
         strategy.ConfigureTransport(options);
     }

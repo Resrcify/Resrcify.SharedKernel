@@ -40,6 +40,29 @@ public sealed class PublishSubscribeTests(BusFixture bus, ITestOutputHelper outp
     }
 
     [Fact]
+    public async Task Publish_WhenTheBrokerRefusesTheEvent_Throws()
+    {
+        // Publisher confirms: the publish waits for the broker, so an outbox retries a refused event instead of
+        // marking it sent.
+        await BrokerQueues.DeclareRefusingSubscriberAsync(bus.RabbitMqConnection, _wireName, Queue("refusing"));
+        await using var publisher = await EventService.StartPublisherAsync(bus.RabbitMqConnection, _wireName);
+
+        await Should.ThrowAsync<Exception>(() => publisher.PublishAsync(new PlayerRenamedPublished("p1", "Han")));
+    }
+
+    [Fact]
+    public async Task Publish_WithPublisherConfirmsOff_ReturnsWhenTheBrokerRefusesTheEvent()
+    {
+        await BrokerQueues.DeclareRefusingSubscriberAsync(bus.RabbitMqConnection, _wireName, Queue("refusing"));
+        await using var publisher = await EventService.StartPublisherAsync(
+            bus.RabbitMqConnection,
+            _wireName,
+            configure => configure.UseConfigurationStrategy(new PublisherConfirmsOffStrategy()));
+
+        await Should.NotThrowAsync(() => publisher.PublishAsync(new PlayerRenamedPublished("p1", "Han")));
+    }
+
+    [Fact]
     public async Task Publish_WhenAServiceRunsTwoInstances_OneOfThemHandlesEachEvent()
     {
         var queue = Queue("shard");

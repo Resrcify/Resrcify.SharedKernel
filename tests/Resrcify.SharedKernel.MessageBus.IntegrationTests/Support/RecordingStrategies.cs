@@ -11,6 +11,18 @@ using Resrcify.SharedKernel.MessageBus.RateLimitedQueues;
 namespace Resrcify.SharedKernel.MessageBus.IntegrationTests.Support;
 
 /// <summary>Counts how many buses it was asked to configure; changes nothing.</summary>
+/// <summary>Turns off the publisher confirms the package turns on.</summary>
+internal sealed class PublisherConfirmsOffStrategy : IBusConfigurationStrategy
+{
+    public void ConfigureTransport(RabbitMqOptionsBuilder transport)
+        => transport.SetPublisherConfirms(false);
+
+    public void ConfigureOptions(OptionsConfigurer options)
+    {
+        // Nothing to change.
+    }
+}
+
 internal sealed class RecordingBusConfigurationStrategy : IBusConfigurationStrategy
 {
     private int _transports;
