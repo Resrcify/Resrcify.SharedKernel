@@ -117,7 +117,7 @@ public class ValidationPipelineBehaviorTests
         actualResponse.IsSuccess
             .ShouldBeFalse();
 
-        actualResponse.Errors.Count.ShouldBe(1);
+        actualResponse.Errors.Length.ShouldBe(1);
 
         var error = actualResponse.Errors[0];
         error.Code.ShouldBe("Property");
@@ -149,7 +149,7 @@ public class ValidationPipelineBehaviorTests
         actualResponse.IsSuccess
             .ShouldBeFalse();
 
-        actualResponse.Errors.Count.ShouldBe(1);
+        actualResponse.Errors.Length.ShouldBe(1);
 
         var error = actualResponse.Errors[0];
         error.Code.ShouldBe("Property");
@@ -181,7 +181,7 @@ public class ValidationPipelineBehaviorTests
         actualResponse.IsSuccess
             .ShouldBeFalse();
 
-        actualResponse.Errors.Count.ShouldBe(1);
+        actualResponse.Errors.Length.ShouldBe(1);
 
         var error = actualResponse.Errors[0];
         error.Code.ShouldBe("Property");
@@ -222,7 +222,7 @@ public class ValidationPipelineBehaviorTests
         actualResponse.IsSuccess
             .ShouldBeFalse();
 
-        actualResponse.Errors.Count
+        actualResponse.Errors.Length
             .ShouldBe(4);
 
         actualResponse.Errors
@@ -271,7 +271,7 @@ public class ValidationPipelineBehaviorTests
         actualResponse.IsSuccess
             .ShouldBeFalse();
 
-        actualResponse.Errors.Count
+        actualResponse.Errors.Length
             .ShouldBe(4);
 
         actualResponse.Errors
@@ -320,7 +320,7 @@ public class ValidationPipelineBehaviorTests
         actualResponse.IsSuccess
             .ShouldBeFalse();
 
-        actualResponse.Errors.Count
+        actualResponse.Errors.Length
             .ShouldBe(4);
 
         actualResponse.Errors

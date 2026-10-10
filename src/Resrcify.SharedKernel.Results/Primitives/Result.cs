@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Runtime.InteropServices;
 using System.Text.Json.Serialization;
 using Resrcify.SharedKernel.Results.Serialization;
 
@@ -30,7 +32,7 @@ public class Result
 
         IsSuccess = isSuccess;
         Errors = error == Error.None
-            ? EmptyErrors
+            ? []
             : [error];
     }
 
@@ -56,7 +58,8 @@ public class Result
             throw new ArgumentException("A result's errors can't include null.", nameof(errors));
 
         IsSuccess = isSuccess;
-        Errors = copy;
+        // The copy is this result's own, so it is handed out as is: nothing else holds the array to change it.
+        Errors = ImmutableCollectionsMarshal.AsImmutableArray(copy);
     }
 
     public bool IsSuccess { get; }
@@ -64,7 +67,18 @@ public class Result
     public bool IsFailure => !IsSuccess;
 
     /// <summary>Why the result failed: at least one error on a failure, none on a success.</summary>
-    public IReadOnlyList<Error> Errors { get; }
+    /// <remarks>
+    /// Immutable, and a concrete type so it converts: <c>return failed.Errors;</c> answers with a failure from a method
+    /// returning <see cref="Result"/> or <see cref="Result{TValue}"/>.
+    /// </remarks>
+    public ImmutableArray<Error> Errors { get; }
+
+    public static implicit operator Result(
+        ImmutableArray<Error> errors)
+        => Failure(errors);
+    public static implicit operator Result(
+        Error[] errors)
+        => Failure(errors);
 
     public static Result Success() => SuccessResult;
 

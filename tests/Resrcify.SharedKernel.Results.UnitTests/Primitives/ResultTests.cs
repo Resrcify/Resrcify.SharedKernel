@@ -73,7 +73,7 @@ public sealed class ResultTests
         // Assert
         result.IsSuccess.ShouldBeFalse();
         result.IsFailure.ShouldBeTrue();
-        result.Errors.ShouldBeEquivalentTo(errors);
+        result.Errors.ShouldBe(errors);
     }
 
     [Fact]
@@ -175,7 +175,7 @@ public sealed class ResultTests
         // Assert
         result.IsSuccess.ShouldBeFalse();
         result.IsFailure.ShouldBeTrue();
-        result.Errors.ShouldBeEquivalentTo(errors);
+        result.Errors.ShouldBe(errors);
     }
 
     [Fact]
@@ -626,6 +626,27 @@ public sealed class ResultTests
     [Fact]
     public void Failure_ShouldThrow_WhenItsErrorsIncludeErrorNone()
         => Should.Throw<ArgumentException>(() => Result.Failure([Error.NullValue, Error.None]));
+
+    [Fact]
+    public void ImplicitConversionFromErrors_ShouldAnswerWithTheSameFailure()
+    {
+        var failed = Result.Failure<string>([Error.NullValue, Error.EmptyInput]);
+
+        static Result Forward(Result<string> failed) => failed.Errors;
+        var result = Forward(failed);
+
+        result.IsFailure.ShouldBeTrue();
+        result.Errors.ShouldBe([Error.NullValue, Error.EmptyInput]);
+    }
+
+    [Fact]
+    public void ImplicitConversionFromErrorArray_ShouldCreateFailure()
+    {
+        Result result = new[] { Error.NullValue };
+
+        result.IsFailure.ShouldBeTrue();
+        result.Errors.ShouldBe([Error.NullValue]);
+    }
 
     [Fact]
     public void Errors_ShouldNotChange_WhenTheCallersArrayChangesAfterwards()

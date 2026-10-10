@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Threading.Tasks;
 
 namespace Resrcify.SharedKernel.Results.Primitives;
@@ -472,14 +472,14 @@ public static class ResultExtensions
     public static TOut Match<TIn, TOut>(
         this Result<TIn> result,
         Func<TIn, TOut> onSuccess,
-        Func<IReadOnlyList<Error>, TOut> onFailure)
+        Func<ImmutableArray<Error>, TOut> onFailure)
         => result.IsSuccess
             ? onSuccess(result.Value)
             : onFailure(result.Errors);
     public static async Task<TOut> Match<TIn, TOut>(
         this Task<Result<TIn>> resultTask,
         Func<TIn, TOut> onSuccess,
-        Func<IReadOnlyList<Error>, TOut> onFailure)
+        Func<ImmutableArray<Error>, TOut> onFailure)
     {
         if (TaskUtils.TryGetResult(resultTask, out var completedResult))
         {
@@ -496,7 +496,7 @@ public static class ResultExtensions
     public static async Task<TOut> Match<TIn, TOut>(
         this Result<TIn> result,
         Func<TIn, Task<TOut>> onSuccess,
-        Func<IReadOnlyList<Error>, Task<TOut>> onFailure)
+        Func<ImmutableArray<Error>, Task<TOut>> onFailure)
     {
         return result.IsSuccess
             ? await onSuccess(result.Value)
@@ -505,7 +505,7 @@ public static class ResultExtensions
     public static Task<TOut> Match<TIn, TOut>(
         this Task<Result<TIn>> resultTask,
         Func<TIn, Task<TOut>> onSuccess,
-        Func<IReadOnlyList<Error>, Task<TOut>> onFailure)
+        Func<ImmutableArray<Error>, Task<TOut>> onFailure)
     {
         if (TaskUtils.TryGetResult(resultTask, out var completedResult))
         {
@@ -524,7 +524,7 @@ public static class ResultExtensions
         static async Task<TOut> MatchAwaited(
             Task<Result<TIn>> resultTask,
             Func<TIn, Task<TOut>> onSuccess,
-            Func<IReadOnlyList<Error>, Task<TOut>> onFailure)
+            Func<ImmutableArray<Error>, Task<TOut>> onFailure)
         {
             var result = await resultTask;
             return result.IsSuccess
@@ -535,14 +535,14 @@ public static class ResultExtensions
     public static async Task<TOut> Match<TIn, TOut>(
         this Result<TIn> result,
         Func<TIn, Task<TOut>> onSuccess,
-        Func<IReadOnlyList<Error>, TOut> onFailure)
+        Func<ImmutableArray<Error>, TOut> onFailure)
         => result.IsSuccess
             ? await onSuccess(result.Value)
             : onFailure(result.Errors);
     public static async Task<TOut> Match<TIn, TOut>(
         this Task<Result<TIn>> resultTask,
         Func<TIn, Task<TOut>> onSuccess,
-        Func<IReadOnlyList<Error>, TOut> onFailure)
+        Func<ImmutableArray<Error>, TOut> onFailure)
     {
         var result = await resultTask;
         return result.IsSuccess
@@ -552,14 +552,14 @@ public static class ResultExtensions
     public static async Task<TOut> Match<TIn, TOut>(
         this Result<TIn> result,
         Func<TIn, TOut> onSuccess,
-        Func<IReadOnlyList<Error>, Task<TOut>> onFailure)
+        Func<ImmutableArray<Error>, Task<TOut>> onFailure)
         => result.IsSuccess
             ? onSuccess(result.Value)
             : await onFailure(result.Errors);
     public static async Task<TOut> Match<TIn, TOut>(
         this Task<Result<TIn>> resultTask,
         Func<TIn, TOut> onSuccess,
-        Func<IReadOnlyList<Error>, Task<TOut>> onFailure)
+        Func<ImmutableArray<Error>, Task<TOut>> onFailure)
     {
         var result = await resultTask;
         return result.IsSuccess

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Text.Json.Serialization;
 using Resrcify.SharedKernel.Results.Serialization;
 
@@ -38,5 +39,8 @@ public class Result<TValue>
         => Failure<TValue>(error);
     public static implicit operator Result<TValue>(
         Error[] errors)
+        => Failure<TValue>(errors);
+    public static implicit operator Result<TValue>(
+        ImmutableArray<Error> errors)
         => Failure<TValue>(errors);
 }

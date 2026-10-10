@@ -59,7 +59,7 @@ public sealed class ResultFunctionalPatternTests
 
         result.IsFailure.ShouldBeTrue();
         result.Errors.ShouldContain(error);
-        result.Errors.Count.ShouldBe(1);
+        result.Errors.Length.ShouldBe(1);
         mapCalled.ShouldBeFalse();
         tapCalled.ShouldBeFalse();
         bindCalled.ShouldBeFalse();
@@ -77,8 +77,8 @@ public sealed class ResultFunctionalPatternTests
             Result.Success());
 
         result.IsFailure.ShouldBeTrue();
-        result.Errors.ShouldBeEquivalentTo(new[] { first, second });
-        result.Errors.Count.ShouldBe(2);
+        result.Errors.ShouldBe(new[] { first, second });
+        result.Errors.Length.ShouldBe(2);
     }
 
     [Fact]
@@ -132,8 +132,8 @@ public sealed class ResultFunctionalPatternTests
             Result.Success(15));
 
         combined.IsFailure.ShouldBeTrue();
-        combined.Errors.ShouldBeEquivalentTo(new[] { first, second });
-        combined.Errors.Count.ShouldBe(2);
+        combined.Errors.ShouldBe(new[] { first, second });
+        combined.Errors.Length.ShouldBe(2);
     }
 
     [Fact]

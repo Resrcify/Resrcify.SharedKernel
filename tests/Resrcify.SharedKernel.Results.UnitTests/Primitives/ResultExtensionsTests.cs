@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -129,7 +130,7 @@ public class ResultExtensionsTests
         // Assert
         boundResult.IsSuccess.ShouldBeFalse();
         boundResult.IsFailure.ShouldBeTrue();
-        boundResult.Errors.ShouldBeEquivalentTo(originalResult.Errors);
+        boundResult.Errors.ShouldBe(originalResult.Errors);
     }
 
     [Fact]
@@ -303,7 +304,7 @@ public class ResultExtensionsTests
         // Arrange
         var result = Result.Success(42);
         static string onSuccess(int x) => $"Success: {x}";
-        static string onFailure(IReadOnlyList<Error> errors) => "Failure";
+        static string onFailure(ImmutableArray<Error> errors) => "Failure";
 
         // Act
         var matchResult = result.Match(onSuccess, onFailure);
@@ -318,7 +319,7 @@ public class ResultExtensionsTests
         // Arrange
         var result = Result.Failure<int>(Error.NullValue);
         static string onSuccess(int x) => $"Success: {x}";
-        static string onFailure(IReadOnlyList<Error> errors) => $"Failure: {errors[0].Code}";
+        static string onFailure(ImmutableArray<Error> errors) => $"Failure: {errors[0].Code}";
 
         // Act
         var matchResult = result.Match(onSuccess, onFailure);
@@ -333,7 +334,7 @@ public class ResultExtensionsTests
         // Arrange
         var resultTask = Task.FromResult(Result.Success(42));
         static string onSuccess(int x) => $"Success: {x}";
-        static string onFailure(IReadOnlyList<Error> errors) => "Failure";
+        static string onFailure(ImmutableArray<Error> errors) => "Failure";
 
         // Act
         var matchResult = await resultTask.Match(onSuccess, onFailure);
@@ -348,7 +349,7 @@ public class ResultExtensionsTests
         // Arrange
         var resultTask = Task.FromResult(Result.Failure<int>(Error.NullValue));
         static string onSuccess(int x) => $"Success: {x}";
-        static string onFailure(IReadOnlyList<Error> errors) => $"Failure: {errors[0].Code}";
+        static string onFailure(ImmutableArray<Error> errors) => $"Failure: {errors[0].Code}";
 
         // Act
         var matchResult = await resultTask.Match(onSuccess, onFailure);

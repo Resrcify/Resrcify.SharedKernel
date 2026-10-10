@@ -69,8 +69,20 @@ public class ResultTTests
         // Assert
         result.IsSuccess.ShouldBeFalse();
         result.IsFailure.ShouldBeTrue();
-        result.Errors.ShouldBeEquivalentTo(errors);
+        result.Errors.ShouldBe(errors);
         Should.Throw<InvalidOperationException>(() => _ = result.Value);
+    }
+
+    [Fact]
+    public void ImplicitConversionFromErrors_ShouldAnswerWithTheSameFailure_ForAnotherValueType()
+    {
+        var failed = Result.Failure<string>([Error.NullValue, Error.EmptyInput]);
+
+        static Result<int> Forward(Result<string> failed) => failed.Errors;
+        var result = Forward(failed);
+
+        result.IsFailure.ShouldBeTrue();
+        result.Errors.ShouldBe([Error.NullValue, Error.EmptyInput]);
     }
 
     private sealed class TestResult<TValue> : Result<TValue>
