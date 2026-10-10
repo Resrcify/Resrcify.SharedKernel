@@ -33,10 +33,11 @@ public class RabbitMqContainerFixture
     private static readonly TimeProvider Time = TimeProvider.System;
 
     /// <summary>
-    /// Image used when <see cref="Configure"/> doesn't call <c>WithImage</c>: the version production runs, with the
-    /// management plugin (<see cref="ManagementUrl"/> needs it).
+    /// Image used when <see cref="Configure"/> doesn't call <c>WithImage</c>: the newest RabbitMQ 4 (production's
+    /// operator deploys a current 4.x, and each 4.x refuses more deprecated features: 4.3 refuses transient
+    /// non-exclusive queues), with the management plugin (<see cref="ManagementUrl"/> needs it).
     /// </summary>
-    protected const string DefaultImage = "rabbitmq:4.1-management";
+    protected const string DefaultImage = "rabbitmq:4.3-management";
 
     /// <summary>
     /// Environment variable naming the image to run instead, for every fixture (it wins over a

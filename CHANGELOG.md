@@ -274,7 +274,8 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
 #### Test fixtures
 
 - **`PostgresContainerFixture` and `RabbitMqContainerFixture` default to `postgres:18` and
-  `rabbitmq:4.1-management`** (what production runs; was `postgres:15.1` and `rabbitmq:3.11`).
+  `rabbitmq:4.3-management`** (was `postgres:15.1` and `rabbitmq:3.11`): the newest 4.x, since production's operator
+  deploys a current one and each 4.x refuses more deprecated features (4.1 accepted the queue 4.3 refuses).
   `RESRCIFY_TEST_POSTGRES_IMAGE` / `RESRCIFY_TEST_RABBITMQ_IMAGE` replace the image for every fixture.
 - ArchitectureTesting: `SharedKernelPackage` has new members, `Observability` (after `Web`) and `UnitOfWorkPostgres` (after `UnitOfWork`),
   so the numeric values of the members after them shift.
@@ -458,6 +459,11 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
 
 ### Fixed
 
+- **Scatter-gather starts on RabbitMQ 4.3.** Its reply queue was transient and not exclusive, which RabbitMQ 4.3
+  refuses by default (`transient_nonexcl_queues`): the bus couldn't declare it, and the service failed to start after
+  a minute of reconnecting. The queue is now durable and the broker deletes it 30 minutes after its instance stops
+  using it (`x-expires`), so it also keeps the replies that arrive during a reconnect, which the auto-deleted queue
+  lost. Found moving Shard's events to the bus (Discord's end-to-end tests run RabbitMQ 4.3).
 - **Found trying the 4.0 APIs in Shard:** idempotency runs before validation (a retry of "create the shard" was
   refused by the rule "the shard must not exist yet" instead of getting the first answer); it takes a cache that is
   also a claim store (`DistributedCachingService` registered as `ICachingService`) without registering it as one; the

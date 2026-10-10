@@ -49,6 +49,9 @@ internal sealed partial class ScatterGatherTransport(
 
     private static readonly TimeSpan FirstRestartDelay = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan MaxRestartDelay = TimeSpan.FromSeconds(30);
+    // How long the broker keeps the reply queue with no consumer: past every request's wait, and long enough to ride
+    // out a broker restart. The queue's name is this instance's, so nothing else ever consumes it.
+    private static readonly TimeSpan ReplyQueueExpiry = TimeSpan.FromMinutes(30);
 
     private readonly ConcurrentDictionary<Guid, PendingBatch> _pending = new();
     private readonly Lock _gate = new();
@@ -188,7 +191,13 @@ internal sealed partial class ScatterGatherTransport(
         => Configure.With(activator)
             .Logging(logging => logging.Use(new RebusLoggerFactory(serviceProvider.GetRequiredService<ILoggerFactory>())))
             .Transport(transport => settings.ConfigureTransport(transport, serviceProvider, _queue, strategy, rabbitMq => rabbitMq
-                .InputQueueOptions(options => options.SetDurable(false).SetAutoDelete(true))
+                // Durable, deleted by the broker once unused for ReplyQueueExpiry: RabbitMQ 4.3 refuses a transient
+                // non-exclusive queue (transient_nonexcl_queues), and an exclusive one would go with every reconnect,
+                // losing the replies that came meanwhile. This one outlives a reconnect; a stopped instance's goes.
+                .InputQueueOptions(options => options
+                    .SetDurable(true)
+                    .SetAutoDelete(false)
+                    .SetQueueTTL((long)ReplyQueueExpiry.TotalMilliseconds))
                 .Prefetch(settings.Prefetch)))
             .Serialization(serializer => settings.ConfigureSerialization(serializer, serviceProvider))
             .Routing(routing =>

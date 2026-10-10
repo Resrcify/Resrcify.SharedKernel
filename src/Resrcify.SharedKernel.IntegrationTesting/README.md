@@ -22,7 +22,7 @@ RabbitMQ in Testcontainers, and a host fixture that runs a service's `Program` i
 - `IntegrationFactoryBase<TProgram>` (`Factories/`): a `WebApplicationFactory` whose subclass supplies settings
   (`UseSetting`), for hosts that own no containers.
 - `PostgresContainerFixture`, `RabbitMqContainerFixture` (`Fixtures/`): one container each, `postgres:18` and
-  `rabbitmq:4.1-management` by default (`RESRCIFY_TEST_POSTGRES_IMAGE` / `RESRCIFY_TEST_RABBITMQ_IMAGE` replace the
+  `rabbitmq:4.3-management` by default (`RESRCIFY_TEST_POSTGRES_IMAGE` / `RESRCIFY_TEST_RABBITMQ_IMAGE` replace the
   image for every fixture), a readiness probe, `JoinNetwork(network, aliases)`, and for RabbitMQ
   `WaitForExchangePublish`.
 
