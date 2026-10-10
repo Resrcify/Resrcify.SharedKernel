@@ -56,7 +56,11 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   `ImmutableArray<Error>`: a method group taking `Error[]` must take `ImmutableArray<Error>`. Shouldly's
   `ShouldBeEquivalentTo` compares types, so `Errors.ShouldBeEquivalentTo(array)` fails; use `ShouldBe(array)`.
   It is a struct and never null: drop `Errors.ShouldNotBeNull()` (no longer compiles) and `Errors is null` checks.
-- **`Error` → `string` is explicit.** Write `(string)error` or, better, `error.Code`.
+- **`Error` → `string` (still implicit) and `Error.ToString()` give `"Code: Message"`**, not the code alone (the code
+  alone when there is no message). ⚠️ Code that used an error AS ITS CODE still compiles and now gets the longer
+  text: a comparison (`x.Code == someError`, `.Code.ShouldBe(someError)`), a dictionary key, a metric tag or a
+  `new Error(code: someError, ...)`. Search for those and write `someError.Code`. An error passed as a message
+  (`new Error("X", someError, ...)`) now reads `"Code: Message"` instead of the bare code.
 - **The `Create` extensions are removed**; they did exactly what `Map` does. `.Create(f)` → `.Map(f)`.
 - **`Match(func, error)`, which returned a `Result`, is now `Map(func, error)`.** It maps a success and replaces a
   failure's errors with `error`.

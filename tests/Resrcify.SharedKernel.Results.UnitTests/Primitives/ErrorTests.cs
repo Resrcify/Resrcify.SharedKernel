@@ -50,17 +50,17 @@ public sealed class ErrorTests
     }
 
     [Fact]
-    public void ExplicitConversionToString_ShouldReturnErrorCode()
+    public void ImplicitConversionToString_ShouldReturnCodeAndMessage()
     {
         // Arrange
         var error = new Error("Code", "Message", ErrorType.Failure);
 
         // Act
-        var errorCode = (string)error;
+        string text = error;
 
         // Assert
-        errorCode
-            .ShouldBe("Code");
+        text
+            .ShouldBe("Code: Message");
     }
 
     [Fact]
@@ -169,16 +169,23 @@ public sealed class ErrorTests
     }
 
     [Fact]
-    public void ToString_ShouldReturnErrorCode()
+    public void ToString_ShouldReturnCodeAndMessage()
     {
         // Arrange
         var error = new Error("Code", "Message", ErrorType.Failure);
 
         // Act
-        string errorCode = error.ToString();
+        var text = error.ToString();
 
         // Assert
-        errorCode
-            .ShouldBe("Code");
+        text
+            .ShouldBe("Code: Message");
+    }
+
+    [Fact]
+    public void ToString_ShouldReturnTheCodeAlone_WhenThereIsNoMessage()
+    {
+        new Error("Code", string.Empty, ErrorType.Failure).ToString().ShouldBe("Code");
+        Error.None.ToString().ShouldBeEmpty();
     }
 }
