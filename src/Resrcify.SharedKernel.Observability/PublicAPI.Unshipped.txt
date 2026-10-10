@@ -1,0 +1,47 @@
+#nullable enable
+Resrcify.SharedKernel.Observability.Configuration.ObservabilityOptions
+Resrcify.SharedKernel.Observability.Configuration.ObservabilityOptions.ObservabilityOptions() -> void
+Resrcify.SharedKernel.Observability.Configuration.ObservabilityOptions.OtlpEndpoint.get -> string?
+Resrcify.SharedKernel.Observability.Configuration.ObservabilityOptions.OtlpEndpoint.set -> void
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.ActivitySources.get -> System.Collections.Generic.ICollection<string!>!
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.AspNetCoreInstrumentation.get -> bool
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.AspNetCoreInstrumentation.set -> void
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.ConfigureLogging.get -> System.Action<Serilog.LoggerConfiguration!>?
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.ConfigureLogging.set -> void
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.ConfigureMetrics.get -> System.Action<OpenTelemetry.Metrics.MeterProviderBuilder!>?
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.ConfigureMetrics.set -> void
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.ConfigureTracing.get -> System.Action<OpenTelemetry.Trace.TracerProviderBuilder!>?
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.ConfigureTracing.set -> void
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.HttpClientInstrumentation.get -> bool
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.HttpClientInstrumentation.set -> void
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.Logging.get -> bool
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.Logging.set -> void
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.Meters.get -> System.Collections.Generic.ICollection<string!>!
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.Metrics.get -> bool
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.Metrics.set -> void
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.OtlpExporter.get -> bool
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.OtlpExporter.set -> void
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.PrometheusExporter.get -> bool
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.PrometheusExporter.set -> void
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.QuartzInstrumentation.get -> bool
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.QuartzInstrumentation.set -> void
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.RuntimeInstrumentation.get -> bool
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.RuntimeInstrumentation.set -> void
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.ServiceTelemetryOptions() -> void
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.SharedKernelInstrumentation.get -> bool
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.SharedKernelInstrumentation.set -> void
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.Tracing.get -> bool
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.Tracing.set -> void
+Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.UntracedPaths.get -> System.Collections.Generic.ICollection<string!>!
+Resrcify.SharedKernel.Observability.Configuration.TelemetrySources
+Resrcify.SharedKernel.Observability.Extensions.ServiceTelemetryEndpointRouteBuilderExtensions
+Resrcify.SharedKernel.Observability.Extensions.ServiceTelemetryServiceCollectionExtensions
+const Resrcify.SharedKernel.Observability.Configuration.ObservabilityOptions.SectionName = "Observability" -> string!
+const Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions.OtlpExporterName = "ServiceTelemetry" -> string!
+const Resrcify.SharedKernel.Observability.Configuration.TelemetrySources.Quartz = "Quartz" -> string!
+const Resrcify.SharedKernel.Observability.Configuration.TelemetrySources.RebusDiagnostics = "Rebus.Diagnostics" -> string!
+const Resrcify.SharedKernel.Observability.Configuration.TelemetrySources.SharedKernel = "Resrcify.SharedKernel.*" -> string!
+const Resrcify.SharedKernel.Observability.Extensions.ServiceTelemetryEndpointRouteBuilderExtensions.DefaultMetricsPath = "/metrics" -> string!
+static Resrcify.SharedKernel.Observability.Extensions.ServiceTelemetryEndpointRouteBuilderExtensions.MapServiceMetrics(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, string! path = "/metrics") -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Resrcify.SharedKernel.Observability.Extensions.ServiceTelemetryServiceCollectionExtensions.AddServiceTelemetry(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! serviceName, Microsoft.Extensions.Configuration.IConfiguration! configuration, System.Action<Resrcify.SharedKernel.Observability.Configuration.ServiceTelemetryOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

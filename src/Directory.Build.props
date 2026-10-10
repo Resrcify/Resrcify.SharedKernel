@@ -1,0 +1,15 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!--
+    The packages' public API, listed per project (the analyzer picks the two files up itself): PublicAPI.Shipped.txt (released) and PublicAPI.Unshipped.txt (added
+    since). A public member added, removed or changed without its line fails the build (RS0016 / RS0017), so an API
+    change is always a visible diff. On a release, move the Unshipped lines into Shipped.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>

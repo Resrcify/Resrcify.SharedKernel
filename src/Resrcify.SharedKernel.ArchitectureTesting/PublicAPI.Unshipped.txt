@@ -1,0 +1,69 @@
+#nullable enable
+Resrcify.SharedKernel.ArchitectureTesting.Extensions.NetArchTestExtensions
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.BaseArchitectureTest
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.BaseArchitectureTest.BaseArchitectureTest() -> void
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.BaseArchitectureTest.GetLayerAssembly(string! layer) -> System.Reflection.Assembly?
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.BaseArchitectureTest.LayerAssemblies.get -> System.Collections.Generic.IReadOnlyDictionary<string!, System.Reflection.Assembly!>!
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.BaseArchitectureTest.SkipIfNoAssembly(string! layer) -> void
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.LayerAssemblyResolver
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.Layers
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage.ArchitectureTesting = 8 -> Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage.Caching = 5 -> Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage.IntegrationTesting = 9 -> Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage.Mediator = 0 -> Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage.MessageBus = 1 -> Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage.Observability = 7 -> Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage.Repository = 4 -> Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage.UnitOfWork = 2 -> Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage.UnitOfWorkPostgres = 3 -> Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage.Web = 6 -> Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage
+Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackageExtensions
+Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests
+Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests.ConventionalApplicationTests() -> void
+Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalDomainTests
+Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalDomainTests.ConventionalDomainTests() -> void
+Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalLayerDependencyTests
+Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalLayerDependencyTests.ConventionalLayerDependencyTests() -> void
+Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalPresentationTests
+Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalPresentationTests.ConventionalPresentationTests() -> void
+const Resrcify.SharedKernel.ArchitectureTesting.Helpers.Layers.Application = "Application" -> string!
+const Resrcify.SharedKernel.ArchitectureTesting.Helpers.Layers.Domain = "Domain" -> string!
+const Resrcify.SharedKernel.ArchitectureTesting.Helpers.Layers.Infrastructure = "Infrastructure" -> string!
+const Resrcify.SharedKernel.ArchitectureTesting.Helpers.Layers.Persistence = "Persistence" -> string!
+const Resrcify.SharedKernel.ArchitectureTesting.Helpers.Layers.Presentation = "Presentation" -> string!
+const Resrcify.SharedKernel.ArchitectureTesting.Helpers.Layers.Web = "Web" -> string!
+static Resrcify.SharedKernel.ArchitectureTesting.Extensions.NetArchTestExtensions.Evaluate(this NetArchTest.Rules.ConditionList! conditionList) -> void
+static Resrcify.SharedKernel.ArchitectureTesting.Helpers.LayerAssemblyResolver.Resolve(System.Reflection.Assembly! testAssembly) -> System.Collections.Generic.IReadOnlyDictionary<string!, System.Reflection.Assembly!>!
+static Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackageExtensions.Namespace(this Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage package) -> string!
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests.CommandHandlers_Should_BeSealed() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests.CommandHandlers_Should_HaveCommandHandlerPostfix() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests.CommandHandlers_Should_ReturnTaskOfResult() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests.Commands_Should_BeSealed() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests.Commands_Should_HaveCommandPostfix() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests.Commands_Should_HaveResponsePostfix() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests.Queries_Should_BeSealed() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests.Queries_Should_HaveQueryPostfix() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests.Queries_Should_HaveResponsePostfix() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests.QueryHandlers_Should_BeSealed() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests.QueryHandlers_Should_HaveQueryHandlerPostfix() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests.QueryHandlers_Should_ReturnTaskOfResult() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests.RequestHandlers_Should_BeSealed() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests.RequestHandlers_Should_HaveRequestHandlerPostfix() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests.RequestHandlers_Should_ReturnTaskOfResult() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests.Requests_Should_BeSealed() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalApplicationTests.Requests_Should_HaveRequestPostfix() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalDomainTests.DomainEvents_Should_BeSealed() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalDomainTests.DomainEvents_Should_HaveEventPostfix() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalDomainTests.Entities_Should_HavePrivateConstructor() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalLayerDependencyTests.ExtraForbiddenDependencies.get -> System.Collections.Generic.IEnumerable<(string! Source, string! Target)>!
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalLayerDependencyTests.LayerTiers.get -> System.Collections.Generic.IReadOnlyDictionary<string!, int>!
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalLayerDependencyTests.Layers_ShouldNotDependOnForbiddenLayers() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalLayerDependencyTests.Layers_ShouldNotDependOnSharedKernelPackagesOutsideTheirLayers() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalLayerDependencyTests.SharedKernelPackageRestrictions.get -> System.Collections.Generic.IReadOnlyDictionary<Resrcify.SharedKernel.ArchitectureTesting.Helpers.SharedKernelPackage, string![]!>!
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalPresentationTests.Controllers_Should_DependOnMediator() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalPresentationTests.Controllers_Should_InheritApiController() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalPresentationTests.Endpoints_Should_BeSealed() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalPresentationTests.Endpoints_Should_DependOnMediator() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalPresentationTests.Endpoints_Should_ExposeSingleMapEndpointMethod() -> void
+virtual Resrcify.SharedKernel.ArchitectureTesting.Tests.ConventionalPresentationTests.Endpoints_Should_ImplementIEndpoint() -> void

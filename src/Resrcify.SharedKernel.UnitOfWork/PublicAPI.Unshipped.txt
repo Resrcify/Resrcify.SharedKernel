@@ -1,0 +1,310 @@
+#nullable enable
+Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxIndexes
+Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxIndexes.PartialUniqueDedup.get -> System.Action<Microsoft.EntityFrameworkCore.Metadata.Builders.IndexBuilder<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage!>!>!
+Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxIndexes.PartialUnprocessed.get -> System.Action<Microsoft.EntityFrameworkCore.Metadata.Builders.IndexBuilder<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage!>!>!
+Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxInsertStrategy
+Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxInsertStrategy.InsertAsync(Microsoft.EntityFrameworkCore.DbContext! context, System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage!>! messages, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxInsertStrategy.InsertsOutsideSaveChanges.get -> bool
+Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxLaneClaim
+Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxLaneClaim.TryClaimAsync(Microsoft.EntityFrameworkCore.DbContext! context, System.Guid messageId, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<bool>!
+Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxSaveObserver
+Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxSaveObserver.MessagesSavedAsync(Microsoft.EntityFrameworkCore.DbContext! context, System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage!>! messages, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxSerializer
+Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxSerializer.Deserialize(string! content) -> Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDomainEvent?
+Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxSerializer.Serialize(Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDomainEvent! domainEvent) -> string!
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.CleanupOutboxMessagesJob<TDbContext>
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.CleanupOutboxMessagesJob<TDbContext>.CleanupOutboxMessagesJob(Microsoft.Extensions.DependencyInjection.IServiceScopeFactory! scopeFactory, Microsoft.Extensions.Logging.ILogger<Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.CleanupOutboxMessagesJob<TDbContext!>!>! logger, System.TimeProvider? timeProvider = null) -> void
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.CleanupOutboxMessagesJob<TDbContext>.Execute(Quartz.IJobExecutionContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.CommandJob<TCommand, TResponse>
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.CommandJob<TCommand, TResponse>.CommandJob(Resrcify.SharedKernel.Abstractions.Mediator.ISender! sender, Microsoft.Extensions.Logging.ILogger! logger) -> void
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.CommandJob<TCommand, TResponse>.Execute(Quartz.IJobExecutionContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.CommandJob<TCommand>
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.CommandJob<TCommand>.CommandJob(Resrcify.SharedKernel.Abstractions.Mediator.ISender! sender, Microsoft.Extensions.Logging.ILogger! logger) -> void
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.IntervalJobSetup
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.JobHeartbeatRegistry
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.JobHeartbeatRegistry.Beat(Quartz.JobKey! job) -> void
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.JobHeartbeatRegistry.JobHeartbeatRegistry(System.TimeProvider? timeProvider = null) -> void
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.JobHeartbeatRegistry.LastBeat(Quartz.JobKey! job) -> System.DateTimeOffset?
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.JobHeartbeatRegistry.StartedAt.get -> System.DateTimeOffset
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.JobHeartbeatSetup
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.OutboxJobs
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.OutboxWakeUp<TDbContext>
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.OutboxWakeUp<TDbContext>.DrainAsync(System.TimeSpan? timeout = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.OutboxWakeUp<TDbContext>.OutboxWakeUp(System.IServiceProvider! provider, Microsoft.Extensions.Logging.ILogger<Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.OutboxWakeUp<TDbContext!>!>! logger) -> void
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.OutboxWakeUp<TDbContext>.WakeAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.ProcessOutboxMessagesJob<TDbContext>
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.ProcessOutboxMessagesJob<TDbContext>.Execute(Quartz.IJobExecutionContext! context, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.ProcessOutboxMessagesJob<TDbContext>.ProcessOutboxMessagesJob(Microsoft.Extensions.DependencyInjection.IServiceScopeFactory! scopeFactory, System.TimeProvider? timeProvider = null, Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.OutboxWakeUp<TDbContext!>? wakeUp = null) -> void
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.ProcessOutboxMessagesJobSetup
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.SendCommandJob<TCommand, TResponse>
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.SendCommandJob<TCommand, TResponse>.SendCommandJob(Resrcify.SharedKernel.Abstractions.Mediator.ISender! sender, Microsoft.Extensions.Logging.ILogger<Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.SendCommandJob<TCommand, TResponse!>!>! logger) -> void
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.SendCommandJob<TCommand>
+Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.SendCommandJob<TCommand>.SendCommandJob(Resrcify.SharedKernel.Abstractions.Mediator.ISender! sender, Microsoft.Extensions.Logging.ILogger<Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.SendCommandJob<TCommand>!>! logger) -> void
+Resrcify.SharedKernel.UnitOfWork.Converters.DomainEventConverter
+Resrcify.SharedKernel.UnitOfWork.Converters.DomainEventConverter.DomainEventConverter() -> void
+Resrcify.SharedKernel.UnitOfWork.Converters.SingleValueObjectConverter
+Resrcify.SharedKernel.UnitOfWork.Converters.SingleValueObjectConverter<TSelf, TValue>
+Resrcify.SharedKernel.UnitOfWork.Converters.SingleValueObjectConverter<TSelf, TValue>.SingleValueObjectConverter() -> void
+Resrcify.SharedKernel.UnitOfWork.Extensions.MigrationsServiceCollectionExtensions
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxHealthChecksBuilderExtensions
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxLaneOptions
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxLaneOptions.Claim.get -> Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxLaneClaim?
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxLaneOptions.Claim.set -> void
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxLaneOptions.MaxConcurrency.get -> int
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxLaneOptions.MaxConcurrency.set -> void
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxLaneOptions.MaxRetryCount.get -> int
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxLaneOptions.MaxRetryCount.set -> void
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxLaneOptions.OutboxLaneOptions() -> void
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxLaneOptions.PollInterval.get -> System.TimeSpan
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxLaneOptions.PollInterval.set -> void
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxLaneServiceCollectionExtensions
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxModelBuilderExtensions
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions.BacklogCheckIntervalInSeconds.get -> int
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions.BacklogCheckIntervalInSeconds.set -> void
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions.BatchSize.get -> int
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions.BatchSize.set -> void
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions.Claim.get -> Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxLaneClaim?
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions.Claim.set -> void
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions.DelayInSecondsBeforeStart.get -> int
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions.DelayInSecondsBeforeStart.set -> void
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions.MaxRetryCount.get -> int
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions.MaxRetryCount.set -> void
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions.OutboxOptions() -> void
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions.ProcessIntervalInSeconds.get -> int
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions.ProcessIntervalInSeconds.set -> void
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions.ProcessedRetentionInDays.get -> int
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions.ProcessedRetentionInDays.set -> void
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions.TimeProvider.get -> System.TimeProvider?
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions.TimeProvider.set -> void
+Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxServiceCollectionExtensions
+Resrcify.SharedKernel.UnitOfWork.Extensions.QuartzJobsHealthChecksBuilderExtensions
+Resrcify.SharedKernel.UnitOfWork.Extensions.SaveChangesInterceptorExtensions
+Resrcify.SharedKernel.UnitOfWork.Extensions.SingleValueObjectConventionExtensions
+Resrcify.SharedKernel.UnitOfWork.Interceptors.InsertOutboxMessagesInterceptor
+Resrcify.SharedKernel.UnitOfWork.Interceptors.InsertOutboxMessagesInterceptor.InsertOutboxMessagesInterceptor(Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxSerializer! serializer, Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxInsertStrategy? insertStrategy = null, System.TimeProvider? timeProvider = null, System.Collections.Generic.IEnumerable<Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxSaveObserver!>? observers = null, Microsoft.Extensions.Logging.ILogger<Resrcify.SharedKernel.UnitOfWork.Interceptors.InsertOutboxMessagesInterceptor!>? logger = null) -> void
+Resrcify.SharedKernel.UnitOfWork.Interceptors.UpdateAuditableEntitiesInterceptor
+Resrcify.SharedKernel.UnitOfWork.Interceptors.UpdateAuditableEntitiesInterceptor.UpdateAuditableEntitiesInterceptor(System.TimeProvider? timeProvider = null) -> void
+Resrcify.SharedKernel.UnitOfWork.Interceptors.UpdateDeletableEntitiesInterceptor
+Resrcify.SharedKernel.UnitOfWork.Interceptors.UpdateDeletableEntitiesInterceptor.UpdateDeletableEntitiesInterceptor(System.TimeProvider? timeProvider = null) -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.DefaultOutboxInsertStrategy
+Resrcify.SharedKernel.UnitOfWork.Outbox.DefaultOutboxInsertStrategy.DefaultOutboxInsertStrategy() -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.DefaultOutboxInsertStrategy.InsertAsync(Microsoft.EntityFrameworkCore.DbContext! context, System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage!>! messages, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.UnitOfWork.Outbox.DefaultOutboxInsertStrategy.InsertsOutsideSaveChanges.get -> bool
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxAdministration<TDbContext>
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxAdministration<TDbContext>.FindAsync(System.Guid id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails?>!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxAdministration<TDbContext>.GetSummaryAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary!>!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxAdministration<TDbContext>.ListGivenUpAsync(int take = 50, string? type = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary!>!>!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxAdministration<TDbContext>.OutboxAdministration(TDbContext! context, System.IServiceProvider! services) -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxAdministration<TDbContext>.RetryAllGivenUpAsync(string? type = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<int>!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxAdministration<TDbContext>.RetryAsync(System.Guid id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxDiagnostics
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.<Clone>$() -> Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.Deconstruct(out string! Type, out string? Lane, out int Waiting, out int Retrying, out int GivenUp) -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.Equals(Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary? other) -> bool
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.GivenUp.get -> int
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.GivenUp.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.Lane.get -> string?
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.Lane.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.OutboxEventTypeSummary(string! Type, string? Lane, int Waiting, int Retrying, int GivenUp) -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.Retrying.get -> int
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.Retrying.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.Type.get -> string!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.Type.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.Waiting.get -> int
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.Waiting.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent.<Clone>$() -> Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent.Deconstruct(out string! Lane, out System.Type! EventType) -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent.Equals(Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent? other) -> bool
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent.EventType.get -> System.Type!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent.EventType.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent.Lane.get -> string!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent.Lane.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent.OutboxLaneEvent(string! Lane, System.Type! EventType) -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.Content.get -> string!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.Content.set -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.DedupKey.get -> string?
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.DedupKey.set -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.Error.get -> string?
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.Error.set -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.Id.get -> System.Guid
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.Id.set -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.NextAttemptOnUtc.get -> System.DateTime?
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.NextAttemptOnUtc.set -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.OccurredOnUtc.get -> System.DateTime
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.OccurredOnUtc.set -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.OutboxMessage() -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.ProcessedOnUtc.get -> System.DateTime?
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.ProcessedOnUtc.set -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.RetryCount.get -> int
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.RetryCount.set -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.Type.get -> string!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.Type.set -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageConfiguration
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageConfiguration.Configure(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage!>! builder) -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageConfiguration.OutboxMessageConfiguration(string! tableName = "OutboxMessages", string? schema = null, System.Action<Microsoft.EntityFrameworkCore.Metadata.Builders.IndexBuilder<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage!>!>? configureUnprocessedIndex = null, System.Action<Microsoft.EntityFrameworkCore.Metadata.Builders.IndexBuilder<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage!>!>? configureDedupIndex = null, System.Action<Microsoft.EntityFrameworkCore.Metadata.Builders.IndexBuilder<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage!>!>? configureProcessedIndex = null) -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.<Clone>$() -> Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.Content.get -> string!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.Content.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.Deconstruct(out System.Guid Id, out string! Type, out string! Content, out System.DateTime OccurredOnUtc, out System.DateTime? ProcessedOnUtc, out bool GaveUp, out int RetryCount, out System.DateTime? NextAttemptOnUtc, out string? Error) -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.Equals(Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails? other) -> bool
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.Error.get -> string?
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.Error.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.GaveUp.get -> bool
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.GaveUp.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.Id.get -> System.Guid
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.Id.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.NextAttemptOnUtc.get -> System.DateTime?
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.NextAttemptOnUtc.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.OccurredOnUtc.get -> System.DateTime
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.OccurredOnUtc.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.OutboxMessageDetails(System.Guid Id, string! Type, string! Content, System.DateTime OccurredOnUtc, System.DateTime? ProcessedOnUtc, bool GaveUp, int RetryCount, System.DateTime? NextAttemptOnUtc, string? Error) -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.ProcessedOnUtc.get -> System.DateTime?
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.ProcessedOnUtc.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.RetryCount.get -> int
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.RetryCount.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.Type.get -> string!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.Type.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.<Clone>$() -> Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.Deconstruct(out System.Guid Id, out string! Type, out System.DateTime OccurredOnUtc, out int RetryCount, out string? Error) -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.Equals(Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary? other) -> bool
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.Error.get -> string?
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.Error.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.Id.get -> System.Guid
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.Id.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.OccurredOnUtc.get -> System.DateTime
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.OccurredOnUtc.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.OutboxMessageSummary(System.Guid Id, string! Type, System.DateTime OccurredOnUtc, int RetryCount, string? Error) -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.RetryCount.get -> int
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.RetryCount.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.Type.get -> string!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.Type.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.<Clone>$() -> Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.Deconstruct(out int Waiting, out int Retrying, out int GivenUp, out System.DateTime? OldestWaitingOccurredOnUtc, out System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary!>! EventTypes) -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.Equals(Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary? other) -> bool
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.EventTypes.get -> System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary!>!
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.EventTypes.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.GivenUp.get -> int
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.GivenUp.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.OldestWaitingOccurredOnUtc.get -> System.DateTime?
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.OldestWaitingOccurredOnUtc.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.OutboxSummary(int Waiting, int Retrying, int GivenUp, System.DateTime? OldestWaitingOccurredOnUtc, System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary!>! EventTypes) -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.Retrying.get -> int
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.Retrying.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.Waiting.get -> int
+Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.Waiting.init -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.PostgresOnConflictOutboxInsertStrategy
+Resrcify.SharedKernel.UnitOfWork.Outbox.PostgresOnConflictOutboxInsertStrategy.InsertAsync(Microsoft.EntityFrameworkCore.DbContext! context, System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage!>! messages, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.UnitOfWork.Outbox.PostgresOnConflictOutboxInsertStrategy.PostgresOnConflictOutboxInsertStrategy() -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.PostgresOutboxIndexes
+Resrcify.SharedKernel.UnitOfWork.Outbox.PostgresOutboxIndexes.PartialProcessed.get -> System.Action<Microsoft.EntityFrameworkCore.Metadata.Builders.IndexBuilder<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage!>!>!
+Resrcify.SharedKernel.UnitOfWork.Outbox.PostgresOutboxIndexes.PartialUniqueDedup.get -> System.Action<Microsoft.EntityFrameworkCore.Metadata.Builders.IndexBuilder<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage!>!>!
+Resrcify.SharedKernel.UnitOfWork.Outbox.PostgresOutboxIndexes.PartialUnprocessed.get -> System.Action<Microsoft.EntityFrameworkCore.Metadata.Builders.IndexBuilder<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage!>!>!
+Resrcify.SharedKernel.UnitOfWork.Outbox.PostgresOutboxIndexes.PostgresOutboxIndexes() -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.PostgresOutboxLaneClaim
+Resrcify.SharedKernel.UnitOfWork.Outbox.PostgresOutboxLaneClaim.PostgresOutboxLaneClaim() -> void
+Resrcify.SharedKernel.UnitOfWork.Outbox.PostgresOutboxLaneClaim.TryClaimAsync(Microsoft.EntityFrameworkCore.DbContext! context, System.Guid messageId, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<bool>!
+Resrcify.SharedKernel.UnitOfWork.Outbox.SystemTextJsonOutboxSerializer
+Resrcify.SharedKernel.UnitOfWork.Outbox.SystemTextJsonOutboxSerializer.Deserialize(string! content) -> Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDomainEvent?
+Resrcify.SharedKernel.UnitOfWork.Outbox.SystemTextJsonOutboxSerializer.Serialize(Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDomainEvent! domainEvent) -> string!
+Resrcify.SharedKernel.UnitOfWork.Outbox.SystemTextJsonOutboxSerializer.SystemTextJsonOutboxSerializer() -> void
+Resrcify.SharedKernel.UnitOfWork.Primitives.PersistenceErrors
+Resrcify.SharedKernel.UnitOfWork.Primitives.UnitOfWork<TDbContext>
+Resrcify.SharedKernel.UnitOfWork.Primitives.UnitOfWork<TDbContext>.BeginTransactionAsync(System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.ReadCommitted, System.TimeSpan? commandTimeout = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.UnitOfWork.Primitives.UnitOfWork<TDbContext>.CommitTransactionAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.UnitOfWork.Primitives.UnitOfWork<TDbContext>.CompleteAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.UnitOfWork.Primitives.UnitOfWork<TDbContext>.Dispose() -> void
+Resrcify.SharedKernel.UnitOfWork.Primitives.UnitOfWork<TDbContext>.ExecuteAsync<TResponse>(System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<TResponse!>!>! operation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TResponse!>!
+Resrcify.SharedKernel.UnitOfWork.Primitives.UnitOfWork<TDbContext>.ExecuteInTransactionAsync(System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task!>! operation, System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.ReadCommitted, System.TimeSpan? commandTimeout = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.UnitOfWork.Primitives.UnitOfWork<TDbContext>.ExecuteInTransactionAsync<TResponse>(System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<TResponse!>!>! operation, System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.ReadCommitted, System.TimeSpan? commandTimeout = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TResponse!>!
+Resrcify.SharedKernel.UnitOfWork.Primitives.UnitOfWork<TDbContext>.RollbackTransactionAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.UnitOfWork.Primitives.UnitOfWork<TDbContext>.TryCompleteAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Resrcify.SharedKernel.Results.Primitives.Result!>!
+Resrcify.SharedKernel.UnitOfWork.Primitives.UnitOfWork<TDbContext>.UnitOfWork(TDbContext! context) -> void
+abstract Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.CommandJob<TCommand, TResponse>.CreateCommand(Quartz.IJobExecutionContext! context) -> TCommand
+const Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.CleanupOutboxMessagesJob<TDbContext>.DeleteBatchSize = 5000 -> int
+const Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.ProcessOutboxMessagesJob<TDbContext>.DrainBudgetShare = 0.8 -> double
+const Resrcify.SharedKernel.UnitOfWork.Extensions.MigrationsServiceCollectionExtensions.SectionName = "Migrations" -> string!
+const Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxAdministration<TDbContext>.MaxTake = 500 -> int
+const Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxDiagnostics.ActivitySourceName = "Resrcify.SharedKernel.UnitOfWork.Outbox" -> string!
+const Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxDiagnostics.MeterName = "Resrcify.SharedKernel.UnitOfWork.Outbox" -> string!
+const Resrcify.SharedKernel.UnitOfWork.Outbox.PostgresOutboxIndexes.PartialDedupFilterSql = "\"DedupKey\" IS NOT NULL AND \"ProcessedOnUtc\" IS NULL" -> string!
+const Resrcify.SharedKernel.UnitOfWork.Outbox.PostgresOutboxIndexes.ProcessedFilterSql = "\"ProcessedOnUtc\" IS NOT NULL" -> string!
+const Resrcify.SharedKernel.UnitOfWork.Outbox.PostgresOutboxIndexes.UnprocessedFilterSql = "\"ProcessedOnUtc\" IS NULL" -> string!
+const Resrcify.SharedKernel.UnitOfWork.Primitives.PersistenceErrors.DeadlockSqlState = "40P01" -> string!
+const Resrcify.SharedKernel.UnitOfWork.Primitives.PersistenceErrors.SerializationFailureSqlState = "40001" -> string!
+const Resrcify.SharedKernel.UnitOfWork.Primitives.PersistenceErrors.UniqueViolationSqlState = "23505" -> string!
+override Resrcify.SharedKernel.UnitOfWork.Converters.DomainEventConverter.Read(ref System.Text.Json.Utf8JsonReader reader, System.Type! typeToConvert, System.Text.Json.JsonSerializerOptions! options) -> Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDomainEvent?
+override Resrcify.SharedKernel.UnitOfWork.Converters.DomainEventConverter.Write(System.Text.Json.Utf8JsonWriter! writer, Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDomainEvent! value, System.Text.Json.JsonSerializerOptions! options) -> void
+override Resrcify.SharedKernel.UnitOfWork.Converters.SingleValueObjectConverter<TSelf, TValue>.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.UnitOfWork.Converters.SingleValueObjectConverter<TSelf, TValue>.GetHashCode() -> int
+override Resrcify.SharedKernel.UnitOfWork.Interceptors.InsertOutboxMessagesInterceptor.SaveChangesCanceledAsync(Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData! eventData, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+override Resrcify.SharedKernel.UnitOfWork.Interceptors.InsertOutboxMessagesInterceptor.SaveChangesFailedAsync(Microsoft.EntityFrameworkCore.Diagnostics.DbContextErrorEventData! eventData, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+override Resrcify.SharedKernel.UnitOfWork.Interceptors.InsertOutboxMessagesInterceptor.SavedChangesAsync(Microsoft.EntityFrameworkCore.Diagnostics.SaveChangesCompletedEventData! eventData, int result, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<int>
+override Resrcify.SharedKernel.UnitOfWork.Interceptors.InsertOutboxMessagesInterceptor.SavingChanges(Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData! eventData, Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result) -> Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>
+override Resrcify.SharedKernel.UnitOfWork.Interceptors.InsertOutboxMessagesInterceptor.SavingChangesAsync(Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData! eventData, Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>>
+override Resrcify.SharedKernel.UnitOfWork.Interceptors.UpdateAuditableEntitiesInterceptor.SavingChanges(Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData! eventData, Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result) -> Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>
+override Resrcify.SharedKernel.UnitOfWork.Interceptors.UpdateAuditableEntitiesInterceptor.SavingChangesAsync(Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData! eventData, Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>>
+override Resrcify.SharedKernel.UnitOfWork.Interceptors.UpdateDeletableEntitiesInterceptor.SavingChanges(Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData! eventData, Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result) -> Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>
+override Resrcify.SharedKernel.UnitOfWork.Interceptors.UpdateDeletableEntitiesInterceptor.SavingChangesAsync(Microsoft.EntityFrameworkCore.Diagnostics.DbContextEventData! eventData, Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int> result, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Microsoft.EntityFrameworkCore.Diagnostics.InterceptionResult<int>>
+override Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.GetHashCode() -> int
+override Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.ToString() -> string!
+override Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent.GetHashCode() -> int
+override Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent.ToString() -> string!
+override Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.GetHashCode() -> int
+override Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.ToString() -> string!
+override Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.GetHashCode() -> int
+override Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.ToString() -> string!
+override Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.GetHashCode() -> int
+override Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.ToString() -> string!
+static Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.IntervalJobSetup.AddIntervalCommandJob<TCommand, TResponse>(this Quartz.IQuartzBuilder! quartz, System.TimeSpan interval, System.TimeSpan? startAfter = null, System.TimeProvider? timeProvider = null) -> Quartz.IQuartzBuilder!
+static Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.IntervalJobSetup.AddIntervalCommandJob<TCommand>(this Quartz.IQuartzBuilder! quartz, System.TimeSpan interval, System.TimeSpan? startAfter = null, System.TimeProvider? timeProvider = null) -> Quartz.IQuartzBuilder!
+static Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.IntervalJobSetup.AddIntervalJob<TJob>(this Quartz.IQuartzBuilder! quartz, System.TimeSpan interval, System.TimeSpan? startAfter = null, System.TimeProvider? timeProvider = null) -> Quartz.IQuartzBuilder!
+static Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.IntervalJobSetup.JobKeyFor<TJob>() -> Quartz.JobKey!
+static Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.JobHeartbeatSetup.AddJobHeartbeats(this Quartz.IQuartzBuilder! quartz) -> Quartz.IQuartzBuilder!
+static Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.OutboxJobs.Cleanup<TDbContext>() -> Quartz.JobKey!
+static Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.OutboxJobs.Process<TDbContext>() -> Quartz.JobKey!
+static Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.OutboxWakeUp<TDbContext>.DefaultDrainTimeout.get -> System.TimeSpan
+static Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.ProcessOutboxMessagesJobSetup.AddCleanupOutboxMessagesJob<TDbContext>(this Quartz.IQuartzBuilder! quartz, int processedRetentionInDays = 7, System.TimeProvider? timeProvider = null) -> Quartz.IQuartzBuilder!
+static Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.ProcessOutboxMessagesJobSetup.AddProcessOutboxMessagesJob<TDbContext>(this Quartz.IQuartzBuilder! quartz, int processBatchSize = 20, int processIntervalInSeconds = 60, int delayInSecondsBeforeStart = 60, int processMaxRetryCount = 3, int processedRetentionInDays = 7, Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxLaneClaim? claim = null, System.TimeProvider? timeProvider = null) -> Quartz.IQuartzBuilder!
+static Resrcify.SharedKernel.UnitOfWork.Converters.SingleValueObjectConverter.FromPersisted<TSelf, TValue>(TValue value) -> TSelf
+static Resrcify.SharedKernel.UnitOfWork.Extensions.MigrationsServiceCollectionExtensions.AddMigrationsOnStartup<TContext>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration, string! sectionName = "Migrations") -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxHealthChecksBuilderExtensions.AddOutbox<TDbContext>(this Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder! builder, System.TimeSpan? maxWaitingAge = null, string? name = null, Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus? failureStatus = null, System.Collections.Generic.IEnumerable<string!>? tags = null) -> Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!
+static Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxLaneServiceCollectionExtensions.AddOutboxLanes<TDbContext>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxLaneOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxModelBuilderExtensions.ApplyOutboxMessageConfiguration(this Microsoft.EntityFrameworkCore.ModelBuilder! modelBuilder, string! tableName = "OutboxMessages", string? schema = null, System.Action<Microsoft.EntityFrameworkCore.Metadata.Builders.IndexBuilder<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage!>!>? configureUnprocessedIndex = null, System.Action<Microsoft.EntityFrameworkCore.Metadata.Builders.IndexBuilder<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage!>!>? configureDedupIndex = null, System.Action<Microsoft.EntityFrameworkCore.Metadata.Builders.IndexBuilder<Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage!>!>? configureProcessedIndex = null) -> Microsoft.EntityFrameworkCore.ModelBuilder!
+static Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxServiceCollectionExtensions.AddOutboxProcessing<TDbContext>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxSerializer! serializer, System.Action<Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Resrcify.SharedKernel.UnitOfWork.Extensions.QuartzJobsHealthChecksBuilderExtensions.AddQuartzJobs(this Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder! builder, System.Func<System.TimeSpan, System.TimeSpan>? maxSilence = null, string! name = "quartz-jobs", Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus? failureStatus = null, System.Collections.Generic.IEnumerable<string!>? tags = null) -> Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!
+static Resrcify.SharedKernel.UnitOfWork.Extensions.SaveChangesInterceptorExtensions.AddEntityInterceptors(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Resrcify.SharedKernel.UnitOfWork.Extensions.SaveChangesInterceptorExtensions.AddOutboxInterceptor(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxSerializer? serializer = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Resrcify.SharedKernel.UnitOfWork.Extensions.SaveChangesInterceptorExtensions.AddSaveChangesInterceptors(this Microsoft.EntityFrameworkCore.DbContextOptionsBuilder! options, System.IServiceProvider! provider, bool withOutbox = true) -> Microsoft.EntityFrameworkCore.DbContextOptionsBuilder!
+static Resrcify.SharedKernel.UnitOfWork.Extensions.SingleValueObjectConventionExtensions.AddSingleValueObjectConversions(this Microsoft.EntityFrameworkCore.ModelConfigurationBuilder! configurationBuilder, params System.Reflection.Assembly![]! assemblies) -> Microsoft.EntityFrameworkCore.ModelConfigurationBuilder!
+static Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.operator !=(Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary? left, Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary? right) -> bool
+static Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary.operator ==(Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary? left, Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxEventTypeSummary? right) -> bool
+static Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent.operator !=(Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent? left, Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent? right) -> bool
+static Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent.operator ==(Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent? left, Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneEvent? right) -> bool
+static Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.operator !=(Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails? left, Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails? right) -> bool
+static Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails.operator ==(Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails? left, Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageDetails? right) -> bool
+static Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.operator !=(Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary? left, Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary? right) -> bool
+static Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary.operator ==(Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary? left, Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessageSummary? right) -> bool
+static Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.operator !=(Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary? left, Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary? right) -> bool
+static Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary.operator ==(Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary? left, Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxSummary? right) -> bool
+static Resrcify.SharedKernel.UnitOfWork.Outbox.PostgresOutboxIndexes.Instance.get -> Resrcify.SharedKernel.UnitOfWork.Outbox.PostgresOutboxIndexes!
+static Resrcify.SharedKernel.UnitOfWork.Outbox.PostgresOutboxLaneClaim.Instance.get -> Resrcify.SharedKernel.UnitOfWork.Outbox.PostgresOutboxLaneClaim!
+static readonly Resrcify.SharedKernel.UnitOfWork.BackgroundJobs.IntervalJobSetup.DefaultStartAfter -> System.TimeSpan
+static readonly Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxHealthChecksBuilderExtensions.DefaultMaxWaitingAge -> System.TimeSpan
+static readonly Resrcify.SharedKernel.UnitOfWork.Extensions.QuartzJobsHealthChecksBuilderExtensions.DefaultMaxSilence -> System.Func<System.TimeSpan, System.TimeSpan>!
+static readonly Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxMessage.GivenUpProcessedOnUtc -> System.DateTime
+static readonly Resrcify.SharedKernel.UnitOfWork.Primitives.PersistenceErrors.Concurrency -> Resrcify.SharedKernel.Results.Primitives.Error!
+static readonly Resrcify.SharedKernel.UnitOfWork.Primitives.PersistenceErrors.Deadlock -> Resrcify.SharedKernel.Results.Primitives.Error!
+static readonly Resrcify.SharedKernel.UnitOfWork.Primitives.PersistenceErrors.SerializationFailure -> Resrcify.SharedKernel.Results.Primitives.Error!
+static readonly Resrcify.SharedKernel.UnitOfWork.Primitives.PersistenceErrors.UniqueViolation -> Resrcify.SharedKernel.Results.Primitives.Error!

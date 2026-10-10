@@ -1,0 +1,15 @@
+#nullable enable
+Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxAdministrationEndpointExtensions
+Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxRetried
+Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxRetried.<Clone>$() -> Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxRetried!
+Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxRetried.Deconstruct(out int Retried) -> void
+Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxRetried.Equals(Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxRetried? other) -> bool
+Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxRetried.OutboxRetried(int Retried) -> void
+Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxRetried.Retried.get -> int
+Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxRetried.Retried.init -> void
+override Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxRetried.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxRetried.GetHashCode() -> int
+override Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxRetried.ToString() -> string!
+static Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxAdministrationEndpointExtensions.MapOutboxAdministration<TDbContext>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! prefix = "/admin/outbox") -> Microsoft.AspNetCore.Routing.RouteGroupBuilder!
+static Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxRetried.operator !=(Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxRetried? left, Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxRetried? right) -> bool
+static Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxRetried.operator ==(Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxRetried? left, Resrcify.SharedKernel.UnitOfWork.Web.Extensions.OutboxRetried? right) -> bool

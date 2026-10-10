@@ -1,0 +1,59 @@
+#nullable enable
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder.ConfigureConnection(System.Action<Npgsql.NpgsqlConnectionStringBuilder!>! configure) -> Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder!
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder.ConfigureDbContext(System.Action<Microsoft.EntityFrameworkCore.DbContextOptionsBuilder!>! configure) -> Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder!
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder.ConfigureNpgsql(System.Action<Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.NpgsqlDbContextOptionsBuilder!>! configure) -> Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder!
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder.FromSection(string! sectionName) -> Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder!
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder.PostgresDbContextBuilder() -> void
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder.RetryOnFailure(int maxRetryCount = 6, System.TimeSpan? maxRetryDelay = null) -> Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder!
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder.SectionName.get -> string!
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder.WithOutbox(System.Action<Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOutboxOptions!>? configure = null) -> Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder!
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder.WithOutboxWakeUp(System.Action<Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox.OutboxWakeUpOptions!>? configure = null) -> Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder!
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOptions
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOptions.CommandTimeoutInSeconds.get -> int?
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOptions.CommandTimeoutInSeconds.set -> void
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOptions.Database.get -> string!
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOptions.Database.set -> void
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOptions.Host.get -> string!
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOptions.Host.set -> void
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOptions.Password.get -> string!
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOptions.Password.set -> void
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOptions.Port.get -> int
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOptions.Port.set -> void
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOptions.PostgresOptions() -> void
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOptions.Username.get -> string!
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOptions.Username.set -> void
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOutboxOptions
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOutboxOptions.OnConflictDoNothing.get -> bool
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOutboxOptions.OnConflictDoNothing.set -> void
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOutboxOptions.PostgresOutboxOptions() -> void
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOutboxOptions.Serializer.get -> Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxSerializer?
+Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOutboxOptions.Serializer.set -> void
+Resrcify.SharedKernel.UnitOfWork.Postgres.Design.PostgresDesignTimeFactory<TContext>
+Resrcify.SharedKernel.UnitOfWork.Postgres.Design.PostgresDesignTimeFactory<TContext>.CreateDbContext(string![]! args) -> TContext!
+Resrcify.SharedKernel.UnitOfWork.Postgres.Design.PostgresDesignTimeFactory<TContext>.PostgresDesignTimeFactory() -> void
+Resrcify.SharedKernel.UnitOfWork.Postgres.Extensions.PostgresRowVersionExtensions
+Resrcify.SharedKernel.UnitOfWork.Postgres.Extensions.PostgresServiceCollectionExtensions
+Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox.OutboxWakeUpOptions
+Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox.OutboxWakeUpOptions.Debounce.get -> System.TimeSpan
+Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox.OutboxWakeUpOptions.Debounce.set -> void
+Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox.OutboxWakeUpOptions.KeepAliveInSeconds.get -> int
+Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox.OutboxWakeUpOptions.KeepAliveInSeconds.set -> void
+Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox.OutboxWakeUpOptions.MaxReconnectDelay.get -> System.TimeSpan
+Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox.OutboxWakeUpOptions.MaxReconnectDelay.set -> void
+Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox.OutboxWakeUpOptions.OutboxWakeUpOptions() -> void
+Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox.OutboxWakeUpOptions.ReconnectDelay.get -> System.TimeSpan
+Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox.OutboxWakeUpOptions.ReconnectDelay.set -> void
+const Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOptions.SectionName = "Database" -> string!
+const Resrcify.SharedKernel.UnitOfWork.Postgres.Extensions.PostgresRowVersionExtensions.Column = "xmin" -> string!
+const Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox.OutboxWakeUpOptions.Channel = "resrcify_outbox" -> string!
+static Resrcify.SharedKernel.UnitOfWork.Postgres.Extensions.PostgresRowVersionExtensions.HasPostgresRowVersion<TEntity>(this Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<TEntity!>! builder, System.Linq.Expressions.Expression<System.Func<TEntity!, uint>!>! property) -> Microsoft.EntityFrameworkCore.Metadata.Builders.PropertyBuilder<uint>!
+static Resrcify.SharedKernel.UnitOfWork.Postgres.Extensions.PostgresRowVersionExtensions.HasPostgresRowVersion<TEntity>(this Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<TEntity!>! builder, string! propertyName = "xmin") -> Microsoft.EntityFrameworkCore.Metadata.Builders.PropertyBuilder<uint>!
+static Resrcify.SharedKernel.UnitOfWork.Postgres.Extensions.PostgresServiceCollectionExtensions.AddPostgresDbContext<TContext>(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration, System.Action<Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Resrcify.SharedKernel.UnitOfWork.Postgres.Extensions.PostgresServiceCollectionExtensions.GetPostgresConnectionString<TContext>(this System.IServiceProvider! provider) -> string!
+virtual Resrcify.SharedKernel.UnitOfWork.Postgres.Design.PostgresDesignTimeFactory<TContext>.Configure(Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresDbContextBuilder! builder) -> void
+virtual Resrcify.SharedKernel.UnitOfWork.Postgres.Design.PostgresDesignTimeFactory<TContext>.ConfigureOptions(Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration.PostgresOptions! options) -> void
+virtual Resrcify.SharedKernel.UnitOfWork.Postgres.Design.PostgresDesignTimeFactory<TContext>.CreateDbContext(Microsoft.EntityFrameworkCore.DbContextOptions<TContext!>! options) -> TContext!
+virtual Resrcify.SharedKernel.UnitOfWork.Postgres.Design.PostgresDesignTimeFactory<TContext>.EnvironmentName.get -> string!
+virtual Resrcify.SharedKernel.UnitOfWork.Postgres.Design.PostgresDesignTimeFactory<TContext>.SettingsDirectory.get -> string?
+virtual Resrcify.SharedKernel.UnitOfWork.Postgres.Design.PostgresDesignTimeFactory<TContext>.WebProjectName.get -> string?

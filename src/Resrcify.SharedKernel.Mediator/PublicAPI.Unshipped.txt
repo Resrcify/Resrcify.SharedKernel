@@ -1,0 +1,80 @@
+#nullable enable
+Resrcify.SharedKernel.Mediator.Behaviors.CachingPipelineBehavior<TRequest, TResponse>
+Resrcify.SharedKernel.Mediator.Behaviors.CachingPipelineBehavior<TRequest, TResponse>.CachingPipelineBehavior(Resrcify.SharedKernel.Abstractions.Caching.ICachingService! cachingService, Microsoft.Extensions.Logging.ILogger<Resrcify.SharedKernel.Mediator.Behaviors.CachingPipelineBehavior<TRequest, TResponse!>!>! logger) -> void
+Resrcify.SharedKernel.Mediator.Behaviors.CachingPipelineBehavior<TRequest, TResponse>.Handle(TRequest request, Resrcify.SharedKernel.Abstractions.Mediator.RequestHandlerDelegate<TResponse!>! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse!>!
+Resrcify.SharedKernel.Mediator.Behaviors.IdempotencyErrors
+Resrcify.SharedKernel.Mediator.Behaviors.IdempotencyPipelineBehavior<TRequest, TResponse>
+Resrcify.SharedKernel.Mediator.Behaviors.IdempotencyPipelineBehavior<TRequest, TResponse>.Handle(TRequest request, Resrcify.SharedKernel.Abstractions.Mediator.RequestHandlerDelegate<TResponse!>! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse!>!
+Resrcify.SharedKernel.Mediator.Behaviors.IdempotencyPipelineBehavior<TRequest, TResponse>.IdempotencyPipelineBehavior(System.IServiceProvider! services, Microsoft.Extensions.Logging.ILogger<Resrcify.SharedKernel.Mediator.Behaviors.IdempotencyPipelineBehavior<TRequest, TResponse!>!>! logger) -> void
+Resrcify.SharedKernel.Mediator.Behaviors.IdempotencyPipelineOptions
+Resrcify.SharedKernel.Mediator.Behaviors.IdempotencyPipelineOptions.Expiration.get -> System.TimeSpan
+Resrcify.SharedKernel.Mediator.Behaviors.IdempotencyPipelineOptions.Expiration.set -> void
+Resrcify.SharedKernel.Mediator.Behaviors.IdempotencyPipelineOptions.IdempotencyPipelineOptions() -> void
+Resrcify.SharedKernel.Mediator.Behaviors.IdempotencyPipelineOptions.InProgressTimeout.get -> System.TimeSpan
+Resrcify.SharedKernel.Mediator.Behaviors.IdempotencyPipelineOptions.InProgressTimeout.set -> void
+Resrcify.SharedKernel.Mediator.Behaviors.IdempotencyPipelineOptions.MaxKeyLength.get -> int
+Resrcify.SharedKernel.Mediator.Behaviors.IdempotencyPipelineOptions.MaxKeyLength.set -> void
+Resrcify.SharedKernel.Mediator.Behaviors.LoggingPipelineBehavior<TRequest, TResponse>
+Resrcify.SharedKernel.Mediator.Behaviors.LoggingPipelineBehavior<TRequest, TResponse>.Handle(TRequest request, Resrcify.SharedKernel.Abstractions.Mediator.RequestHandlerDelegate<TResponse!>! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse!>!
+Resrcify.SharedKernel.Mediator.Behaviors.LoggingPipelineBehavior<TRequest, TResponse>.LoggingPipelineBehavior(Microsoft.Extensions.Logging.ILogger<Resrcify.SharedKernel.Mediator.Behaviors.LoggingPipelineBehavior<TRequest, TResponse!>!>! logger, System.TimeProvider? timeProvider = null, Resrcify.SharedKernel.Mediator.Behaviors.LoggingPipelineOptions? options = null) -> void
+Resrcify.SharedKernel.Mediator.Behaviors.LoggingPipelineOptions
+Resrcify.SharedKernel.Mediator.Behaviors.LoggingPipelineOptions.LoggingPipelineOptions() -> void
+Resrcify.SharedKernel.Mediator.Behaviors.LoggingPipelineOptions.RequestLevel.get -> Microsoft.Extensions.Logging.LogLevel
+Resrcify.SharedKernel.Mediator.Behaviors.LoggingPipelineOptions.RequestLevel.set -> void
+Resrcify.SharedKernel.Mediator.Behaviors.LoggingPipelineOptions.SlowRequestThreshold.get -> System.TimeSpan?
+Resrcify.SharedKernel.Mediator.Behaviors.LoggingPipelineOptions.SlowRequestThreshold.set -> void
+Resrcify.SharedKernel.Mediator.Behaviors.TransactionPipelineBehavior<TRequest, TResponse>
+Resrcify.SharedKernel.Mediator.Behaviors.TransactionPipelineBehavior<TRequest, TResponse>.Handle(TRequest request, Resrcify.SharedKernel.Abstractions.Mediator.RequestHandlerDelegate<TResponse!>! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse!>!
+Resrcify.SharedKernel.Mediator.Behaviors.TransactionPipelineBehavior<TRequest, TResponse>.TransactionPipelineBehavior(Resrcify.SharedKernel.Abstractions.UnitOfWork.IUnitOfWork! unitOfWork, Microsoft.Extensions.Logging.ILogger<Resrcify.SharedKernel.Mediator.Behaviors.TransactionPipelineBehavior<TRequest, TResponse!>!>! logger) -> void
+Resrcify.SharedKernel.Mediator.Behaviors.UnitOfWorkPipelineBehavior<TRequest, TResponse>
+Resrcify.SharedKernel.Mediator.Behaviors.UnitOfWorkPipelineBehavior<TRequest, TResponse>.Handle(TRequest request, Resrcify.SharedKernel.Abstractions.Mediator.RequestHandlerDelegate<TResponse!>! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse!>!
+Resrcify.SharedKernel.Mediator.Behaviors.UnitOfWorkPipelineBehavior<TRequest, TResponse>.UnitOfWorkPipelineBehavior(Resrcify.SharedKernel.Abstractions.UnitOfWork.IUnitOfWork! unitOfWork, Microsoft.Extensions.Logging.ILogger<Resrcify.SharedKernel.Mediator.Behaviors.UnitOfWorkPipelineBehavior<TRequest, TResponse!>!>! logger, Resrcify.SharedKernel.Mediator.Behaviors.UnitOfWorkPipelineOptions? options = null) -> void
+Resrcify.SharedKernel.Mediator.Behaviors.UnitOfWorkPipelineOptions
+Resrcify.SharedKernel.Mediator.Behaviors.UnitOfWorkPipelineOptions.ReturnPersistenceFailures.get -> bool
+Resrcify.SharedKernel.Mediator.Behaviors.UnitOfWorkPipelineOptions.ReturnPersistenceFailures.set -> void
+Resrcify.SharedKernel.Mediator.Behaviors.UnitOfWorkPipelineOptions.UnitOfWorkPipelineOptions() -> void
+Resrcify.SharedKernel.Mediator.Behaviors.ValidationPipelineBehavior<TRequest, TResponse>
+Resrcify.SharedKernel.Mediator.Behaviors.ValidationPipelineBehavior<TRequest, TResponse>.Handle(TRequest request, Resrcify.SharedKernel.Abstractions.Mediator.RequestHandlerDelegate<TResponse!>! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse!>!
+Resrcify.SharedKernel.Mediator.Behaviors.ValidationPipelineBehavior<TRequest, TResponse>.ValidationPipelineBehavior(System.Collections.Generic.IEnumerable<FluentValidation.IValidator<TRequest>!>! validators) -> void
+Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration
+Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration.AddOpenBehavior(System.Type! behaviorType) -> Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration!
+Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration.AddOpenBehavior(System.Type! behaviorType, Microsoft.Extensions.DependencyInjection.ServiceLifetime lifetime) -> Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration!
+Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration.AddRequestPostProcessor(System.Type! processorType) -> Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration!
+Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration.AddRequestPostProcessor(System.Type! processorType, Microsoft.Extensions.DependencyInjection.ServiceLifetime lifetime) -> Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration!
+Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration.AddRequestPreProcessor(System.Type! processorType) -> Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration!
+Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration.AddRequestPreProcessor(System.Type! processorType, Microsoft.Extensions.DependencyInjection.ServiceLifetime lifetime) -> Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration!
+Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration.AddStandardBehaviors(System.Action<Resrcify.SharedKernel.Mediator.Configuration.StandardBehaviorsOptions!>? configure = null) -> Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration!
+Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration.ConfigureIdempotency(System.Action<Resrcify.SharedKernel.Mediator.Behaviors.IdempotencyPipelineOptions!>! configure) -> Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration!
+Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration.ConfigureLogging(System.Action<Resrcify.SharedKernel.Mediator.Behaviors.LoggingPipelineOptions!>! configure) -> Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration!
+Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration.ConfigureUnitOfWork(System.Action<Resrcify.SharedKernel.Mediator.Behaviors.UnitOfWorkPipelineOptions!>! configure) -> Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration!
+Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration.EnableDiTimePipelineComposition(bool enabled = true) -> Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration!
+Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration.MediatorConfiguration() -> void
+Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration.RegisterServicesFromAssemblies(params System.Reflection.Assembly![]! assemblies) -> Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration!
+Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration.SkipBehaviorCheck() -> Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration!
+Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration.UseMediatorLifetime(Microsoft.Extensions.DependencyInjection.ServiceLifetime lifetime) -> Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration!
+Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration.UseNotificationPublishStrategy(Resrcify.SharedKernel.Mediator.Publishing.NotificationPublishStrategy strategy) -> Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration!
+Resrcify.SharedKernel.Mediator.Configuration.StandardBehavior
+Resrcify.SharedKernel.Mediator.Configuration.StandardBehavior.Caching = 4 -> Resrcify.SharedKernel.Mediator.Configuration.StandardBehavior
+Resrcify.SharedKernel.Mediator.Configuration.StandardBehavior.Idempotency = 5 -> Resrcify.SharedKernel.Mediator.Configuration.StandardBehavior
+Resrcify.SharedKernel.Mediator.Configuration.StandardBehavior.Logging = 0 -> Resrcify.SharedKernel.Mediator.Configuration.StandardBehavior
+Resrcify.SharedKernel.Mediator.Configuration.StandardBehavior.Transaction = 2 -> Resrcify.SharedKernel.Mediator.Configuration.StandardBehavior
+Resrcify.SharedKernel.Mediator.Configuration.StandardBehavior.UnitOfWork = 3 -> Resrcify.SharedKernel.Mediator.Configuration.StandardBehavior
+Resrcify.SharedKernel.Mediator.Configuration.StandardBehavior.Validation = 1 -> Resrcify.SharedKernel.Mediator.Configuration.StandardBehavior
+Resrcify.SharedKernel.Mediator.Configuration.StandardBehaviorsOptions
+Resrcify.SharedKernel.Mediator.Configuration.StandardBehaviorsOptions.InsertAfter(Resrcify.SharedKernel.Mediator.Configuration.StandardBehavior anchor, params System.Type![]! behaviorTypes) -> Resrcify.SharedKernel.Mediator.Configuration.StandardBehaviorsOptions!
+Resrcify.SharedKernel.Mediator.Configuration.StandardBehaviorsOptions.InsertBefore(Resrcify.SharedKernel.Mediator.Configuration.StandardBehavior anchor, params System.Type![]! behaviorTypes) -> Resrcify.SharedKernel.Mediator.Configuration.StandardBehaviorsOptions!
+Resrcify.SharedKernel.Mediator.Configuration.StandardBehaviorsOptions.StandardBehaviorsOptions() -> void
+Resrcify.SharedKernel.Mediator.Configuration.StandardBehaviorsOptions.Without(Resrcify.SharedKernel.Mediator.Configuration.StandardBehavior behavior) -> Resrcify.SharedKernel.Mediator.Configuration.StandardBehaviorsOptions!
+Resrcify.SharedKernel.Mediator.Diagnostics.MediatorDiagnostics
+Resrcify.SharedKernel.Mediator.Extensions.ServiceCollectionExtensions
+Resrcify.SharedKernel.Mediator.Publishing.NotificationPublishStrategy
+Resrcify.SharedKernel.Mediator.Publishing.NotificationPublishStrategy.Parallel = 1 -> Resrcify.SharedKernel.Mediator.Publishing.NotificationPublishStrategy
+Resrcify.SharedKernel.Mediator.Publishing.NotificationPublishStrategy.Sequential = 0 -> Resrcify.SharedKernel.Mediator.Publishing.NotificationPublishStrategy
+const Resrcify.SharedKernel.Mediator.Diagnostics.MediatorDiagnostics.ActivitySourceName = "Resrcify.SharedKernel.Mediator" -> string!
+const Resrcify.SharedKernel.Mediator.Diagnostics.MediatorDiagnostics.MeterName = "Resrcify.SharedKernel.Mediator" -> string!
+static Resrcify.SharedKernel.Mediator.Behaviors.IdempotencyErrors.InProgress.get -> Resrcify.SharedKernel.Results.Primitives.Error!
+static Resrcify.SharedKernel.Mediator.Behaviors.IdempotencyErrors.InvalidKey(int maxLength) -> Resrcify.SharedKernel.Results.Primitives.Error!
+static Resrcify.SharedKernel.Mediator.Behaviors.IdempotencyErrors.KeyReused.get -> Resrcify.SharedKernel.Results.Primitives.Error!
+static Resrcify.SharedKernel.Mediator.Extensions.ServiceCollectionExtensions.AddMediator(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.DependencyInjection.ServiceLifetime mediatorLifetime, params System.Reflection.Assembly![]! assemblies) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Resrcify.SharedKernel.Mediator.Extensions.ServiceCollectionExtensions.AddMediator(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Resrcify.SharedKernel.Mediator.Configuration.MediatorConfiguration!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Resrcify.SharedKernel.Mediator.Extensions.ServiceCollectionExtensions.AddMediator(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, params System.Reflection.Assembly![]! assemblies) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

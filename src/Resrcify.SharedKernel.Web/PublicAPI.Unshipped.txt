@@ -1,0 +1,106 @@
+#nullable enable
+Resrcify.SharedKernel.Web.Abstractions.IEndpoint
+Resrcify.SharedKernel.Web.Abstractions.IEndpoint.MapEndpoint(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app) -> void
+Resrcify.SharedKernel.Web.Authentication.ResrcifyJwtOptions
+Resrcify.SharedKernel.Web.Authentication.ResrcifyJwtOptions.Audience.get -> string!
+Resrcify.SharedKernel.Web.Authentication.ResrcifyJwtOptions.Audience.set -> void
+Resrcify.SharedKernel.Web.Authentication.ResrcifyJwtOptions.Authority.get -> string!
+Resrcify.SharedKernel.Web.Authentication.ResrcifyJwtOptions.Authority.set -> void
+Resrcify.SharedKernel.Web.Authentication.ResrcifyJwtOptions.Issuer.get -> string!
+Resrcify.SharedKernel.Web.Authentication.ResrcifyJwtOptions.Issuer.set -> void
+Resrcify.SharedKernel.Web.Authentication.ResrcifyJwtOptions.RequireHttpsMetadata.get -> bool
+Resrcify.SharedKernel.Web.Authentication.ResrcifyJwtOptions.RequireHttpsMetadata.set -> void
+Resrcify.SharedKernel.Web.Authentication.ResrcifyJwtOptions.ResrcifyJwtOptions() -> void
+Resrcify.SharedKernel.Web.Endpoints.IdempotencyHeaders
+Resrcify.SharedKernel.Web.Endpoints.RequestEndpointOptions
+Resrcify.SharedKernel.Web.Endpoints.RequestEndpointOptions.OnFailure.get -> System.Func<Resrcify.SharedKernel.Results.Primitives.Result!, Microsoft.AspNetCore.Http.IResult!>!
+Resrcify.SharedKernel.Web.Endpoints.RequestEndpointOptions.OnFailure.set -> void
+Resrcify.SharedKernel.Web.Endpoints.RequestEndpointOptions.ProblemStatusCodes.get -> System.Collections.Generic.IList<int>!
+Resrcify.SharedKernel.Web.Endpoints.RequestEndpointOptions.RequestEndpointOptions() -> void
+Resrcify.SharedKernel.Web.Exceptions.ResultExceptionHandler
+Resrcify.SharedKernel.Web.Exceptions.ResultExceptionHandler.ResultExceptionHandler(Microsoft.Extensions.Hosting.IHostEnvironment! environment, Microsoft.Extensions.Options.IOptions<Resrcify.SharedKernel.Web.Exceptions.ResultProblemDetailsOptions!>! options, Microsoft.Extensions.Logging.ILogger<Resrcify.SharedKernel.Web.Exceptions.ResultExceptionHandler!>! logger) -> void
+Resrcify.SharedKernel.Web.Exceptions.ResultExceptionHandler.TryHandleAsync(Microsoft.AspNetCore.Http.HttpContext! httpContext, System.Exception! exception, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+Resrcify.SharedKernel.Web.Exceptions.ResultProblemDetailsOptions
+Resrcify.SharedKernel.Web.Exceptions.ResultProblemDetailsOptions.IncludeExceptionDetails.get -> bool?
+Resrcify.SharedKernel.Web.Exceptions.ResultProblemDetailsOptions.IncludeExceptionDetails.set -> void
+Resrcify.SharedKernel.Web.Exceptions.ResultProblemDetailsOptions.ResultProblemDetailsOptions() -> void
+Resrcify.SharedKernel.Web.Extensions.ClaimsPrincipalExtensions
+Resrcify.SharedKernel.Web.Extensions.EndpointExtensions
+Resrcify.SharedKernel.Web.Extensions.HealthEndpointExtensions
+Resrcify.SharedKernel.Web.Extensions.HttpContextExtensions
+Resrcify.SharedKernel.Web.Extensions.HttpResponseMessageExtensions
+Resrcify.SharedKernel.Web.Extensions.HttpResultExtensions
+Resrcify.SharedKernel.Web.Extensions.InternalControllersExtensions
+Resrcify.SharedKernel.Web.Extensions.RequestEndpointExtensions
+Resrcify.SharedKernel.Web.Extensions.ResrcifyJwtBearerServiceCollectionExtensions
+Resrcify.SharedKernel.Web.Extensions.ResultProblemDetailsServiceCollectionExtensions
+Resrcify.SharedKernel.Web.Extensions.ResultResilienceHttpClientBuilderExtensions
+Resrcify.SharedKernel.Web.Health.HealthEndpointOptions
+Resrcify.SharedKernel.Web.Health.HealthEndpointOptions.HealthEndpointOptions() -> void
+Resrcify.SharedKernel.Web.Health.HealthEndpointOptions.LivePath.get -> string!
+Resrcify.SharedKernel.Web.Health.HealthEndpointOptions.LivePath.set -> void
+Resrcify.SharedKernel.Web.Health.HealthEndpointOptions.Path.get -> string!
+Resrcify.SharedKernel.Web.Health.HealthEndpointOptions.Path.set -> void
+Resrcify.SharedKernel.Web.Health.HealthEndpointOptions.ReadyPath.get -> string!
+Resrcify.SharedKernel.Web.Health.HealthEndpointOptions.ReadyPath.set -> void
+Resrcify.SharedKernel.Web.Health.HealthResponseWriter
+Resrcify.SharedKernel.Web.Health.HealthTags
+Resrcify.SharedKernel.Web.Primitives.ApiController
+Resrcify.SharedKernel.Web.Primitives.ApiController.ApiController(Resrcify.SharedKernel.Abstractions.Mediator.ISender! sender) -> void
+Resrcify.SharedKernel.Web.Primitives.ApiController.Sender.get -> Resrcify.SharedKernel.Abstractions.Mediator.ISender!
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.AlsoRetry.get -> System.Collections.Generic.ISet<int>!
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.AttemptTimeout.get -> System.TimeSpan
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.AttemptTimeout.set -> void
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.CircuitBreaker.get -> bool
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.CircuitBreaker.set -> void
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.CircuitBreakerBreakDuration.get -> System.TimeSpan
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.CircuitBreakerBreakDuration.set -> void
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.CircuitBreakerFailureRatio.get -> double
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.CircuitBreakerFailureRatio.set -> void
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.CircuitBreakerMinimumThroughput.get -> int
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.CircuitBreakerMinimumThroughput.set -> void
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.CircuitBreakerSamplingDuration.get -> System.TimeSpan
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.CircuitBreakerSamplingDuration.set -> void
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.MaxRetries.get -> int
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.MaxRetries.set -> void
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.MaxRetryDelay.get -> System.TimeSpan
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.MaxRetryDelay.set -> void
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.NeverRetry.get -> System.Collections.Generic.ISet<int>!
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.ResultResilienceOptions() -> void
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.RetryDelay.get -> System.TimeSpan
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.RetryDelay.set -> void
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.TotalTimeout.get -> System.TimeSpan
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.TotalTimeout.set -> void
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.UseJitter.get -> bool
+Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions.UseJitter.set -> void
+const Resrcify.SharedKernel.Web.Authentication.ResrcifyJwtOptions.SectionName = "Jwt" -> string!
+const Resrcify.SharedKernel.Web.Endpoints.IdempotencyHeaders.Key = "Idempotency-Key" -> string!
+const Resrcify.SharedKernel.Web.Endpoints.IdempotencyHeaders.Replayed = "Idempotency-Replayed" -> string!
+const Resrcify.SharedKernel.Web.Exceptions.ResultExceptionHandler.ErrorCode = "Unhandled" -> string!
+const Resrcify.SharedKernel.Web.Exceptions.ResultExceptionHandler.ErrorMessage = "An unexpected error occurred." -> string!
+const Resrcify.SharedKernel.Web.Extensions.ResultResilienceHttpClientBuilderExtensions.PipelineName = "result-resilience" -> string!
+const Resrcify.SharedKernel.Web.Health.HealthTags.Live = "live" -> string!
+const Resrcify.SharedKernel.Web.Health.HealthTags.Ready = "ready" -> string!
+static Resrcify.SharedKernel.Web.Endpoints.IdempotencyHeaders.MarkIfReplayed(Microsoft.AspNetCore.Http.HttpContext! context, object! request) -> void
+static Resrcify.SharedKernel.Web.Extensions.ClaimsPrincipalExtensions.GetUserId(this System.Security.Claims.ClaimsPrincipal! user) -> Resrcify.SharedKernel.Results.Primitives.Result<System.Guid>!
+static Resrcify.SharedKernel.Web.Extensions.EndpointExtensions.AddEndpoints(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, params System.Reflection.Assembly![]! assemblies) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Resrcify.SharedKernel.Web.Extensions.EndpointExtensions.MapEndpoints(this Microsoft.AspNetCore.Builder.WebApplication! app, Microsoft.AspNetCore.Routing.RouteGroupBuilder? routeGroupBuilder = null) -> Microsoft.AspNetCore.Builder.IApplicationBuilder!
+static Resrcify.SharedKernel.Web.Extensions.HealthEndpointExtensions.MapHealthEndpoints(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, System.Action<Resrcify.SharedKernel.Web.Health.HealthEndpointOptions!>? configure = null) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
+static Resrcify.SharedKernel.Web.Extensions.HttpContextExtensions.GetBearerToken(this Microsoft.AspNetCore.Http.HttpContext! context) -> string?
+static Resrcify.SharedKernel.Web.Extensions.HttpResponseMessageExtensions.ToResultAsync(this System.Net.Http.HttpResponseMessage! response, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Resrcify.SharedKernel.Results.Primitives.Result!>!
+static Resrcify.SharedKernel.Web.Extensions.HttpResponseMessageExtensions.ToResultAsync<T>(this System.Net.Http.HttpResponseMessage! response, System.Text.Json.JsonSerializerOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Resrcify.SharedKernel.Results.Primitives.Result<T>!>!
+static Resrcify.SharedKernel.Web.Extensions.HttpResultExtensions.Match(this System.Threading.Tasks.Task<Resrcify.SharedKernel.Results.Primitives.Result!>! resultTask, System.Func<Microsoft.AspNetCore.Http.IResult!>! onSuccess, System.Func<Resrcify.SharedKernel.Results.Primitives.Result!, Microsoft.AspNetCore.Http.IResult!>! onFailure) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Http.IResult!>!
+static Resrcify.SharedKernel.Web.Extensions.HttpResultExtensions.Match<TIn>(this System.Threading.Tasks.Task<Resrcify.SharedKernel.Results.Primitives.Result<TIn>!>! resultTask, System.Func<TIn, Microsoft.AspNetCore.Http.IResult!>! onSuccess, System.Func<Resrcify.SharedKernel.Results.Primitives.Result!, Microsoft.AspNetCore.Http.IResult!>! onFailure) -> System.Threading.Tasks.Task<Microsoft.AspNetCore.Http.IResult!>!
+static Resrcify.SharedKernel.Web.Extensions.HttpResultExtensions.ToProblemDetails(this Resrcify.SharedKernel.Results.Primitives.Result! result) -> Microsoft.AspNetCore.Http.IResult!
+static Resrcify.SharedKernel.Web.Extensions.InternalControllersExtensions.EnableInternalControllers(this Microsoft.Extensions.DependencyInjection.IMvcBuilder! builder, System.Type? controllerType = null) -> Microsoft.Extensions.DependencyInjection.IMvcBuilder!
+static Resrcify.SharedKernel.Web.Extensions.RequestEndpointExtensions.MapDeleteRequest(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, System.Delegate! toRequest, System.Delegate? onSuccess = null, System.Func<Resrcify.SharedKernel.Results.Primitives.Result!, Microsoft.AspNetCore.Http.IResult!>? onFailure = null) -> Microsoft.AspNetCore.Builder.RouteHandlerBuilder!
+static Resrcify.SharedKernel.Web.Extensions.RequestEndpointExtensions.MapGetRequest(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, System.Delegate! toRequest, System.Delegate? onSuccess = null, System.Func<Resrcify.SharedKernel.Results.Primitives.Result!, Microsoft.AspNetCore.Http.IResult!>? onFailure = null) -> Microsoft.AspNetCore.Builder.RouteHandlerBuilder!
+static Resrcify.SharedKernel.Web.Extensions.RequestEndpointExtensions.MapPatchRequest(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, System.Delegate! toRequest, System.Delegate? onSuccess = null, System.Func<Resrcify.SharedKernel.Results.Primitives.Result!, Microsoft.AspNetCore.Http.IResult!>? onFailure = null) -> Microsoft.AspNetCore.Builder.RouteHandlerBuilder!
+static Resrcify.SharedKernel.Web.Extensions.RequestEndpointExtensions.MapPostRequest(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, System.Delegate! toRequest, System.Delegate? onSuccess = null, System.Func<Resrcify.SharedKernel.Results.Primitives.Result!, Microsoft.AspNetCore.Http.IResult!>? onFailure = null) -> Microsoft.AspNetCore.Builder.RouteHandlerBuilder!
+static Resrcify.SharedKernel.Web.Extensions.RequestEndpointExtensions.MapPutRequest(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, System.Delegate! toRequest, System.Delegate? onSuccess = null, System.Func<Resrcify.SharedKernel.Results.Primitives.Result!, Microsoft.AspNetCore.Http.IResult!>? onFailure = null) -> Microsoft.AspNetCore.Builder.RouteHandlerBuilder!
+static Resrcify.SharedKernel.Web.Extensions.RequestEndpointExtensions.MapRequest(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, System.Collections.Generic.IEnumerable<string!>! httpMethods, System.Delegate! toRequest, System.Delegate? onSuccess = null, System.Func<Resrcify.SharedKernel.Results.Primitives.Result!, Microsoft.AspNetCore.Http.IResult!>? onFailure = null) -> Microsoft.AspNetCore.Builder.RouteHandlerBuilder!
+static Resrcify.SharedKernel.Web.Extensions.ResrcifyJwtBearerServiceCollectionExtensions.AddResrcifyJwtBearer(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration, System.Action<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerOptions!>? configure = null) -> Microsoft.AspNetCore.Authentication.AuthenticationBuilder!
+static Resrcify.SharedKernel.Web.Extensions.ResultProblemDetailsServiceCollectionExtensions.AddResultProblemDetails(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Resrcify.SharedKernel.Web.Exceptions.ResultProblemDetailsOptions!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Resrcify.SharedKernel.Web.Extensions.ResultResilienceHttpClientBuilderExtensions.AddResultResilience(this Microsoft.Extensions.DependencyInjection.IHttpClientBuilder! builder, System.Action<Resrcify.SharedKernel.Web.Resilience.ResultResilienceOptions!>? configure = null) -> Microsoft.Extensions.Http.Resilience.IHttpResiliencePipelineBuilder!
+static Resrcify.SharedKernel.Web.Health.HealthResponseWriter.WriteAsync(Microsoft.AspNetCore.Http.HttpContext! context, Microsoft.Extensions.Diagnostics.HealthChecks.HealthReport! report) -> System.Threading.Tasks.Task!

@@ -1,0 +1,35 @@
+#nullable enable
+Resrcify.SharedKernel.Repository.Extensions.QueryableExtensions
+Resrcify.SharedKernel.Repository.Primitives.Repository<TDbContext, TEntity, TId>
+Resrcify.SharedKernel.Repository.Primitives.Repository<TDbContext, TEntity, TId>.AddAsync(TEntity! entity, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Repository.Primitives.Repository<TDbContext, TEntity, TId>.AddRangeAsync(System.Collections.Generic.IEnumerable<TEntity!>! entities, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Repository.Primitives.Repository<TDbContext, TEntity, TId>.ApplySpecification(Resrcify.SharedKernel.Abstractions.Repository.ISpecification<TEntity!>! specification) -> System.Linq.IQueryable<TEntity!>!
+Resrcify.SharedKernel.Repository.Primitives.Repository<TDbContext, TEntity, TId>.Context.get -> TDbContext!
+Resrcify.SharedKernel.Repository.Primitives.Repository<TDbContext, TEntity, TId>.ExistsAsync(System.Linq.Expressions.Expression<System.Func<TEntity!, bool>!>! predicate, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Resrcify.SharedKernel.Repository.Primitives.Repository<TDbContext, TEntity, TId>.ExistsAsync(TId id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Resrcify.SharedKernel.Repository.Primitives.Repository<TDbContext, TEntity, TId>.FindAsync(Resrcify.SharedKernel.Abstractions.Repository.ISpecification<TEntity!>! specification) -> System.Collections.Generic.IAsyncEnumerable<TEntity!>!
+Resrcify.SharedKernel.Repository.Primitives.Repository<TDbContext, TEntity, TId>.Remove(TEntity! entity) -> void
+Resrcify.SharedKernel.Repository.Primitives.Repository<TDbContext, TEntity, TId>.RemoveRange(System.Collections.Generic.IEnumerable<TEntity!>! entities) -> void
+Resrcify.SharedKernel.Repository.Primitives.Repository<TDbContext, TEntity, TId>.Repository(TDbContext! context) -> void
+Resrcify.SharedKernel.Repository.Primitives.Specification<TEntity, TId>
+Resrcify.SharedKernel.Repository.Primitives.Specification<TEntity, TId>.AddInclude(System.Linq.Expressions.Expression<System.Func<TEntity!, object!>!>! includeExpression) -> void
+Resrcify.SharedKernel.Repository.Primitives.Specification<TEntity, TId>.AddOrderBy(System.Linq.Expressions.Expression<System.Func<TEntity!, object!>!>! ordertByExpression) -> void
+Resrcify.SharedKernel.Repository.Primitives.Specification<TEntity, TId>.AddOrderByDescending(System.Linq.Expressions.Expression<System.Func<TEntity!, object!>!>! ordertByDescendingExpression) -> void
+Resrcify.SharedKernel.Repository.Primitives.Specification<TEntity, TId>.Criteria.get -> System.Linq.Expressions.Expression<System.Func<TEntity!, bool>!>?
+Resrcify.SharedKernel.Repository.Primitives.Specification<TEntity, TId>.IncludeExpressions.get -> System.Collections.Generic.ICollection<System.Linq.Expressions.Expression<System.Func<TEntity!, object!>!>!>!
+Resrcify.SharedKernel.Repository.Primitives.Specification<TEntity, TId>.IsNoTrackingQuery.get -> bool
+Resrcify.SharedKernel.Repository.Primitives.Specification<TEntity, TId>.IsNoTrackingQuery.set -> void
+Resrcify.SharedKernel.Repository.Primitives.Specification<TEntity, TId>.IsSplitQuery.get -> bool
+Resrcify.SharedKernel.Repository.Primitives.Specification<TEntity, TId>.IsSplitQuery.set -> void
+Resrcify.SharedKernel.Repository.Primitives.Specification<TEntity, TId>.OrderByDescendingExpression.get -> System.Linq.Expressions.Expression<System.Func<TEntity!, object!>!>?
+Resrcify.SharedKernel.Repository.Primitives.Specification<TEntity, TId>.OrderByExpression.get -> System.Linq.Expressions.Expression<System.Func<TEntity!, object!>!>?
+Resrcify.SharedKernel.Repository.Primitives.Specification<TEntity, TId>.Specification(System.Linq.Expressions.Expression<System.Func<TEntity!, bool>!>? criteria) -> void
+Resrcify.SharedKernel.Repository.Primitives.SpecificationEvaluator
+static Resrcify.SharedKernel.Repository.Extensions.QueryableExtensions.IncludeIf<T>(this System.Linq.IQueryable<T!>! queryable, bool condition, System.Linq.Expressions.Expression<System.Func<T!, object!>!>! keySelector) -> System.Linq.IQueryable<T!>!
+static Resrcify.SharedKernel.Repository.Extensions.QueryableExtensions.WhereIf<T>(this System.Linq.IQueryable<T>! queryable, bool condition, System.Linq.Expressions.Expression<System.Func<T, bool>!>! predicate) -> System.Linq.IQueryable<T>!
+static Resrcify.SharedKernel.Repository.Primitives.SpecificationEvaluator.GetQuery<TEntity>(System.Linq.IQueryable<TEntity!>! inputQueryable, Resrcify.SharedKernel.Abstractions.Repository.ISpecification<TEntity!>! specification) -> System.Linq.IQueryable<TEntity!>!
+virtual Resrcify.SharedKernel.Repository.Primitives.Repository<TDbContext, TEntity, TId>.FindAsync(System.Linq.Expressions.Expression<System.Func<TEntity!, bool>!>! predicate) -> System.Collections.Generic.IAsyncEnumerable<TEntity!>!
+virtual Resrcify.SharedKernel.Repository.Primitives.Repository<TDbContext, TEntity, TId>.FirstOrDefaultAsync(Resrcify.SharedKernel.Abstractions.Repository.ISpecification<TEntity!>! specification, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TEntity?>!
+virtual Resrcify.SharedKernel.Repository.Primitives.Repository<TDbContext, TEntity, TId>.FirstOrDefaultAsync(System.Linq.Expressions.Expression<System.Func<TEntity!, bool>!>! predicate, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TEntity?>!
+virtual Resrcify.SharedKernel.Repository.Primitives.Repository<TDbContext, TEntity, TId>.GetAllAsync() -> System.Collections.Generic.IAsyncEnumerable<TEntity!>!
+virtual Resrcify.SharedKernel.Repository.Primitives.Repository<TDbContext, TEntity, TId>.GetByIdAsync(TId id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TEntity?>!

@@ -56,6 +56,13 @@ dotnet_style_prefer_is_null_check_over_reference_equality_method = true:error
 # S3453: Classes should not have only "private" constructors
 dotnet_diagnostic.S3453.severity = none
 
+# RS0026 / RS0027 (public API analyzer): overloads with optional parameters. They reject the
+# `CancellationToken cancellationToken = default` overloads the API is built on (Send, Publish, GetAsync,
+# ExistsAsync, ...), as MediatR and the BCL do; "fixing" them breaks every consumer. The API lists
+# (PublicAPI.*.txt, RS0016 / RS0017) still show any signature change as a diff.
+dotnet_diagnostic.RS0026.severity = none
+dotnet_diagnostic.RS0027.severity = none
+
 [*.{cs,vb}]
 dotnet_style_prefer_simplified_boolean_expressions = true:suggestion
 dotnet_style_prefer_simplified_interpolation = true:suggestion

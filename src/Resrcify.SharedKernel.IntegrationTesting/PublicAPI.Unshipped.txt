@@ -1,0 +1,52 @@
+#nullable enable
+Resrcify.SharedKernel.IntegrationTesting.Factories.IntegrationFactoryBase<TProgram>
+Resrcify.SharedKernel.IntegrationTesting.Factories.IntegrationFactoryBase<TProgram>.IntegrationFactoryBase() -> void
+Resrcify.SharedKernel.IntegrationTesting.Factories.ServiceHostFixture<TProgram>
+Resrcify.SharedKernel.IntegrationTesting.Factories.ServiceHostFixture<TProgram>.InitializeAsync() -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.IntegrationTesting.Factories.ServiceHostFixture<TProgram>.Network.get -> DotNet.Testcontainers.Networks.INetwork?
+Resrcify.SharedKernel.IntegrationTesting.Factories.ServiceHostFixture<TProgram>.Postgres.get -> Resrcify.SharedKernel.IntegrationTesting.Fixtures.PostgresContainerFixture!
+Resrcify.SharedKernel.IntegrationTesting.Factories.ServiceHostFixture<TProgram>.RabbitMq.get -> Resrcify.SharedKernel.IntegrationTesting.Fixtures.RabbitMqContainerFixture?
+Resrcify.SharedKernel.IntegrationTesting.Factories.ServiceHostFixture<TProgram>.ServiceHostFixture() -> void
+Resrcify.SharedKernel.IntegrationTesting.Factories.ServiceHostFixture<TProgram>.Settings.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string?>!
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.ContainerFixture<TContainer>
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.ContainerFixture<TContainer>.Container.get -> TContainer
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.ContainerFixture<TContainer>.ContainerFixture() -> void
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.ContainerFixture<TContainer>.DisposeAsync() -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.ContainerFixture<TContainer>.InitializeAsync() -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.PostgresContainerFixture
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.PostgresContainerFixture.CreateIsolatedConnectionString() -> string!
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.PostgresContainerFixture.Host.get -> string!
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.PostgresContainerFixture.JoinNetwork(DotNet.Testcontainers.Networks.INetwork! network, params string![]! aliases) -> void
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.PostgresContainerFixture.Port.get -> string!
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.PostgresContainerFixture.PostgresContainerFixture() -> void
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.RabbitMqContainerFixture
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.RabbitMqContainerFixture.AmqpPort.get -> string!
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.RabbitMqContainerFixture.Host.get -> string!
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.RabbitMqContainerFixture.JoinNetwork(DotNet.Testcontainers.Networks.INetwork! network, params string![]! aliases) -> void
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.RabbitMqContainerFixture.ManagementPort.get -> string!
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.RabbitMqContainerFixture.ManagementUrl.get -> System.Uri!
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.RabbitMqContainerFixture.RabbitMqContainerFixture() -> void
+Resrcify.SharedKernel.IntegrationTesting.Fixtures.RabbitMqContainerFixture.WaitForExchangePublish(string! exchange, System.TimeSpan timeout, string! vhost = "/", System.TimeSpan? pollInterval = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+abstract Resrcify.SharedKernel.IntegrationTesting.Factories.IntegrationFactoryBase<TProgram>.EnvOverrides() -> System.Collections.Generic.IDictionary<string!, string?>!
+abstract Resrcify.SharedKernel.IntegrationTesting.Fixtures.ContainerFixture<TContainer>.Build() -> TContainer
+const Resrcify.SharedKernel.IntegrationTesting.Factories.ServiceHostFixture<TProgram>.PostgresNetworkAlias = "postgres" -> string!
+const Resrcify.SharedKernel.IntegrationTesting.Factories.ServiceHostFixture<TProgram>.RabbitMqNetworkAlias = "rabbitmq" -> string!
+const Resrcify.SharedKernel.IntegrationTesting.Fixtures.PostgresContainerFixture.DefaultImage = "postgres:18" -> string!
+const Resrcify.SharedKernel.IntegrationTesting.Fixtures.PostgresContainerFixture.ImageVariable = "RESRCIFY_TEST_POSTGRES_IMAGE" -> string!
+const Resrcify.SharedKernel.IntegrationTesting.Fixtures.RabbitMqContainerFixture.DefaultImage = "rabbitmq:4.3.4-management" -> string!
+const Resrcify.SharedKernel.IntegrationTesting.Fixtures.RabbitMqContainerFixture.ImageVariable = "RESRCIFY_TEST_RABBITMQ_IMAGE" -> string!
+override Resrcify.SharedKernel.IntegrationTesting.Factories.IntegrationFactoryBase<TProgram>.ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder! builder) -> void
+override Resrcify.SharedKernel.IntegrationTesting.Factories.ServiceHostFixture<TProgram>.ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder! builder) -> void
+override Resrcify.SharedKernel.IntegrationTesting.Fixtures.PostgresContainerFixture.Build() -> Testcontainers.PostgreSql.PostgreSqlContainer!
+override Resrcify.SharedKernel.IntegrationTesting.Fixtures.PostgresContainerFixture.OnStartedAsync() -> System.Threading.Tasks.Task!
+override Resrcify.SharedKernel.IntegrationTesting.Fixtures.RabbitMqContainerFixture.Build() -> Testcontainers.RabbitMq.RabbitMqContainer!
+override sealed Resrcify.SharedKernel.IntegrationTesting.Factories.ServiceHostFixture<TProgram>.EnvOverrides() -> System.Collections.Generic.IDictionary<string!, string?>!
+virtual Resrcify.SharedKernel.IntegrationTesting.Factories.IntegrationFactoryBase<TProgram>.Environment.get -> string!
+virtual Resrcify.SharedKernel.IntegrationTesting.Factories.ServiceHostFixture<TProgram>.ConfigureSettings(System.Collections.Generic.IDictionary<string!, string?>! settings) -> void
+virtual Resrcify.SharedKernel.IntegrationTesting.Factories.ServiceHostFixture<TProgram>.ConfigureTestServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Resrcify.SharedKernel.IntegrationTesting.Factories.ServiceHostFixture<TProgram>.CreatePostgres() -> Resrcify.SharedKernel.IntegrationTesting.Fixtures.PostgresContainerFixture!
+virtual Resrcify.SharedKernel.IntegrationTesting.Factories.ServiceHostFixture<TProgram>.CreateRabbitMq() -> Resrcify.SharedKernel.IntegrationTesting.Fixtures.RabbitMqContainerFixture?
+virtual Resrcify.SharedKernel.IntegrationTesting.Factories.ServiceHostFixture<TProgram>.UsesNetwork.get -> bool
+virtual Resrcify.SharedKernel.IntegrationTesting.Fixtures.ContainerFixture<TContainer>.OnStartedAsync() -> System.Threading.Tasks.Task!
+virtual Resrcify.SharedKernel.IntegrationTesting.Fixtures.PostgresContainerFixture.Configure(Testcontainers.PostgreSql.PostgreSqlBuilder! builder) -> Testcontainers.PostgreSql.PostgreSqlBuilder!
+virtual Resrcify.SharedKernel.IntegrationTesting.Fixtures.RabbitMqContainerFixture.Configure(Testcontainers.RabbitMq.RabbitMqBuilder! builder) -> Testcontainers.RabbitMq.RabbitMqBuilder!

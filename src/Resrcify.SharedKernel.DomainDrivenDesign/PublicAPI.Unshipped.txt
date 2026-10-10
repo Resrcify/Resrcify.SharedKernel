@@ -1,0 +1,57 @@
+#nullable enable
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.AggregateRoot<TId>
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.AggregateRoot<TId>.AggregateRoot(TId id) -> void
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.AggregateRoot<TId>.ClearDomainEvents() -> void
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.AggregateRoot<TId>.GetDomainEvents() -> System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDomainEvent!>!
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.AggregateRoot<TId>.RaiseDomainEvent(Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDomainEvent! domainEvent) -> void
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.AggregateRoot<TId>.RemoveDomainEvent(Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDomainEvent! domainEvent) -> void
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent.Deconstruct(out System.Guid Id) -> void
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent.DomainEvent(Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent! original) -> void
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent.DomainEvent(System.Guid Id) -> void
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent.Id.get -> System.Guid
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent.Id.init -> void
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Entity<TId>
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Entity<TId>.Entity(TId id) -> void
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Entity<TId>.Equals(Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Entity<TId>? other) -> bool
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Entity<TId>.Id.get -> TId
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum>
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum>.Enumeration(int value, string! name) -> void
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum>.Equals(Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum!>? other) -> bool
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum>.Name.get -> string!
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum>.Name.init -> void
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum>.Value.get -> int
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum>.Value.init -> void
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.ValueObject
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.ValueObject.Equals(Resrcify.SharedKernel.DomainDrivenDesign.Primitives.ValueObject? other) -> bool
+Resrcify.SharedKernel.DomainDrivenDesign.Primitives.ValueObject.ValueObject() -> void
+abstract Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent.<Clone>$() -> Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent!
+abstract Resrcify.SharedKernel.DomainDrivenDesign.Primitives.ValueObject.GetAtomicValues() -> System.Collections.Generic.IEnumerable<object!>!
+override Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent.GetHashCode() -> int
+override Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent.ToString() -> string!
+override Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Entity<TId>.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Entity<TId>.GetHashCode() -> int
+override Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Entity<TId>.ToString() -> string!
+override Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum>.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum>.GetHashCode() -> int
+override Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum>.ToString() -> string!
+override Resrcify.SharedKernel.DomainDrivenDesign.Primitives.ValueObject.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.DomainDrivenDesign.Primitives.ValueObject.GetHashCode() -> int
+override Resrcify.SharedKernel.DomainDrivenDesign.Primitives.ValueObject.ToString() -> string!
+static Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent.operator !=(Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent? left, Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent? right) -> bool
+static Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent.operator ==(Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent? left, Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent? right) -> bool
+static Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Entity<TId>.operator !=(Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Entity<TId>? first, Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Entity<TId>? second) -> bool
+static Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Entity<TId>.operator ==(Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Entity<TId>? first, Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Entity<TId>? second) -> bool
+static Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum>.Enumerations.get -> System.Collections.Generic.IReadOnlyDictionary<int, TEnum!>!
+static Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum>.FromName(string? name) -> TEnum?
+static Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum>.FromValue(int value) -> TEnum?
+static Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum>.TryFromName(string? name, out TEnum? result) -> bool
+static Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum>.TryFromValue(int value, out TEnum? result) -> bool
+static Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum>.implicit operator int(Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum!>! e) -> int
+static Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum>.implicit operator string!(Resrcify.SharedKernel.DomainDrivenDesign.Primitives.Enumeration<TEnum!>! e) -> string!
+static Resrcify.SharedKernel.DomainDrivenDesign.Primitives.ValueObject.operator !=(Resrcify.SharedKernel.DomainDrivenDesign.Primitives.ValueObject? left, Resrcify.SharedKernel.DomainDrivenDesign.Primitives.ValueObject? right) -> bool
+static Resrcify.SharedKernel.DomainDrivenDesign.Primitives.ValueObject.operator ==(Resrcify.SharedKernel.DomainDrivenDesign.Primitives.ValueObject? left, Resrcify.SharedKernel.DomainDrivenDesign.Primitives.ValueObject? right) -> bool
+virtual Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent.EqualityContract.get -> System.Type!
+virtual Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent.Equals(Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent? other) -> bool
+virtual Resrcify.SharedKernel.DomainDrivenDesign.Primitives.DomainEvent.PrintMembers(System.Text.StringBuilder! builder) -> bool

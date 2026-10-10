@@ -42,6 +42,7 @@ domain-driven design primitives, result handling, messaging behaviors, repositor
 - Preserve existing project style and avoid unrelated refactors while applying namespace corrections.
 - Read the clock through `TimeProvider` (from DI, or an optional constructor parameter defaulting to `TimeProvider.System`), never `DateTime.UtcNow` / `DateTimeOffset.UtcNow`, and wait with its overloads (`Task.Delay(delay, timeProvider, ct)`, `new PeriodicTimer(interval, timeProvider)`), so services can test time with `FakeTimeProvider`.
 - Record every change a consumer can notice in `CHANGELOG.md`, under the unreleased version: a breaking one under "Breaking changes" with what the consumer must do, the rest under Added / Fixed / Removed.
+- Every package lists its public API in `PublicAPI.Shipped.txt` (released) and `PublicAPI.Unshipped.txt` (since), next to its project; a public member added, removed or changed without its line fails the build (RS0016 / RS0017). Add the line with the change. On a release, move each package's Unshipped lines into its Shipped file. To regenerate a package's lines, build with `-p:ErrorLog=<file>.sarif%2Cversion=2.1` and take each RS0016's `APIName` (`dotnet format` can't apply that fix).
 
 ## Naming and solution conventions
 

@@ -1,0 +1,149 @@
+#nullable enable
+Resrcify.SharedKernel.MessageBus.Abstractions.IBusConfigurationStrategy
+Resrcify.SharedKernel.MessageBus.Abstractions.IBusConfigurationStrategy.ConfigureConnectionFactory(RabbitMQ.Client.ConnectionFactory! factory) -> void
+Resrcify.SharedKernel.MessageBus.Abstractions.IBusConfigurationStrategy.ConfigureOptions(Rebus.Config.OptionsConfigurer! options) -> void
+Resrcify.SharedKernel.MessageBus.Abstractions.IBusConfigurationStrategy.ConfigureTransport(Rebus.Config.RabbitMqOptionsBuilder! transport) -> void
+Resrcify.SharedKernel.MessageBus.Abstractions.IMessageSerializationStrategy
+Resrcify.SharedKernel.MessageBus.Abstractions.IMessageSerializationStrategy.Configure(System.Text.Json.JsonSerializerOptions! options) -> void
+Resrcify.SharedKernel.MessageBus.Abstractions.IRateLimiterStrategy
+Resrcify.SharedKernel.MessageBus.Abstractions.IRateLimiterStrategy.CreateLimiter(string! queueName, Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions! options) -> System.Threading.RateLimiting.RateLimiter!
+Resrcify.SharedKernel.MessageBus.Configuration.DefaultBusConfigurationStrategy
+Resrcify.SharedKernel.MessageBus.Configuration.DefaultBusConfigurationStrategy.ConfigureOptions(Rebus.Config.OptionsConfigurer! options) -> void
+Resrcify.SharedKernel.MessageBus.Configuration.DefaultBusConfigurationStrategy.ConfigureTransport(Rebus.Config.RabbitMqOptionsBuilder! transport) -> void
+Resrcify.SharedKernel.MessageBus.Configuration.DefaultBusConfigurationStrategy.DefaultBusConfigurationStrategy() -> void
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.AddEventHandlers(params System.Reflection.Assembly![]! additionalAssemblies) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.AddHandler<THandler>() -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.AddMessage<TMessage>(string? wireName = null, string? sendTo = null) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.AddRateLimitedQueue<TRequest, TResponse, THandler>(System.Action<Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions!>? configure = null) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.AddRateLimitedQueue<TRequest, TResponse, THandler>(string? queueName, System.Action<Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions!>? configure = null) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.AddRateLimitedQueue<TRequest, TResponse>(System.Func<TRequest!, Resrcify.SharedKernel.Abstractions.Mediator.IRequest<Resrcify.SharedKernel.Results.Primitives.Result<TResponse!>!>!>! toMediatorRequest, System.Action<Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions!>? configure = null) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.AddRequest<TRequest, TResponse>(string? queue = null) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.AddScatterGather(params System.Reflection.Assembly![]! additionalAssemblies) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.CompressMessagesAbove(int? bytes) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.ConfigureSubscription<TEvent>(System.Action<Resrcify.SharedKernel.MessageBus.PublishSubscribe.SubscriptionOptions<TEvent!>!>! configure) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.ForwardEvent<TEvent>(System.Func<TEvent!, Resrcify.SharedKernel.Abstractions.Mediator.INotification!>! toNotification) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.ForwardEvent<TEvent>(System.Func<TEvent!, Resrcify.SharedKernel.Abstractions.Mediator.IRequest<Resrcify.SharedKernel.Results.Primitives.Result!>!>! toCommand) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.RemoveSubscription(string! wireName) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.RemoveSubscription<TEvent>() -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.Services.get -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.SkipDuplicateEvents(System.TimeSpan? rememberFor = null) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.UseConfigurationStrategy(Resrcify.SharedKernel.MessageBus.Abstractions.IBusConfigurationStrategy! strategy) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.UseConfigurationStrategy(System.Func<System.IServiceProvider!, Resrcify.SharedKernel.MessageBus.Abstractions.IBusConfigurationStrategy!>! strategy) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.UseInMemory(Rebus.Transport.InMem.InMemNetwork? network = null) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.UseRabbitMq(Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection! connection) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.UseRabbitMq(System.Func<System.IServiceProvider!, Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection!>! connection) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.UseSerializationStrategy(Resrcify.SharedKernel.MessageBus.Abstractions.IMessageSerializationStrategy! strategy) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.UseSerializationStrategy(System.Func<System.IServiceProvider!, Resrcify.SharedKernel.MessageBus.Abstractions.IMessageSerializationStrategy!>! strategy) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.WithConcurrency(int prefetch, int maxParallelism) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.WithInputQueue(string! queueName) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder.WithServiceName(string! serviceName) -> Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!
+Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection
+Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.<Clone>$() -> Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection!
+Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.ConnectionString.get -> string!
+Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.Deconstruct(out string! Host, out int Port, out string! Username, out string! Password) -> void
+Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.Equals(Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection? other) -> bool
+Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.Host.get -> string!
+Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.Host.init -> void
+Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.Password.get -> string!
+Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.Password.init -> void
+Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.Port.get -> int
+Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.Port.init -> void
+Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.RabbitMqConnection(string! Host, int Port, string! Username, string! Password) -> void
+Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.UseTls.get -> bool
+Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.UseTls.init -> void
+Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.Username.get -> string!
+Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.Username.init -> void
+Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.VirtualHost.get -> string!
+Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.VirtualHost.init -> void
+Resrcify.SharedKernel.MessageBus.Diagnostics.MessageBusDiagnostics
+Resrcify.SharedKernel.MessageBus.Extensions.MessageBusHealthChecksBuilderExtensions
+Resrcify.SharedKernel.MessageBus.Extensions.MessageBusServiceCollectionExtensions
+Resrcify.SharedKernel.MessageBus.PublishSubscribe.SentBackBehindException
+Resrcify.SharedKernel.MessageBus.PublishSubscribe.SentBackBehindException.SentBackBehindException() -> void
+Resrcify.SharedKernel.MessageBus.PublishSubscribe.SentBackBehindException.SentBackBehindException(string! message) -> void
+Resrcify.SharedKernel.MessageBus.PublishSubscribe.SentBackBehindException.SentBackBehindException(string! message, System.Exception! innerException) -> void
+Resrcify.SharedKernel.MessageBus.PublishSubscribe.SubscriptionOptions<TEvent>
+Resrcify.SharedKernel.MessageBus.PublishSubscribe.SubscriptionOptions<TEvent>.HandleInPartitions(System.Func<TEvent!, object!>! key, int partitions = 16, bool inPublishOrder = true) -> Resrcify.SharedKernel.MessageBus.PublishSubscribe.SubscriptionOptions<TEvent!>!
+Resrcify.SharedKernel.MessageBus.PublishSubscribe.SubscriptionOptions<TEvent>.HandleOneAtATime(bool inPublishOrder = true) -> Resrcify.SharedKernel.MessageBus.PublishSubscribe.SubscriptionOptions<TEvent!>!
+Resrcify.SharedKernel.MessageBus.PublishSubscribe.SubscriptionOptions<TEvent>.InPublishOrder.get -> bool
+Resrcify.SharedKernel.MessageBus.PublishSubscribe.SubscriptionOptions<TEvent>.SubscriptionOptions() -> void
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions.AnswerFailure.get -> System.Func<System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.Results.Primitives.Error!>!, bool>!
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions.AnswerFailure.set -> void
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions.Burst.get -> int
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions.Burst.set -> void
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions.HealthCheckInterval.get -> System.TimeSpan
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions.HealthCheckInterval.set -> void
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions.HealthCheckTag.get -> string?
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions.HealthCheckTag.set -> void
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions.PerSecond.get -> int
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions.PerSecond.set -> void
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions.Prefetch.get -> int?
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions.Prefetch.set -> void
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions.RateLimitedQueueOptions() -> void
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions.RateLimiter.get -> Resrcify.SharedKernel.MessageBus.Abstractions.IRateLimiterStrategy!
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions.RateLimiter.set -> void
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.SharedRateLimiterStrategy
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.SharedRateLimiterStrategy.CreateLimiter(string! queueName, Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions! options) -> System.Threading.RateLimiting.RateLimiter!
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.SharedRateLimiterStrategy.SharedRateLimiterStrategy(System.Func<System.Threading.RateLimiting.RateLimiter!>! createLimiter) -> void
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.TokenBucketRateLimiterStrategy
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.TokenBucketRateLimiterStrategy.CreateLimiter(string! queueName, Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions! options) -> System.Threading.RateLimiting.RateLimiter!
+Resrcify.SharedKernel.MessageBus.RateLimitedQueues.TokenBucketRateLimiterStrategy.TokenBucketRateLimiterStrategy() -> void
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterGatherErrors
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterHeaders
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.<Clone>$() -> Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed!
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.Deconstruct(out System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData!>! Errors) -> void
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.Equals(Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed? other) -> bool
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData.<Clone>$() -> Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData!
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData.Code.get -> string!
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData.Code.init -> void
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData.Deconstruct(out string! Code, out string! Message, out Resrcify.SharedKernel.Results.Primitives.ErrorType Type) -> void
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData.Equals(Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData? other) -> bool
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData.ErrorData(string! Code, string! Message, Resrcify.SharedKernel.Results.Primitives.ErrorType Type) -> void
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData.Message.get -> string!
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData.Message.init -> void
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData.Type.get -> Resrcify.SharedKernel.Results.Primitives.ErrorType
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData.Type.init -> void
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.Errors.get -> System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData!>!
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.Errors.init -> void
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ScatterRequestFailed(System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData!>! Errors) -> void
+Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ToErrors() -> Resrcify.SharedKernel.Results.Primitives.Error![]!
+Resrcify.SharedKernel.MessageBus.Serialization.DefaultMessageSerializationStrategy
+Resrcify.SharedKernel.MessageBus.Serialization.DefaultMessageSerializationStrategy.Configure(System.Text.Json.JsonSerializerOptions! options) -> void
+Resrcify.SharedKernel.MessageBus.Serialization.DefaultMessageSerializationStrategy.DefaultMessageSerializationStrategy() -> void
+Resrcify.SharedKernel.MessageBus.Serialization.MessageContract
+const Resrcify.SharedKernel.MessageBus.Diagnostics.MessageBusDiagnostics.MeterName = "Resrcify.SharedKernel.MessageBus" -> string!
+const Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterHeaders.BatchId = "resrcify-scatter-batch-id" -> string!
+const Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterHeaders.ItemKey = "resrcify-scatter-item-key" -> string!
+const Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterHeaders.Kind = "resrcify-scatter-kind" -> string!
+const Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.WireName = "resrcify.scatter-request-failed.v2" -> string!
+override Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.GetHashCode() -> int
+override Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.ToString() -> string!
+override Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData.GetHashCode() -> int
+override Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData.ToString() -> string!
+override Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.GetHashCode() -> int
+override Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ToString() -> string!
+static Resrcify.SharedKernel.MessageBus.Configuration.DefaultBusConfigurationStrategy.Instance.get -> Resrcify.SharedKernel.MessageBus.Configuration.DefaultBusConfigurationStrategy!
+static Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.operator !=(Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection? left, Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection? right) -> bool
+static Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.operator ==(Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection? left, Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection? right) -> bool
+static Resrcify.SharedKernel.MessageBus.Extensions.MessageBusHealthChecksBuilderExtensions.AddMessageBus(this Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder! builder, string! name = "messagebus", Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus? failureStatus = null, System.Collections.Generic.IEnumerable<string!>? tags = null) -> Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!
+static Resrcify.SharedKernel.MessageBus.Extensions.MessageBusServiceCollectionExtensions.AddMessageBus(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions.AnswerFailureWhenItsTheRequestsFault(System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.Results.Primitives.Error!>! errors) -> bool
+static Resrcify.SharedKernel.MessageBus.RateLimitedQueues.SharedRateLimiterStrategy.TokenBucket(int perSecond, int burst) -> Resrcify.SharedKernel.MessageBus.RateLimitedQueues.SharedRateLimiterStrategy!
+static Resrcify.SharedKernel.MessageBus.RateLimitedQueues.TokenBucketRateLimiterStrategy.Instance.get -> Resrcify.SharedKernel.MessageBus.RateLimitedQueues.TokenBucketRateLimiterStrategy!
+static Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterGatherErrors.Unanswered(string! key) -> Resrcify.SharedKernel.Results.Primitives.Error!
+static Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterGatherErrors.UnexpectedReply(string! type) -> Resrcify.SharedKernel.Results.Primitives.Error!
+static Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterHeaders.TryRead(System.Collections.Generic.IReadOnlyDictionary<string!, string!>! headers, out System.Guid batchId, out string! itemKey) -> bool
+static Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData.operator !=(Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData? left, Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData? right) -> bool
+static Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData.operator ==(Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData? left, Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ErrorData? right) -> bool
+static Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.From(System.Collections.Generic.IEnumerable<Resrcify.SharedKernel.Results.Primitives.Error!>! errors) -> Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed!
+static Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.operator !=(Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed? left, Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed? right) -> bool
+static Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.operator ==(Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed? left, Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed? right) -> bool
+static Resrcify.SharedKernel.MessageBus.Serialization.DefaultMessageSerializationStrategy.Instance.get -> Resrcify.SharedKernel.MessageBus.Serialization.DefaultMessageSerializationStrategy!
+static Resrcify.SharedKernel.MessageBus.Serialization.MessageContract.Differences<TSent, TReceived>(TSent! sample, Resrcify.SharedKernel.MessageBus.Abstractions.IMessageSerializationStrategy? senderStrategy = null) -> System.Collections.Generic.IReadOnlyList<string!>!

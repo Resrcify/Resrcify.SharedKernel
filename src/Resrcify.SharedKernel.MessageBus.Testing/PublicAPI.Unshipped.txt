@@ -1,0 +1,49 @@
+#nullable enable
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusStandIn
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusStandIn.DisposeAsync() -> System.Threading.Tasks.ValueTask
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusStandIn.Harness.get -> Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestHarness!
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestHarness
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestHarness.Consumed.get -> Resrcify.SharedKernel.MessageBus.Testing.MessageRecording!
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestHarness.DeadLettered.get -> Resrcify.SharedKernel.MessageBus.Testing.MessageRecording!
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestHarness.FailNext<TMessage>(int deliveries = 1, System.Exception? exception = null) -> void
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestHarness.FailStart(string! queue, int starts = 1) -> void
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestHarness.Faulted.get -> Resrcify.SharedKernel.MessageBus.Testing.MessageRecording!
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestHarness.Network.get -> Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestNetwork!
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestHarness.Published.get -> Resrcify.SharedKernel.MessageBus.Testing.MessageRecording!
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestHarness.Sent.get -> Resrcify.SharedKernel.MessageBus.Testing.MessageRecording!
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestHarness.WaitUntilIdleAsync(System.TimeSpan? timeout = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestHarnessServiceCollectionExtensions
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestNetwork
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestNetwork.MessageBusTestNetwork() -> void
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestNetwork.Network.get -> Rebus.Transport.InMem.InMemNetwork!
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestNetwork.StartResponderAsync<TRequest, TResponse>(System.Func<TRequest!, System.Threading.CancellationToken, System.Threading.Tasks.Task<Resrcify.SharedKernel.Results.Primitives.Result<TResponse!>!>!>! respond, string? queue = null, System.Action<Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!>? configure = null, System.Action<Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions!>? queueOptions = null) -> System.Threading.Tasks.Task<Resrcify.SharedKernel.MessageBus.Testing.MessageBusStandIn!>!
+Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestNetwork.WaitUntilIdleAsync(System.TimeSpan? timeout = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.MessageBus.Testing.MessageRecording
+Resrcify.SharedKernel.MessageBus.Testing.MessageRecording.All.get -> System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage!>!
+Resrcify.SharedKernel.MessageBus.Testing.MessageRecording.Of<TMessage>() -> System.Collections.Generic.IReadOnlyList<TMessage!>!
+Resrcify.SharedKernel.MessageBus.Testing.MessageRecording.WaitForAsync<TMessage>(System.Func<TMessage!, bool>? match = null, System.TimeSpan? timeout = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TMessage!>!
+Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage
+Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.<Clone>$() -> Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage!
+Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.Deconstruct(out object? Message, out System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Headers, out System.Collections.Generic.IReadOnlyList<string!>! Destinations, out string? Queue, out System.Exception? Exception) -> void
+Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.Destinations.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.Destinations.init -> void
+Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.Equals(Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage? other) -> bool
+Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.Exception.get -> System.Exception?
+Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.Exception.init -> void
+Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.Headers.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.Headers.init -> void
+Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.Message.get -> object?
+Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.Message.init -> void
+Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.MessageId.get -> string?
+Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.MessageType.get -> string?
+Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.Queue.get -> string?
+Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.Queue.init -> void
+Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.RecordedMessage(object? Message, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Headers, System.Collections.Generic.IReadOnlyList<string!>! Destinations, string? Queue, System.Exception? Exception) -> void
+override Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.GetHashCode() -> int
+override Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.ToString() -> string!
+static Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestHarnessServiceCollectionExtensions.AddMessageBusTestHarness(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestNetwork? network = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.operator !=(Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage? left, Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage? right) -> bool
+static Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage.operator ==(Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage? left, Resrcify.SharedKernel.MessageBus.Testing.RecordedMessage? right) -> bool
+static readonly Resrcify.SharedKernel.MessageBus.Testing.MessageBusTestNetwork.DefaultTimeout -> System.TimeSpan
+static readonly Resrcify.SharedKernel.MessageBus.Testing.MessageRecording.DefaultTimeout -> System.TimeSpan

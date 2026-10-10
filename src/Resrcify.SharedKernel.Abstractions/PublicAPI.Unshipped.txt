@@ -1,0 +1,180 @@
+#nullable enable
+Resrcify.SharedKernel.Abstractions.Caching.ICachingService
+Resrcify.SharedKernel.Abstractions.Caching.ICachingService.GetAsync<T>(string! key, System.Text.Json.JsonSerializerOptions? serializerOptions = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T?>!
+Resrcify.SharedKernel.Abstractions.Caching.ICachingService.GetAsync<T>(string! key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<T?>!
+Resrcify.SharedKernel.Abstractions.Caching.ICachingService.GetBulkAsync<T>(System.Collections.Generic.IEnumerable<string!>! keys, System.Text.Json.JsonSerializerOptions? serializerOptions = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IEnumerable<T?>!>!
+Resrcify.SharedKernel.Abstractions.Caching.ICachingService.GetBulkAsync<T>(System.Collections.Generic.IEnumerable<string!>! keys, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IEnumerable<T?>!>!
+Resrcify.SharedKernel.Abstractions.Caching.ICachingService.MaxLifetime.get -> System.TimeSpan
+Resrcify.SharedKernel.Abstractions.Caching.ICachingService.RemoveAsync(string! key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.Caching.ICachingService.SetAsync<T>(string! key, T! value, System.DateTimeOffset absoluteExpiration, System.Text.Json.JsonSerializerOptions? serializerOptions = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.Caching.ICachingService.SetAsync<T>(string! key, T! value, System.DateTimeOffset absoluteExpiration, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.Caching.ICachingService.SetAsync<T>(string! key, T! value, System.DateTimeOffset? absoluteExpiration, System.TimeSpan? absoluteExpirationRelativeToNow, System.TimeSpan? slidingExpiration, System.Text.Json.JsonSerializerOptions? serializerOptions, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.Caching.ICachingService.SetForAsync<T>(string! key, T! value, System.TimeSpan expiresIn, System.Text.Json.JsonSerializerOptions? serializerOptions = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.Caching.ICachingService.SetForAsync<T>(string! key, T! value, System.TimeSpan expiresIn, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.Caching.ICachingService.SetSlidingAsync<T>(string! key, T! value, System.TimeSpan slidingExpiration, System.Text.Json.JsonSerializerOptions? serializerOptions = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.Caching.ICachingService.SetSlidingAsync<T>(string! key, T! value, System.TimeSpan slidingExpiration, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.Caching.IClaimStore
+Resrcify.SharedKernel.Abstractions.Caching.IClaimStore.ReleaseAsync(string! key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.Caching.IClaimStore.TryClaimForAsync(string! key, System.TimeSpan expiresIn, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IAggregateRoot
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IAggregateRoot.ClearDomainEvents() -> void
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IAggregateRoot.GetDomainEvents() -> System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDomainEvent!>!
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IAggregateRoot.RemoveDomainEvent(Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDomainEvent! domainEvent) -> void
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IAggregateRoot<TId>
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IAggregateRoot<TId>.Id.get -> TId
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IAuditableEntity
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IAuditableEntity.CreatedOnUtc.get -> System.DateTime
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IAuditableEntity.ModifiedOnUtc.get -> System.DateTime
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDedupable
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDedupable.DedupKey.get -> string!
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDeletableEntity
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDeletableEntity.DeletedOnUtc.get -> System.DateTime?
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDeletableEntity.IsDeleted.get -> bool
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDomainEvent
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDomainEvent.Id.get -> System.Guid
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.IDomainEvent.Id.init -> void
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.ISingleValueObject<TSelf, TValue>
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.ISingleValueObject<TSelf, TValue>.Create(TValue value) -> Resrcify.SharedKernel.Results.Primitives.Result<TSelf>!
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.ISingleValueObject<TSelf, TValue>.FromPersisted(TValue value) -> TSelf
+Resrcify.SharedKernel.Abstractions.DomainDrivenDesign.ISingleValueObject<TSelf, TValue>.Value.get -> TValue
+Resrcify.SharedKernel.Abstractions.Mediator.IBaseCommand
+Resrcify.SharedKernel.Abstractions.Mediator.ICachingQuery
+Resrcify.SharedKernel.Abstractions.Mediator.ICachingQuery.CacheKey.get -> string?
+Resrcify.SharedKernel.Abstractions.Mediator.ICachingQuery.CacheKey.set -> void
+Resrcify.SharedKernel.Abstractions.Mediator.ICachingQuery.Expiration.get -> System.TimeSpan
+Resrcify.SharedKernel.Abstractions.Mediator.ICachingQuery.Expiration.set -> void
+Resrcify.SharedKernel.Abstractions.Mediator.ICachingQuery<TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.ICommand
+Resrcify.SharedKernel.Abstractions.Mediator.ICommand<TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.ICommandHandler<TCommand, TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.ICommandHandler<TCommand>
+Resrcify.SharedKernel.Abstractions.Mediator.IDomainEventHandler<TEvent>
+Resrcify.SharedKernel.Abstractions.Mediator.IIdempotencyContext
+Resrcify.SharedKernel.Abstractions.Mediator.IIdempotencyContext.WasReplayed(object! request) -> bool
+Resrcify.SharedKernel.Abstractions.Mediator.IIdempotentRequest
+Resrcify.SharedKernel.Abstractions.Mediator.IIdempotentRequest.IdempotencyKey.get -> string?
+Resrcify.SharedKernel.Abstractions.Mediator.IIdempotentRequest.IdempotencyScope.get -> string?
+Resrcify.SharedKernel.Abstractions.Mediator.IMediator
+Resrcify.SharedKernel.Abstractions.Mediator.IMediatorAssemblyScan
+Resrcify.SharedKernel.Abstractions.Mediator.IMediatorAssemblyScan.Assemblies.get -> System.Collections.Generic.IReadOnlyCollection<System.Reflection.Assembly!>!
+Resrcify.SharedKernel.Abstractions.Mediator.IMediatorAssemblyScanListener
+Resrcify.SharedKernel.Abstractions.Mediator.IMediatorAssemblyScanListener.OnScanned(Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Collections.Generic.IReadOnlyCollection<System.Reflection.Assembly!>! assemblies) -> void
+Resrcify.SharedKernel.Abstractions.Mediator.INotification
+Resrcify.SharedKernel.Abstractions.Mediator.INotificationHandler<TNotification>
+Resrcify.SharedKernel.Abstractions.Mediator.INotificationHandler<TNotification>.Handle(TNotification notification, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.Mediator.IPipelineBehavior<TRequest, TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.IPipelineBehavior<TRequest, TResponse>.Handle(TRequest request, Resrcify.SharedKernel.Abstractions.Mediator.RequestHandlerDelegate<TResponse>! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse>!
+Resrcify.SharedKernel.Abstractions.Mediator.IPublisher
+Resrcify.SharedKernel.Abstractions.Mediator.IPublisher.Publish(object! notification, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.Mediator.IPublisher.Publish<TNotification>(TNotification notification, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.Mediator.IQuery<TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.IQueryHandler<TQuery, TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.IRequest<TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.IRequest<TResponse>.ResponseType.get -> System.Type!
+Resrcify.SharedKernel.Abstractions.Mediator.IRequestHandler<TRequest, TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.IRequestHandler<TRequest, TResponse>.Handle(TRequest request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse>!
+Resrcify.SharedKernel.Abstractions.Mediator.IRequestPipelineBehavior<TRequest, TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.IRequestPipelineBehavior<TRequest, TResponse>.Handle(TRequest request, Resrcify.SharedKernel.Abstractions.Mediator.RequestExecutionDelegate<TRequest, TResponse>! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse>!
+Resrcify.SharedKernel.Abstractions.Mediator.IRequestPostProcessor<TRequest, TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.IRequestPostProcessor<TRequest, TResponse>.Process(TRequest request, TResponse response, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.Mediator.IRequestPreProcessor<TRequest>
+Resrcify.SharedKernel.Abstractions.Mediator.IRequestPreProcessor<TRequest>.Process(TRequest request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.Mediator.ISender
+Resrcify.SharedKernel.Abstractions.Mediator.ISender.Send(object! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<object?>!
+Resrcify.SharedKernel.Abstractions.Mediator.ISender.Send<TResponse>(Resrcify.SharedKernel.Abstractions.Mediator.IRequest<TResponse>! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TResponse>!
+Resrcify.SharedKernel.Abstractions.Mediator.IStreamPipelineBehavior<TRequest, TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.IStreamPipelineBehavior<TRequest, TResponse>.Handle(TRequest request, Resrcify.SharedKernel.Abstractions.Mediator.StreamHandlerDelegate<TResponse>! next, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<TResponse>!
+Resrcify.SharedKernel.Abstractions.Mediator.IStreamRequest<TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.IStreamRequest<TResponse>.ResponseType.get -> System.Type!
+Resrcify.SharedKernel.Abstractions.Mediator.IStreamRequestHandler<TRequest, TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.IStreamRequestHandler<TRequest, TResponse>.Handle(TRequest request, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<TResponse>!
+Resrcify.SharedKernel.Abstractions.Mediator.IStreamSender
+Resrcify.SharedKernel.Abstractions.Mediator.IStreamSender.CreateStream<TResponse>(Resrcify.SharedKernel.Abstractions.Mediator.IStreamRequest<TResponse>! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<TResponse>!
+Resrcify.SharedKernel.Abstractions.Mediator.ITransactionCommand
+Resrcify.SharedKernel.Abstractions.Mediator.ITransactionCommand<TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.ITransactionalCommand
+Resrcify.SharedKernel.Abstractions.Mediator.ITransactionalCommand.CommandTimeout.get -> System.TimeSpan?
+Resrcify.SharedKernel.Abstractions.Mediator.ITransactionalCommand.IsolationLevel.get -> System.Data.IsolationLevel?
+Resrcify.SharedKernel.Abstractions.Mediator.IValueTaskPipelineBehavior<TRequest, TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.IValueTaskPipelineBehavior<TRequest, TResponse>.Handle(TRequest request, Resrcify.SharedKernel.Abstractions.Mediator.ValueTaskRequestHandlerDelegate<TResponse>! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.IValueTaskRequestHandler<TRequest, TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.IValueTaskRequestHandler<TRequest, TResponse>.Handle(TRequest request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.IValueTaskRequestPipelineBehavior<TRequest, TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.IValueTaskRequestPipelineBehavior<TRequest, TResponse>.Handle(TRequest request, Resrcify.SharedKernel.Abstractions.Mediator.ValueTaskRequestExecutionDelegate<TRequest, TResponse>! next, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.RequestExecutionDelegate<TRequest, TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.RequestHandlerDelegate<TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.StreamHandlerDelegate<TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.ValueTaskRequestExecutionDelegate<TRequest, TResponse>
+Resrcify.SharedKernel.Abstractions.Mediator.ValueTaskRequestHandlerDelegate<TResponse>
+Resrcify.SharedKernel.Abstractions.MessageBus.IEventBus
+Resrcify.SharedKernel.Abstractions.MessageBus.IEventBus.PublishAsync<TEvent>(TEvent! integrationEvent, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.MessageBus.IGathered<TResponse>
+Resrcify.SharedKernel.Abstractions.MessageBus.IGathered<TResponse>.Failures.get -> System.Collections.Generic.IReadOnlyDictionary<string!, System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.Results.Primitives.Error!>!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IGathered<TResponse>.IsComplete.get -> bool
+Resrcify.SharedKernel.Abstractions.MessageBus.IGathered<TResponse>.Results.get -> System.Collections.Generic.IReadOnlyDictionary<string!, TResponse!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IGathered<TResponse>.SettledKeys.get -> System.Collections.Generic.IReadOnlyCollection<string!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IGathered<TResponse>.UnansweredKeys.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IGathered<TResponse>.this[string! key].get -> Resrcify.SharedKernel.Results.Primitives.Result<TResponse!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IIntegrationEventHandler<TEvent>
+Resrcify.SharedKernel.Abstractions.MessageBus.IIntegrationEventHandler<TEvent>.HandleAsync(TEvent! integrationEvent, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Resrcify.SharedKernel.Results.Primitives.Result!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IRequestResponder<TRequest, TResponse>
+Resrcify.SharedKernel.Abstractions.MessageBus.IRequestResponder<TRequest, TResponse>.HandleAsync(TRequest! request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Resrcify.SharedKernel.Results.Primitives.Result<TResponse!>!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IScatterGatherClient
+Resrcify.SharedKernel.Abstractions.MessageBus.IScatterGatherClient.GatherAsync<TRequest, TResponse>(System.Collections.Generic.IReadOnlyDictionary<string!, TRequest!>! requests, System.TimeSpan timeout, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Resrcify.SharedKernel.Abstractions.MessageBus.IGathered<TResponse!>!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IScatterGatherClient.RequestAsync<TRequest, TResponse>(TRequest! request, System.TimeSpan timeout, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Resrcify.SharedKernel.Results.Primitives.Result<TResponse!>!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IScatterGatherClient.StreamAsync<TRequest, TResponse>(System.Collections.Generic.IReadOnlyDictionary<string!, TRequest!>! requests, System.TimeSpan timeout, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Resrcify.SharedKernel.Abstractions.MessageBus.IScatterReply<TResponse!>!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IScatterGatherHandler<TEvent, TRequest, TResponse>
+Resrcify.SharedKernel.Abstractions.MessageBus.IScatterGatherHandler<TEvent, TRequest, TResponse>.GatherAsync(TEvent notification, Resrcify.SharedKernel.Abstractions.MessageBus.IGathered<TResponse!>! replies, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.MessageBus.IScatterGatherHandler<TEvent, TRequest, TResponse>.ScatterAsync(TEvent notification, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyDictionary<string!, TRequest!>!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IScatterGatherHandler<TEvent, TRequest, TResponse>.Timeout.get -> System.TimeSpan
+Resrcify.SharedKernel.Abstractions.MessageBus.IScatterGatherRequestHandler<TRequest, TItemRequest, TItemResponse, TResponse>
+Resrcify.SharedKernel.Abstractions.MessageBus.IScatterGatherRequestHandler<TRequest, TItemRequest, TItemResponse, TResponse>.HandleAsync(TRequest request, Resrcify.SharedKernel.Abstractions.MessageBus.IGathered<TItemResponse!>! replies, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IScatterGatherRequestHandler<TRequest, TItemRequest, TItemResponse, TResponse>.ScatterAsync(TRequest request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyDictionary<string!, TItemRequest!>!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IScatterGatherRequestHandler<TRequest, TItemRequest, TItemResponse, TResponse>.Timeout.get -> System.TimeSpan
+Resrcify.SharedKernel.Abstractions.MessageBus.IScatterReply<TItemResponse>
+Resrcify.SharedKernel.Abstractions.MessageBus.IScatterReply<TItemResponse>.Key.get -> string!
+Resrcify.SharedKernel.Abstractions.MessageBus.IScatterReply<TItemResponse>.Result.get -> Resrcify.SharedKernel.Results.Primitives.Result<TItemResponse!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IStreamingScatterGatherRequestHandler<TRequest, TItemRequest, TItemResponse, TResponse>
+Resrcify.SharedKernel.Abstractions.MessageBus.IStreamingScatterGatherRequestHandler<TRequest, TItemRequest, TItemResponse, TResponse>.HandleAsync(TRequest request, System.Collections.Generic.IAsyncEnumerable<Resrcify.SharedKernel.Abstractions.MessageBus.IScatterReply<TItemResponse!>!>! replies, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<TResponse>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IStreamingScatterGatherRequestHandler<TRequest, TItemRequest, TItemResponse, TResponse>.ScatterAsync(TRequest request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyDictionary<string!, TItemRequest!>!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IStreamingScatterGatherRequestHandler<TRequest, TItemRequest, TItemResponse, TResponse>.Timeout.get -> System.TimeSpan
+Resrcify.SharedKernel.Abstractions.Repository.IRepository<TEntity, TId>
+Resrcify.SharedKernel.Abstractions.Repository.IRepository<TEntity, TId>.AddAsync(TEntity! entity, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.Repository.IRepository<TEntity, TId>.AddRangeAsync(System.Collections.Generic.IEnumerable<TEntity!>! entities, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.Repository.IRepository<TEntity, TId>.ExistsAsync(System.Linq.Expressions.Expression<System.Func<TEntity!, bool>!>! predicate, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Resrcify.SharedKernel.Abstractions.Repository.IRepository<TEntity, TId>.ExistsAsync(TId id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<bool>!
+Resrcify.SharedKernel.Abstractions.Repository.IRepository<TEntity, TId>.FindAsync(Resrcify.SharedKernel.Abstractions.Repository.ISpecification<TEntity!>! specification) -> System.Collections.Generic.IAsyncEnumerable<TEntity!>!
+Resrcify.SharedKernel.Abstractions.Repository.IRepository<TEntity, TId>.FindAsync(System.Linq.Expressions.Expression<System.Func<TEntity!, bool>!>! predicate) -> System.Collections.Generic.IAsyncEnumerable<TEntity!>!
+Resrcify.SharedKernel.Abstractions.Repository.IRepository<TEntity, TId>.FirstOrDefaultAsync(Resrcify.SharedKernel.Abstractions.Repository.ISpecification<TEntity!>! specification, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TEntity?>!
+Resrcify.SharedKernel.Abstractions.Repository.IRepository<TEntity, TId>.FirstOrDefaultAsync(System.Linq.Expressions.Expression<System.Func<TEntity!, bool>!>! predicate, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TEntity?>!
+Resrcify.SharedKernel.Abstractions.Repository.IRepository<TEntity, TId>.GetAllAsync() -> System.Collections.Generic.IAsyncEnumerable<TEntity!>!
+Resrcify.SharedKernel.Abstractions.Repository.IRepository<TEntity, TId>.GetByIdAsync(TId id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TEntity?>!
+Resrcify.SharedKernel.Abstractions.Repository.IRepository<TEntity, TId>.Remove(TEntity! entity) -> void
+Resrcify.SharedKernel.Abstractions.Repository.IRepository<TEntity, TId>.RemoveRange(System.Collections.Generic.IEnumerable<TEntity!>! entities) -> void
+Resrcify.SharedKernel.Abstractions.Repository.ISpecification<TEntity>
+Resrcify.SharedKernel.Abstractions.Repository.ISpecification<TEntity>.Criteria.get -> System.Linq.Expressions.Expression<System.Func<TEntity, bool>!>?
+Resrcify.SharedKernel.Abstractions.Repository.ISpecification<TEntity>.IncludeExpressions.get -> System.Collections.Generic.ICollection<System.Linq.Expressions.Expression<System.Func<TEntity, object!>!>!>!
+Resrcify.SharedKernel.Abstractions.Repository.ISpecification<TEntity>.IsNoTrackingQuery.get -> bool
+Resrcify.SharedKernel.Abstractions.Repository.ISpecification<TEntity>.IsSplitQuery.get -> bool
+Resrcify.SharedKernel.Abstractions.Repository.ISpecification<TEntity>.OrderByDescendingExpression.get -> System.Linq.Expressions.Expression<System.Func<TEntity, object!>!>?
+Resrcify.SharedKernel.Abstractions.Repository.ISpecification<TEntity>.OrderByExpression.get -> System.Linq.Expressions.Expression<System.Func<TEntity, object!>!>?
+Resrcify.SharedKernel.Abstractions.UnitOfWork.IOutboxLaneEvent
+Resrcify.SharedKernel.Abstractions.UnitOfWork.IOutboxLaneEvent.EventType.get -> System.Type!
+Resrcify.SharedKernel.Abstractions.UnitOfWork.IOutboxLaneEvent.Lane.get -> string!
+Resrcify.SharedKernel.Abstractions.UnitOfWork.IOutboxMessageContext
+Resrcify.SharedKernel.Abstractions.UnitOfWork.IOutboxMessageContext.MessageId.get -> System.Guid?
+Resrcify.SharedKernel.Abstractions.UnitOfWork.IOutboxMessageContext.NextStableId(string! kind) -> System.Guid?
+Resrcify.SharedKernel.Abstractions.UnitOfWork.IUnitOfWork
+Resrcify.SharedKernel.Abstractions.UnitOfWork.IUnitOfWork.BeginTransactionAsync(System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.ReadCommitted, System.TimeSpan? commandTimeout = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.UnitOfWork.IUnitOfWork.CommitTransactionAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.UnitOfWork.IUnitOfWork.CompleteAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.UnitOfWork.IUnitOfWork.ExecuteAsync<TResponse>(System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<TResponse!>!>! operation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TResponse!>!
+Resrcify.SharedKernel.Abstractions.UnitOfWork.IUnitOfWork.ExecuteInTransactionAsync(System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task!>! operation, System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.ReadCommitted, System.TimeSpan? commandTimeout = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.UnitOfWork.IUnitOfWork.ExecuteInTransactionAsync<TResponse>(System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<TResponse!>!>! operation, System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.ReadCommitted, System.TimeSpan? commandTimeout = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TResponse!>!
+Resrcify.SharedKernel.Abstractions.UnitOfWork.IUnitOfWork.RollbackTransactionAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+Resrcify.SharedKernel.Abstractions.UnitOfWork.IUnitOfWork.TryCompleteAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Resrcify.SharedKernel.Results.Primitives.Result!>!
+virtual Resrcify.SharedKernel.Abstractions.Mediator.RequestExecutionDelegate<TRequest, TResponse>.Invoke(TRequest request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TResponse>!
+virtual Resrcify.SharedKernel.Abstractions.Mediator.RequestHandlerDelegate<TResponse>.Invoke(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TResponse>!
+virtual Resrcify.SharedKernel.Abstractions.Mediator.StreamHandlerDelegate<TResponse>.Invoke(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<TResponse>!
+virtual Resrcify.SharedKernel.Abstractions.Mediator.ValueTaskRequestExecutionDelegate<TRequest, TResponse>.Invoke(TRequest request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TResponse>
+virtual Resrcify.SharedKernel.Abstractions.Mediator.ValueTaskRequestHandlerDelegate<TResponse>.Invoke(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TResponse>
