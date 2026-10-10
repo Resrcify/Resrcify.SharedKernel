@@ -77,7 +77,7 @@ dotnet test tests/Resrcify.SharedKernel.UnitOfWork.IntegrationTests
 
 Requires Docker on the runner. CI (`build-and-test.yml`) has it on `ubuntu-latest`.
 
-The fixtures default to the images production runs (`postgres:18`, `rabbitmq:4.3-management`, the newest 4.x: each one refuses more deprecated broker features); don't pin an older one with `WithImage`. To run a suite against another version without editing code, set `RESRCIFY_TEST_POSTGRES_IMAGE` / `RESRCIFY_TEST_RABBITMQ_IMAGE` — they win over a fixture's own `WithImage`.
+The fixtures default to the images production runs (`postgres:18`; `rabbitmq:4.3.4-management`, the RabbitMQ Cluster Operator v2.23.0's default: move it with the operator, as each 4.x refuses more deprecated broker features); don't pin an older one with `WithImage`. To run a suite against another version without editing code, set `RESRCIFY_TEST_POSTGRES_IMAGE` / `RESRCIFY_TEST_RABBITMQ_IMAGE` — they win over a fixture's own `WithImage`.
 
 ### 4. Architecture test — `Resrcify.SharedKernel.ArchitectureTesting`
 
