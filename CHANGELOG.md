@@ -466,6 +466,11 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
 
 ### Fixed
 
+- **A scatter-gather request sent while the reply bus restarts waits for it instead of throwing.** When a RabbitMQ node
+  went down, the reply bus restarted, and a request sent meanwhile threw `InvalidOperationException` ("The
+  scatter-gather transport has not started") out of `RequestAsync` / `GatherAsync` / `StreamAsync`. It now waits for
+  the bus within its own timeout (which now runs from before the send), and its items end unanswered if the bus isn't
+  back by then. Found stopping cluster nodes under traffic.
 - **Scatter-gather starts on RabbitMQ 4.3.** Its reply queue was transient and not exclusive, which RabbitMQ 4.3
   refuses by default (`transient_nonexcl_queues`): the bus couldn't declare it, and the service failed to start after
   a minute of reconnecting. The queue is now durable and the broker deletes it 30 minutes after its instance stops

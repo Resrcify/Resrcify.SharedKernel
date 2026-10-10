@@ -131,6 +131,67 @@ public sealed class ScatterGatherTransportTests
         reply.Value.Text.ShouldBe("back");
     }
 
+    [Fact]
+    public async Task RequestAsync_WhileTheReplyBusRestarts_WaitsForItInsteadOfThrowing()
+    {
+        // A node of the cluster went down: the reply bus restarts, and a request sent meanwhile used to throw "The
+        // scatter-gather transport has not started" out of RequestAsync.
+        var (responder, requester, transport, strategy) = await StartRestartingRequesterAsync();
+        using var respond = responder;
+        using var request = requester;
+        strategy.Arm(2);
+
+        transport.OnBrokerRecovered();
+        await InMemoryServices.WaitUntilAsync(() => strategy.Failed == 1, TimeSpan.FromSeconds(10));
+        transport.IsRunning.ShouldBeFalse();
+
+        // The bus is back within about 3 s (two failed restarts, 1 s and 2 s apart): within the request's timeout.
+        var reply = await Client(requester).RequestAsync<Echo, Echoed>(new Echo("waited"), TimeSpan.FromSeconds(15));
+
+        reply.IsSuccess.ShouldBeTrue();
+        reply.Value.Text.ShouldBe("waited");
+    }
+
+    [Fact]
+    public async Task RequestAsync_WhenTheReplyBusIsNotBackBeforeTheTimeout_IsUnanswered()
+    {
+        var (responder, requester, transport, strategy) = await StartRestartingRequesterAsync();
+        using var respond = responder;
+        using var request = requester;
+        strategy.Arm(int.MaxValue);
+
+        transport.OnBrokerRecovered();
+        await InMemoryServices.WaitUntilAsync(() => strategy.Failed == 1, TimeSpan.FromSeconds(10));
+        var started = DateTime.UtcNow;
+
+        var reply = await Client(requester).RequestAsync<Echo, Echoed>(new Echo("lost"), TimeSpan.FromSeconds(1));
+
+        reply.IsFailure.ShouldBeTrue();
+        reply.Errors[0].Type.ShouldBe(ErrorType.Timeout);
+        (DateTime.UtcNow - started).ShouldBeLessThan(TimeSpan.FromSeconds(3));   // within its timeout, not after it
+    }
+
+    private static async Task<(
+        Microsoft.Extensions.Hosting.IHost Responder,
+        Microsoft.Extensions.Hosting.IHost Requester,
+        ScatterGatherTransport Transport,
+        FailingStartStrategy Strategy)> StartRestartingRequesterAsync()
+    {
+        var network = new InMemNetwork();
+        var queue = $"echo-{Guid.NewGuid():N}";
+        var strategy = new FailingStartStrategy(address => address?.Contains(".replies.", StringComparison.Ordinal) == true);
+        var responder = await InMemoryServices.StartAsync(
+            network,
+            bus => bus.AddRateLimitedQueue<Echo, Echoed, EchoHandler>(queue),
+            services => services.AddSingleton(new EchoCalls()));
+        var requester = await InMemoryServices.StartAsync(
+            network,
+            bus => bus.UseConfigurationStrategy(strategy).AddRequest<Echo, Echoed>(queue).AddScatterGather());
+        var transport = requester.Services.GetRequiredService<ScatterGatherTransport>();
+        transport.IsRunning.ShouldBeTrue();
+        return (responder, requester, transport, strategy);
+    }
+
     private static IScatterGatherClient Client(Microsoft.Extensions.Hosting.IHost host)
         => host.Services.GetRequiredService<IScatterGatherClient>();
 

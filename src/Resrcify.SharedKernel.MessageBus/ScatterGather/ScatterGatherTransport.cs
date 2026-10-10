@@ -60,6 +60,8 @@ internal sealed partial class ScatterGatherTransport(
     private string? _queue;
     private BuiltinHandlerActivator? _activator;
     private IBus? _bus;
+    // Completed while a bus runs; a new, pending one from each stop. A request sent while the bus restarts waits on it.
+    private TaskCompletionSource _busRunning = NewBusSignal();
     private bool _started;
     private int _disposed;
 
@@ -179,6 +181,7 @@ internal sealed partial class ScatterGatherTransport(
         {
             _bus = ConfigureBus(activator, strategy);
             _activator = activator;
+            _busRunning.TrySetResult();
         }
         catch
         {
@@ -224,6 +227,8 @@ internal sealed partial class ScatterGatherTransport(
 
     private void StopBus()
     {
+        if (_bus is not null)
+            Volatile.Write(ref _busRunning, NewBusSignal());
         _bus?.Dispose();
         _bus = null;
         _activator?.Dispose();
@@ -261,12 +266,13 @@ internal sealed partial class ScatterGatherTransport(
 
         var (batchId, pending) = Register(requests.Keys, retainReplies: true);
         var started = time.GetTimestamp();
+        // The timeout runs on the TimeProvider's clock (a fake clock ends a gather too), from before the send: waiting
+        // for a restarting bus counts against it.
+        using var timedOut = new CancellationTokenSource(timeout, time);
         try
         {
-            await SendAsync(batchId, requests, timeout);
+            await SendAsync(batchId, requests, timeout, timedOut.Token);
 
-            // The timeout runs on the TimeProvider's clock (a fake clock ends a gather too).
-            using var timedOut = new CancellationTokenSource(timeout, time);
             using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timedOut.Token);
             try
             {
@@ -338,13 +344,13 @@ internal sealed partial class ScatterGatherTransport(
         var started = time.GetTimestamp();
         var items = new BatchItems();
         var end = BatchEnd.Stopped;
+        // The timeout runs on the TimeProvider's clock (a fake clock ends a gather too), from before the send. It closes
+        // the batch: the replies accepted before it are still read, however long the caller takes over each.
+        using var timedOut = new CancellationTokenSource(timeout, time);
         try
         {
-            await SendAsync(batchId, requests, timeout);
+            await SendAsync(batchId, requests, timeout, timedOut.Token);
 
-            // The timeout runs on the TimeProvider's clock (a fake clock ends a gather too). It closes the batch: the
-            // replies accepted before it are still read, however long the caller takes over each.
-            using var timedOut = new CancellationTokenSource(timeout, time);
             await using var closeOnTimeout = timedOut.Token.Register(pending.Close);
             while (await NextArrivalAsync(pending, cancellationToken) is { } arrival)
             {
@@ -374,24 +380,70 @@ internal sealed partial class ScatterGatherTransport(
         return (batchId, pending);
     }
 
-    private async Task SendAsync<TRequest>(Guid batchId, IReadOnlyDictionary<string, TRequest> requests, TimeSpan timeout)
+    /// <summary>
+    /// Sends the batch on the running bus. While it restarts (after a broker outage, or retrying a failed restart) the
+    /// batch waits for it, until <paramref name="timedOut"/>: then nothing is sent and every item ends unanswered, as a
+    /// request nobody answered does. A bus replaced while sending gets the batch again (a reply that comes twice is
+    /// ignored).
+    /// </summary>
+    private async Task SendAsync<TRequest>(
+        Guid batchId,
+        IReadOnlyDictionary<string, TRequest> requests,
+        TimeSpan timeout,
+        CancellationToken timedOut)
         where TRequest : class
     {
-        var bus = _bus ?? throw new InvalidOperationException("The scatter-gather transport has not started.");
         var expiresAfter = timeout.ToString("c", CultureInfo.InvariantCulture);
         var batch = batchId.ToString("D");
-        // One Rebus transaction for the whole batch: the sends are collected and published together when it
-        // completes, instead of one broker round trip each (sending one by one capped a batch at ~170/s).
-        using var sending = new RebusTransactionScope();
-        foreach (var (key, request) in requests)
-            await bus.Send(request, new Dictionary<string, string>
+        while (await RunningBusAsync(timedOut) is { } bus)
+        {
+            try
             {
-                [ScatterHeaders.BatchId] = batch,
-                [ScatterHeaders.ItemKey] = key,
-                [Headers.TimeToBeReceived] = expiresAfter,
-            });
-        await sending.CompleteAsync();
+                // One Rebus transaction for the whole batch: the sends are collected and published together when it
+                // completes, instead of one broker round trip each (sending one by one capped a batch at ~170/s).
+                using var sending = new RebusTransactionScope();
+                foreach (var (key, request) in requests)
+                    await bus.Send(request, new Dictionary<string, string>
+                    {
+                        [ScatterHeaders.BatchId] = batch,
+                        [ScatterHeaders.ItemKey] = key,
+                        [Headers.TimeToBeReceived] = expiresAfter,
+                    });
+                await sending.CompleteAsync();
+                return;
+            }
+            catch (Exception) when (!ReferenceEquals(Volatile.Read(ref _bus), bus) && !timedOut.IsCancellationRequested)
+            {
+                // The bus restarted while sending: send the batch on the new one.
+            }
+        }
     }
+
+    /// <summary>
+    /// The running bus; while it restarts, the one it restarts as, or <see langword="null"/> when
+    /// <paramref name="timedOut"/> comes first. Throws when the transport isn't started (or was stopped).
+    /// </summary>
+    private async Task<IBus?> RunningBusAsync(CancellationToken timedOut)
+    {
+        while (true)
+        {
+            if (Volatile.Read(ref _bus) is { } bus)
+                return bus;
+            if (!Volatile.Read(ref _started))
+                throw new InvalidOperationException("The scatter-gather transport has not started.");
+            try
+            {
+                await Volatile.Read(ref _busRunning).Task.WaitAsync(timedOut);
+            }
+            catch (OperationCanceledException) when (timedOut.IsCancellationRequested)
+            {
+                return null;
+            }
+        }
+    }
+
+    private static TaskCompletionSource NewBusSignal()
+        => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>
     /// The next reply, or <see langword="null"/> once every item has answered or the batch closed (its timeout passed)
