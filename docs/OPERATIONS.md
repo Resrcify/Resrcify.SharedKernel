@@ -45,6 +45,8 @@ Symptom -> Root cause -> Fix -> Verification.
   shows `unlimited-delivery`; `rabbitmq-queues check_if_node_is_quorum_critical` before stopping a node;
   `rabbitmqctl list_queues name type policy` shows the services' queues as `quorum` with the policy. On the 3-node test
   cluster, traffic through both buses survived stopping the node leading the queues, and a message handed back 30
-  times by a closed channel stayed. While a node is down, a connection that was on it reconnects; the service's own bus
-  can take up to a minute (one direct request with a 30 s timeout went unanswered in one test run; outbox-driven
-  requests are retried).
+  times by a closed channel stayed. While a node is down, a connection that was on it reconnects (about 2 s in the tests; up to
+  18 s when the broker watcher's own connection was on that node, as it then waits to reconnect before restarting the
+  consumers). Requests sent meanwhile wait and are answered late, within their timeout (before 4.0.0's fix they
+  could throw; see the changelog). Under a request and an event every 250 ms, stopping the node holding the request,
+  reply or event consumer lost nothing.
