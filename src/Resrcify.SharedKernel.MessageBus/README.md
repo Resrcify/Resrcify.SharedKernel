@@ -35,6 +35,7 @@ outbox messages.
   - [Failures: the result pattern](#failures-the-result-pattern)
   - [Responding: rate-limited queues](#responding-rate-limited-queues)
   - [Publish/subscribe: integration events](#publishsubscribe-integration-events)
+  - [Running on a RabbitMQ cluster](#running-on-a-rabbitmq-cluster)
   - [Running without RabbitMQ: in memory](#running-without-rabbitmq-in-memory)
   - [Checking that two copies of a message agree](#checking-that-two-copies-of-a-message-agree)
   - [Large messages: compression](#large-messages-compression)
@@ -356,6 +357,14 @@ tries follows the bus' retry strategy (`options.RetryStrategy(maxDeliveryAttempt
   `RemoveSubscription<TEvent>()` (or `RemoveSubscription("TEvent")` once the class is gone) for a release: it unbinds
   at start-up. Until then its events fail ("no message type here is called …"), count as `messagebus.messages.unknown`,
   and end up in the error queue.
+
+## Running on a RabbitMQ cluster
+
+With more than one node, make the queues quorum queues and lift their delivery limit, on the broker: quorum as the
+vhost's default queue type, and a policy `"delivery-limit": -1` for quorum queues. Classic queues aren't replicated,
+and a quorum queue otherwise drops a message the bus handed back 20 times (a service stopping, a health gate closing).
+The commands, and how to move existing queues: [docs/OPERATIONS.md](../../docs/OPERATIONS.md). Point the services at
+the cluster's one address (in Kubernetes, its Service), not at a list of nodes.
 
 ## Running without RabbitMQ: in memory
 
