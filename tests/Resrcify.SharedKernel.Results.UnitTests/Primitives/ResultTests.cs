@@ -628,27 +628,6 @@ public sealed class ResultTests
         => Should.Throw<ArgumentException>(() => Result.Failure([Error.NullValue, Error.None]));
 
     [Fact]
-    public void ImplicitConversionFromErrors_ShouldAnswerWithTheSameFailure()
-    {
-        var failed = Result.Failure<string>([Error.NullValue, Error.EmptyInput]);
-
-        static Result Forward(Result<string> failed) => failed.Errors;
-        var result = Forward(failed);
-
-        result.IsFailure.ShouldBeTrue();
-        result.Errors.ShouldBe([Error.NullValue, Error.EmptyInput]);
-    }
-
-    [Fact]
-    public void ImplicitConversionFromErrorArray_ShouldCreateFailure()
-    {
-        Result result = new[] { Error.NullValue };
-
-        result.IsFailure.ShouldBeTrue();
-        result.Errors.ShouldBe([Error.NullValue]);
-    }
-
-    [Fact]
     public void Errors_ShouldNotChange_WhenTheCallersArrayChangesAfterwards()
     {
         Error[] errors = [Error.NullValue];

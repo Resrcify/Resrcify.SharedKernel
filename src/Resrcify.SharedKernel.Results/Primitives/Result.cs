@@ -69,16 +69,12 @@ public class Result
     /// <summary>Why the result failed: at least one error on a failure, none on a success.</summary>
     /// <remarks>
     /// Immutable, and a concrete type so it converts: <c>return failed.Errors;</c> answers with a failure from a method
-    /// returning <see cref="Result"/> or <see cref="Result{TValue}"/>.
+    /// returning <see cref="Result{TValue}"/>. Not to a plain <see cref="Result"/>: a conversion to it makes every
+    /// method taking a <see cref="Result"/> fit a function of the errors, so <c>Match(Results.Ok,
+    /// HttpResultExtensions.ToProblemDetails)</c> turned ambiguous. <c>Result.Failure(failed.Errors)</c> does that.
     /// </remarks>
     public ImmutableArray<Error> Errors { get; }
 
-    public static implicit operator Result(
-        ImmutableArray<Error> errors)
-        => Failure(errors);
-    public static implicit operator Result(
-        Error[] errors)
-        => Failure(errors);
 
     public static Result Success() => SuccessResult;
 

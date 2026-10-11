@@ -50,8 +50,8 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   `Result.Failure(x.Errors)` where `x` might be a success, and for `Error.None` used as a placeholder error.
 - **`Result.Errors` is an `ImmutableArray<Error>`** (was `Error[]`), copied when the result is made, so nothing can
   change a result's errors. It reads like the array did (`Length`, `[0]`, `foreach`, LINQ) and still converts:
-  `return failed.Errors;` answers with that failure from a method returning `Result<T>` (any `T`) or, new, `Result`;
-  so does an `Error[]`. Passing it where an `Error[]` is expected needs `.ToArray()`. `Result.Failure` takes an
+  `return failed.Errors;` answers with that failure from a method returning `Result<T>` (any `T`), as in 3.x; so
+  does an `Error[]`. (Not to a plain `Result`, as in 3.x: write `Result.Failure(failed.Errors)`.) Passing it where an `Error[]` is expected needs `.ToArray()`. `Result.Failure` takes an
   `IReadOnlyList<Error>` (arrays, lists and `ImmutableArray` all work). `Match`'s `onFailure` receives an
   `ImmutableArray<Error>`: a method group taking `Error[]` must take `ImmutableArray<Error>`. Shouldly's
   `ShouldBeEquivalentTo` compares types, so `Errors.ShouldBeEquivalentTo(array)` fails; use `ShouldBe(array)`.

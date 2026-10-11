@@ -24,6 +24,27 @@ namespace Resrcify.SharedKernel.Web.UnitTests.Extensions;
     Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class HttpResultExtensionsTests
 {
+    // The endpoint pattern from 3.x, with Results.Primitives imported too (this file does): both are method groups,
+    // and it compiles only while nothing converts the errors to a plain Result (the Results package's Match would
+    // fit as well, and the call turn ambiguous).
+    [Fact]
+    public async Task Match_WithMethodGroups_ShouldAnswerTheSuccess()
+    {
+        var actual = await Task.FromResult(Result.Success(5))
+            .Match(Microsoft.AspNetCore.Http.Results.Ok, HttpResultExtensions.ToProblemDetails);
+
+        actual.ShouldBeOfType<Ok<int>>().Value.ShouldBe(5);
+    }
+
+    [Fact]
+    public async Task Match_WithMethodGroups_ShouldAnswerTheFailureAsProblemDetails()
+    {
+        var actual = await Task.FromResult(Result.Failure<int>(Error.NotFound("Thing.NotFound", "No such thing")))
+            .Match(Microsoft.AspNetCore.Http.Results.Ok, HttpResultExtensions.ToProblemDetails);
+
+        actual.ShouldBeOfType<ProblemHttpResult>().StatusCode.ShouldBe(404);
+    }
+
     [Fact]
     public async Task Match_WithSuccessResultTask_ShouldReturnSuccess()
     {
