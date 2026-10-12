@@ -10,6 +10,12 @@ namespace Resrcify.SharedKernel.MessageBus.RateLimitedQueues;
 /// configured rate. In any one second at most <c>PerSecond + Burst</c> go through (or <c>PerSecond</c> plus one
 /// refill step, if that is larger than <c>Burst</c>).
 /// </summary>
+/// <remarks>
+/// That holds where the tokens are taken. Tokens come a refill step at a time (5 at 90/s), and the calls of one
+/// step reach the upstream spread a little, which can shift one step into the next second there (measured: 105 at
+/// 90/s + 10). To stay within an upstream's limit, leave one step of headroom: <c>PerSecond + Burst + step</c> at
+/// most the limit (90 + 5 for 100/s).
+/// </remarks>
 public sealed class TokenBucketRateLimiterStrategy : IRateLimiterStrategy
 {
     /// <summary>
