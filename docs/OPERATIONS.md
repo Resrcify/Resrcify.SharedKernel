@@ -38,10 +38,24 @@ Symptom -> Root cause -> Fix -> Verification.
      (`rabbitmqctl list_queues name type messages`), delete them (`rabbitmqctl delete_queue <name>`), start it: they
      come back as quorum queues. A new service's queues are quorum from the start.
 
+  4. **Optional: start at one replica, grow later.** Set the size new quorum queues start with on every node, in
+     `advanced.config` (the operator's `spec.rabbitmq.advancedConfig`); a `rabbitmq.conf` line of that name stops the
+     node from starting:
+     `[{rabbit, [{quorum_cluster_size, 1}]}].`
+     A one-replica quorum queue is a classic queue as far as availability goes: while its node is down, publishes to it
+     are rejected and it can't be read; its messages are there when the node is back (measured side by side with a
+     classic queue on the same node). It is still a quorum queue otherwise: the delivery limit applies (step 2 is still
+     needed: without it a message went after 20 deliveries), and it can't be exclusive or non-durable. What it saves is
+     step 3 later: going to three replicas is online, no queue deleted or emptied:
+     `rabbitmq-queues grow rabbit@<node> all --vhost-pattern ".*" --queue-pattern ".*"` for each other node (measured:
+     1 → 3 members, messages kept). Change `quorum_cluster_size` back (or remove it) so new queues start with three.
+     Neither a policy `initial-cluster-size` nor `target-group-size` makes a new quorum queue smaller (measured).
+
   Both settings live in the cluster's own data: they survive restarts, not a cluster recreated from scratch. Declaring
   quorum queues in code instead works too (`x-queue-type: quorum` through an `IBusConfigurationStrategy`; MassTransit's
   `SetQuorumQueue()`), but every service would need it, and MassTransit's services as well.
-- **Verification:** `rabbitmqctl list_vhosts name default_queue_type` shows `quorum`; `rabbitmqctl list_policies`
+- **Verification:** `rabbitmqctl environment` shows `{quorum_cluster_size,1}` when step 4 is used, and
+  `rabbitmqctl list_queues name type members` one member per queue; `rabbitmqctl list_vhosts name default_queue_type` shows `quorum`; `rabbitmqctl list_policies`
   shows `unlimited-delivery`; `rabbitmq-queues check_if_node_is_quorum_critical` before stopping a node;
   `rabbitmqctl list_queues name type policy` shows the services' queues as `quorum` with the policy. On the 3-node test
   cluster, traffic through both buses survived stopping the node leading the queues, and a message handed back 30
@@ -50,3 +64,15 @@ Symptom -> Root cause -> Fix -> Verification.
   consumers). Requests sent meanwhile wait and are answered late, within their timeout (before 4.0.0's fix they
   could throw; see the changelog). Under a request and an event every 250 ms, stopping the node holding the request,
   reply or event consumer lost nothing.
+
+## Events in a service's error queue
+
+- **Symptom:** `messagebus.messages.dead_lettered` rises (the `MessageBusMessagesDeadLettered` alert); a service's
+  `<input queue>.error` queue holds messages.
+- **Root cause:** an integration event's handler kept failing (5 tries in its place by default), so the bus moved the
+  event aside rather than retry it forever. The message's `rbs2-error-details` header says which handler and why.
+- **Fix:** find and fix the cause, then move the events back. Through the service's admin endpoints
+  (`app.MapErrorQueueAdministration()`, under `/admin/error-queue`): `GET /` lists them with why each failed;
+  `POST /retry` (or `POST /retry?type=<event>`) moves them back to be handled again, resuming at the handler that
+  failed; `DELETE /messages/{id}` drops one that should never be handled. In code, `IErrorQueue` does the same.
+- **Verification:** `GET /` answers `count: 0`; the handler's `messagebus.events.handled` counts `success` for them.
