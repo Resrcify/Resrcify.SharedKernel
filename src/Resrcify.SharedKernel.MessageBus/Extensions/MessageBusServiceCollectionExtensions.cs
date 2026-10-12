@@ -11,6 +11,7 @@ using Rebus.Retry;
 using Rebus.Retry.Simple;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
 using Resrcify.SharedKernel.MessageBus.Diagnostics;
+using Resrcify.SharedKernel.MessageBus.ErrorQueues;
 using Resrcify.SharedKernel.MessageBus.PublishSubscribe;
 using Rebus.Routing.TypeBased;
 using Rebus.Transport;
@@ -49,6 +50,7 @@ public static class MessageBusServiceCollectionExtensions
         var settings = builder.Settings;
         services.AddSingleton(settings);
         services.TryAddTransient<IEventBus, EventBus>();
+        services.TryAddSingleton<IErrorQueue, ErrorQueue>();
         services.TryAddSingleton<ReceiveOrder>();
         services.TryAddSingleton<EventsInFlight>();
         // The clock deadlines, retries in place and health checks read; replace it (e.g. with FakeTimeProvider) in tests.

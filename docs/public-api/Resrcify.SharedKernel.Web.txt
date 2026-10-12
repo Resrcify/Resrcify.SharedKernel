@@ -25,6 +25,21 @@ Resrcify.SharedKernel.Web.Exceptions.ResultProblemDetailsOptions.IncludeExceptio
 Resrcify.SharedKernel.Web.Exceptions.ResultProblemDetailsOptions.ResultProblemDetailsOptions() -> void
 Resrcify.SharedKernel.Web.Extensions.ClaimsPrincipalExtensions
 Resrcify.SharedKernel.Web.Extensions.EndpointExtensions
+Resrcify.SharedKernel.Web.Extensions.ErrorQueueAdministrationEndpointExtensions
+Resrcify.SharedKernel.Web.Extensions.ErrorQueueDeleted
+Resrcify.SharedKernel.Web.Extensions.ErrorQueueDeleted.<Clone>$() -> Resrcify.SharedKernel.Web.Extensions.ErrorQueueDeleted!
+Resrcify.SharedKernel.Web.Extensions.ErrorQueueDeleted.Deconstruct(out int Deleted) -> void
+Resrcify.SharedKernel.Web.Extensions.ErrorQueueDeleted.Deleted.get -> int
+Resrcify.SharedKernel.Web.Extensions.ErrorQueueDeleted.Deleted.init -> void
+Resrcify.SharedKernel.Web.Extensions.ErrorQueueDeleted.Equals(Resrcify.SharedKernel.Web.Extensions.ErrorQueueDeleted? other) -> bool
+Resrcify.SharedKernel.Web.Extensions.ErrorQueueDeleted.ErrorQueueDeleted(int Deleted) -> void
+Resrcify.SharedKernel.Web.Extensions.ErrorQueueRetried
+Resrcify.SharedKernel.Web.Extensions.ErrorQueueRetried.<Clone>$() -> Resrcify.SharedKernel.Web.Extensions.ErrorQueueRetried!
+Resrcify.SharedKernel.Web.Extensions.ErrorQueueRetried.Deconstruct(out int Retried) -> void
+Resrcify.SharedKernel.Web.Extensions.ErrorQueueRetried.Equals(Resrcify.SharedKernel.Web.Extensions.ErrorQueueRetried? other) -> bool
+Resrcify.SharedKernel.Web.Extensions.ErrorQueueRetried.ErrorQueueRetried(int Retried) -> void
+Resrcify.SharedKernel.Web.Extensions.ErrorQueueRetried.Retried.get -> int
+Resrcify.SharedKernel.Web.Extensions.ErrorQueueRetried.Retried.init -> void
 Resrcify.SharedKernel.Web.Extensions.HealthEndpointExtensions
 Resrcify.SharedKernel.Web.Extensions.HttpContextExtensions
 Resrcify.SharedKernel.Web.Extensions.HttpResponseMessageExtensions
@@ -78,13 +93,25 @@ const Resrcify.SharedKernel.Web.Endpoints.IdempotencyHeaders.Key = "Idempotency-
 const Resrcify.SharedKernel.Web.Endpoints.IdempotencyHeaders.Replayed = "Idempotency-Replayed" -> string!
 const Resrcify.SharedKernel.Web.Exceptions.ResultExceptionHandler.ErrorCode = "Unhandled" -> string!
 const Resrcify.SharedKernel.Web.Exceptions.ResultExceptionHandler.ErrorMessage = "An unexpected error occurred." -> string!
+const Resrcify.SharedKernel.Web.Extensions.ErrorQueueAdministrationEndpointExtensions.MaxTake = 1000 -> int
 const Resrcify.SharedKernel.Web.Extensions.ResultResilienceHttpClientBuilderExtensions.PipelineName = "result-resilience" -> string!
 const Resrcify.SharedKernel.Web.Health.HealthTags.Live = "live" -> string!
 const Resrcify.SharedKernel.Web.Health.HealthTags.Ready = "ready" -> string!
+override Resrcify.SharedKernel.Web.Extensions.ErrorQueueDeleted.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.Web.Extensions.ErrorQueueDeleted.GetHashCode() -> int
+override Resrcify.SharedKernel.Web.Extensions.ErrorQueueDeleted.ToString() -> string!
+override Resrcify.SharedKernel.Web.Extensions.ErrorQueueRetried.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.Web.Extensions.ErrorQueueRetried.GetHashCode() -> int
+override Resrcify.SharedKernel.Web.Extensions.ErrorQueueRetried.ToString() -> string!
 static Resrcify.SharedKernel.Web.Endpoints.IdempotencyHeaders.MarkIfReplayed(Microsoft.AspNetCore.Http.HttpContext! context, object! request) -> void
 static Resrcify.SharedKernel.Web.Extensions.ClaimsPrincipalExtensions.GetUserId(this System.Security.Claims.ClaimsPrincipal! user) -> Resrcify.SharedKernel.Results.Primitives.Result<System.Guid>!
 static Resrcify.SharedKernel.Web.Extensions.EndpointExtensions.AddEndpoints(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, params System.Reflection.Assembly![]! assemblies) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 static Resrcify.SharedKernel.Web.Extensions.EndpointExtensions.MapEndpoints(this Microsoft.AspNetCore.Builder.WebApplication! app, Microsoft.AspNetCore.Routing.RouteGroupBuilder? routeGroupBuilder = null) -> Microsoft.AspNetCore.Builder.IApplicationBuilder!
+static Resrcify.SharedKernel.Web.Extensions.ErrorQueueAdministrationEndpointExtensions.MapErrorQueueAdministration(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! prefix = "/admin/error-queue") -> Microsoft.AspNetCore.Routing.RouteGroupBuilder!
+static Resrcify.SharedKernel.Web.Extensions.ErrorQueueDeleted.operator !=(Resrcify.SharedKernel.Web.Extensions.ErrorQueueDeleted? left, Resrcify.SharedKernel.Web.Extensions.ErrorQueueDeleted? right) -> bool
+static Resrcify.SharedKernel.Web.Extensions.ErrorQueueDeleted.operator ==(Resrcify.SharedKernel.Web.Extensions.ErrorQueueDeleted? left, Resrcify.SharedKernel.Web.Extensions.ErrorQueueDeleted? right) -> bool
+static Resrcify.SharedKernel.Web.Extensions.ErrorQueueRetried.operator !=(Resrcify.SharedKernel.Web.Extensions.ErrorQueueRetried? left, Resrcify.SharedKernel.Web.Extensions.ErrorQueueRetried? right) -> bool
+static Resrcify.SharedKernel.Web.Extensions.ErrorQueueRetried.operator ==(Resrcify.SharedKernel.Web.Extensions.ErrorQueueRetried? left, Resrcify.SharedKernel.Web.Extensions.ErrorQueueRetried? right) -> bool
 static Resrcify.SharedKernel.Web.Extensions.HealthEndpointExtensions.MapHealthEndpoints(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, System.Action<Resrcify.SharedKernel.Web.Health.HealthEndpointOptions!>? configure = null) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!
 static Resrcify.SharedKernel.Web.Extensions.HttpContextExtensions.GetBearerToken(this Microsoft.AspNetCore.Http.HttpContext! context) -> string?
 static Resrcify.SharedKernel.Web.Extensions.HttpResponseMessageExtensions.ToResultAsync(this System.Net.Http.HttpResponseMessage! response, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Resrcify.SharedKernel.Results.Primitives.Result!>!

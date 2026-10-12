@@ -64,6 +64,10 @@ internal sealed class EventService : IAsyncDisposable
             .UseRabbitMq(connection)
             .AddMessage<PlayerRenamedPublished>(wireName, sendTo: queue));
 
+    /// <summary>The service's error queue.</summary>
+    public IErrorQueue ErrorQueue
+        => _host.Services.GetRequiredService<IErrorQueue>();
+
     public Task PublishAsync(PlayerRenamedPublished renamed)
         => _host.Services.GetRequiredService<IEventBus>().PublishAsync(renamed);
 
@@ -105,6 +109,9 @@ internal sealed class EventLog
 
     public int Attempts => Volatile.Read(ref _attempts);
 
+    /// <summary>Whatever made the events marked <c>Fail</c> fail is fixed: they are handled from now on.</summary>
+    public bool Recovered { get; set; }
+
     /// <summary>How long handling one event takes, to see what runs at the same time.</summary>
     public TimeSpan Delay { get; init; }
 
@@ -133,14 +140,17 @@ internal sealed class EventLog
     }
 }
 
-/// <summary>Records every event; one marked <c>Fail</c> fails (a failure another try may fix) every time.</summary>
+/// <summary>
+/// Records every event; one marked <c>Fail</c> fails (a failure another try may fix) every time, until the log says it
+/// <see cref="EventLog.Recovered"/>.
+/// </summary>
 internal sealed class PlayerRenamedHandler(EventLog log) : IIntegrationEventHandler<PlayerRenamed>
 {
     public async Task<Result> HandleAsync(PlayerRenamed integrationEvent, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(integrationEvent);
         log.RecordAttempt();
-        if (integrationEvent.Fail)
+        if (integrationEvent.Fail && !log.Recovered)
             return Result.Failure(Error.ExternalFailure("Discord.Unavailable", "Always fails."));
         await log.HandleAsync(integrationEvent);
         return Result.Success();

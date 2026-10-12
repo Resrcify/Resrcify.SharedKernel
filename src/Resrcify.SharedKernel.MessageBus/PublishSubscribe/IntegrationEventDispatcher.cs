@@ -191,15 +191,22 @@ internal sealed partial class IntegrationEventDispatcher<TEvent>(
 
     /// <summary>
     /// Runs the handlers one after the other. A retry starts again at the handler that failed, so the ones before it
-    /// don't run twice.
+    /// don't run twice. A message moved back from the error queue names the handlers that had finished with it
+    /// (<see cref="HandledBy"/>), and they are skipped.
     /// </summary>
     private async Task<EventOutcome> RunHandlersAsync(TEvent message, string wireName, CancellationToken cancellationToken)
     {
         var outcome = EventOutcome.Success;
-        var names = handlers.Select(handler => handler.GetType().Name).ToList();
-        for (var index = 0; index < names.Count; index++)
+        var types = handlers.Select(handler => handler.GetType()).ToList();
+        var keys = HandledBy.KeysOf(types);
+        var context = MessageContext.Current;
+        var finished = HandledBy.Read(context);
+        for (var index = 0; index < types.Count; index++)
         {
-            var name = names[index];
+            if (finished.Contains(keys[index]))
+                continue;
+
+            var name = types[index].Name;
             for (var attempt = 1; attempt <= settings.EventTries; attempt++)
             {
                 var failure = await TryHandleAsync(index, message, cancellationToken);
@@ -216,6 +223,8 @@ internal sealed partial class IntegrationEventDispatcher<TEvent>(
                 if (attempt == settings.EventTries)
                 {
                     LogDeadLettered(OnceLogged(failure.Exception), wireName, name, attempt, failure.Describe());
+                    // Moved back from the error queue, it resumes at this handler.
+                    HandledBy.Write(context, finished);
                     await bus.Advanced.TransportMessage.Deadletter($"{name} failed {attempt} times: {failure.Describe()}");
                     return EventOutcome.Error;
                 }
@@ -223,6 +232,9 @@ internal sealed partial class IntegrationEventDispatcher<TEvent>(
                 LogRetryInPlace(NotLoggedYet(failure.Exception), wireName, name, attempt, failure.Describe());
                 await Task.Delay(RetryDelay(attempt), time, cancellationToken);
             }
+
+            // Handled, or rejected as the event's fault: done with it either way.
+            finished.Add(keys[index]);
         }
         return outcome;
     }

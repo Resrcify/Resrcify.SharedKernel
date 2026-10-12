@@ -56,6 +56,7 @@ Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.Username.init 
 Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.VirtualHost.get -> string!
 Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.VirtualHost.init -> void
 Resrcify.SharedKernel.MessageBus.Diagnostics.MessageBusDiagnostics
+Resrcify.SharedKernel.MessageBus.ErrorQueues.ErrorQueueErrors
 Resrcify.SharedKernel.MessageBus.Extensions.MessageBusHealthChecksBuilderExtensions
 Resrcify.SharedKernel.MessageBus.Extensions.MessageBusServiceCollectionExtensions
 Resrcify.SharedKernel.MessageBus.PublishSubscribe.SentBackBehindException
@@ -131,6 +132,10 @@ override Resrcify.SharedKernel.MessageBus.ScatterGather.ScatterRequestFailed.ToS
 static Resrcify.SharedKernel.MessageBus.Configuration.DefaultBusConfigurationStrategy.Instance.get -> Resrcify.SharedKernel.MessageBus.Configuration.DefaultBusConfigurationStrategy!
 static Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.operator !=(Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection? left, Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection? right) -> bool
 static Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection.operator ==(Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection? left, Resrcify.SharedKernel.MessageBus.Configuration.RabbitMqConnection? right) -> bool
+static Resrcify.SharedKernel.MessageBus.ErrorQueues.ErrorQueueErrors.MessageNotFound(string! messageId) -> Resrcify.SharedKernel.Results.Primitives.Error!
+static Resrcify.SharedKernel.MessageBus.ErrorQueues.ErrorQueueErrors.None.get -> Resrcify.SharedKernel.Results.Primitives.Error!
+static Resrcify.SharedKernel.MessageBus.ErrorQueues.ErrorQueueErrors.NotMoved(string! messageId, string! reason) -> Resrcify.SharedKernel.Results.Primitives.Error!
+static Resrcify.SharedKernel.MessageBus.ErrorQueues.ErrorQueueErrors.Unavailable(string! reason) -> Resrcify.SharedKernel.Results.Primitives.Error!
 static Resrcify.SharedKernel.MessageBus.Extensions.MessageBusHealthChecksBuilderExtensions.AddMessageBus(this Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder! builder, string! name = "messagebus", Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus? failureStatus = null, System.Collections.Generic.IEnumerable<string!>? tags = null) -> Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!
 static Resrcify.SharedKernel.MessageBus.Extensions.MessageBusServiceCollectionExtensions.AddMessageBus(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Resrcify.SharedKernel.MessageBus.Configuration.MessageBusBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 static Resrcify.SharedKernel.MessageBus.RateLimitedQueues.RateLimitedQueueOptions.AnswerFailureWhenItsTheRequestsFault(System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.Results.Primitives.Error!>! errors) -> bool

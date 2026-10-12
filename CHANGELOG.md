@@ -324,6 +324,12 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   test needn't poll for its handlers to have run.
 - **`IGathered.SettledKeys`**: the items with a definite answer (a result, or a failure that is the request's fault),
   for an all-or-nothing gather that must not apply when an item's responder gave up.
+- **The message bus' error queue: show, delete, move back.** `IErrorQueue` (registered by `AddMessageBus`) lists the
+  events whose handlers kept failing (`<input queue>.error`) with why each failed, deletes one, all or all of a type,
+  and moves one, all or all of a type back to the queue it failed on, on RabbitMQ (classic and quorum queues: listing
+  uses no delivery up) and in memory. A message moved back resumes at the handler that failed: those that had finished
+  with it are named in a `resrcify-handled-by` header written when it was dead-lettered, and don't run again.
+  `app.MapErrorQueueAdministration()` (Web) maps it to admin endpoints under `/admin/error-queue`.
 - **`ForwardEvent<TEvent>(...)`** on the message bus builder: hands an integration event to the mediator as a
   notification or a command, so a handler that only does that needn't be written.
 - **`messagebus.events.published` has a `via_outbox` tag**: `false` marks an event published outside the outbox (a

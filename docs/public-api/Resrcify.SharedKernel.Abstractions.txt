@@ -105,6 +105,44 @@ Resrcify.SharedKernel.Abstractions.Mediator.RequestHandlerDelegate<TResponse>
 Resrcify.SharedKernel.Abstractions.Mediator.StreamHandlerDelegate<TResponse>
 Resrcify.SharedKernel.Abstractions.Mediator.ValueTaskRequestExecutionDelegate<TRequest, TResponse>
 Resrcify.SharedKernel.Abstractions.Mediator.ValueTaskRequestHandlerDelegate<TResponse>
+Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents
+Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents.<Clone>$() -> Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents!
+Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents.Count.get -> int
+Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents.Count.init -> void
+Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents.Deconstruct(out string! Queue, out int Count, out System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage!>! Messages) -> void
+Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents.Equals(Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents? other) -> bool
+Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents.ErrorQueueContents(string! Queue, int Count, System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage!>! Messages) -> void
+Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents.Messages.get -> System.Collections.Generic.IReadOnlyList<Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents.Messages.init -> void
+Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents.Queue.get -> string!
+Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents.Queue.init -> void
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.<Clone>$() -> Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage!
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.Body.get -> System.ReadOnlyMemory<byte>
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.Body.init -> void
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.Deconstruct(out string! MessageId, out string? MessageType, out string? SourceQueue, out string? Error, out System.DateTimeOffset? SentOnUtc, out System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Headers, out string? Text, out System.ReadOnlyMemory<byte> Body) -> void
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.Equals(Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage? other) -> bool
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.Error.get -> string?
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.Error.init -> void
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.FailedMessage(string! MessageId, string? MessageType, string? SourceQueue, string? Error, System.DateTimeOffset? SentOnUtc, System.Collections.Generic.IReadOnlyDictionary<string!, string!>! Headers, string? Text, System.ReadOnlyMemory<byte> Body) -> void
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.Headers.get -> System.Collections.Generic.IReadOnlyDictionary<string!, string!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.Headers.init -> void
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.MessageId.get -> string!
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.MessageId.init -> void
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.MessageType.get -> string?
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.MessageType.init -> void
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.SentOnUtc.get -> System.DateTimeOffset?
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.SentOnUtc.init -> void
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.SourceQueue.get -> string?
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.SourceQueue.init -> void
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.Text.get -> string?
+Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.Text.init -> void
+Resrcify.SharedKernel.Abstractions.MessageBus.IErrorQueue
+Resrcify.SharedKernel.Abstractions.MessageBus.IErrorQueue.DeleteAllAsync(string? messageType = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Resrcify.SharedKernel.Results.Primitives.Result<int>!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IErrorQueue.DeleteAsync(string! messageId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Resrcify.SharedKernel.Results.Primitives.Result!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IErrorQueue.ListAsync(int max = 100, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Resrcify.SharedKernel.Results.Primitives.Result<Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents!>!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IErrorQueue.RetryAllAsync(string? messageType = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Resrcify.SharedKernel.Results.Primitives.Result<int>!>!
+Resrcify.SharedKernel.Abstractions.MessageBus.IErrorQueue.RetryAsync(string! messageId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Resrcify.SharedKernel.Results.Primitives.Result!>!
 Resrcify.SharedKernel.Abstractions.MessageBus.IEventBus
 Resrcify.SharedKernel.Abstractions.MessageBus.IEventBus.PublishAsync<TEvent>(TEvent! integrationEvent, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Resrcify.SharedKernel.Abstractions.MessageBus.IGathered<TResponse>
@@ -172,6 +210,16 @@ Resrcify.SharedKernel.Abstractions.UnitOfWork.IUnitOfWork.ExecuteInTransactionAs
 Resrcify.SharedKernel.Abstractions.UnitOfWork.IUnitOfWork.ExecuteInTransactionAsync<TResponse>(System.Func<System.Threading.CancellationToken, System.Threading.Tasks.Task<TResponse!>!>! operation, System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.ReadCommitted, System.TimeSpan? commandTimeout = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TResponse!>!
 Resrcify.SharedKernel.Abstractions.UnitOfWork.IUnitOfWork.RollbackTransactionAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Resrcify.SharedKernel.Abstractions.UnitOfWork.IUnitOfWork.TryCompleteAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Resrcify.SharedKernel.Results.Primitives.Result!>!
+override Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents.GetHashCode() -> int
+override Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents.ToString() -> string!
+override Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.Equals(object? obj) -> bool
+override Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.GetHashCode() -> int
+override Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.ToString() -> string!
+static Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents.operator !=(Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents? left, Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents? right) -> bool
+static Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents.operator ==(Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents? left, Resrcify.SharedKernel.Abstractions.MessageBus.ErrorQueueContents? right) -> bool
+static Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.operator !=(Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage? left, Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage? right) -> bool
+static Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage.operator ==(Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage? left, Resrcify.SharedKernel.Abstractions.MessageBus.FailedMessage? right) -> bool
 virtual Resrcify.SharedKernel.Abstractions.Mediator.RequestExecutionDelegate<TRequest, TResponse>.Invoke(TRequest request, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TResponse>!
 virtual Resrcify.SharedKernel.Abstractions.Mediator.RequestHandlerDelegate<TResponse>.Invoke(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<TResponse>!
 virtual Resrcify.SharedKernel.Abstractions.Mediator.StreamHandlerDelegate<TResponse>.Invoke(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<TResponse>!

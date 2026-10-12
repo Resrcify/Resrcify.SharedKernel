@@ -15,14 +15,7 @@ internal static class BrokerQueues
     /// </summary>
     public static async Task DeclareRefusingSubscriberAsync(RabbitMqConnection connection, string wireName, string queue)
     {
-        var factory = new ConnectionFactory
-        {
-            HostName = connection.Host,
-            Port = connection.Port,
-            UserName = connection.Username,
-            Password = connection.Password,
-        };
-        await using var rabbitMq = await factory.CreateConnectionAsync();
+        await using var rabbitMq = await Factory(connection).CreateConnectionAsync();
         await using var channel = await rabbitMq.CreateChannelAsync();
         await channel.ExchangeDeclareAsync("RebusTopics", ExchangeType.Topic, durable: true);
         await channel.QueueDeclareAsync(
@@ -37,14 +30,7 @@ internal static class BrokerQueues
     /// <summary>How many messages wait in <paramref name="queue"/>, or -1 if it doesn't exist.</summary>
     public static async Task<long> MessageCountAsync(RabbitMqConnection connection, string queue)
     {
-        var factory = new ConnectionFactory
-        {
-            HostName = connection.Host,
-            Port = connection.Port,
-            UserName = connection.Username,
-            Password = connection.Password,
-        };
-        await using var rabbitMq = await factory.CreateConnectionAsync();
+        await using var rabbitMq = await Factory(connection).CreateConnectionAsync();
         await using var channel = await rabbitMq.CreateChannelAsync();
         try
         {
@@ -55,4 +41,22 @@ internal static class BrokerQueues
             return -1;
         }
     }
+
+    /// <summary>Deletes <paramref name="queue"/>, messages and all.</summary>
+    public static async Task DeleteQueueAsync(RabbitMqConnection connection, string queue)
+    {
+        await using var rabbitMq = await Factory(connection).CreateConnectionAsync();
+        await using var channel = await rabbitMq.CreateChannelAsync();
+        await channel.QueueDeleteAsync(queue);
+    }
+
+    private static ConnectionFactory Factory(RabbitMqConnection connection)
+        => new()
+        {
+            HostName = connection.Host,
+            Port = connection.Port,
+            UserName = connection.Username,
+            Password = connection.Password,
+            VirtualHost = connection.VirtualHost,
+        };
 }

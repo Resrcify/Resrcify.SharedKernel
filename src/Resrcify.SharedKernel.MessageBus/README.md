@@ -35,6 +35,7 @@ outbox messages.
   - [Failures: the result pattern](#failures-the-result-pattern)
   - [Responding: rate-limited queues](#responding-rate-limited-queues)
   - [Publish/subscribe: integration events](#publishsubscribe-integration-events)
+  - [The error queue: show, delete, move back](#the-error-queue-show-delete-move-back)
   - [Running on a RabbitMQ cluster](#running-on-a-rabbitmq-cluster)
   - [Running without RabbitMQ: in memory](#running-without-rabbitmq-in-memory)
   - [Checking that two copies of a message agree](#checking-that-two-copies-of-a-message-agree)
@@ -251,7 +252,7 @@ services.AddMessageBus(bus => bus
     .UseRabbitMq(...)
     // Consumes the PlayerArenaProfileRequest queue. Gate it on a tag only the upstream's check carries.
     .AddRateLimitedQueue<PlayerArenaProfileRequest, PlayerArenaProfileResponse, PlayerArenaProfileHandler>(
-        queue => { queue.PerSecond = 100; queue.Burst = 10; queue.HealthCheckTag = "game"; }));
+        queue => { queue.PerSecond = 90; queue.Burst = 5; queue.HealthCheckTag = "game"; }));
 
 internal sealed class PlayerArenaProfileHandler(ISender sender)
     : IRequestResponder<PlayerArenaProfileRequest, PlayerArenaProfileResponse>
@@ -263,6 +264,10 @@ internal sealed class PlayerArenaProfileHandler(ISender sender)
 
 Each `AddRateLimitedQueue` runs its own bus and token bucket, so every request type has its own limit
 **per instance**. Instances compete on the same queue, so adding one adds capacity.
+
+In any one second at most `PerSecond + Burst` requests start. Tokens come a refill step at a time (5 at 90/s,
+every 55.6 ms), and the calls of one step reach the upstream a little spread, which can shift one step into the next
+second there. Leave that step as headroom: for an upstream that allows 100 a second, 90 + burst 5.
 
 ### Without a responder class: through the mediator
 
@@ -357,6 +362,39 @@ tries follows the bus' retry strategy (`options.RetryStrategy(maxDeliveryAttempt
   `RemoveSubscription<TEvent>()` (or `RemoveSubscription("TEvent")` once the class is gone) for a release: it unbinds
   at start-up. Until then its events fail ("no message type here is called …"), count as `messagebus.messages.unknown`,
   and end up in the error queue.
+
+## The error queue: show, delete, move back
+
+The events whose handlers kept failing wait in the service's `<input queue>.error`. `IErrorQueue` (registered by
+`AddMessageBus`, its contract in `Resrcify.SharedKernel.Abstractions.MessageBus`) shows them, deletes them, or moves
+them back to the queue they failed on, to be handled again once the cause is fixed:
+
+```csharp
+var listed = await errorQueue.ListAsync(max: 100);          // Result<ErrorQueueContents>: the queue, its count, the first messages
+// each FailedMessage: MessageId, MessageType (wire name), SourceQueue, Error (the handler and its errors),
+// SentOnUtc, Headers, Text (a JSON body as text, unzipped) and Body
+await errorQueue.RetryAsync(listed.Value.Messages[0].MessageId);   // moves it back
+await errorQueue.RetryAllAsync("ShardRankChanged");                // every one of a type (or every one: null)
+await errorQueue.DeleteAsync(messageId);
+await errorQueue.DeleteAllAsync();
+```
+
+The **Resrcify.SharedKernel.Web** package maps it to admin endpoints (`app.MapErrorQueueAdministration()`, under
+`/admin/error-queue`), next to the outbox's.
+
+- **A message moved back resumes where it failed.** It keeps its message ID and loses its error details. The handlers
+  that had finished with it (handled it, or rejected it as the event's fault) before the one that failed are named in
+  its `resrcify-handled-by` header and don't run again; the one that failed and those after it do. A service that skips
+  duplicates handles it: its claim was released when it went to the error queue. If it fails again, it goes back to the
+  error queue, with the new error.
+- **Results, not exceptions:** `ErrorQueue.MessageNotFound` (`NotFound`) for an unknown ID, `ErrorQueue.NotMoved`
+  (`Conflict`) for a message that can't be moved back (its queue is gone; it stays), `ErrorQueue.None` (`NotFound`) for a
+  service without an input queue, `ErrorQueue.Unavailable` (`ExternalFailure`) when the broker can't be reached. Every
+  deletion and move is logged.
+- **Listing uses nothing up.** Each operation reads the queue once (`basic.get`), holding the messages until it is done,
+  and hands back those it keeps with a requeueing `basic.nack`, which doesn't count as a delivery, and waits until a
+  quorum queue has them back. A message moved back is published (mandatory, confirmed) before it leaves the error queue.
+- It works on the in-memory network too (`UseInMemory`, the test harness).
 
 ## Running on a RabbitMQ cluster
 
@@ -529,6 +567,7 @@ The package's own metrics (`MessageBusDiagnostics.MeterName`):
 | A request's requester stops waiting while it is handled | The handler's token is cancelled and the request is dropped unanswered. |
 | A responder stops consuming mid-request (unhealthy, or shutting down) | The handler's token is cancelled and the request goes back to the queue, for another instance. |
 | An integration event's handler keeps failing | After 5 attempts (or the strategy's `RetryStrategy`) it moves to the service's `<input queue>.error` queue, counted in `messagebus.messages.dead_lettered`. |
+| A message is moved back from the error queue (`IErrorQueue.RetryAsync`) | It is handled again from the handler that failed: the handlers that had finished with it don't run twice. |
 | An outbox message is retried after its handler published | The event goes out again under the same message ID; a subscriber with `SkipDuplicateEvents()` handles it once. |
 | A handler is deleted but its subscription stays | Its events fail and go to the error queue (`messagebus.messages.unknown`); `RemoveSubscription` unbinds them. |
 | A streamed batch's caller reads slowly | Only unread replies are held; a reply is released once read. |

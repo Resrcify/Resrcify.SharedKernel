@@ -1,5 +1,7 @@
+using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 using Resrcify.SharedKernel.IntegrationTesting.Fixtures;
 using Testcontainers.PostgreSql;
@@ -25,6 +27,27 @@ public sealed class BusFixture : IAsyncLifetime
     public RabbitMqConnection RabbitMqConnection
         => new(RabbitMq.Host, int.Parse(RabbitMq.AmqpPort, CultureInfo.InvariantCulture), Username, Password);
 
+    /// <summary>
+    /// A virtual host of its own whose queues are quorum queues unless declared otherwise, as on a production cluster.
+    /// </summary>
+    public async Task<RabbitMqConnection> QuorumVirtualHostAsync()
+    {
+        var virtualHost = $"quorum-{Guid.NewGuid():N}";
+        await RabbitMqCtlAsync("add_vhost", virtualHost, "--default-queue-type", "quorum");
+        await RabbitMqCtlAsync("set_permissions", "-p", virtualHost, Username, ".*", ".*", ".*");
+        return RabbitMqConnection with { VirtualHost = virtualHost };
+    }
+
+    /// <summary>The type of <paramref name="queue"/> (classic, quorum) in <paramref name="virtualHost"/>.</summary>
+    public async Task<string?> QueueTypeAsync(string virtualHost, string queue)
+    {
+        var listed = await RabbitMqCtlAsync("list_queues", "-p", virtualHost, "--quiet", "--no-table-headers", "name", "type");
+        return listed
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(line => line.Split('\t'))
+            .FirstOrDefault(columns => columns[0] == queue)?[1];
+    }
+
     public async Task InitializeAsync()
     {
         await Postgres.InitializeAsync();
@@ -35,6 +58,14 @@ public sealed class BusFixture : IAsyncLifetime
     {
         await RabbitMq.DisposeAsync();
         await Postgres.DisposeAsync();
+    }
+
+    private async Task<string> RabbitMqCtlAsync(params string[] arguments)
+    {
+        var result = await RabbitMq.Container.ExecAsync(["rabbitmqctl", .. arguments]);
+        if (result.ExitCode != 0)
+            throw new InvalidOperationException($"rabbitmqctl {string.Join(' ', arguments)} failed: {result.Stderr}");
+        return result.Stdout;
     }
 
     [SuppressMessage(

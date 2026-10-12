@@ -37,6 +37,7 @@
 - Consistent mapping from `ErrorType` to HTTP problem responses.
 - `AddResultProblemDetails()`: unhandled exceptions answered with the same problem details as a failed result.
 - `MapHealthEndpoints()`: `/health`, `/health/ready` and `/health/live`, anonymous, with a JSON response writer.
+- `MapErrorQueueAdministration()`: the message bus' error queue under `/admin/error-queue` (show, delete, move back).
 - `AddResultResilience()`: retries, timeouts and a circuit breaker for an `HttpClient`, retrying what the result
   pattern calls transient.
 - `AddResrcifyJwtBearer(configuration)`: JWT bearer authentication against Resrcify.Identity.
@@ -283,6 +284,25 @@ app.MapHealthChecks("health/live", new HealthCheckOptions { Predicate = _ => fal
 After: `app.MapHealthEndpoints();`. A service whose liveness ran no check (`Predicate = _ => false`) gets the same
 answer as long as no check is tagged `live`. The JSON's shape is this package's (`checks`, `duration`, `error`), not
 HealthChecks.UI's (`entries`, `totalDuration`, `exception`): a probe reads only the status code.
+
+### The message bus' error queue
+
+```csharp
+app.MapErrorQueueAdministration()                       // under /admin/error-queue
+    .RequireAuthorization(policy => policy.RequireRole("Admin"));
+```
+
+| Endpoint | |
+|---|---|
+| `GET /?take=100` | the first messages, oldest first (1 to 1000), with why each failed, and how many there are |
+| `DELETE /messages/{id}` | deletes a message: 204, or 404 |
+| `DELETE /?type=` | deletes every message, or every one of the type: `{ "deleted": n }` |
+| `POST /messages/{id}/retry` | moves a message back to the queue it failed on: 204, 404, or 409 when it can't be moved |
+| `POST /retry?type=` | moves every message, or every one of the type, back: `{ "retried": n }` |
+
+They answer through `IErrorQueue` (registered by the MessageBus package's `AddMessageBus`; see its README), and require
+an authenticated caller; add the admin policy on the group returned. Messages hold event content: never open these to
+everyone.
 
 ### Calling another service: resilience keyed on ErrorType
 
