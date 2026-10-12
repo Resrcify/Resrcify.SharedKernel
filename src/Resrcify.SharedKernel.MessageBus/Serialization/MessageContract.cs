@@ -47,6 +47,30 @@ public static class MessageContract
         return differences;
     }
 
+    /// <summary>
+    /// Reads <paramref name="sentJson"/>, a message as it arrived on the wire, as <typeparamref name="TReceived"/>,
+    /// writes that again, and lists every difference, as <see cref="Differences{TSent, TReceived}"/> does. For a test
+    /// on the receiving side that has the real sender's message but not its class: the JSON of the message being
+    /// handled checked against this side's copy.
+    /// </summary>
+    public static IReadOnlyList<string> Differences<TReceived>(string sentJson)
+        where TReceived : class
+        => Differences(typeof(TReceived), sentJson);
+
+    /// <inheritdoc cref="Differences{TReceived}(string)"/>
+    public static IReadOnlyList<string> Differences(Type receivedType, string sentJson)
+    {
+        ArgumentNullException.ThrowIfNull(receivedType);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sentJson);
+        var sent = JsonNode.Parse(sentJson);
+        var received = JsonSerializer.Deserialize(sentJson, receivedType, MessageJson.Options);
+        var readBack = JsonSerializer.SerializeToNode(received, receivedType, MessageJson.Options);
+
+        var differences = new List<string>();
+        Compare(sent, readBack, "$", receivedType.Name, differences);
+        return differences;
+    }
+
     private static void Compare(JsonNode? sent, JsonNode? received, string path, string receiver, List<string> differences)
     {
         switch (sent, received)

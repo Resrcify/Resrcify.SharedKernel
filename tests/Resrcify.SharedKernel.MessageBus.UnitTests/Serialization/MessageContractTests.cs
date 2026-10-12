@@ -38,6 +38,21 @@ public sealed class MessageContractTests
     }
 
     [Fact]
+    public void Differences_ShouldCheckTheJsonAsItArrived_AgainstTheReceiversCopy()
+    {
+        var arrived = JsonSerializer.Serialize(Sample, MessageJson.Options);
+
+        MessageContract.Differences<Discord.SentinelArenaUnitsChanged>(arrived).ShouldBeEmpty();
+        MessageContract.Differences(new DriftedDiscord.SentinelArenaUnitsChanged("", []).GetType(), arrived).ShouldBe(
+        [
+            "$.changes[0].newRank: sent, but SentinelArenaUnitsChanged has no such property (dropped)",
+            "$.changes[0].rank: SentinelArenaUnitsChanged has it, but it isn't sent (gets its default)",
+            "$.changes[1].newRank: sent, but SentinelArenaUnitsChanged has no such property (dropped)",
+            "$.changes[1].rank: SentinelArenaUnitsChanged has it, but it isn't sent (gets its default)",
+        ]);
+    }
+
+    [Fact]
     public void Differences_ShouldWriteAsTheSendersStrategyDoes_WhenItHasOne()
         => MessageContract.Differences<Sentinel.SentinelArenaUnitsChanged, Discord.SentinelArenaUnitsChanged>(Sample, new LeaveOutGuildId())
             .ShouldBe(["$.guildId: SentinelArenaUnitsChanged has it, but it isn't sent (gets its default)"]);
