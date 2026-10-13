@@ -330,8 +330,6 @@ Upgrading a service: work through **Breaking changes** below, top to bottom. The
   uses no delivery up) and in memory. A message moved back resumes at the handler that failed: those that had finished
   with it are named in a `resrcify-handled-by` header written when it was dead-lettered, and don't run again.
   `app.MapErrorQueueAdministration()` (Web) maps it to admin endpoints under `/admin/error-queue`.
-- **`MessageContract.Differences<TReceived>(json)`**: checks a message as it arrived on the wire against the receiving
-  side's class, for an end-to-end test that runs the real sender but doesn't have its class.
 - **`ForwardEvent<TEvent>(...)`** on the message bus builder: hands an integration event to the mediator as a
   notification or a command, so a handler that only does that needn't be written.
 - **`messagebus.events.published` has a `via_outbox` tag**: `false` marks an event published outside the outbox (a
