@@ -443,6 +443,11 @@ public void SentinelArenaUnitsChanged_ShouldReadAsDiscordsCopy()
 reads it as the receiver's class and lists every property dropped, read differently, or not sent. Give the sample a
 value in every property, nested ones and lists included.
 
+Where the sender's class isn't at hand (another repository), check the real message as it arrived instead: in a test
+handler on the receiving side, read the body of the message being handled and pass it with this side's class,
+`MessageContract.Differences<Discord.SentinelArenaUnitsChanged>(json)` (or `Differences(type, json)`). An end-to-end
+test that runs the real sender then fails on a renamed or missing property, whether or not it asserts that field.
+
 ## Large messages: compression
 
 Message bodies of 32 KB or more are gzipped on every bus (`CompressMessagesAbove(bytes)` changes the threshold, `null`
