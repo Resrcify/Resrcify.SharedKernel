@@ -6,6 +6,7 @@
     <Title>Resrcify.SharedKernel.DomainDrivenDesign</Title>
     <Description>Implements the different building blocks used in Domain Driven Desing.</Description>
     <Summary>Implements the different building blocks used in Domain Driven Desing.</Summary>
+    <PackageTags>$(PackageTags);aggregate-root;entity;value-object;domain-events</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

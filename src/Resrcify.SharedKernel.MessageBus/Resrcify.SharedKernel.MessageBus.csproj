@@ -5,6 +5,7 @@
     <Title>Resrcify.SharedKernel.MessageBus</Title>
     <Description>Message bus on Rebus and RabbitMQ (or in memory): scatter-gather through the outbox, per-instance rate-limited request queues, and publish/subscribe integration events.</Description>
     <Summary>Message bus on Rebus and RabbitMQ (or in memory): scatter-gather through the outbox, per-instance rate-limited request queues, and publish/subscribe integration events.</Summary>
+    <PackageTags>$(PackageTags);message-bus;rebus;rabbitmq;integration-events;outbox;scatter-gather;rate-limiting</PackageTags>
   </PropertyGroup>
 
   <!-- Rebus is a real dependency: its types are part of this package's API (handlers, configuration

@@ -6,6 +6,7 @@
     <Description>Test harness for Resrcify.SharedKernel.MessageBus: switches a service's buses to an in-memory network, records what they publish, send, consume and fail, waits until every bus is idle, injects failures and stands in for other services' request queues.</Description>
     <Summary>Test harness for Resrcify.SharedKernel.MessageBus: in-memory network, awaitable recordings, idle waits, fault injection and stand-in responders.</Summary>
     <IsTestProject>false</IsTestProject>
+    <PackageTags>$(PackageTags);message-bus;rebus;testing;test-harness</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

@@ -5,6 +5,7 @@
     <Title>Resrcify.SharedKernel.UnitOfWork.Web</Title>
     <Description>Admin endpoints for the outbox: what waits and what gave up, per event type and lane, each message's content and error, and retrying messages that gave up.</Description>
     <Summary>Outbox admin endpoints: summary, given-up messages, retry.</Summary>
+    <PackageTags>$(PackageTags);unit-of-work;outbox;aspnetcore;admin-endpoints</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

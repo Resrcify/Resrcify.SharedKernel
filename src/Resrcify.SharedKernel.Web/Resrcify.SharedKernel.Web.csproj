@@ -5,6 +5,7 @@
     <Title>Resrcify.SharedKernel.Web</Title>
     <Description>ASP.NET Core helpers around the result pattern: problem details for failures and unhandled exceptions, reading responses back as results, health endpoints, an ErrorType-keyed HTTP resilience preset and the shared JWT bearer setup.</Description>
     <Summary>ASP.NET Core helpers around the result pattern: problem details, health endpoints, HTTP resilience, JWT bearer.</Summary>
+    <PackageTags>$(PackageTags);aspnetcore;minimal-api;problem-details;jwt;http-client</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

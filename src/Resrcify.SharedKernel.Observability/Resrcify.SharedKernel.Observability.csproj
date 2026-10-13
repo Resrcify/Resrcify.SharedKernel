@@ -5,6 +5,7 @@
     <Title>Resrcify.SharedKernel.Observability</Title>
     <Description>One-call service telemetry: OpenTelemetry tracing and metrics (ASP.NET Core, HttpClient, runtime, every SharedKernel source, Quartz), the Prometheus scrape endpoint, OTLP trace export when configured, and Serilog with trace-correlated logs.</Description>
     <Summary>One-call service telemetry: OpenTelemetry, Prometheus, OTLP and Serilog wired the same way in every service.</Summary>
+    <PackageTags>$(PackageTags);opentelemetry;prometheus;otlp;serilog;tracing;metrics</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

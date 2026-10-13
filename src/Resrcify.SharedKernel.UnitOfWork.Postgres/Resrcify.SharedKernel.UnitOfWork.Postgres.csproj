@@ -5,6 +5,7 @@
     <Title>Resrcify.SharedKernel.UnitOfWork.Postgres</Title>
     <Description>PostgreSQL wiring for the unit of work: a DbContext from the services' Database section with the SharedKernel interceptors, retries, an xmin concurrency token, a design-time factory for dotnet ef, and an outbox woken by NOTIFY.</Description>
     <Summary>PostgreSQL DbContext setup, design-time factory, xmin row versions and an outbox woken by NOTIFY.</Summary>
+    <PackageTags>$(PackageTags);unit-of-work;outbox;postgresql;npgsql;entity-framework-core</PackageTags>
   </PropertyGroup>
 
   <!-- Private, like every SharedKernel package's dependencies: the service references the ones it uses itself (see the

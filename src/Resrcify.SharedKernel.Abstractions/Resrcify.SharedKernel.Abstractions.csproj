@@ -5,6 +5,7 @@
     <Title>Resrcify.SharedKernel.Abstractions</Title>
     <Description>Shared cross-cutting abstractions used by multiple SharedKernel projects.</Description>
     <Summary>Shared cross-cutting abstractions used by multiple SharedKernel projects.</Summary>
+    <PackageTags>$(PackageTags);abstractions;results;mediator;repository;unit-of-work</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

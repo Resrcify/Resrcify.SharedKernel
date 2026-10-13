@@ -5,6 +5,7 @@
     <Title>Resrcify.SharedKernel.UnitOfWork</Title>
     <Description>Implements a unit of work pattern, including interceptors using EntityFrameworkCore.</Description>
     <Summary>Implements a unit of work pattern, includin interceptors using EntityFrameworkCore.</Summary>
+    <PackageTags>$(PackageTags);unit-of-work;outbox;entity-framework-core;quartz;domain-events</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

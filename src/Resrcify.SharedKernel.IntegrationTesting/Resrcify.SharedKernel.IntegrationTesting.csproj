@@ -6,6 +6,7 @@
     <Description>Composable integration-test fixtures (Testcontainers Postgres / RabbitMQ + WebApplicationFactory) for downstream services.</Description>
     <Summary>Composable integration-test fixtures (Testcontainers Postgres / RabbitMQ + WebApplicationFactory) for downstream services.</Summary>
     <IsTestProject>false</IsTestProject>
+    <PackageTags>$(PackageTags);integration-tests;testcontainers;postgresql;rabbitmq;testing</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

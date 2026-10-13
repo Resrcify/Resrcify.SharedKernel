@@ -5,6 +5,7 @@
     <Title>Resrcify.SharedKernel.Results</Title>
     <Description>Implements the result pattern.</Description>
     <Summary>Implements the result pattern.</Summary>
+    <PackageTags>$(PackageTags);result-pattern;railway-oriented;errors;functional</PackageTags>
   </PropertyGroup>
 
 </Project>

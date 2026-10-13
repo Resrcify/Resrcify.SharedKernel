@@ -5,6 +5,7 @@
     <Title>Resrcify.SharedKernel.Mediator</Title>
     <Description>In-process mediator: request/notification/stream dispatching with pipeline behaviors.</Description>
     <Summary>In-process mediator: request/notification/stream dispatching with pipeline behaviors.</Summary>
+    <PackageTags>$(PackageTags);mediator;pipeline-behaviors;commands;queries</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
