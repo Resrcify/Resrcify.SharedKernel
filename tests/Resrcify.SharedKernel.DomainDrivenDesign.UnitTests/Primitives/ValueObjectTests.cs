@@ -120,4 +120,49 @@ public class ValueObjectTests
         // Act & Assert
         (address1 != address2).ShouldBeFalse();
     }
+
+    [Fact]
+    public void EqualityOperators_ShouldTreatNullAsEqualOnlyToNull_WhenEitherSideIsNull()
+    {
+        // Through a call, so the analyzer can't assume what the operators return.
+        var none = Opaque<Address>(null);
+        var alsoNone = Opaque<Address>(null);
+        var address = Opaque(new Address("Main", "City", "123"));
+
+        (none == alsoNone).ShouldBeTrue();
+        (none != null).ShouldBeFalse();
+        (address == null).ShouldBeFalse();
+        (address != null).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Equals_ShouldBeFalse_WhenTwoDifferentValueObjectsHaveTheSameValues()
+    {
+        var email = new Email("a");
+        var username = new Username("a");
+
+        email.Equals(username).ShouldBeFalse();
+        (email == username).ShouldBeFalse();
+        new HashSet<ValueObject> { email, username }.Count.ShouldBe(2);
+    }
+
+    private static T? Opaque<T>(T? value)
+        where T : class
+        => value;
+
+    private sealed class Email(string value) : ValueObject
+    {
+        public override IEnumerable<object> GetAtomicValues()
+        {
+            yield return value;
+        }
+    }
+
+    private sealed class Username(string value) : ValueObject
+    {
+        public override IEnumerable<object> GetAtomicValues()
+        {
+            yield return value;
+        }
+    }
 }

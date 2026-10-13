@@ -25,7 +25,7 @@ namespace Resrcify.SharedKernel.ArchitectureTesting.Tests;
     Justification = "xUnit discovers tests on public abstract bases via inheritance.")]
 public abstract class ConventionalDomainTests : BaseArchitectureTest
 {
-    private const string Layer = "Domain";
+    private const string Layer = Layers.Domain;
 
     [SkippableFact]
     public virtual void DomainEvents_Should_BeSealed()

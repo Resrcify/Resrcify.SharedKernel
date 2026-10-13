@@ -21,7 +21,8 @@ public static class ClaimsPrincipalExtensions
             MissingUserIdClaim);
     }
 
-    internal static readonly Error MissingUserIdClaim = Error.Validation(
+    // The caller isn't identified: a 401, not a problem with the request.
+    internal static readonly Error MissingUserIdClaim = Error.Unauthorized(
         "User.MissingUserIdClaim",
         $"User Id claim not found or invalid.");
 }

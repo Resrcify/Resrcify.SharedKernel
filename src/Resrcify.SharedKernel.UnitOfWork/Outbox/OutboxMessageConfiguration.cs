@@ -17,6 +17,7 @@ public sealed class OutboxMessageConfiguration
     private readonly string? _schema;
     private readonly Action<IndexBuilder<OutboxMessage>>? _configureUnprocessedIndex;
     private readonly Action<IndexBuilder<OutboxMessage>>? _configureDedupIndex;
+    private readonly Action<IndexBuilder<OutboxMessage>>? _configureProcessedIndex;
 
     /// <param name="tableName">Table name for the outbox messages.</param>
     /// <param name="schema">
@@ -49,16 +50,22 @@ public sealed class OutboxMessageConfiguration
     /// Without that strategy in place, a unique-constraint violation inside the
     /// SaveChanges pipeline will fail the entire user transaction.
     /// </param>
+    /// <param name="configureProcessedIndex">
+    /// Optional hook for the index the hourly cleanup deletes through (<c>ProcessedOnUtc &lt; cutoff</c>). On PostgreSQL,
+    /// <see cref="PostgresOutboxIndexes.PartialProcessed"/> keeps it to processed rows.
+    /// </param>
     public OutboxMessageConfiguration(
         string tableName = "OutboxMessages",
         string? schema = null,
         Action<IndexBuilder<OutboxMessage>>? configureUnprocessedIndex = null,
-        Action<IndexBuilder<OutboxMessage>>? configureDedupIndex = null)
+        Action<IndexBuilder<OutboxMessage>>? configureDedupIndex = null,
+        Action<IndexBuilder<OutboxMessage>>? configureProcessedIndex = null)
     {
         _tableName = tableName;
         _schema = schema;
         _configureUnprocessedIndex = configureUnprocessedIndex;
         _configureDedupIndex = configureDedupIndex;
+        _configureProcessedIndex = configureProcessedIndex;
     }
 
     public void Configure(EntityTypeBuilder<OutboxMessage> builder)
@@ -91,5 +98,12 @@ public sealed class OutboxMessageConfiguration
             .HasDatabaseName("IX_OutboxMessages_Dedup");
 
         _configureDedupIndex?.Invoke(dedupIndex);
+
+        // Backs the hourly cleanup: "processed before the cutoff, oldest first".
+        var processedIndex = builder
+            .HasIndex(x => x.ProcessedOnUtc)
+            .HasDatabaseName("IX_OutboxMessages_Processed");
+
+        _configureProcessedIndex?.Invoke(processedIndex);
     }
 }

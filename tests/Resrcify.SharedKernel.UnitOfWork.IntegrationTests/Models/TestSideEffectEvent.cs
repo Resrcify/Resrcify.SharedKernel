@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Resrcify.SharedKernel.Abstractions.Messaging;
+using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 
 namespace Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Models;

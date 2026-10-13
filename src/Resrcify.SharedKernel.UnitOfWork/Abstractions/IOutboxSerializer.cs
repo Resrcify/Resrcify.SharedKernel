@@ -3,10 +3,9 @@ using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 namespace Resrcify.SharedKernel.UnitOfWork.Abstractions;
 
 /// <summary>
-/// Strategy for turning domain events into outbox payloads and back. Both built-in
-/// implementations embed the concrete type in the payload, so <see cref="Deserialize"/>
-/// needs only the stored content. Pick one by registering it as <see cref="IOutboxSerializer"/>:
-/// <c>SystemTextJsonOutboxSerializer</c> or <c>NewtonsoftJsonOutboxSerializer</c>.
+/// Strategy for turning domain events into outbox payloads and back. The built-in
+/// <c>SystemTextJsonOutboxSerializer</c> embeds the concrete type in the payload, so <see cref="Deserialize"/>
+/// needs only the stored content. Implement this interface for another format.
 /// </summary>
 public interface IOutboxSerializer
 {

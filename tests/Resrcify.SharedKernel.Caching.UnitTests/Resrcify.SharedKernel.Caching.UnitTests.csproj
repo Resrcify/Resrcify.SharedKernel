@@ -19,6 +19,7 @@
      <PackageReference Include="Shouldly" />
      <PackageReference Include="NSubstitute"/>
      <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
+     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
   </ItemGroup>
 
   <ItemGroup>

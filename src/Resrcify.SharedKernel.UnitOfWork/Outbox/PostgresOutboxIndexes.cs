@@ -54,6 +54,13 @@ public sealed class PostgresOutboxIndexes : IOutboxIndexes
     public Action<IndexBuilder<OutboxMessage>> PartialUnprocessed { get; } =
         index => index.HasFilter(UnprocessedFilterSql);
 
+    /// <summary>Raw filter SQL applied by <see cref="PartialProcessed"/>: only rows the cleanup can delete.</summary>
+    public const string ProcessedFilterSql = "\"ProcessedOnUtc\" IS NOT NULL";
+
+    /// <summary>Keeps the cleanup's index to processed rows.</summary>
+    public Action<IndexBuilder<OutboxMessage>> PartialProcessed { get; } =
+        index => index.HasFilter(ProcessedFilterSql);
+
     public Action<IndexBuilder<OutboxMessage>> PartialUniqueDedup { get; } =
         index => index
             .IsUnique()

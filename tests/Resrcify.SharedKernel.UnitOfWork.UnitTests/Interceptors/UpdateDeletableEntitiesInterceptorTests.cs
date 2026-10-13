@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Time.Testing;
 using Resrcify.SharedKernel.UnitOfWork.Interceptors;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
 using Shouldly;
@@ -15,25 +16,33 @@ namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.Interceptors;
     Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public sealed class UpdateDeletableEntitiesInterceptorTests : DbSetupBase
 {
-    public UpdateDeletableEntitiesInterceptorTests() : base(new UpdateDeletableEntitiesInterceptor())
+    private static readonly DateTimeOffset Start = new(2026, 10, 5, 12, 0, 0, TimeSpan.Zero);
+    private readonly FakeTimeProvider _clock;
+
+    public UpdateDeletableEntitiesInterceptorTests()
+        : this(new FakeTimeProvider(Start))
     {
     }
+
+    private UpdateDeletableEntitiesInterceptorTests(FakeTimeProvider clock)
+        : base(new UpdateDeletableEntitiesInterceptor(clock))
+        => _clock = clock;
 
     [Fact]
     public async Task SaveChangesAsync_ShouldUpdateDeletableEntities()
     {
         // Arrange
-        var now = DateTime.UtcNow;
         var entity = new Person(SocialSecurityNumber.Create(123456789), "John Doe");
         await DbContext.Persons.AddAsync(entity);
         await DbContext.SaveChangesAsync();
         // Act
+        _clock.Advance(TimeSpan.FromMinutes(10));
         DbContext.Persons.Remove(entity);
         await DbContext.SaveChangesAsync();
 
         //Assert
         entity.DeletedOnUtc
-            .ShouldBe(now, TimeSpan.FromSeconds(1));
+            .ShouldBe(Start.UtcDateTime.AddMinutes(10));   // when it was deleted, not when it was added
 
         entity.IsDeleted
             .ShouldBeTrue();
@@ -43,12 +52,12 @@ public sealed class UpdateDeletableEntitiesInterceptorTests : DbSetupBase
     public async Task SaveChangesAsync_ShouldNotDeleteTheEntity_WhenUpdateDeletableEntities()
     {
         // Arrange
-        var now = DateTime.UtcNow;
         var entity = new Person(SocialSecurityNumber.Create(123456789), "John Doe");
         await DbContext.Persons.AddAsync(entity);
         await DbContext.SaveChangesAsync();
 
         // Act
+        _clock.Advance(TimeSpan.FromMinutes(10));
         DbContext.Persons.Remove(entity);
         await DbContext.SaveChangesAsync();
 
@@ -60,10 +69,25 @@ public sealed class UpdateDeletableEntitiesInterceptorTests : DbSetupBase
             .ShouldNotBeNull();
 
         foundEntity.DeletedOnUtc
-            .ShouldBe(now, TimeSpan.FromSeconds(1));
+            .ShouldBe(Start.UtcDateTime.AddMinutes(10));   // when it was deleted, not when it was added
 
         foundEntity.IsDeleted
             .ShouldBeTrue();
 
+    }
+
+    [Fact]
+    public async Task SaveChangesAsync_ShouldLeaveDeletedOnUtcEmpty_WhenTheEntityIsNotDeleted()
+    {
+        // Arrange
+        var entity = new Person(SocialSecurityNumber.Create(123456789), "John Doe");
+
+        // Act
+        await DbContext.Persons.AddAsync(entity);
+        await DbContext.SaveChangesAsync();
+
+        // Assert
+        entity.DeletedOnUtc.ShouldBeNull();
+        entity.IsDeleted.ShouldBeFalse();
     }
 }

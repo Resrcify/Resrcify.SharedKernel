@@ -31,20 +31,14 @@ public class ResultTTests
     }
 
     [Fact]
-    public void ConstructorT_WithSuccessAndMultipleErrors_ShouldCreateSuccessResultWithMultipleErrors()
+    public void ConstructorT_WithSuccessAndMultipleErrors_ShouldThrowException()
     {
         // Arrange
         int value = 42;
-        Error[] errors = [Error.None, Error.NullValue];
+        Error[] errors = [Error.EmptyInput, Error.NullValue];
 
-        // Act
-        var result = new TestResult<int>(value, true, errors);
-
-        // Assert
-        result.IsSuccess.ShouldBeTrue();
-        result.IsFailure.ShouldBeFalse();
-        result.Errors.ShouldBeEquivalentTo(errors);
-        result.Value.ShouldBe(value);
+        // Act & Assert
+        Should.Throw<ArgumentException>(() => new TestResult<int>(value, true, errors));
     }
 
     [Fact]
@@ -67,7 +61,7 @@ public class ResultTTests
     public void ConstructorT_WithFailureAndMultipleErrors_ShouldCreateFailureResultWithMultipleErrors()
     {
         // Arrange
-        Error[] errors = [Error.None, Error.NullValue];
+        Error[] errors = [Error.EmptyInput, Error.NullValue];
 
         // Act
         var result = new TestResult<int>(default, false, errors);
@@ -75,8 +69,20 @@ public class ResultTTests
         // Assert
         result.IsSuccess.ShouldBeFalse();
         result.IsFailure.ShouldBeTrue();
-        result.Errors.ShouldBeEquivalentTo(errors);
+        result.Errors.ShouldBe(errors);
         Should.Throw<InvalidOperationException>(() => _ = result.Value);
+    }
+
+    [Fact]
+    public void ImplicitConversionFromErrors_ShouldAnswerWithTheSameFailure_ForAnotherValueType()
+    {
+        var failed = Result.Failure<string>([Error.NullValue, Error.EmptyInput]);
+
+        static Result<int> Forward(Result<string> failed) => failed.Errors;
+        var result = Forward(failed);
+
+        result.IsFailure.ShouldBeTrue();
+        result.Errors.ShouldBe([Error.NullValue, Error.EmptyInput]);
     }
 
     private sealed class TestResult<TValue> : Result<TValue>

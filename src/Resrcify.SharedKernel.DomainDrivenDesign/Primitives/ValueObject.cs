@@ -21,15 +21,18 @@ public abstract class ValueObject
 
     public override bool Equals(
         object? obj)
-    {
-        return obj is ValueObject other &&
-            ValuesAreEqual(other);
-    }
+        => obj is ValueObject other &&
+            Equals(other);
 
+    /// <summary>Equal when both are the same type of value object with the same atomic values.</summary>
     public bool Equals(
         ValueObject? other)
     {
-        return other is not null &&
+        if (other is null)
+            return false;
+        if (ReferenceEquals(this, other))
+            return true;
+        return other.GetType() == GetType() &&
             ValuesAreEqual(other);
     }
 
@@ -37,7 +40,7 @@ public abstract class ValueObject
     {
         return GetAtomicValues()
             .Aggregate(
-                default(int),
+                GetType().GetHashCode(),
                 HashCode.Combine);
     }
 
@@ -45,13 +48,10 @@ public abstract class ValueObject
         ValueObject? left,
         ValueObject? right)
     {
-        if (left is null ||
-            right is null)
-            return false;
-
         if (ReferenceEquals(left, right))
             return true;
-
+        if (left is null || right is null)
+            return false;
         return left.Equals(right);
     }
 

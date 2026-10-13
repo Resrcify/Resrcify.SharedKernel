@@ -64,4 +64,19 @@ public class AggregateRootTests
         // Assert
         events.ShouldBeEmpty();
     }
+
+    [Fact]
+    public void RemoveDomainEvent_ShouldTakeBackJustThatEvent()
+    {
+        var aggregateRoot = new TestAggregateRoot(1);
+        var kept = new TestDomainEvent(Guid.NewGuid());
+        var takenBack = new TestDomainEvent(Guid.NewGuid());
+        aggregateRoot.PublicRaiseDomainEvent(kept);
+        aggregateRoot.PublicRaiseDomainEvent(takenBack);
+
+        aggregateRoot.RemoveDomainEvent(takenBack);
+        aggregateRoot.RemoveDomainEvent(new TestDomainEvent(Guid.NewGuid()));
+
+        aggregateRoot.GetDomainEvents().ShouldHaveSingleItem().ShouldBe(kept);
+    }
 }

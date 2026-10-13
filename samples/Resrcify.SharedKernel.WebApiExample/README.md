@@ -20,7 +20,7 @@
 
 - A runnable API using SharedKernel modules as NuGet dependencies.
 - Example usage for:
-    - `Messaging`
+    - `Mediator`
     - `Results`
     - `DomainDrivenDesign`
     - `Repository`

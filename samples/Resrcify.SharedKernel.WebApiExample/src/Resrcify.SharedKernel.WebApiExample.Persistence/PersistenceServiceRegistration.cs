@@ -31,7 +31,8 @@ public static class PersistenceServiceRegistration
 
         services.AddScoped<ICompanyRepository, CompanyRepository>();
 
-        services.ApplyMigrations<AppDbContext>();
+        // Migrates while the host starts, before it serves (Migrations:Run in appsettings.json).
+        services.AddMigrationsOnStartup<AppDbContext>(configuration);
 
         return services;
     }

@@ -120,4 +120,23 @@ public class EntityTests
         // Act & Assert
         (entity1 != entity2).ShouldBeFalse();
     }
+
+    [Fact]
+    public void EqualityOperators_ShouldTreatNullAsEqualOnlyToNull_WhenEitherSideIsNull()
+    {
+        // Through a call, so the analyzer can't assume what the operators return.
+        var none = Opaque<ConcreteEntity>(null);
+        var alsoNone = Opaque<ConcreteEntity>(null);
+        var entity = Opaque(new ConcreteEntity(1));
+
+        (none == alsoNone).ShouldBeTrue();
+        (none != null).ShouldBeFalse();
+        (entity == null).ShouldBeFalse();
+        (entity != null).ShouldBeTrue();
+        (null == entity).ShouldBeFalse();
+    }
+
+    private static T? Opaque<T>(T? value)
+        where T : class
+        => value;
 }

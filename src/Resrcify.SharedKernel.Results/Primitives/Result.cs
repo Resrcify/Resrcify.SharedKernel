@@ -1,9 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Runtime.InteropServices;
 using System.Text.Json.Serialization;
+using Resrcify.SharedKernel.Results.Serialization;
 
 namespace Resrcify.SharedKernel.Results.Primitives;
 
+[JsonConverter(typeof(ResultJsonConverterFactory))]
 public class Result
 {
     private static readonly Error[] EmptyErrors = [];
@@ -15,6 +19,9 @@ public class Result
         bool isSuccess,
         Error error)
     {
+        // A null error isn't "no error" (that is Error.None): every reader of a failure's errors dereferences them.
+        ArgumentNullException.ThrowIfNull(error);
+
         if (isSuccess &&
             error != Error.None)
             throw new InvalidOperationException();
@@ -25,24 +32,49 @@ public class Result
 
         IsSuccess = isSuccess;
         Errors = error == Error.None
-            ? EmptyErrors
+            ? []
             : [error];
     }
 
-    [JsonConstructor]
     protected internal Result(
         bool isSuccess,
-        Error[] errors)
+        IReadOnlyList<Error> errors)
     {
+        // Copied: a result can't change after it is made, whatever the caller does with its list.
+        Error[] copy = errors is null || errors.Count == 0
+            ? EmptyErrors
+            : [.. errors];
+
+        if (isSuccess && copy.Length != 0)
+            throw new ArgumentException("A successful result has no errors.", nameof(errors));
+
+        if (!isSuccess && copy.Length == 0)
+            throw new ArgumentException("A failed result needs at least one error.", nameof(errors));
+
+        if (!isSuccess && Array.IndexOf(copy, Error.None) >= 0)
+            throw new ArgumentException("A failed result's errors can't include Error.None.", nameof(errors));
+
+        if (Array.IndexOf(copy, null) >= 0)
+            throw new ArgumentException("A result's errors can't include null.", nameof(errors));
+
         IsSuccess = isSuccess;
-        Errors = errors ?? EmptyErrors;
+        // The copy is this result's own, so it is handed out as is: nothing else holds the array to change it.
+        Errors = ImmutableCollectionsMarshal.AsImmutableArray(copy);
     }
 
     public bool IsSuccess { get; }
 
     public bool IsFailure => !IsSuccess;
 
-    public Error[] Errors { get; }
+    /// <summary>Why the result failed: at least one error on a failure, none on a success.</summary>
+    /// <remarks>
+    /// Immutable, and a concrete type so it converts: <c>return failed.Errors;</c> answers with a failure from a method
+    /// returning <see cref="Result{TValue}"/>. Not to a plain <see cref="Result"/>: a conversion to it makes every
+    /// method taking a <see cref="Result"/> fit a function of the errors, so <c>Match(Results.Ok,
+    /// HttpResultExtensions.ToProblemDetails)</c> turned ambiguous. <c>Result.Failure(failed.Errors)</c> does that.
+    /// </remarks>
+    public ImmutableArray<Error> Errors { get; }
+
 
     public static Result Success() => SuccessResult;
 
@@ -60,7 +92,7 @@ public class Result
             error);
 
     public static Result Failure(
-        Error[] errors)
+        IReadOnlyList<Error> errors)
         => new(
             false,
             errors);
@@ -73,7 +105,7 @@ public class Result
             error);
 
     public static Result<TValue> Failure<TValue>(
-        Error[] errors)
+        IReadOnlyList<Error> errors)
         => new(
             default,
             false,

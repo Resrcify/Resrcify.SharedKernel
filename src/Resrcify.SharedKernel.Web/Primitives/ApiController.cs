@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using Resrcify.SharedKernel.Abstractions.Messaging;
+using Resrcify.SharedKernel.Abstractions.Mediator;
 
 namespace Resrcify.SharedKernel.Web.Primitives;
 

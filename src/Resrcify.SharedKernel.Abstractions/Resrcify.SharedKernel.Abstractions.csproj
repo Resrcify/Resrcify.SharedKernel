@@ -5,6 +5,7 @@
     <Title>Resrcify.SharedKernel.Abstractions</Title>
     <Description>Shared cross-cutting abstractions used by multiple SharedKernel projects.</Description>
     <Summary>Shared cross-cutting abstractions used by multiple SharedKernel projects.</Summary>
+    <PackageTags>$(PackageTags);abstractions;results;mediator;repository;unit-of-work</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
@@ -12,6 +13,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <!-- IServiceCollection (Mediator: IMediatorAssemblyScanListener). Not the ASP.NET Core framework:
+         Domain and Application reference this package. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>
 </Project>

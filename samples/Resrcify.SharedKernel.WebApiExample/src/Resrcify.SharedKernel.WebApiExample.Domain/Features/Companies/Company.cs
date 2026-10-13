@@ -34,7 +34,7 @@ public sealed class Company
     public DateTime CreatedOnUtc { get; }
     public DateTime ModifiedOnUtc { get; }
     public bool IsDeleted { get; }
-    public DateTime DeletedOnUtc { get; }
+    public DateTime? DeletedOnUtc { get; }
     public IReadOnlyList<Contact> Contacts => _contacts;
     private readonly List<Contact> _contacts = [];
 
@@ -109,7 +109,7 @@ public sealed class Company
             .Create(email)
             .Bind(e => Result.Create(
                 _contacts.Find(c => c.Email.Equals(e))))
-            .Match(
+            .Map(
                 contact => contact,
                 DomainErrors.Contact.NotFound(email.Value));
 

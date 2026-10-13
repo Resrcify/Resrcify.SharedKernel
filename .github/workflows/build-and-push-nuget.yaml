@@ -6,6 +6,8 @@ jobs:
   tests:
     uses: ./.github/workflows/build-and-test.yml
   docker:
+    # Publish only once the tests passed.
+    needs: tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -30,8 +32,9 @@ jobs:
         run: dotnet pack Resrcify.SharedKernel.slnx --configuration Release /p:Version=${VERSION} --no-build --output . -m:1
       - name: List generated packages
         run: ls *.nupkg
+      # Each package's .snupkg goes up with it. --skip-duplicate: a re-run after a failed push publishes the rest.
       - name: Push Packages to NuGet
         run: |
           for package in *.nupkg; do
-            dotnet nuget push "$package" --source https://api.nuget.org/v3/index.json --api-key  ${{ secrets.NUGET_API_KEY }}
+            dotnet nuget push "$package" --source https://api.nuget.org/v3/index.json --api-key  ${{ secrets.NUGET_API_KEY }} --skip-duplicate
           done

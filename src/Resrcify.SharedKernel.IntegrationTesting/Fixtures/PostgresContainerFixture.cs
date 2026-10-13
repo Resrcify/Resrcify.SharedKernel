@@ -2,6 +2,7 @@ using System;
 using System.Data.Common;
 using System.Globalization;
 using System.Threading.Tasks;
+using DotNet.Testcontainers.Networks;
 using Npgsql;
 using Testcontainers.PostgreSql;
 
@@ -24,18 +25,52 @@ public class PostgresContainerFixture
 {
     private const ushort ContainerPort = 5432;
 
+    // Waits on a real container, so on real time.
+    private static readonly TimeProvider Time = TimeProvider.System;
+
     /// <summary>
-    /// Image used when <see cref="Configure"/> doesn't call <c>WithImage</c>.
-    /// This is the value Testcontainers' own parameterless <see cref="PostgreSqlBuilder"/>
-    /// constructor used before it was obsoleted, so the default is unchanged.
+    /// Image used when <see cref="Configure"/> doesn't call <c>WithImage</c>: the version production runs.
     /// </summary>
-    protected const string DefaultImage = "postgres:15.1";
+    protected const string DefaultImage = "postgres:18";
+
+    /// <summary>
+    /// Environment variable naming the image to run instead, for every fixture (it wins over a
+    /// <c>WithImage</c> in <see cref="Configure"/>), e.g. to try a whole suite against the next version.
+    /// </summary>
+    public const string ImageVariable = "RESRCIFY_TEST_POSTGRES_IMAGE";
 
     protected virtual PostgreSqlBuilder Configure(PostgreSqlBuilder builder)
         => builder;
 
+    private INetwork? _network;
+    private string[] _networkAliases = [];
+
+    /// <summary>
+    /// Puts the container on <paramref name="network"/> as <paramref name="aliases"/>, so other containers on it reach
+    /// this one by name; the test process keeps using <see cref="Host"/> and the mapped port. Call it before the fixture
+    /// starts. Without it the container is on the default network only.
+    /// </summary>
+    public void JoinNetwork(
+        INetwork network,
+        params string[] aliases)
+    {
+        ArgumentNullException.ThrowIfNull(network);
+        ArgumentNullException.ThrowIfNull(aliases);
+        _network = network;
+        _networkAliases = aliases;
+    }
+
     protected override PostgreSqlContainer Build()
-        => Configure(new PostgreSqlBuilder(DefaultImage)).Build();
+    {
+        var builder = Configure(new PostgreSqlBuilder(DefaultImage));
+        if (_network is { } network)
+            builder = builder
+                .WithNetwork(network)
+                .WithNetworkAliases(_networkAliases);
+        return ContainerImages.FromEnvironment(ImageVariable) is { } image
+            ? builder.WithImage(image).Build()
+            : builder.Build();
+    }
 
     public string Host
         => Container.Hostname;
@@ -50,7 +85,7 @@ public class PostgresContainerFixture
     /// </summary>
     protected override async Task OnStartedAsync()
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        var deadline = Time.GetUtcNow() + TimeSpan.FromSeconds(30);
         while (true)
         {
             try
@@ -64,9 +99,9 @@ public class PostgresContainerFixture
                 await command.ExecuteScalarAsync();
                 return;
             }
-            catch (NpgsqlException) when (DateTime.UtcNow < deadline)
+            catch (NpgsqlException) when (Time.GetUtcNow() < deadline)
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(250));
+                await Task.Delay(TimeSpan.FromMilliseconds(250), Time);
             }
         }
     }

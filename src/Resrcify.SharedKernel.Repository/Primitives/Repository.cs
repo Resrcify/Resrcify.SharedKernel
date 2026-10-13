@@ -10,9 +10,13 @@ using Resrcify.SharedKernel.Abstractions.Repository;
 
 namespace Resrcify.SharedKernel.Repository.Primitives;
 
+/// <summary>
+/// The EF Core implementation of <see cref="IRepository{TEntity, TId}"/>: a service's repository derives from it and
+/// implements its own repository interface. Override a fetch to change how the aggregate is loaded (e.g. with its
+/// children).
+/// </summary>
 public abstract class Repository<TDbContext, TEntity, TId>
-    : IRepository<TEntity, TId>,
-    INullableFetchRepository<TEntity, TId>
+    : IRepository<TEntity, TId>
     where TDbContext : DbContext
     where TEntity : class, IAggregateRoot<TId>
     where TId : notnull

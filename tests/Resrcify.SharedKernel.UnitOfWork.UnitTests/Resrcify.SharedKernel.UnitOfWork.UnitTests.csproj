@@ -18,15 +18,30 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
+    <!-- The compiled models SingleValueObjectConventionExtensionsCompiledModelTests generates and compiles: they reach
+         the test model's internal types, as a service's own compiled model reaches its own. -->
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.UnitTests.CompiledModels.Sqlite" />
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.UnitTests.CompiledModels.SqliteNativeAot" />
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.UnitTests.CompiledModels.Npgsql" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.UnitOfWork\Resrcify.SharedKernel.UnitOfWork.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.DomainDrivenDesign\Resrcify.SharedKernel.DomainDrivenDesign.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Shouldly" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="NSubstitute"/>
     <PackageReference Include="Microsoft.EntityFrameworkCore"/>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational"/>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <!-- A development dependency: compile assets are excluded unless asked for (the snapshot generator). -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <IncludeAssets>compile; runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
     <PackageReference Include="Quartz"/>
   </ItemGroup>

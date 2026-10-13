@@ -88,6 +88,14 @@ public class Error
             code,
             message,
             ErrorType.Failure);
+
+    public static Error Unprocessable(
+        string code,
+        string message)
+        => new(
+            code,
+            message,
+            ErrorType.Unprocessable);
     public Error(
         string code,
         string message,
@@ -102,9 +110,11 @@ public class Error
     public string Message { get; init; }
     public ErrorType Type { get; init; }
 
+    /// <summary>The error as text, <c>"Code: Message"</c> (see <see cref="ToString"/>).</summary>
+    /// <remarks>For the code alone, use <see cref="Code"/>; for the message alone, <see cref="Message"/>.</remarks>
     public static implicit operator string(
         Error error)
-        => error.Code;
+        => error.ToString();
     public static implicit operator Result(
         Error error)
         => Result.Failure(error);
@@ -145,6 +155,9 @@ public class Error
             Message,
             Type);
 
+    /// <summary><c>"Code: Message"</c>, or the code alone when there is no message (<see cref="None"/> is empty).</summary>
     public override string ToString()
-        => Code;
+        => string.IsNullOrEmpty(Message)
+            ? Code
+            : $"{Code}: {Message}";
 }

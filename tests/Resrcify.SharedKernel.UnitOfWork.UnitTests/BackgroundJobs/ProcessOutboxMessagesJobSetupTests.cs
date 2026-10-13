@@ -29,7 +29,7 @@ namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.BackgroundJobs;
     Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public class ProcessOutboxMessagesJobSetupTests
 {
-    private static readonly JobKey OutboxJobKey = new("ProcessOutboxMessagesJob");
+    private static readonly JobKey OutboxJobKey = OutboxJobs.Process<TestDbContext>();
 
     [Fact]
     public async Task AddProcessOutboxMessagesJob_Should_RegisterTheJobOnTheScheduler()
@@ -175,6 +175,117 @@ public class ProcessOutboxMessagesJobSetupTests
         maxRetryCount.ShouldBe(4);
         trigger.ShouldBeAssignableTo<ISimpleTrigger>().RepeatInterval.ShouldBe(TimeSpan.FromSeconds(30));
     }
+
+    [Fact]
+    public async Task AddProcessOutboxMessagesJob_Should_GiveEachDbContextItsOwnJobs_WhenTwoHaveAnOutbox()
+    {
+        await using var provider = BuildProvider(services => services.AddQuartz(quartz =>
+        {
+            quartz.AddProcessOutboxMessagesJob<TestDbContext>();
+            quartz.AddProcessOutboxMessagesJob<SecondTestDbContext>();
+        }));
+
+        var scheduler = await GetSchedulerAsync(provider);
+
+        (await scheduler.GetJobDetail(OutboxJobs.Process<TestDbContext>())).ShouldNotBeNull();
+        (await scheduler.GetJobDetail(OutboxJobs.Process<SecondTestDbContext>())).ShouldNotBeNull();
+        (await scheduler.GetJobDetail(OutboxJobs.Cleanup<TestDbContext>())).ShouldNotBeNull();
+        (await scheduler.GetJobDetail(OutboxJobs.Cleanup<SecondTestDbContext>())).ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task AddProcessOutboxMessagesJob_Should_ScheduleTheHourlyCleanup_WhenRetentionIsOn()
+    {
+        await using var provider = BuildProvider(services => services.AddQuartz(quartz =>
+            quartz.AddProcessOutboxMessagesJob<TestDbContext>()));
+        var scheduler = await GetSchedulerAsync(provider);
+
+        var trigger = (await scheduler.GetTriggersOfJob(OutboxJobs.Cleanup<TestDbContext>())).ShouldHaveSingleItem();
+
+        trigger.ShouldBeAssignableTo<ISimpleTrigger>().RepeatInterval.ShouldBe(TimeSpan.FromHours(1));
+    }
+
+    [Fact]
+    public async Task AddProcessOutboxMessagesJob_Should_NotScheduleTheCleanup_WhenRetentionIsOff()
+    {
+        await using var provider = BuildProvider(services => services.AddQuartz(quartz =>
+            quartz.AddProcessOutboxMessagesJob<TestDbContext>(processedRetentionInDays: 0)));
+        var scheduler = await GetSchedulerAsync(provider);
+
+        (await scheduler.GetJobDetail(OutboxJobs.Cleanup<TestDbContext>())).ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void AddOutboxProcessing_ShouldThrow_WhenTheBatchSizeIsNotPositive(int batchSize)
+        => Should.Throw<ArgumentOutOfRangeException>(() => new ServiceCollection().AddOutboxProcessing<TestDbContext>(
+            new SystemTextJsonOutboxSerializer(),
+            options => options.BatchSize = batchSize));
+
+    [Fact]
+    public async Task AddOutboxProcessing_ShouldScheduleTheFirstRuns_OnTheClockRegisteredBefore()
+    {
+        var fake = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        await using var provider = BuildProvider(services =>
+        {
+            services.AddSingleton<TimeProvider>(fake);
+            services.AddOutboxProcessing<TestDbContext>(new SystemTextJsonOutboxSerializer());
+        });
+        var scheduler = await GetSchedulerAsync(provider);
+
+        var process = (await scheduler.GetTriggersOfJob(OutboxJobKey)).ShouldHaveSingleItem();
+        var cleanup = (await scheduler.GetTriggersOfJob(OutboxJobs.Cleanup<TestDbContext>())).ShouldHaveSingleItem();
+
+        process.StartTimeUtc.ShouldBe(fake.GetUtcNow().AddSeconds(60));
+        cleanup.StartTimeUtc.ShouldBe(fake.GetUtcNow().AddMinutes(5));
+    }
+
+    [Fact]
+    public void AddOutboxProcessing_ShouldGiveTheLanesTheOutboxsClaim_WhenTheyHaveNone()
+    {
+        var services = new ServiceCollection();
+
+        services.AddOutboxProcessing<TestDbContext>(
+            new SystemTextJsonOutboxSerializer(),
+            options => options.Claim = PostgresOutboxLaneClaim.Instance);
+
+        LaneOptions(services).Claim.ShouldBeSameAs(PostgresOutboxLaneClaim.Instance);
+    }
+
+    [Fact]
+    public void AddOutboxProcessing_ShouldGiveTheLanesTheOutboxsClaim_WhenTheyWereTunedBefore()
+    {
+        var services = new ServiceCollection();
+
+        services.AddOutboxLanes<TestDbContext>(lanes => lanes.MaxConcurrency = 2);
+        services.AddOutboxProcessing<TestDbContext>(
+            new SystemTextJsonOutboxSerializer(),
+            options => options.Claim = PostgresOutboxLaneClaim.Instance);
+
+        LaneOptions(services).Claim.ShouldBeSameAs(PostgresOutboxLaneClaim.Instance);
+        LaneOptions(services).MaxConcurrency.ShouldBe(2);
+    }
+
+    [Fact]
+    public void AddOutboxLanes_ShouldTakeTheOutboxsClaim_WhenTunedAfterIt()
+    {
+        var services = new ServiceCollection();
+
+        services.AddOutboxProcessing<TestDbContext>(
+            new SystemTextJsonOutboxSerializer(),
+            options => options.Claim = PostgresOutboxLaneClaim.Instance);
+        services.AddOutboxLanes<TestDbContext>(lanes => lanes.MaxConcurrency = 2);
+
+        LaneOptions(services).Claim.ShouldBeSameAs(PostgresOutboxLaneClaim.Instance);
+    }
+
+    private static OutboxLaneOptions LaneOptions(IServiceCollection services)
+        => services
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<OutboxLaneSettings<TestDbContext>>()
+            .Last()
+            .Options;
 
     private static ServiceProvider BuildProvider(Action<IServiceCollection> configure)
     {

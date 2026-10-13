@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Claims;
+using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.Web.Extensions;
 using Shouldly;
 using Xunit;
@@ -43,6 +44,7 @@ public class ClaimsPrincipalExtensionsTests
         // Assert
         result.IsFailure.ShouldBeTrue();
         result.Errors.ShouldContain(ClaimsPrincipalExtensions.MissingUserIdClaim);
+        result.Errors[0].Type.ShouldBe(ErrorType.Unauthorized);
     }
 
     [Fact]
@@ -60,5 +62,6 @@ public class ClaimsPrincipalExtensionsTests
         // Assert
         result.IsFailure.ShouldBeTrue();
         result.Errors.ShouldContain(ClaimsPrincipalExtensions.MissingUserIdClaim);
+        result.Errors[0].Type.ShouldBe(ErrorType.Unauthorized);
     }
 }

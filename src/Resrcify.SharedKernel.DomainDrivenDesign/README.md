@@ -16,6 +16,7 @@
     - [Aggregate root example](#aggregate-root-example)
     - [Domain event example](#domain-event-example)
     - [Value object example](#value-object-example)
+    - [Single-value value objects](#single-value-value-objects)
   - [Related modules](#related-modules)
 
 ## What you get
@@ -25,6 +26,7 @@
     - `IAuditableEntity`
     - `IDeletableEntity`
     - `IDomainEvent`
+    - `ISingleValueObject<TSelf, TValue>` (a value object stored as its one value; see below)
 - Primitives in `Primitives/`:
     - `AggregateRoot<TId>`
     - `Entity<TId>`
@@ -139,6 +141,45 @@ public sealed class Money
     }
 }
 ```
+
+### Single-value value objects
+
+A value object that wraps one value (an id, a name, a code) and is stored as that value in one column implements
+`ISingleValueObject<TSelf, TValue>`. The interface asks for what such a value object already has: `TValue Value` and
+`static Result<TSelf> Create(TValue value)`. Adding it to the base list is the whole change:
+
+```csharp
+public sealed class PlayerId
+    : ValueObject,
+    ISingleValueObject<PlayerId, string>
+{
+    public const int MaxLength = 50;
+
+    public string Value { get; }
+
+    private PlayerId(string value)
+        => Value = value;
+
+    public static Result<PlayerId> Create(string value)
+        => Result.Ensure(
+            value,
+            (v => !string.IsNullOrEmpty(v), DomainErrors.PlayerId.Empty),
+            (v => v.Length <= MaxLength, DomainErrors.PlayerId.TooLong(value, MaxLength)))
+            .Map(v => new PlayerId(v));
+
+    public override IEnumerable<object> GetAtomicValues()
+    {
+        yield return Value;
+    }
+}
+```
+
+The persistence convention in `Resrcify.SharedKernel.UnitOfWork` (`AddSingleValueObjectConversions`) then stores
+every property of the type as `Value` and reads it back with `FromPersisted`, which by default is
+`Create(value).Value`: a stored value is validated again, exactly as the hand-written
+`HasConversion(x => x.Value, v => PlayerId.Create(v).Value)` did. A value object that should read stored values
+differently implements `public static PlayerId FromPersisted(string value)` itself. There is no base class for it:
+static members can't be inherited, and a value object keeps the base it has (`ValueObject`).
 
 ## Related modules
 

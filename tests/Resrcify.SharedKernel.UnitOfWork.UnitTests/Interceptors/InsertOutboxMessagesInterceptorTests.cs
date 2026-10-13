@@ -251,6 +251,86 @@ public sealed class InsertOutboxMessagesInterceptorTests : DbSetupBase
         allRows.ShouldContain(m => m.Type == typeof(TestDomainEvent).FullName);
     }
 
+    [Fact]
+    public async Task SaveChangesAsync_ShouldTellTheObservers_OnceASaveWroteMessages()
+    {
+        // Arrange
+        var observer = new RecordingObserver();
+        await using var harness = new InterceptorHarness(new InsertOutboxMessagesInterceptor(
+            new SystemTextJsonOutboxSerializer(),
+            observers: [observer]));
+        await harness.InitializeAsync();
+        var quiet = new TestAggregateRoot(SocialSecurityNumber.Create(123456780), "Quiet");
+        var evented = new TestAggregateRoot(SocialSecurityNumber.Create(123456781), "Evented");
+        evented.PublicRaiseDomainEvent(new TestDomainEvent(Guid.NewGuid(), "first"));
+        evented.PublicRaiseDomainEvent(new TestDomainEvent(Guid.NewGuid(), "second"));
+
+        // Act — a save without events, then one with two.
+        await harness.DbContext.Persons.AddAsync(quiet);
+        await harness.DbContext.SaveChangesAsync();
+        await harness.DbContext.Persons.AddAsync(evented);
+        await harness.DbContext.SaveChangesAsync();
+
+        // Assert
+        observer.Saved.ShouldHaveSingleItem().ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task SaveChangesAsync_ShouldStand_WhenAnObserverFailsAfterTheSaveCommitted()
+    {
+        // The save committed before the observer ran: failing it would have the caller save again what is saved.
+        await using var harness = new InterceptorHarness(new InsertOutboxMessagesInterceptor(
+            new SystemTextJsonOutboxSerializer(),
+            observers: [new ThrowingObserver()]));
+        await harness.InitializeAsync();
+        var evented = new TestAggregateRoot(SocialSecurityNumber.Create(123456782), "Evented");
+        evented.PublicRaiseDomainEvent(new TestDomainEvent(Guid.NewGuid(), "saved"));
+        await harness.DbContext.Persons.AddAsync(evented);
+
+        await Should.NotThrowAsync(() => harness.DbContext.SaveChangesAsync());
+
+        (await harness.DbContext.Set<OutboxMessage>().CountAsync()).ShouldBe(1);
+        evented.GetDomainEvents().ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task SaveChangesAsync_ShouldFail_WhenAnObserverFailsInsideTheCallersTransaction()
+    {
+        await using var harness = new InterceptorHarness(new InsertOutboxMessagesInterceptor(
+            new SystemTextJsonOutboxSerializer(),
+            observers: [new ThrowingObserver()]));
+        await harness.InitializeAsync();
+        var evented = new TestAggregateRoot(SocialSecurityNumber.Create(123456783), "Evented");
+        evented.PublicRaiseDomainEvent(new TestDomainEvent(Guid.NewGuid(), "rolled back"));
+        await harness.DbContext.Persons.AddAsync(evented);
+        await using var transaction = await harness.DbContext.Database.BeginTransactionAsync();
+
+        await Should.ThrowAsync<InvalidOperationException>(() => harness.DbContext.SaveChangesAsync());
+    }
+
+    private sealed class ThrowingObserver : Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxSaveObserver
+    {
+        public Task MessagesSavedAsync(
+            Microsoft.EntityFrameworkCore.DbContext context,
+            System.Collections.Generic.IReadOnlyList<OutboxMessage> messages,
+            System.Threading.CancellationToken cancellationToken)
+            => throw new InvalidOperationException("The wake-up failed.");
+    }
+
+    private sealed class RecordingObserver : Resrcify.SharedKernel.UnitOfWork.Abstractions.IOutboxSaveObserver
+    {
+        public System.Collections.Generic.List<int> Saved { get; } = [];
+
+        public Task MessagesSavedAsync(
+            Microsoft.EntityFrameworkCore.DbContext context,
+            System.Collections.Generic.IReadOnlyList<OutboxMessage> messages,
+            System.Threading.CancellationToken cancellationToken)
+        {
+            Saved.Add(messages.Count);
+            return Task.CompletedTask;
+        }
+    }
+
     private sealed class TestAggregateRoot : Person
     {
         public TestAggregateRoot(SocialSecurityNumber id, string name) : base(id, name)

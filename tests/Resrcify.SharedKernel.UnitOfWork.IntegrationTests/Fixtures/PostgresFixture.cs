@@ -5,9 +5,8 @@ using Testcontainers.PostgreSql;
 namespace Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Fixtures;
 
 /// <summary>
-/// Pins a specific Postgres image for this test project. Override exists
-/// to demonstrate the per-consumer customisation point — most consumers
-/// will pin a major version they care about.
+/// The Postgres for this test project: the fixture's default image (the version production runs, or
+/// <c>RESRCIFY_TEST_POSTGRES_IMAGE</c>) with this project's database and credentials.
 /// </summary>
 [SuppressMessage(
     "Performance",
@@ -18,7 +17,6 @@ public sealed class PostgresFixture
 {
     protected override PostgreSqlBuilder Configure(PostgreSqlBuilder builder)
         => builder
-            .WithImage("postgres:16")
             .WithDatabase("integration")
             .WithUsername("integration")
             .WithPassword("integration");

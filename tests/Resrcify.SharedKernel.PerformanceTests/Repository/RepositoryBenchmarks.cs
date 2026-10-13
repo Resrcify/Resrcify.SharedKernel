@@ -60,6 +60,10 @@ public class RepositoryBenchmarks
         public void ClearDomainEvents()
         {
         }
+
+        public void RemoveDomainEvent(IDomainEvent domainEvent)
+        {
+        }
     }
 
     private sealed class PersonByMinAgeSpecification : Specification<PersonAggregate, int>

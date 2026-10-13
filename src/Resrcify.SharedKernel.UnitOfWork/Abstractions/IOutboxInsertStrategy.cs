@@ -27,4 +27,11 @@ public interface IOutboxInsertStrategy
         DbContext context,
         IReadOnlyList<OutboxMessage> messages,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Whether <see cref="InsertAsync"/> writes to the database itself (raw SQL), rather than adding the messages to
+    /// the change tracker for EF's save to write. The outbox interceptor then wraps the save in a transaction of its
+    /// own (when there is none), so the messages and the save commit together. Defaults to <see langword="true"/>.
+    /// </summary>
+    bool InsertsOutsideSaveChanges => true;
 }

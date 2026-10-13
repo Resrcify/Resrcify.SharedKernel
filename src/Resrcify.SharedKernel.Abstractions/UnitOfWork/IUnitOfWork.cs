@@ -10,9 +10,29 @@ public interface IUnitOfWork : IDisposable
 {
     Task CompleteAsync(
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <see cref="CompleteAsync"/>, with the failures a caller can answer returned instead of thrown: a concurrency
+    /// conflict and a unique-constraint violation are a <c>Conflict</c>; a serialization failure or a deadlock (outside a
+    /// transaction, where nothing else retries it) is a transient <c>Failure</c>. Anything else still throws.
+    /// </summary>
+    Task<Result> TryCompleteAsync(
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Runs <paramref name="operation"/> without a transaction of its own, and when it fails (a failed
+    /// <see cref="Result"/> or an exception) undoes in the change tracker what it changed: its entities are put back as
+    /// they were and the domain events it raised are dropped, so a later save in the same scope doesn't save half its
+    /// work. Changes pending before the call are left as they are. Nothing is saved either way.
+    /// </summary>
+    Task<TResponse> ExecuteAsync<TResponse>(
+        Func<CancellationToken, Task<TResponse>> operation,
+        CancellationToken cancellationToken = default)
+        where TResponse : Result;
+
     Task BeginTransactionAsync(
         IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
-        TimeSpan? commandLifetime = null,
+        TimeSpan? commandTimeout = null,
         CancellationToken cancellationToken = default);
     Task CommitTransactionAsync(
         CancellationToken cancellationToken = default);

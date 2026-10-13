@@ -9,9 +9,23 @@ using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Interceptors;
 
-public sealed class UpdateAuditableEntitiesInterceptor
+/// <summary>Sets <c>CreatedOnUtc</c> / <c>ModifiedOnUtc</c> from <paramref name="timeProvider"/> (the system clock by default).</summary>
+public sealed class UpdateAuditableEntitiesInterceptor(TimeProvider? timeProvider = null)
     : SaveChangesInterceptor
 {
+    public override InterceptionResult<int> SavingChanges(
+        DbContextEventData eventData,
+        InterceptionResult<int> result)
+    {
+        if (eventData.Context is not null)
+            UpdateAuditableEntities(
+                eventData,
+                eventData.Context);
+        return base.SavingChanges(
+            eventData,
+            result);
+    }
+
     public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
         InterceptionResult<int> result,
@@ -19,19 +33,22 @@ public sealed class UpdateAuditableEntitiesInterceptor
     {
         if (eventData.Context is not null)
             UpdateAuditableEntities(
+                eventData,
                 eventData.Context);
         return await base.SavingChangesAsync(
             eventData,
             result,
             cancellationToken);
     }
-    private static void UpdateAuditableEntities(DbContext context)
+    private void UpdateAuditableEntities(
+        DbContextEventData saving,
+        DbContext context)
     {
-        DateTime utcNow = DateTime.UtcNow;
-        IEnumerable<EntityEntry<IAuditableEntity>> entries =
-            context
-                .ChangeTracker
-                .Entries<IAuditableEntity>();
+        DateTime utcNow = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+        List<EntityEntry<IAuditableEntity>> entries = SaveChangesEntries.Where<IAuditableEntity>(
+            saving,
+            context,
+            entry => entry.State is EntityState.Added or EntityState.Modified);
 
         foreach (EntityEntry<IAuditableEntity> entityEntry in entries)
         {

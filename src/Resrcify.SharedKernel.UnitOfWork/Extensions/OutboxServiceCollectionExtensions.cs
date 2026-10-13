@@ -1,12 +1,16 @@
 using System;
+using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Quartz;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.Primitives;
+
+using Resrcify.SharedKernel.UnitOfWork.Outbox;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Extensions;
 
@@ -46,9 +50,19 @@ public static class OutboxServiceCollectionExtensions
 
         var options = new OutboxOptions();
         configure?.Invoke(options);
+        // A batch of 0 would never come back short, so a run would keep reading until its time is up.
+        ArgumentOutOfRangeException.ThrowIfLessThan(options.BatchSize, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(options.ProcessIntervalInSeconds, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(options.MaxRetryCount, 1);
+        ArgumentOutOfRangeException.ThrowIfNegative(options.DelayInSecondsBeforeStart);
+        ArgumentOutOfRangeException.ThrowIfNegative(options.ProcessedRetentionInDays);
+        var time = options.TimeProvider ?? RegisteredTimeProvider(services) ?? TimeProvider.System;
 
         services.TryAddSingleton(serializer);
+        // The clock outbox processing, cleanup and the lanes read; replace it (e.g. with FakeTimeProvider) in tests.
+        services.TryAddSingleton(time);
         services.TryAddScoped<IUnitOfWork, UnitOfWork<TDbContext>>();
+        services.AddOutboxMessageContext();
 
         // AddQuartz composes: every call after the first adds to the same default scheduler
         // (its registrations are TryAdd), so this is safe alongside the application's own
@@ -57,8 +71,31 @@ public static class OutboxServiceCollectionExtensions
             options.BatchSize,
             options.ProcessIntervalInSeconds,
             options.DelayInSecondsBeforeStart,
-            options.MaxRetryCount));
+            options.MaxRetryCount,
+            options.ProcessedRetentionInDays,
+            options.Claim,
+            time));
+
+        // The backlog monitor behind the outbox.messages.* gauges and the outbox health check (AddOutbox<TDbContext>).
+        ArgumentOutOfRangeException.ThrowIfLessThan(options.BacklogCheckIntervalInSeconds, 1);
+        services.AddSingleton(new OutboxBacklogSettings<TDbContext>(
+            options.MaxRetryCount,
+            TimeSpan.FromSeconds(options.BacklogCheckIntervalInSeconds)));
+        services.TryAddSingleton<OutboxBacklogMonitor<TDbContext>>();
+        services.TryAddScoped<OutboxAdministration<TDbContext>>();
+        services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<OutboxBacklogMonitor<TDbContext>>());
+
+        // Outbox lanes (e.g. scatter-gather) with defaults, unless AddOutboxLanes tuned them already; either way they
+        // claim with the outbox's claim when they have none of their own (several instances run the lanes too).
+        if (!services.HasOutboxLanes<TDbContext>())
+            services.AddOutboxLanes<TDbContext>();
+        else
+            services.ClaimOutboxLanesWith<TDbContext>(options.Claim);
 
         return services;
     }
+
+    private static TimeProvider? RegisteredTimeProvider(IServiceCollection services)
+        => services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(TimeProvider))?.ImplementationInstance
+            as TimeProvider;
 }
