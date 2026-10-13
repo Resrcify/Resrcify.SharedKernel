@@ -3,10 +3,9 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
-## 4.0.0 (unreleased)
+## 4.0.0 (2026-10-13)
 
-Upgrading a service: work through **Breaking changes** below, top to bottom. The step-by-step guide for our services
-(including the move from MassTransit) is `docs/migrating-from-masstransit.md` in the SwgohApi repository, "Step 0".
+Upgrading a service: work through **Breaking changes** below, top to bottom.
 
 ### Breaking changes
 

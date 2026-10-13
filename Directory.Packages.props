@@ -3,8 +3,8 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
     <ItemGroup>
-      <PackageVersion Include="FluentValidation" Version="12.1.1" />
-      <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
+      <PackageVersion Include="FluentValidation" Version="12.2.0" />
+      <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.2.0" />
       <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.12" />
       <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.12" />
       <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.12" />
@@ -12,11 +12,11 @@
       <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
       <!-- Tests only: generating migration snapshots to prove two models need no migration. -->
       <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
-      <PackageVersion Include="Quartz" Version="4.3.0" />
+      <PackageVersion Include="Quartz" Version="4.4.0" />
       <!-- Message bus (Resrcify.SharedKernel.MessageBus). Rebus is MIT with no commercial tier;
            it replaces MassTransit, whose v9+ is commercially licensed. -->
       <PackageVersion Include="Rebus" Version="8.9.5" />
-      <PackageVersion Include="Rebus.RabbitMq" Version="10.1.1" />
+      <PackageVersion Include="Rebus.RabbitMq" Version="10.1.2" />
       <PackageVersion Include="Rebus.ServiceProvider" Version="10.7.2" />
       <PackageVersion Include="Rebus.Diagnostics" Version="1.4.0" />
       <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.12" />
@@ -24,7 +24,7 @@
       <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.12" />
       <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
       <PackageVersion Include="xunit" Version="2.9.3" />
-      <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0"/>
+      <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1"/>
       <PackageVersion Include="coverlet.collector" Version="10.1.0" />
       <PackageVersion Include="Shouldly" Version="4.3.0" />
       <PackageVersion Include="NSubstitute" Version="6.2.0" />
@@ -36,8 +36,8 @@
            used here only to benchmark against the in-house mediator. -->
       <PackageVersion Include="MediatR" Version="12.5.0" />
       <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.35.0.4138" />
-      <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
-      <PackageVersion Include="Testcontainers.RabbitMq" Version="4.15.0" />
+      <PackageVersion Include="Testcontainers.PostgreSql" Version="4.16.0" />
+      <PackageVersion Include="Testcontainers.RabbitMq" Version="4.16.0" />
       <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
       <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
       <PackageVersion Include="Npgsql" Version="10.0.3" />
