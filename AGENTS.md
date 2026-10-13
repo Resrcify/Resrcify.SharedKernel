@@ -42,7 +42,6 @@ domain-driven design primitives, result handling, messaging behaviors, repositor
 - Preserve existing project style and avoid unrelated refactors while applying namespace corrections.
 - Read the clock through `TimeProvider` (from DI, or an optional constructor parameter defaulting to `TimeProvider.System`), never `DateTime.UtcNow` / `DateTimeOffset.UtcNow`, and wait with its overloads (`Task.Delay(delay, timeProvider, ct)`, `new PeriodicTimer(interval, timeProvider)`), so services can test time with `FakeTimeProvider`.
 - Record every change a consumer can notice in `CHANGELOG.md`, under the unreleased version: a breaking one under "Breaking changes" with what the consumer must do, the rest under Added / Fixed / Removed.
-- The public API is documented per package in `docs/public-api/<Package>.txt`. After changing a public member, regenerate it (`pwsh tools/Update-PublicApiDocs.ps1`) and commit the diff with the change. It is a reference, not a gate: the build doesn't check it.
 
 ## Naming and solution conventions
 
