@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.IntegrationTesting\Resrcify.SharedKernel.IntegrationTesting.csproj" />
+    <ProjectReference Include="..\Resrcify.SharedKernel.IntegrationTesting.GenericHostTestService\Resrcify.SharedKernel.IntegrationTesting.GenericHostTestService.csproj" />
     <ProjectReference Include="..\Resrcify.SharedKernel.IntegrationTesting.TestService\Resrcify.SharedKernel.IntegrationTesting.TestService.csproj" />
   </ItemGroup>
 </Project>

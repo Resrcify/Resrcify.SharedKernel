@@ -22,6 +22,17 @@ every package in the repository is released together under one version.
   `InvalidOperationException` as the service registers the client, rather than pick a precedence silently.
 - **Web: `ResultResilienceErrors`** (`Timeout`, `CircuitOpen`, the `Resrcify-Resilience` header) and
   `ResultResilienceOptions.ThrowTimeoutsAndOpenCircuits`: see the fix below.
+- **IntegrationTesting: `ServiceHostFixture.StartDependenciesAsync(cancellationToken)`**, a hook that starts what else
+  a service needs (another service's container on `Network`, say), once PostgreSQL, RabbitMQ and the network are up
+  and the conventional `Settings` are in place, before `ConfigureSettings` and the host; `ConfigureSettings` reads
+  what it started (a URL). **`DisposeWithFixture(x)`** (an `IAsyncDisposable`, or an `IAsyncLifetime` such as a
+  container fixture) has the fixture dispose `x` on teardown: after the host has stopped, before RabbitMQ,
+  PostgreSQL and the network, last first. A service that had to hand-write its fixture to start one more container
+  (Sentinel's system tests, with SwgohApi's image) can use `ServiceHostFixture`.
+- **IntegrationTesting: a `ServiceHostFixture` without PostgreSQL.** `CreatePostgres()` may return `null` (it returns
+  `PostgresContainerFixture?`; an override returning the non-nullable type still compiles): no container, no
+  `Database:*` or `Migrations:Run` settings, and `Postgres` throws `InvalidOperationException`. Discord's bot, which has
+  no database, couldn't use the fixture.
 
 ### Fixed
 
@@ -37,6 +48,15 @@ every package in the repository is released together under one version.
   service using the preset reads its responses with `ToResultAsync`, where a timeout is a failed call like a 503, not
   an exceptional one; a `catch (TimeoutRejectedException)` around such a call is now dead code and can go. Set
   `ThrowTimeoutsAndOpenCircuits = true` to keep the exceptions (as 4.0.0 and `AddStandardResilienceHandler` do).
+- **A `ServiceHostFixture` whose start fails tears down what it had started.** A failure in a container,
+  `StartDependenciesAsync` or `ConfigureSettings` disposes what was started (as on teardown) before `InitializeAsync`
+  throws, instead of relying on xUnit to dispose a fixture that never finished starting; the teardown then runs once.
+- **The settings of `IntegrationFactoryBase` / `ServiceHostFixture` win over `appsettings.json` on the generic
+  host.** They reached the host only through `UseSetting`, i.e. the host configuration, which
+  `Host.CreateDefaultBuilder` puts before `appsettings*.json` and environment variables: a `Program` on the generic
+  host (with a `Startup`) got its `appsettings.json` value instead of the fixture's. They are now also added as the
+  last configuration source, so they win in both hosting models (`WebApplication` already let them win while
+  registering, and still sees them then).
 
 ## 4.0.0 (2026-10-13)
 
