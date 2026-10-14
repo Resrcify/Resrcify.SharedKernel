@@ -27,6 +27,16 @@ every package in the repository is released together under one version.
 
 ### Fixed
 
+- **The scatter-gather reply queue is named after the service** (Resrcify.SharedKernel.MessageBus):
+  `<service>.scatter.replies.<machine>-<guid>`, the service being the `WithServiceName` name, else the input queue.
+  A service with a name but no input queue (Tournament, Oracle) got the anonymous `scatter.replies.<machine>-<guid>`;
+  one with neither still does. It stays unique per instance, durable, not exclusive and deleted by the broker 30
+  minutes after its instance stops using it, so it still starts on RabbitMQ 4.3 (a quorum queue where quorum is the
+  default type). ⚠️ **Behaviour change:** the reply queue of a service with an input queue moves from
+  `<input queue>.replies.…` to `<input queue>.scatter.replies.…`, and a service with both a name and an input queue
+  names it after the name. Nothing is lost: an instance's queue is its own, and the old ones expire 30 minutes after the
+  last instance using them stops. Update a test, policy or alert matching the old names (Tournament's
+  `MessageBusRegistrationTests` looks for `scatter.replies.`).
 - **A custom layer gets the SharedKernel package restrictions** (Resrcify.SharedKernel.ArchitectureTesting). A layer
   added through `LayerTiers` (Discord's `Bot`) got the tier rules but no package restrictions, so it could use any
   SharedKernel package unless the service rebuilt `SharedKernelPackageRestrictions` itself. It is now restricted like

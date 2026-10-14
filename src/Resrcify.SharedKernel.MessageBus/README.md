@@ -148,8 +148,13 @@ connection-factory settings go in the configuration strategy, in both `Configure
 
 ### Handlers
 
-`AddScatterGather` opens a reply queue private to this service instance (deleted when the instance goes
-away), so with several instances each one receives only its own replies. Handlers need no registration:
+`AddScatterGather` opens a reply queue private to this service instance, so with several instances each one receives
+only its own replies. It is named after the service, `<service>.scatter.replies.<machine>-<guid>` (the service is the
+`WithServiceName` name, else the input queue; `scatter.replies.<machine>-<guid>` with neither), so a service without an
+input queue (Tournament, Oracle) is still recognisable in the management UI. It is durable and not exclusive (RabbitMQ
+4.3 refuses a transient non-exclusive queue; an exclusive one would go with every reconnect), so on a virtual host whose
+default queue type is quorum it is a quorum queue; the broker deletes it 30 minutes after its instance stops using it
+(`x-expires`). Handlers need no registration:
 it follows the mediator's assembly scan (whether `AddMediator` runs before or after it), wires each handler
 as its event's notification handler, and puts their events in the outbox's scatter-gather lane. Handlers
 outside the mediator's assemblies can be added with `AddScatterGather(extraAssembly)`.

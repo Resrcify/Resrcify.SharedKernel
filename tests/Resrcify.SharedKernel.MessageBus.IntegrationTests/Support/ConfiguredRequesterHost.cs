@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
 using Resrcify.SharedKernel.MessageBus.Configuration;
 using Resrcify.SharedKernel.MessageBus.Extensions;
+using Resrcify.SharedKernel.MessageBus.ScatterGather;
 using Resrcify.SharedKernel.Results.Primitives;
 
 namespace Resrcify.SharedKernel.MessageBus.IntegrationTests.Support;
@@ -23,6 +24,11 @@ internal sealed class ConfiguredRequesterHost : IAsyncDisposable
 
     private ConfiguredRequesterHost(IHost host)
         => _host = host;
+
+    /// <summary>The reply queue the scatter-gather transport declared.</summary>
+    public string ReplyQueue
+        => _host.Services.GetRequiredService<ScatterGatherTransport>().ReplyQueue
+            ?? throw new InvalidOperationException("The scatter-gather transport hasn't started.");
 
     /// <summary>The <c>MessageBus:*</c> settings for <paramref name="connection"/>, as a service's configuration has them.</summary>
     public static Dictionary<string, string?> SettingsFor(RabbitMqConnection connection)

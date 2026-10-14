@@ -228,6 +228,36 @@ public sealed class ScatterGatherTests(BusFixture bus, ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task ScatterGather_WithAServiceNameAndNoInputQueue_RepliesOnAQueueNamedAfterTheServicePerInstance()
+    {
+        // Tournament and Oracle: a service name, no input queue; on a quorum-by-default virtual host, as in production
+        // (RabbitMQ 4.3 refuses a transient non-exclusive queue: the reply queue must still start there).
+        var quorum = await bus.QuorumVirtualHostAsync();
+        var service = $"tournament-{Guid.NewGuid():N}";
+        await using var pod = await ResponderPod.StartAsync(quorum, _requestQueue, perSecond: 100, burst: 10);
+        await using var first = await ConfiguredRequesterHost.StartAsync(
+            ConfiguredRequesterHost.SettingsFor(quorum),
+            _requestQueue,
+            requester => requester.WithServiceName(service));
+        await using var second = await ConfiguredRequesterHost.StartAsync(
+            ConfiguredRequesterHost.SettingsFor(quorum),
+            _requestQueue,
+            requester => requester.WithServiceName(service));
+
+        var firstReply = await first.RequestAsync(new PingRequest("first"), TimeSpan.FromSeconds(15));
+        var secondReply = await second.RequestAsync(new PingRequest("second"), TimeSpan.FromSeconds(15));
+
+        first.ReplyQueue.ShouldStartWith($"{service}.scatter.replies.");
+        second.ReplyQueue.ShouldStartWith($"{service}.scatter.replies.");
+        second.ReplyQueue.ShouldNotBe(first.ReplyQueue);
+        firstReply.Value.ShouldBe(new PingResponse("pong first"));
+        secondReply.Value.ShouldBe(new PingResponse("pong second"));
+        // Durable and not exclusive, so the virtual host's default type applies.
+        (await bus.QueueTypeAsync(quorum.VirtualHost, first.ReplyQueue)).ShouldBe("quorum");
+        (await bus.QueueTypeAsync(quorum.VirtualHost, second.ReplyQueue)).ShouldBe("quorum");
+    }
+
+    [Fact]
     public async Task RateLimitedQueue_WhenAnInstanceStartsFailingBetweenHealthChecks_StepsAsideAtOnce()
     {
         UseTimeout(TimeSpan.FromSeconds(30));
