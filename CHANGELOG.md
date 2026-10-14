@@ -5,6 +5,25 @@ every package in the repository is released together under one version.
 
 ## 4.2.0 (unreleased)
 
+### Added
+
+- **UnitOfWork: `AddIntervalCommandJob` / `AddCronCommandJob` with a command factory**, for a command without a
+  parameterless constructor (a record whose parameters are all optional) or one built from services:
+  `AddIntervalCommandJob<TCommand>(interval, Func<IServiceProvider, TCommand> createCommand, startAfter = null,
+  timeProvider = null)`, `AddCronCommandJob<TCommand>(cronExpression, createCommand, timeZone = null, timeProvider =
+  null)`, and both as `<TCommand, TResponse>`. The factory is called on every run with that run's DI scope, so it can
+  read a `TimeProvider` or a scoped service; the job's key is the one the `new()` overload gives
+  (`SendCommandJob-<command>`), so moving to the factory doesn't rename a job, and the command's result type is checked
+  at registration as before. A second factory for the same command type, from either helper, throws
+  `InvalidOperationException` at registration. The `new()` overloads are unchanged. Shard's
+  `ProcessPayoutCyclesCommand(DateTime? DateTime = null)` kept a hand-written `CommandJob` for want of it:
+
+  ```csharp
+  services.AddQuartz(quartz => quartz.AddCronCommandJob<ProcessPayoutCyclesCommand>(
+      "0 0/15 * * * ?",
+      provider => new ProcessPayoutCyclesCommand(provider.GetRequiredService<TimeProvider>().GetUtcNow().UtcDateTime)));
+  ```
+
 ### Fixed
 
 - **The token-bucket limiter's rate test no longer counts wall-clock time** (Resrcify.SharedKernel.MessageBus, tests

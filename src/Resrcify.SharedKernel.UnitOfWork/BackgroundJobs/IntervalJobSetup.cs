@@ -44,23 +44,11 @@ public static class IntervalJobSetup
         where TJob : class, IJob
     {
         ArgumentNullException.ThrowIfNull(quartz);
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(interval, TimeSpan.Zero);
-        if (startAfter < TimeSpan.Zero)
-            throw new ArgumentOutOfRangeException(nameof(startAfter), startAfter, "The first run can't be in the past.");
-        var delay = startAfter ?? DefaultStartAfter;
-
-        var jobKey = JobKeyFor<TJob>();
-        return quartz
-            .AddJob<TJob>(job => job
-                .WithIdentity(jobKey)
-                .DisallowConcurrentExecution())
-            .AddTrigger<TJob>((provider, trigger) => trigger
-                .ForJob(jobKey)
-                .StartAt(Clock(provider, timeProvider).GetUtcNow() + delay)
-                .WithSchedule(SimpleScheduleBuilder
-                    .Create()
-                    .WithInterval(interval)
-                    .RepeatForever()));
+        return quartz.ScheduleIntervalJob<TJob>(
+            JobKeyFor<TJob>(),
+            interval,
+            startAfter,
+            timeProvider);
     }
 
     /// <summary>
@@ -71,7 +59,7 @@ public static class IntervalJobSetup
     /// <inheritdoc cref="AddIntervalJob{TJob}" path="/param"/>
     /// <exception cref="InvalidOperationException">
     /// <typeparamref name="TCommand"/> returns a value (<c>Result&lt;T&gt;</c>): use
-    /// <see cref="AddIntervalCommandJob{TCommand, TResponse}"/>.
+    /// <see cref="AddIntervalCommandJob{TCommand, TResponse}(IQuartzBuilder, TimeSpan, TimeSpan?, TimeProvider?)"/>.
     /// </exception>
     public static IQuartzBuilder AddIntervalCommandJob<TCommand>(
         this IQuartzBuilder quartz,
@@ -109,6 +97,68 @@ public static class IntervalJobSetup
     }
 
     /// <summary>
+    /// Sends the <typeparamref name="TCommand"/> <paramref name="createCommand"/> makes through the mediator every
+    /// <paramref name="interval"/>, for a command without a parameterless constructor (a record whose parameters are
+    /// all optional) or one built from services. The job's key is <c>SendCommandJob-&lt;command type name&gt;</c>, the
+    /// one <see cref="AddIntervalCommandJob{TCommand}(IQuartzBuilder, TimeSpan, TimeSpan?, TimeProvider?)"/> gives it,
+    /// so moving between the two doesn't rename the job.
+    /// </summary>
+    /// <inheritdoc cref="AddIntervalJob{TJob}" path="/param"/>
+    /// <param name="createCommand">
+    /// Makes the command each run, from the run's DI scope (Quartz builds the job in a scope of its own per run), so it
+    /// can read a <see cref="TimeProvider"/> or a scoped service.
+    /// </param>
+    /// <exception cref="InvalidOperationException">
+    /// <typeparamref name="TCommand"/> returns a value (<c>Result&lt;T&gt;</c>): use
+    /// <see cref="AddIntervalCommandJob{TCommand, TResponse}(IQuartzBuilder, TimeSpan, Func{IServiceProvider, TCommand}, TimeSpan?, TimeProvider?)"/>.
+    /// Or a factory for <typeparamref name="TCommand"/> is registered already.
+    /// </exception>
+    public static IQuartzBuilder AddIntervalCommandJob<TCommand>(
+        this IQuartzBuilder quartz,
+        TimeSpan interval,
+        Func<IServiceProvider, TCommand> createCommand,
+        TimeSpan? startAfter = null,
+        TimeProvider? timeProvider = null)
+        where TCommand : IRequest<Result>
+    {
+        CommandFactory.Register<TCommand, Result>(quartz, createCommand);
+        return quartz.ScheduleIntervalJob<FactoryCommandJob<TCommand, Result>>(
+            SendCommandJobKeyFor<TCommand>(),
+            interval,
+            startAfter,
+            timeProvider);
+    }
+
+    /// <summary>
+    /// Sends the <typeparamref name="TCommand"/> returning <typeparamref name="TResponse"/> that
+    /// <paramref name="createCommand"/> makes through the mediator every <paramref name="interval"/>. The job's key is
+    /// <c>SendCommandJob-&lt;command type name&gt;-&lt;response type name&gt;</c>, the one
+    /// <see cref="AddIntervalCommandJob{TCommand, TResponse}(IQuartzBuilder, TimeSpan, TimeSpan?, TimeProvider?)"/>
+    /// gives it.
+    /// </summary>
+    /// <inheritdoc cref="AddIntervalCommandJob{TCommand}(IQuartzBuilder, TimeSpan, Func{IServiceProvider, TCommand}, TimeSpan?, TimeProvider?)" path="/param"/>
+    /// <exception cref="InvalidOperationException">
+    /// <typeparamref name="TCommand"/> doesn't return <typeparamref name="TResponse"/>, or a factory for
+    /// <typeparamref name="TCommand"/> is registered already.
+    /// </exception>
+    public static IQuartzBuilder AddIntervalCommandJob<TCommand, TResponse>(
+        this IQuartzBuilder quartz,
+        TimeSpan interval,
+        Func<IServiceProvider, TCommand> createCommand,
+        TimeSpan? startAfter = null,
+        TimeProvider? timeProvider = null)
+        where TCommand : IRequest<TResponse>
+        where TResponse : Result
+    {
+        CommandFactory.Register<TCommand, TResponse>(quartz, createCommand);
+        return quartz.ScheduleIntervalJob<FactoryCommandJob<TCommand, TResponse>>(
+            SendCommandJobKeyFor<TCommand, TResponse>(),
+            interval,
+            startAfter,
+            timeProvider);
+    }
+
+    /// <summary>
     /// The key <see cref="AddIntervalJob{TJob}"/> gives <typeparamref name="TJob"/>: its type name, with a generic job's
     /// type arguments after a dash (<c>SendCommandJob-RankSyncCommand</c>, as the outbox's
     /// <c>ProcessOutboxMessagesJob-ShardDbContext</c>).
@@ -117,16 +167,62 @@ public static class IntervalJobSetup
         where TJob : IJob
         => new(NameOf(typeof(TJob)));
 
-    private static string NameOf(Type type)
-    {
-        if (!type.IsGenericType)
-            return type.Name;
+    /// <summary>
+    /// The key <see cref="SendCommandJob{TCommand}"/> gets, <c>SendCommandJob-&lt;command&gt;</c>; also for a command
+    /// without a parameterless constructor, which that type can't be made with.
+    /// </summary>
+    internal static JobKey SendCommandJobKeyFor<TCommand>()
+        => new(NameOf(typeof(SendCommandJob<>), typeof(TCommand)));
 
-        var name = type.Name;
+    /// <summary>
+    /// The key <see cref="SendCommandJob{TCommand, TResponse}"/> gets,
+    /// <c>SendCommandJob-&lt;command&gt;-&lt;response&gt;</c>; also for a command without a parameterless constructor.
+    /// </summary>
+    internal static JobKey SendCommandJobKeyFor<TCommand, TResponse>()
+        => new(NameOf(typeof(SendCommandJob<,>), typeof(TCommand), typeof(TResponse)));
+
+    // A job and its repeating trigger under the given key.
+    private static IQuartzBuilder ScheduleIntervalJob<TJob>(
+        this IQuartzBuilder quartz,
+        JobKey jobKey,
+        TimeSpan interval,
+        TimeSpan? startAfter,
+        TimeProvider? timeProvider)
+        where TJob : class, IJob
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(interval, TimeSpan.Zero);
+        if (startAfter < TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(startAfter), startAfter, "The first run can't be in the past.");
+        var delay = startAfter ?? DefaultStartAfter;
+
+        return quartz
+            .AddJob<TJob>(job => job
+                .WithIdentity(jobKey)
+                .DisallowConcurrentExecution())
+            .AddTrigger<TJob>((provider, trigger) => trigger
+                .ForJob(jobKey)
+                .StartAt(Clock(provider, timeProvider).GetUtcNow() + delay)
+                .WithSchedule(SimpleScheduleBuilder
+                    .Create()
+                    .WithInterval(interval)
+                    .RepeatForever()));
+    }
+
+    private static string NameOf(Type type)
+        => type.IsGenericType
+            ? NameOf(type, type.GenericTypeArguments)
+            : type.Name;
+
+    // A generic type's name (or its definition's, for type arguments it can't be made with) and its type arguments'.
+    private static string NameOf(
+        Type genericType,
+        params Type[] typeArguments)
+    {
+        var name = genericType.Name;
         var arity = name.IndexOf('`', StringComparison.Ordinal);
         if (arity >= 0)
             name = name[..arity];
-        return string.Join('-', type.GenericTypeArguments.Select(NameOf).Prepend(name));
+        return string.Join('-', typeArguments.Select(NameOf).Prepend(name));
     }
 
     private static TimeProvider Clock(IServiceProvider provider, TimeProvider? timeProvider)

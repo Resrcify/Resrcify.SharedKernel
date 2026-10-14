@@ -72,6 +72,37 @@ public sealed class IntervalJobSetupTests
     }
 
     [Fact]
+    public async Task AddIntervalCommandJob_WithAFactory_ShouldKeyTheJobAsWithoutOne()
+    {
+        await using var provider = Build(quartz => quartz
+            .AddIntervalCommandJob<PingCommand>(TimeSpan.FromMinutes(1), _ => new PingCommand())
+            .AddIntervalCommandJob<CountingCommand, Result<int>>(TimeSpan.FromMinutes(1), _ => new CountingCommand()));
+        var scheduler = await provider.GetRequiredService<ISchedulerFactory>().GetScheduler();
+
+        var ping = await scheduler.GetJobDetail(IntervalJobSetup.JobKeyFor<SendCommandJob<PingCommand>>());
+        var counting = await scheduler.GetJobDetail(IntervalJobSetup.JobKeyFor<SendCommandJob<CountingCommand, Result<int>>>());
+
+        ping.ShouldNotBeNull().Key.Name.ShouldBe("SendCommandJob-PingCommand");
+        ping.ConcurrentExecutionDisallowed.ShouldBeTrue();
+        counting.ShouldNotBeNull().Key.Name.ShouldBe("SendCommandJob-CountingCommand-Result-Int32");
+        (await scheduler.GetTriggersOfJob(ping.Key)).ShouldHaveSingleItem().ShouldBeAssignableTo<ISimpleTrigger>();
+    }
+
+    [Fact]
+    public void AddIntervalCommandJob_WithAFactory_ShouldThrowAtRegistration_WhenTheCommandHasOneAlready()
+        => Should.Throw<InvalidOperationException>(() => new ServiceCollection().AddQuartz(quartz => quartz
+                .AddIntervalCommandJob<StampCommand>(TimeSpan.FromMinutes(1), _ => new StampCommand())
+                .AddIntervalCommandJob<StampCommand>(TimeSpan.FromMinutes(5), _ => new StampCommand())))
+            .Message.ShouldContain("A createCommand for StampCommand is registered already");
+
+    [Fact]
+    public void AddIntervalCommandJob_WithAFactory_ShouldThrowAtRegistration_WhenACronJobSendsTheCommandAlready()
+        => Should.Throw<InvalidOperationException>(() => new ServiceCollection().AddQuartz(quartz => quartz
+                .AddCronCommandJob<StampCommand>("0 0/15 * * * ?", _ => new StampCommand())
+                .AddIntervalCommandJob<StampCommand>(TimeSpan.FromMinutes(5), _ => new StampCommand())))
+            .Message.ShouldContain("A createCommand for StampCommand is registered already");
+
+    [Fact]
     public void JobKeyFor_ShouldNameAGenericJobAfterItsTypeArguments()
     {
         IntervalJobSetup.JobKeyFor<NoopJob>().Name.ShouldBe("NoopJob");

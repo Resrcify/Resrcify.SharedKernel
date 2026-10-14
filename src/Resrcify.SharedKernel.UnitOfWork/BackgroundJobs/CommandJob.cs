@@ -321,7 +321,7 @@ public abstract class CommandJob<TCommand>(
 
 /// <summary>
 /// Sends a new <typeparamref name="TCommand"/>, returning <typeparamref name="TResponse"/>, every run: a command job
-/// without a class of its own. Schedule it with <see cref="IntervalJobSetup.AddIntervalCommandJob{TCommand, TResponse}"/>.
+/// without a class of its own. Schedule it with <see cref="IntervalJobSetup.AddIntervalCommandJob{TCommand, TResponse}(IQuartzBuilder, TimeSpan, TimeSpan?, TimeProvider?)"/>.
 /// </summary>
 /// <typeparam name="TCommand">The command sent; made with its parameterless constructor.</typeparam>
 /// <typeparam name="TResponse">The command's result type, e.g. <c>Result&lt;int&gt;</c>.</typeparam>
@@ -338,7 +338,7 @@ public sealed class SendCommandJob<TCommand, TResponse>(
 
 /// <summary>
 /// Sends a new <typeparamref name="TCommand"/> every run: a command job without a class of its own. Schedule it with
-/// <see cref="IntervalJobSetup.AddIntervalCommandJob{TCommand}"/>.
+/// <see cref="IntervalJobSetup.AddIntervalCommandJob{TCommand}(IQuartzBuilder, TimeSpan, TimeSpan?, TimeProvider?)"/>.
 /// </summary>
 /// <typeparam name="TCommand">The command sent; made with its parameterless constructor.</typeparam>
 public sealed class SendCommandJob<TCommand>(
@@ -349,4 +349,24 @@ public sealed class SendCommandJob<TCommand>(
 {
     protected override TCommand CreateCommand(IJobExecutionContext context)
         => new();
+}
+
+/// <summary>
+/// Sends the <typeparamref name="TCommand"/> its <see cref="CommandFactory{TCommand}"/> makes from the run's DI scope,
+/// returning <typeparamref name="TResponse"/>, every run: the job of the <c>AddIntervalCommandJob</c> /
+/// <c>AddCronCommandJob</c> overloads taking a <c>createCommand</c>, for a command without a parameterless constructor.
+/// </summary>
+/// <typeparam name="TCommand">The command sent.</typeparam>
+/// <typeparam name="TResponse">The command's result type.</typeparam>
+internal sealed class FactoryCommandJob<TCommand, TResponse>(
+    ISender sender,
+    ILogger<FactoryCommandJob<TCommand, TResponse>> logger,
+    CommandFactory<TCommand> factory,
+    IServiceProvider services)
+    : CommandJob<TCommand, TResponse>(sender, logger)
+    where TCommand : IRequest<TResponse>
+    where TResponse : Result
+{
+    protected override TCommand CreateCommand(IJobExecutionContext context)
+        => factory.Create(services);
 }
