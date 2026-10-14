@@ -30,6 +30,14 @@ every package in the repository is released together under one version.
   logged at `Debug` and ends normally, so it beats like any run for the `AddQuartzJobs` liveness check. Failed results,
   exceptions (from `CreateCommandAsync` too) and cancellations are handled as in `CommandJob`. For jobs like
   Tournament's and Sentinel's, which may have nothing to do; `CommandJob` is unchanged.
+- **`AddCronJob<TJob>(cronExpression, timeZone = null, timeProvider = null)`**, the cron counterpart of
+  `AddIntervalJob`, with `AddCronCommandJob<TCommand>` / `AddCronCommandJob<TCommand, TResponse>` for the command jobs
+  (`CronJobSetup`). Same job key (`IntervalJobSetup.JobKeyFor<TJob>()`, so a job moved from a hand-written setup keyed
+  `nameof(TJob)` keeps its key), runs that never overlap, the trigger's start read from the registered `TimeProvider`.
+  The expression is read in UTC unless a zone is given, and one that doesn't parse or never fires throws an
+  `ArgumentException` at registration instead of a `FormatException` when the scheduler starts. The `AddQuartzJobs`
+  liveness check judges it by the fire that is due. Replaces Shard's payouts, Sentinel's processing and Oracle's
+  `*JobSetup` classes.
 
 ### Fixed
 

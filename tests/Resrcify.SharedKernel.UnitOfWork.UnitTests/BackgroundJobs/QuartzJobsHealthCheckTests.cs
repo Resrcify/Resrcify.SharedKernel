@@ -86,6 +86,38 @@ public sealed class QuartzJobsHealthCheckTests
     }
 
     [Fact]
+    public async Task CheckHealthAsync_ShouldJudgeAnAddCronJob_ByItsSchedule()
+    {
+        // Every 15 minutes: the default limit is 3 × 15 + 2 = 47 minutes of silence.
+        await using var host = await BuildAsync(quartz => quartz.AddCronJob<NoopJob>("0 0/15 * * * ?"));
+        host.Registry.Beat(Ranks);
+
+        host.Clock.Advance(TimeSpan.FromMinutes(46));
+        (await host.CheckAsync()).Status.ShouldBe(HealthStatus.Healthy);
+
+        host.Clock.Advance(TimeSpan.FromMinutes(2));
+        (await host.CheckAsync()).Status.ShouldBe(HealthStatus.Unhealthy);
+    }
+
+    [Fact]
+    public async Task CheckHealthAsync_ShouldNotCountADailyCronJobAsStalled_BeforeItsFirstFire()
+    {
+        // 16:00 UTC every day, registered at 12:00: silent for hours before its first fire, as scheduled.
+        await using var host = await BuildAsync(quartz => quartz.AddCronJob<NoopJob>("0 0 16 * * ?"));
+
+        host.Clock.Advance(new TimeSpan(3, 59, 0));   // 15:59
+        (await host.CheckAsync()).Status.ShouldBe(HealthStatus.Healthy);
+
+        // Due at 16:00. The limit for a daily job is 3 days + 2 minutes, one interval of it before the due fire: so up
+        // to 2 days and 2 minutes after it.
+        host.Clock.Advance(TimeSpan.FromMinutes(1) + TimeSpan.FromDays(2));   // two days after the due fire
+        (await host.CheckAsync()).Status.ShouldBe(HealthStatus.Healthy);
+
+        host.Clock.Advance(TimeSpan.FromMinutes(3));
+        (await host.CheckAsync()).Status.ShouldBe(HealthStatus.Unhealthy);
+    }
+
+    [Fact]
     public async Task CheckHealthAsync_ShouldWaitForTheNextDueFire_WhenTheScheduleIsUneven()
     {
         // Every 5 minutes from 09:00 to 17:55 (UTC): after 17:55 the next fire is 09:00 the next day, not 18:00.

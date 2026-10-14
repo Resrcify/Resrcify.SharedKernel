@@ -27,6 +27,7 @@
   - [Migrations on start-up](#migrations-on-start-up)
   - [Quartz jobs](#quartz-jobs)
     - [Interval jobs](#interval-jobs)
+    - [Cron jobs](#cron-jobs)
     - [Command jobs](#command-jobs)
     - [Job heartbeats and liveness](#job-heartbeats-and-liveness)
   - [Related modules](#related-modules)
@@ -37,7 +38,7 @@
 - EF Core-backed `UnitOfWork<TDbContext>` implementation, with `TryCompleteAsync` returning a concurrency conflict,
   a duplicate or a serialization failure as a `Result` (`PersistenceErrors`).
 - Outbox/background-job helpers in `BackgroundJobs/`: the outbox job (draining a backlog in one run), its lanes,
-  `OutboxWakeUp`, and Quartz helpers (`AddIntervalJob`, `CommandJob`, `AsyncCommandJob`, job heartbeats and a liveness check).
+  `OutboxWakeUp`, and Quartz helpers (`AddIntervalJob`, `AddCronJob`, `CommandJob`, `AsyncCommandJob`, job heartbeats and a liveness check).
 - Interceptors for domain events and auditable/deletable entities, registrable in the container
   (`AddEntityInterceptors`, `AddOutboxInterceptor`).
 - `AddMigrationsOnStartup<TDbContext>(configuration)`: migrations applied while the host starts.
@@ -448,12 +449,31 @@ services.AddQuartz(quartz => quartz
 (`IntervalJobSetup.JobKeyFor<TJob>()`; a generic job's type arguments follow a dash, as in
 `ProcessOutboxMessagesJob-ShardDbContext`) with a trigger repeating every `interval`, first `startAfter` after the
 scheduler is built. Runs never overlap (the job is registered as `DisallowConcurrentExecution`; mark the class too,
-so it says so where it is written). It replaces a `*JobSetup` class per job. Cron schedules stay `AddJob` +
-`AddTrigger`.
+so it says so where it is written). It replaces a `*JobSetup` class per job.
+
+### Cron jobs
+
+```csharp
+services.AddQuartz(quartz => quartz
+    .AddJobHeartbeats()
+    .AddCronJob<UpdateShardsWithRotatingPayoutsJob>("0 0/15 * * * ?")          // every 15 minutes
+    .AddCronCommandJob<ProcessUnitChangesCommand>("0 0 16 * * ?")                // 16:00 UTC every day
+    .AddCronJob<SendDailyDigestJob>("0 0 8 * * ?", TimeZoneInfo.FindSystemTimeZoneById("Europe/Stockholm")));
+```
+
+`AddCronJob<TJob>(cronExpression, timeZone = UTC, timeProvider = DI's)` is the cron counterpart of `AddIntervalJob`:
+the same key (`IntervalJobSetup.JobKeyFor<TJob>()`), runs that never overlap, and a trigger starting when the
+scheduler is built (read from the registered `TimeProvider`), first firing at the expression's next time. The
+expression is a Quartz one (seconds first: `"0 0/15 * * * ?"`), read in UTC unless a zone is given (so a schedule
+doesn't follow the host's zone or its daylight saving time); one that doesn't parse or never fires throws an
+`ArgumentException` at registration. A fire missed while the scheduler was busy or down fires once as soon as it can
+(Quartz's default). `AddCronCommandJob<TCommand>` / `AddCronCommandJob<TCommand, TResponse>` send a `new TCommand()`
+with `SendCommandJob`, as `AddIntervalCommandJob` does. The liveness check judges a cron job by the fire that is due
+(a nightly job isn't stalled at noon), as for any cron trigger.
 
 ### Command jobs
 
-Most jobs send one command. `AddIntervalCommandJob<TCommand>` needs no job class at all (`SendCommandJob<TCommand>`
+Most jobs send one command. `AddIntervalCommandJob<TCommand>` (or `AddCronCommandJob<TCommand>`) needs no job class at all (`SendCommandJob<TCommand>`
 sends a `new TCommand()`); a job that builds its command derives from `CommandJob<TCommand>` (or
 `CommandJob<TCommand, TResponse>`) and overrides `CreateCommand(context)`. Either one:
 
