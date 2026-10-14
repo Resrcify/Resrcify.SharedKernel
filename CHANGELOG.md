@@ -3,27 +3,67 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
-## 4.0.1 (unreleased)
+## 4.1.0 (unreleased)
 
 ### Behaviour changes
 
 - **`AddProcessOutboxMessagesJob` also runs the outbox backlog monitor**, a hosted service that measures the outbox
   every 30 s (one snapshot of four counts), as `AddOutboxProcessing` always did. A service registering the bare job now
   gets the `outbox.messages.*` gauges and a working `AddOutbox<TDbContext>()` check, for that query every 30 s.
+
 - **`AddHealthChecks().AddOutbox<TDbContext>()` without any outbox processing fails the host's start** (an
   `OptionsValidationException` naming the missing call) instead of answering 500 on every health request.
+
 - **`AddOutboxProcessing<TDbContext>(serializer)` throws when `serializer` isn't the registered `IOutboxSerializer`**
   (that instance, or one of its type), e.g. a custom serializer passed after `AddPostgresDbContext(... WithOutbox())`
   registered the built-in one. It used to be ignored silently, and the jobs read with the registered one. Passing
   `new SystemTextJsonOutboxSerializer()` next to `WithOutbox()`, as the services do, still works.
+
 - **The `AddQuartzJobs` liveness check no longer watches the outbox's jobs** (processing and cleanup, every context's):
   a broker or database outage that stalls a run would restart every replica, which doesn't fix the outage, over and
   over. The outbox's stalls are reported by `AddOutbox<TDbContext>()` (Degraded on `/health/ready`) and the
   `outbox.messages.*` gauges instead, and a scheduler that stopped firing is still caught by every other job. To watch
   them as before: `AddQuartzJobs(jobs => jobs.WatchOutboxJobs = true, ...)`. Tournament's check watched them (an outbox run
   hung for about 3 minutes failed `/health/live`); Shard had excluded them by hand.
+
 - **`AddHealthChecks().AddQuartzJobs(...)` without `AddJobHeartbeats()` fails the host's start**, naming the missing
   call, instead of answering 500 on every liveness probe.
+
+- **`AddResultResilience` answers a timeout or an open circuit with a failed response instead of throwing.** A
+  `TimeoutRejectedException` (the last attempt's or the whole call's) and a `BrokenCircuitException` escaped the
+  pipeline, so a caller reading the response with `ToResultAsync` needed a try/catch (Sentinel's `UpdateGuildsJob`
+  caught the timeout by hand; in Shard it became a 500). The pipeline now answers in the service's place, outermost:
+  a 504 whose problem details `ToResultAsync` reads as `ResultResilienceErrors.Timeout` (`Http.ResilienceTimeout`,
+  `ErrorType.Timeout`), or a 502 read as `ResultResilienceErrors.CircuitOpen` (`Http.CircuitOpen`,
+  `ErrorType.ExternalFailure`, transient). The response carries the header `Resrcify-Resilience: timeout` /
+  `circuit-open` and the request, and `EnsureSuccessStatusCode` throws `HttpRequestException` for it, as for a real 504
+  from a proxy. The caller's own cancellation still throws `OperationCanceledException`. **On by default:** every
+  service using the preset reads its responses with `ToResultAsync`, where a timeout is a failed call like a 503, not
+  an exceptional one; a `catch (TimeoutRejectedException)` around such a call is now dead code and can go. Set
+  `ThrowTimeoutsAndOpenCircuits = true` to keep the exceptions (as 4.0.0 and `AddStandardResilienceHandler` do).
+
+- **The scatter-gather reply queue is named after the service** (Resrcify.SharedKernel.MessageBus):
+  `<service>.scatter.replies.<machine>-<guid>`, the service being the `WithServiceName` name, else the input queue.
+  A service with a name but no input queue (Tournament, Oracle) got the anonymous `scatter.replies.<machine>-<guid>`;
+  one with neither still does. It stays unique per instance, durable, not exclusive and deleted by the broker 30
+  minutes after its instance stops using it, so it still starts on RabbitMQ 4.3 (a quorum queue where quorum is the
+  default type). ⚠️ **Behaviour change:** the reply queue of a service with an input queue moves from
+  `<input queue>.replies.…` to `<input queue>.scatter.replies.…`, and a service with both a name and an input queue
+  names it after the name. Nothing is lost: an instance's queue is its own, and the old ones expire 30 minutes after the
+  last instance using them stops. Update a test, policy or alert matching the old names (Tournament's
+  `MessageBusRegistrationTests` looks for `scatter.replies.`).
+
+- **A custom layer gets the SharedKernel package restrictions** (Resrcify.SharedKernel.ArchitectureTesting). A layer
+  added through `LayerTiers` (Discord's `Bot`) got the tier rules but no package restrictions, so it could use any
+  SharedKernel package unless the service rebuilt `SharedKernelPackageRestrictions` itself. It is now restricted like
+  the conventional layers at its tier (like Web at tier 4; like Infrastructure and Presentation together at tier 3;
+  at a tier without one, like the nearest tier's, the inner one on a tie), or like the layer the new
+  `PackageRestrictionsLike` (custom layer → layer) names, and a failure says so (`Bot → Repository: … (restricted
+  like Web; …)`). A custom layer an overridden `SharedKernelPackageRestrictions` already names keeps exactly what it
+  was given. ⚠️ **Behaviour change:** a custom layer using a package its tier may not use now fails
+  `Layers_ShouldNotDependOnSharedKernelPackagesOutsideTheirLayers`; map it with `PackageRestrictionsLike` (or name it
+  in `SharedKernelPackageRestrictions`) if that is deliberate. Discord's override adding `Bot` wherever Web is
+  restricted gives the same rules and can be deleted.
 
 ### Added
 
@@ -40,8 +80,10 @@ every package in the repository is released together under one version.
 
   It can't be combined with `AlsoRetry` or `NeverRetry`, and holds 400–599 only: `AddResultResilience` throws
   `InvalidOperationException` as the service registers the client, rather than pick a precedence silently.
+
 - **Web: `ResultResilienceErrors`** (`Timeout`, `CircuitOpen`, the `Resrcify-Resilience` header) and
   `ResultResilienceOptions.ThrowTimeoutsAndOpenCircuits`: see the fix below.
+
 - **IntegrationTesting: `ServiceHostFixture.StartDependenciesAsync(cancellationToken)`**, a hook that starts what else
   a service needs (another service's container on `Network`, say), once PostgreSQL, RabbitMQ and the network are up
   and the conventional `Settings` are in place, before `ConfigureSettings` and the host; `ConfigureSettings` reads
@@ -49,15 +91,19 @@ every package in the repository is released together under one version.
   container fixture) has the fixture dispose `x` on teardown: after the host has stopped, before RabbitMQ,
   PostgreSQL and the network, last first. A service that had to hand-write its fixture to start one more container
   (Sentinel's system tests, with SwgohApi's image) can use `ServiceHostFixture`.
+
 - **IntegrationTesting: a `ServiceHostFixture` without PostgreSQL.** `CreatePostgres()` may return `null` (it returns
   `PostgresContainerFixture?`; an override returning the non-nullable type still compiles): no container, no
   `Database:*` or `Migrations:Run` settings, and `Postgres` throws `InvalidOperationException`. Discord's bot, which has
   no database, couldn't use the fixture.
+
 - **`ConventionalLayerDependencyTests.PackageRestrictionsLike`** (ArchitectureTesting): custom layer → the layer whose
   SharedKernel package restrictions it takes, e.g. `{ ["Bot"] = Layers.Web }`.
+
 - **`BaseArchitectureTest(IReadOnlyDictionary<string, Assembly>)` and
   `ConventionalLayerDependencyTests(IReadOnlyDictionary<string, Assembly>)`** (ArchitectureTesting): check the given
   layer assemblies instead of the ones found by naming convention.
+
 - **The message bus binds the `MessageBus` section itself:** `bus.UseRabbitMqFromConfiguration()` (optionally with
   another section name) connects as the host's configuration says, validated when the host starts like
   `AddPostgresDbContext`'s `Database` section: a missing or wrong key stops the start, naming it
@@ -70,17 +116,20 @@ every package in the repository is released together under one version.
   unchanged. A service deletes its `MessageBusOptions` class, its `AddOptions<MessageBusOptions>()` registration and
   the `UseRabbitMq(provider => …)` mapping, and calls `UseRabbitMqFromConfiguration()`. The MessageBus package now
   references `Microsoft.Extensions.Options.ConfigurationExtensions`.
+
 - **`AddOutboxProcessing<TDbContext>(configure)`, and no serializer needed.** The serializer parameter of
   `AddOutboxProcessing<TDbContext>(serializer = null, configure = null)` is optional: without one it reads with the
   registered `IOutboxSerializer` (the one `AddPostgresDbContext(... WithOutbox())` or `AddOutboxInterceptor`
   registered), or registers `SystemTextJsonOutboxSerializer` when none is. A service on the Postgres package writes
   `services.AddOutboxProcessing<ShardDbContext>(outbox => outbox.ProcessIntervalInSeconds = 20)`.
+
 - **`AsyncCommandJob<TCommand>` / `AsyncCommandJob<TCommand, TResponse>`**: a command job whose
   `ValueTask<TCommand?> CreateCommandAsync(IJobExecutionContext context, CancellationToken cancellationToken)` can read
   first (a repository taken in its constructor) and return `null` for "nothing to send this run". A skipped run is
   logged at `Debug` and ends normally, so it beats like any run for the `AddQuartzJobs` liveness check. Failed results,
   exceptions (from `CreateCommandAsync` too) and cancellations are handled as in `CommandJob`. For jobs like
   Tournament's and Sentinel's, which may have nothing to do; `CommandJob` is unchanged.
+
 - **`AddCronJob<TJob>(cronExpression, timeZone = null, timeProvider = null)`**, the cron counterpart of
   `AddIntervalJob`, with `AddCronCommandJob<TCommand>` / `AddCronCommandJob<TCommand, TResponse>` for the command jobs
   (`CronJobSetup`). Same job key (`IntervalJobSetup.JobKeyFor<TJob>()`, so a job moved from a hand-written setup keyed
@@ -89,6 +138,7 @@ every package in the repository is released together under one version.
   `ArgumentException` at registration instead of a `FormatException` when the scheduler starts. The `AddQuartzJobs`
   liveness check judges it by the fire that is due. Replaces Shard's payouts, Sentinel's processing and Oracle's
   `*JobSetup` classes.
+
 - **`AddQuartzJobs(Action<QuartzJobsHealthCheckOptions> configure, name, failureStatus, tags)`** chooses which jobs the
   liveness check watches: `Exclude(JobKey)`, `Exclude<TJob>()` (the key `AddIntervalJob` / `AddCronJob` give it),
   `Exclude(Func<JobKey, bool>)`, `WatchOutboxJobs` (off by default) and `MaxSilence`. Replaces Shard's
@@ -97,59 +147,30 @@ every package in the repository is released together under one version.
 
 ### Fixed
 
-- **`AddResultResilience` answers a timeout or an open circuit with a failed response instead of throwing.** A
-  `TimeoutRejectedException` (the last attempt's or the whole call's) and a `BrokenCircuitException` escaped the
-  pipeline, so a caller reading the response with `ToResultAsync` needed a try/catch (Sentinel's `UpdateGuildsJob`
-  caught the timeout by hand; in Shard it became a 500). The pipeline now answers in the service's place, outermost:
-  a 504 whose problem details `ToResultAsync` reads as `ResultResilienceErrors.Timeout` (`Http.ResilienceTimeout`,
-  `ErrorType.Timeout`), or a 502 read as `ResultResilienceErrors.CircuitOpen` (`Http.CircuitOpen`,
-  `ErrorType.ExternalFailure`, transient). The response carries the header `Resrcify-Resilience: timeout` /
-  `circuit-open` and the request, and `EnsureSuccessStatusCode` throws `HttpRequestException` for it, as for a real 504
-  from a proxy. The caller's own cancellation still throws `OperationCanceledException`. **On by default:** every
-  service using the preset reads its responses with `ToResultAsync`, where a timeout is a failed call like a 503, not
-  an exceptional one; a `catch (TimeoutRejectedException)` around such a call is now dead code and can go. Set
-  `ThrowTimeoutsAndOpenCircuits = true` to keep the exceptions (as 4.0.0 and `AddStandardResilienceHandler` do).
 - **A `ServiceHostFixture` whose start fails tears down what it had started.** A failure in a container,
   `StartDependenciesAsync` or `ConfigureSettings` disposes what was started (as on teardown) before `InitializeAsync`
   throws, instead of relying on xUnit to dispose a fixture that never finished starting; the teardown then runs once.
+
 - **The settings of `IntegrationFactoryBase` / `ServiceHostFixture` win over `appsettings.json` on the generic
   host.** They reached the host only through `UseSetting`, i.e. the host configuration, which
   `Host.CreateDefaultBuilder` puts before `appsettings*.json` and environment variables: a `Program` on the generic
   host (with a `Startup`) got its `appsettings.json` value instead of the fixture's. They are now also added as the
   last configuration source, so they win in both hosting models (`WebApplication` already let them win while
   registering, and still sees them then).
-- **The scatter-gather reply queue is named after the service** (Resrcify.SharedKernel.MessageBus):
-  `<service>.scatter.replies.<machine>-<guid>`, the service being the `WithServiceName` name, else the input queue.
-  A service with a name but no input queue (Tournament, Oracle) got the anonymous `scatter.replies.<machine>-<guid>`;
-  one with neither still does. It stays unique per instance, durable, not exclusive and deleted by the broker 30
-  minutes after its instance stops using it, so it still starts on RabbitMQ 4.3 (a quorum queue where quorum is the
-  default type). ⚠️ **Behaviour change:** the reply queue of a service with an input queue moves from
-  `<input queue>.replies.…` to `<input queue>.scatter.replies.…`, and a service with both a name and an input queue
-  names it after the name. Nothing is lost: an instance's queue is its own, and the old ones expire 30 minutes after the
-  last instance using them stops. Update a test, policy or alert matching the old names (Tournament's
-  `MessageBusRegistrationTests` looks for `scatter.replies.`).
-- **A custom layer gets the SharedKernel package restrictions** (Resrcify.SharedKernel.ArchitectureTesting). A layer
-  added through `LayerTiers` (Discord's `Bot`) got the tier rules but no package restrictions, so it could use any
-  SharedKernel package unless the service rebuilt `SharedKernelPackageRestrictions` itself. It is now restricted like
-  the conventional layers at its tier (like Web at tier 4; like Infrastructure and Presentation together at tier 3;
-  at a tier without one, like the nearest tier's, the inner one on a tie), or like the layer the new
-  `PackageRestrictionsLike` (custom layer → layer) names, and a failure says so (`Bot → Repository: … (restricted
-  like Web; …)`). A custom layer an overridden `SharedKernelPackageRestrictions` already names keeps exactly what it
-  was given. ⚠️ **Behaviour change:** a custom layer using a package its tier may not use now fails
-  `Layers_ShouldNotDependOnSharedKernelPackagesOutsideTheirLayers`; map it with `PackageRestrictionsLike` (or name it
-  in `SharedKernelPackageRestrictions`) if that is deliberate. Discord's override adding `Bot` wherever Web is
-  restricted gives the same rules and can be deleted.
+
 - **The mediator's documentation gives the standard behaviors' real order:** Logging → Idempotency → Validation →
   Transaction → UnitOfWork → Caching. `AddStandardBehaviors`, the `StandardBehavior` enum and the 4.0.0 notes left
   idempotency out, though it has run right after logging since 4.0.0 (nothing changes at run time). `StandardBehavior.Idempotency`
   is documented, and the enum says its members aren't declared in that order (`Idempotency` keeps its value): order by
   name, never by value. A behavior inserted before `Validation` runs after idempotency.
+
 - **`AddHealthChecks().AddOutbox<TDbContext>()` no longer throws when the check runs** (a 500 on `/health` and
   `/health/ready`) for an outbox registered with `quartz.AddProcessOutboxMessagesJob<TDbContext>()` instead of
   `AddOutboxProcessing<TDbContext>()`: the job now registers the backlog monitor the check reads. Without either, the
   check is validated at start-up (the host doesn't start, and says which call is missing); a container used without a
   host gets a check reporting the same message with its failure status, never an exception. Found by Shard, Tournament
   and Sentinel adopting 4.0.0.
+
 - **A direct `DbContext.SaveChangesAsync()` of domain events under `RetryOnFailure()` with `OnConflictDoNothing` says
   what to do.** It failed with EF Core's "The configured execution strategy 'NpgsqlRetryingExecutionStrategy' does not
   support user-initiated transactions", though the caller began none (the outbox's ON CONFLICT insert does, around the
@@ -160,7 +181,6 @@ every package in the repository is released together under one version.
   whole save so that a retry saves it all again; doing so from inside would run every interceptor and `SavingChanges`
   handler twice and can't see `acceptAllChangesOnSuccess`. Same exception type as before; a save without domain events,
   or through the unit of work, is unaffected. Found by Sentinel in a test.
-
 
 ## 4.0.0 (2026-10-13)
 
