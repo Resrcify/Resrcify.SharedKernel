@@ -12,7 +12,7 @@ public static class ApplicationServiceRegistration
         services.AddMediator(config =>
         {
             config.RegisterServicesFromAssemblies(Assembly.GetExecutingAssembly());
-            // Logging -> Validation -> Transaction -> UnitOfWork -> Caching (the first is the outermost).
+            // Logging -> Idempotency -> Validation -> Transaction -> UnitOfWork -> Caching (the first is the outermost).
             config.AddStandardBehaviors();
         });
 

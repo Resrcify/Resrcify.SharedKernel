@@ -3,6 +3,16 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.0.1 (unreleased)
+
+### Fixed
+
+- **The mediator's documentation gives the standard behaviors' real order:** Logging → Idempotency → Validation →
+  Transaction → UnitOfWork → Caching. `AddStandardBehaviors`, the `StandardBehavior` enum and the 4.0.0 notes left
+  idempotency out, though it has run right after logging since 4.0.0 (nothing changes at run time). `StandardBehavior.Idempotency`
+  is documented, and the enum says its members aren't declared in that order (`Idempotency` keeps its value): order by
+  name, never by value. A behavior inserted before `Validation` runs after idempotency.
+
 ## 4.0.0 (2026-10-13)
 
 Upgrading a service: work through **Breaking changes** below, top to bottom.
@@ -372,8 +382,8 @@ Upgrading a service: work through **Breaking changes** below, top to bottom.
   `MediatorDiagnostics.ActivitySourceName` / `MeterName` (`Resrcify.SharedKernel.Mediator`). One span per request
   (outcome, error code and type, exception) and the histogram `mediator.request.duration` (s, tags `request`,
   `outcome`). A single check when nothing listens.
-- **`AddStandardBehaviors()`** on the mediator configuration: Logging → Validation → Transaction → UnitOfWork →
-  Caching, with `Without(...)`, `InsertBefore(...)` and `InsertAfter(...)` for a service's own behaviors.
+- **`AddStandardBehaviors()`** on the mediator configuration: Logging → Idempotency → Validation → Transaction →
+  UnitOfWork → Caching, with `Without(...)`, `InsertBefore(...)` and `InsertAfter(...)` for a service's own behaviors.
 - **`LoggingPipelineOptions`** (`cfg.ConfigureLogging(...)`): `RequestLevel` for the start/complete lines (default
   `Information`), `SlowRequestThreshold` (a Warning when exceeded; off by default). The logging behavior also logs a
   handler's exception at `Error`, letting it through unchanged.
