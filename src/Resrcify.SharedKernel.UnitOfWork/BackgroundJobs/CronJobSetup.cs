@@ -52,31 +52,24 @@ public static class CronJobSetup
         ArgumentNullException.ThrowIfNull(quartz);
         var zone = timeZone ?? TimeZoneInfo.Utc;
         EnsureFires(cronExpression, zone);
-
-        var jobKey = IntervalJobSetup.JobKeyFor<TJob>();
-        return quartz
-            .AddJob<TJob>(job => job
-                .WithIdentity(jobKey)
-                .DisallowConcurrentExecution())
-            .AddTrigger<TJob>((provider, trigger) => trigger
-                .ForJob(jobKey)
-                .StartAt(Clock(provider, timeProvider).GetUtcNow())
-                .WithSchedule(CronScheduleBuilder
-                    .Create(cronExpression)
-                    .InTimeZone(zone)));
+        return quartz.ScheduleCronJob<TJob>(
+            IntervalJobSetup.JobKeyFor<TJob>(),
+            cronExpression,
+            zone,
+            timeProvider);
     }
 
     /// <summary>
     /// Sends a new <typeparamref name="TCommand"/> through the mediator whenever <paramref name="cronExpression"/> fires,
     /// with <see cref="SendCommandJob{TCommand}"/>: no job class to write. Its key is
-    /// <c>SendCommandJob-&lt;command type name&gt;</c>, as <see cref="IntervalJobSetup.AddIntervalCommandJob{TCommand}"/>
+    /// <c>SendCommandJob-&lt;command type name&gt;</c>, as <see cref="IntervalJobSetup.AddIntervalCommandJob{TCommand}(IQuartzBuilder, TimeSpan, TimeSpan?, TimeProvider?)"/>
     /// gives it.
     /// </summary>
     /// <inheritdoc cref="AddCronJob{TJob}" path="/param"/>
     /// <exception cref="ArgumentException"><paramref name="cronExpression"/> doesn't parse, or never fires.</exception>
     /// <exception cref="InvalidOperationException">
     /// <typeparamref name="TCommand"/> returns a value (<c>Result&lt;T&gt;</c>): use
-    /// <see cref="AddCronCommandJob{TCommand, TResponse}"/>.
+    /// <see cref="AddCronCommandJob{TCommand, TResponse}(IQuartzBuilder, string, TimeZoneInfo?, TimeProvider?)"/>.
     /// </exception>
     public static IQuartzBuilder AddCronCommandJob<TCommand>(
         this IQuartzBuilder quartz,
@@ -112,6 +105,107 @@ public static class CronJobSetup
             cronExpression,
             timeZone,
             timeProvider);
+    }
+
+    /// <summary>
+    /// Sends the <typeparamref name="TCommand"/> <paramref name="createCommand"/> makes through the mediator whenever
+    /// <paramref name="cronExpression"/> fires, for a command without a parameterless constructor (a record whose
+    /// parameters are all optional) or one built from services. The job's key is
+    /// <c>SendCommandJob-&lt;command type name&gt;</c>, the one
+    /// <see cref="AddCronCommandJob{TCommand}(IQuartzBuilder, string, TimeZoneInfo?, TimeProvider?)"/> gives it, so
+    /// moving between the two doesn't rename the job.
+    /// </summary>
+    /// <inheritdoc cref="AddCronJob{TJob}" path="/param"/>
+    /// <param name="createCommand">
+    /// Makes the command each run, from the run's DI scope (Quartz builds the job in a scope of its own per run), so it
+    /// can read a <see cref="TimeProvider"/> or a scoped service.
+    /// </param>
+    /// <exception cref="ArgumentException"><paramref name="cronExpression"/> doesn't parse, or never fires.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// <typeparamref name="TCommand"/> returns a value (<c>Result&lt;T&gt;</c>): use
+    /// <see cref="AddCronCommandJob{TCommand, TResponse}(IQuartzBuilder, string, Func{IServiceProvider, TCommand}, TimeZoneInfo?, TimeProvider?)"/>.
+    /// Or a factory for <typeparamref name="TCommand"/> is registered already.
+    /// </exception>
+    public static IQuartzBuilder AddCronCommandJob<TCommand>(
+        this IQuartzBuilder quartz,
+        string cronExpression,
+        Func<IServiceProvider, TCommand> createCommand,
+        TimeZoneInfo? timeZone = null,
+        TimeProvider? timeProvider = null)
+        where TCommand : IRequest<Result>
+        => quartz.AddFactoryCommandJob<TCommand, Result>(
+            IntervalJobSetup.SendCommandJobKeyFor<TCommand>(),
+            cronExpression,
+            createCommand,
+            timeZone,
+            timeProvider);
+
+    /// <summary>
+    /// Sends the <typeparamref name="TCommand"/> returning <typeparamref name="TResponse"/> that
+    /// <paramref name="createCommand"/> makes through the mediator whenever <paramref name="cronExpression"/> fires. The
+    /// job's key is <c>SendCommandJob-&lt;command type name&gt;-&lt;response type name&gt;</c>, the one
+    /// <see cref="AddCronCommandJob{TCommand, TResponse}(IQuartzBuilder, string, TimeZoneInfo?, TimeProvider?)"/> gives
+    /// it.
+    /// </summary>
+    /// <inheritdoc cref="AddCronCommandJob{TCommand}(IQuartzBuilder, string, Func{IServiceProvider, TCommand}, TimeZoneInfo?, TimeProvider?)" path="/param"/>
+    /// <exception cref="ArgumentException"><paramref name="cronExpression"/> doesn't parse, or never fires.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// <typeparamref name="TCommand"/> doesn't return <typeparamref name="TResponse"/>, or a factory for
+    /// <typeparamref name="TCommand"/> is registered already.
+    /// </exception>
+    public static IQuartzBuilder AddCronCommandJob<TCommand, TResponse>(
+        this IQuartzBuilder quartz,
+        string cronExpression,
+        Func<IServiceProvider, TCommand> createCommand,
+        TimeZoneInfo? timeZone = null,
+        TimeProvider? timeProvider = null)
+        where TCommand : IRequest<TResponse>
+        where TResponse : Result
+        => quartz.AddFactoryCommandJob<TCommand, TResponse>(
+            IntervalJobSetup.SendCommandJobKeyFor<TCommand, TResponse>(),
+            cronExpression,
+            createCommand,
+            timeZone,
+            timeProvider);
+
+    private static IQuartzBuilder AddFactoryCommandJob<TCommand, TResponse>(
+        this IQuartzBuilder quartz,
+        JobKey jobKey,
+        string cronExpression,
+        Func<IServiceProvider, TCommand> createCommand,
+        TimeZoneInfo? timeZone,
+        TimeProvider? timeProvider)
+        where TCommand : IRequest<TResponse>
+        where TResponse : Result
+    {
+        var zone = timeZone ?? TimeZoneInfo.Utc;
+        EnsureFires(cronExpression, zone);
+        CommandFactory.Register<TCommand, TResponse>(quartz, createCommand);
+        return quartz.ScheduleCronJob<FactoryCommandJob<TCommand, TResponse>>(
+            jobKey,
+            cronExpression,
+            zone,
+            timeProvider);
+    }
+
+    private static IQuartzBuilder ScheduleCronJob<TJob>(
+        this IQuartzBuilder quartz,
+        JobKey jobKey,
+        string cronExpression,
+        TimeZoneInfo zone,
+        TimeProvider? timeProvider)
+        where TJob : class, IJob
+    {
+        return quartz
+            .AddJob<TJob>(job => job
+                .WithIdentity(jobKey)
+                .DisallowConcurrentExecution())
+            .AddTrigger<TJob>((provider, trigger) => trigger
+                .ForJob(jobKey)
+                .StartAt(Clock(provider, timeProvider).GetUtcNow())
+                .WithSchedule(CronScheduleBuilder
+                    .Create(cronExpression)
+                    .InTimeZone(zone)));
     }
 
     // At registration, not when the scheduler is built at start-up (where Quartz would throw a FormatException), and

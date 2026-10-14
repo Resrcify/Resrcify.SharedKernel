@@ -104,6 +104,37 @@ public sealed class CronJobSetupTests
         job.ShouldNotBeNull().JobType.ShouldBe(typeof(SendCommandJob<CountingCommand, Result<int>>));
     }
 
+    [Fact]
+    public async Task AddCronCommandJob_WithAFactory_ShouldKeyTheJobAsWithoutOne()
+    {
+        await using var provider = Build(quartz => quartz
+            .AddCronCommandJob<PingCommand>(Every15Minutes, _ => new PingCommand())
+            .AddCronCommandJob<CountingCommand, Result<int>>(Every15Minutes, _ => new CountingCommand()));
+        var scheduler = await provider.GetRequiredService<ISchedulerFactory>().GetScheduler();
+
+        var ping = await scheduler.GetJobDetail(IntervalJobSetup.JobKeyFor<SendCommandJob<PingCommand>>());
+        var counting = await scheduler.GetJobDetail(IntervalJobSetup.JobKeyFor<SendCommandJob<CountingCommand, Result<int>>>());
+
+        ping.ShouldNotBeNull().Key.Name.ShouldBe("SendCommandJob-PingCommand");
+        ping.ConcurrentExecutionDisallowed.ShouldBeTrue();
+        counting.ShouldNotBeNull().Key.Name.ShouldBe("SendCommandJob-CountingCommand-Result-Int32");
+        var cron = (await scheduler.GetTriggersOfJob(ping.Key)).ShouldHaveSingleItem().ShouldBeAssignableTo<ICronTrigger>();
+        cron.ShouldNotBeNull().CronExpressionString.ShouldBe(Every15Minutes);
+    }
+
+    [Fact]
+    public void AddCronCommandJob_WithAFactory_ShouldThrowAtRegistration_WhenTheCommandHasOneAlready()
+        => Should.Throw<InvalidOperationException>(() => new ServiceCollection().AddQuartz(quartz => quartz
+                .AddCronCommandJob<StampCommand>(Every15Minutes, _ => new StampCommand())
+                .AddCronCommandJob<StampCommand>("0 0 16 * * ?", _ => new StampCommand())))
+            .Message.ShouldContain("A createCommand for StampCommand is registered already");
+
+    [Fact]
+    public void AddCronCommandJob_WithAFactory_ShouldRefuseAnExpressionThatDoesntParse_AtRegistration()
+        => Should.Throw<ArgumentException>(() => new ServiceCollection().AddQuartz(quartz =>
+                quartz.AddCronCommandJob<StampCommand>("*/15 * * * *", _ => new StampCommand())))
+            .Message.ShouldContain("isn't a Quartz cron expression");
+
     private static ServiceProvider Build(Action<IQuartzBuilder> configure)
     {
         var services = new ServiceCollection();

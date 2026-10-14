@@ -481,7 +481,25 @@ with `SendCommandJob`, as `AddIntervalCommandJob` does. The liveness check judge
 
 Most jobs send one command. `AddIntervalCommandJob<TCommand>` (or `AddCronCommandJob<TCommand>`) needs no job class at all (`SendCommandJob<TCommand>`
 sends a `new TCommand()`); a job that builds its command derives from `CommandJob<TCommand>` (or
-`CommandJob<TCommand, TResponse>`) and overrides `CreateCommand(context)`. Either one:
+`CommandJob<TCommand, TResponse>`) and overrides `CreateCommand(context)`.
+
+A command without a parameterless constructor (a record whose parameters are all optional, so `new()` can't make it), or
+one built from services, takes the overloads with a `createCommand` factory: `AddIntervalCommandJob<TCommand>(interval,
+createCommand, startAfter, timeProvider)`, `AddCronCommandJob<TCommand>(cronExpression, createCommand, timeZone,
+timeProvider)`, and their `<TCommand, TResponse>` forms. The factory, a `Func<IServiceProvider, TCommand>`, is called on
+every run with that run's DI scope (Quartz builds the job in a scope of its own per run), so it can read a
+`TimeProvider` or a scoped service. The job's key is the one the `new()` overload gives (`SendCommandJob-<command>`), so
+moving to the factory doesn't rename the job. A command type has one factory: registering a second one, with either
+helper, throws `InvalidOperationException` at registration.
+
+```csharp
+services.AddQuartz(quartz => quartz
+    .AddCronCommandJob<ProcessPayoutCyclesCommand>(
+        "0 0/15 * * * ?",
+        provider => new ProcessPayoutCyclesCommand(provider.GetRequiredService<TimeProvider>().GetUtcNow().UtcDateTime)));
+```
+
+Every command job:
 
 - logs a failed result with its errors, at `Warning` when another try may pass (`IsTransient()`) and at `Information`
   when it is an expected answer; the trigger keeps its schedule;

@@ -3,6 +3,36 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.2.0 (2026-10-14)
+
+### Added
+
+- **UnitOfWork: `AddIntervalCommandJob` / `AddCronCommandJob` with a command factory**, for a command without a
+  parameterless constructor (a record whose parameters are all optional) or one built from services:
+  `AddIntervalCommandJob<TCommand>(interval, Func<IServiceProvider, TCommand> createCommand, startAfter = null,
+  timeProvider = null)`, `AddCronCommandJob<TCommand>(cronExpression, createCommand, timeZone = null, timeProvider =
+  null)`, and both as `<TCommand, TResponse>`. The factory is called on every run with that run's DI scope, so it can
+  read a `TimeProvider` or a scoped service; the job's key is the one the `new()` overload gives
+  (`SendCommandJob-<command>`), so moving to the factory doesn't rename a job, and the command's result type is checked
+  at registration as before. A second factory for the same command type, from either helper, throws
+  `InvalidOperationException` at registration. The `new()` overloads are unchanged. Shard's
+  `ProcessPayoutCyclesCommand(DateTime? DateTime = null)` kept a hand-written `CommandJob` for want of it:
+
+  ```csharp
+  services.AddQuartz(quartz => quartz.AddCronCommandJob<ProcessPayoutCyclesCommand>(
+      "0 0/15 * * * ?",
+      provider => new ProcessPayoutCyclesCommand(provider.GetRequiredService<TimeProvider>().GetUtcNow().UtcDateTime)));
+  ```
+
+### Fixed
+
+- **The token-bucket limiter's rate test no longer counts wall-clock time** (Resrcify.SharedKernel.MessageBus, tests
+  only; the limiter is unchanged). It counted the tokens granted in 2 s of real time at 90/s + 10 and expected 165–195;
+  a busy CI runner got 131. `TokenBucketRateLimiterStrategy.CreateOptions` (internal), which `CreateLimiter` now builds
+  its bucket from, is tested instead: for 1 to 1000/s the refill averages `PerSecond` in steps of at least 50 ms, the
+  bucket holds at least `Burst` and one step, and 2 simulated seconds grant exactly `2 × PerSecond + Burst` (190 at
+  90/s + 10).
+
 ## 4.1.0 (2026-10-14)
 
 ### Behaviour changes

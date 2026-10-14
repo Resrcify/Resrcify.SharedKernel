@@ -31,6 +31,15 @@ internal sealed class GenericJob<T> : IJob
 /// <summary>A command a job sends.</summary>
 internal sealed record PingCommand : ICommand;
 
+/// <summary>
+/// A command without a parameterless constructor (its one parameter is optional), as Shard's
+/// <c>ProcessPayoutCyclesCommand(DateTime? DateTime = null)</c>: <c>new()</c> can't make it.
+/// </summary>
+internal sealed record StampCommand(DateTimeOffset? At = null) : ICommand;
+
+/// <summary>A command returning a value, without a parameterless constructor.</summary>
+internal sealed record StampCountCommand(DateTimeOffset? At = null) : ICommand<int>;
+
 /// <summary>A logger that keeps what it was asked to log.</summary>
 internal sealed class RecordingLogger<T> : ILogger<T>
 {
