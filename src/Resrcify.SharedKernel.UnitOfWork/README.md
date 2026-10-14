@@ -525,7 +525,30 @@ alike); a paused, finished or one-off trigger isn't checked, and a job not due y
 and fails keeps beating, so an upstream outage doesn't restart the pod. It is meant for `/health/live`: a scheduler
 that stopped firing (Shard's rank updates froze for ~29 h) is fixed by a restart. A run counts as silence until it
 ends, so give long-running jobs room (`maxSilence: interval => interval * 3 + TimeSpan.FromMinutes(30)`). Time is the
-registered `TimeProvider`.
+registered `TimeProvider`. Without `AddJobHeartbeats()` the host fails to start, with a message saying so (a container
+used without a host gets a check that reports it).
+
+**Which jobs it watches.** Every scheduled job but the outbox's (`OutboxJobs.IsOutboxJob`: the processing and cleanup
+jobs of every context). An outbox stalls on its broker or its database, which a restart doesn't fix: watched on
+`/health/live`, a broker outage would restart every replica, over and over. The outbox has its own signal for a stall,
+`AddOutbox<TDbContext>` (the oldest waiting message's age, Degraded on `/health/ready`) and the `outbox.messages.*`
+gauges, and a scheduler that stopped firing is still caught by every other job. Leave other jobs out, or watch the
+outbox's after all, with the options overload:
+
+```csharp
+services.AddHealthChecks().AddQuartzJobs(
+    jobs => jobs
+        .Exclude<ImportArchiveJob>()                       // by type (the key AddIntervalJob / AddCronJob give it)
+        .Exclude(new JobKey("nightly-report"))             // by key
+        .Exclude(job => job.Group == "reports"),           // by predicate
+    tags: [HealthTags.Live]);
+
+// A service whose only jobs are the outbox's, and would rather restart than alert:
+services.AddHealthChecks().AddQuartzJobs(jobs => jobs.WatchOutboxJobs = true, tags: [HealthTags.Live]);
+```
+
+`jobs.MaxSilence` sets the window, as `maxSilence` does. Exclude a job rather than give it an endless window
+(`TimeSpan.MaxValue`).
 
 ### Monitoring the outbox
 

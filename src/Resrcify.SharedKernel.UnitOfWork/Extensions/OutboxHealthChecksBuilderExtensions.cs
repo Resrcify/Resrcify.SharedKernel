@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -91,17 +89,4 @@ internal sealed class OutboxHealthCheckRequirement<TDbContext>
 {
     /// <summary>The DbContext the check belongs to (the type parameter keys it in DI).</summary>
     public Type DbContextType { get; } = typeof(TDbContext);
-}
-
-/// <summary>A health check that can't run as registered: it reports why, with the registration's failure status.</summary>
-internal sealed class MisconfiguredHealthCheck(string description)
-    : IHealthCheck
-{
-    public Task<HealthCheckResult> CheckHealthAsync(
-        HealthCheckContext context,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        return Task.FromResult(new HealthCheckResult(context.Registration.FailureStatus, description));
-    }
 }

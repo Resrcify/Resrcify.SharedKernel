@@ -16,6 +16,14 @@ every package in the repository is released together under one version.
   (that instance, or one of its type), e.g. a custom serializer passed after `AddPostgresDbContext(... WithOutbox())`
   registered the built-in one. It used to be ignored silently, and the jobs read with the registered one. Passing
   `new SystemTextJsonOutboxSerializer()` next to `WithOutbox()`, as the services do, still works.
+- **The `AddQuartzJobs` liveness check no longer watches the outbox's jobs** (processing and cleanup, every context's):
+  a broker or database outage that stalls a run would restart every replica, which doesn't fix the outage, over and
+  over. The outbox's stalls are reported by `AddOutbox<TDbContext>()` (Degraded on `/health/ready`) and the
+  `outbox.messages.*` gauges instead, and a scheduler that stopped firing is still caught by every other job. To watch
+  them as before: `AddQuartzJobs(jobs => jobs.WatchOutboxJobs = true, ...)`. Tournament's check watched them (an outbox run
+  hung for about 3 minutes failed `/health/live`); Shard had excluded them by hand.
+- **`AddHealthChecks().AddQuartzJobs(...)` without `AddJobHeartbeats()` fails the host's start**, naming the missing
+  call, instead of answering 500 on every liveness probe.
 
 ### Added
 
@@ -38,6 +46,11 @@ every package in the repository is released together under one version.
   `ArgumentException` at registration instead of a `FormatException` when the scheduler starts. The `AddQuartzJobs`
   liveness check judges it by the fire that is due. Replaces Shard's payouts, Sentinel's processing and Oracle's
   `*JobSetup` classes.
+- **`AddQuartzJobs(Action<QuartzJobsHealthCheckOptions> configure, name, failureStatus, tags)`** chooses which jobs the
+  liveness check watches: `Exclude(JobKey)`, `Exclude<TJob>()` (the key `AddIntervalJob` / `AddCronJob` give it),
+  `Exclude(Func<JobKey, bool>)`, `WatchOutboxJobs` (off by default) and `MaxSilence`. Replaces Shard's
+  `JobLivenessWindows.Unwatched` (`TimeSpan.MaxValue` as "don't watch"). `OutboxJobs.IsOutboxJob(JobKey)` says whether a
+  key is an outbox job's.
 
 ### Fixed
 

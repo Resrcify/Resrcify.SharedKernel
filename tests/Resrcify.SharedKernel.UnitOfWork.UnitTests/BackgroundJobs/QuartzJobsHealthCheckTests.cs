@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Quartz;
@@ -169,7 +170,72 @@ public sealed class QuartzJobsHealthCheckTests
     }
 
     [Fact]
-    public async Task AddQuartzJobs_ShouldSayWhatIsMissing_WithoutHeartbeats()
+    public async Task CheckHealthAsync_ShouldLeaveTheOutboxJobsOut_ByDefault()
+    {
+        // A broker outage stalling the outbox mustn't restart every replica: the outbox's own check alerts on it.
+        await using var host = await BuildAsync(quartz => quartz.AddProcessOutboxMessagesJob<TestDbContext>(
+            processIntervalInSeconds: 20,
+            delayInSecondsBeforeStart: 0,
+            timeProvider: new FakeTimeProvider(Start)));
+
+        host.Clock.Advance(TimeSpan.FromHours(3));
+        var result = await host.CheckAsync();
+
+        result.Status.ShouldBe(HealthStatus.Healthy);
+        result.Data.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task CheckHealthAsync_ShouldWatchTheOutboxJobs_WhenAskedTo()
+    {
+        await using var host = await BuildAsync(
+            quartz => quartz.AddProcessOutboxMessagesJob<TestDbContext>(
+                processIntervalInSeconds: 20,
+                delayInSecondsBeforeStart: 0,
+                timeProvider: new FakeTimeProvider(Start)),
+            jobs: jobs => jobs.WatchOutboxJobs = true);
+
+        host.Clock.Advance(TimeSpan.FromHours(3));
+        var result = await host.CheckAsync();
+
+        result.Status.ShouldBe(HealthStatus.Unhealthy);
+        result.Description.ShouldNotBeNull().ShouldContain(OutboxJobs.Process<TestDbContext>().ToString());
+        result.Description.ShouldContain(OutboxJobs.Cleanup<TestDbContext>().ToString());
+    }
+
+    [Fact]
+    public async Task CheckHealthAsync_ShouldLeaveAnExcludedJobOut_AndWatchTheRest()
+    {
+        var excludedByKey = new JobKey("excluded-by-key");
+        var excludedByGroup = new JobKey("excluded-by-group", "reports");
+        await using var host = await BuildAsync(
+            quartz => quartz
+                .AddIntervalJob<NoopJob>(TimeSpan.FromMinutes(1))
+                .AddIntervalJob<GenericJob<PingCommand>>(TimeSpan.FromMinutes(1))
+                .AddJob<NoopJob>(job => job.WithIdentity(excludedByKey))
+                .AddTrigger(trigger => trigger
+                    .ForJob(excludedByKey)
+                    .StartAt(Start)
+                    .WithSimpleSchedule(schedule => schedule.WithInterval(TimeSpan.FromMinutes(1)).RepeatForever()))
+                .AddJob<NoopJob>(job => job.WithIdentity(excludedByGroup))
+                .AddTrigger(trigger => trigger
+                    .ForJob(excludedByGroup)
+                    .StartAt(Start)
+                    .WithSimpleSchedule(schedule => schedule.WithInterval(TimeSpan.FromMinutes(1)).RepeatForever())),
+            jobs: jobs => jobs
+                .Exclude<NoopJob>()
+                .Exclude(excludedByKey)
+                .Exclude(job => job.Group == "reports"));
+
+        host.Clock.Advance(TimeSpan.FromHours(1));
+        var result = await host.CheckAsync();
+
+        result.Status.ShouldBe(HealthStatus.Unhealthy);
+        result.Data.Keys.ShouldBe([IntervalJobSetup.JobKeyFor<GenericJob<PingCommand>>().ToString()]);
+    }
+
+    [Fact]
+    public async Task AddQuartzJobs_ShouldReportWhatIsMissing_InsteadOfThrowing_WithoutHeartbeats()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -178,15 +244,37 @@ public sealed class QuartzJobsHealthCheckTests
         await using var provider = services.BuildServiceProvider();
 
         var registration = provider.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations.Single();
+        var result = await registration.Factory(provider).CheckHealthAsync(new HealthCheckContext { Registration = registration });
 
         registration.Tags.ShouldContain("live");
         registration.FailureStatus.ShouldBe(HealthStatus.Unhealthy);
-        Should.Throw<InvalidOperationException>(() => registration.Factory(provider)).Message.ShouldContain("AddJobHeartbeats");
+        result.Status.ShouldBe(HealthStatus.Unhealthy);
+        result.Description.ShouldNotBeNull().ShouldContain("AddJobHeartbeats()");
     }
+
+    [Fact]
+    public async Task AddQuartzJobs_ShouldFailTheHostsStart_WithoutHeartbeats()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings());
+        builder.Services.AddQuartz();
+        builder.Services.AddHealthChecks().AddQuartzJobs(tags: ["live"]);
+        using var host = builder.Build();
+
+        var thrown = await Should.ThrowAsync<OptionsValidationException>(() => host.StartAsync());
+
+        thrown.Message.ShouldContain("AddJobHeartbeats()");
+    }
+
+    [Fact]
+    public void AddQuartzJobs_ShouldRefuseNoWindow()
+        => Should.Throw<ArgumentException>(() => new ServiceCollection()
+            .AddHealthChecks()
+            .AddQuartzJobs(jobs => jobs.MaxSilence = null!));
 
     private static async Task<TestHost> BuildAsync(
         Action<IQuartzBuilder> configure,
-        Func<TimeSpan, TimeSpan>? maxSilence = null)
+        Func<TimeSpan, TimeSpan>? maxSilence = null,
+        Action<QuartzJobsHealthCheckOptions>? jobs = null)
     {
         var clock = new FakeTimeProvider(Start);
         var services = new ServiceCollection();
@@ -197,7 +285,10 @@ public sealed class QuartzJobsHealthCheckTests
             quartz.AddJobHeartbeats();
             configure(quartz);
         });
-        services.AddHealthChecks().AddQuartzJobs(maxSilence);
+        if (jobs is null)
+            services.AddHealthChecks().AddQuartzJobs(maxSilence);
+        else
+            services.AddHealthChecks().AddQuartzJobs(jobs);
         var provider = services.BuildServiceProvider();
         // Made now, as the listener makes it when the scheduler starts: its start is the process start. The scheduler
         // too, as the host builds it at start-up: its triggers' start times are set then.
