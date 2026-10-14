@@ -30,6 +30,8 @@ outbox messages.
   - [Install](#install)
   - [Message names](#message-names)
   - [Requesting: scatter-gather](#requesting-scatter-gather)
+    - [Connecting](#connecting)
+    - [Handlers](#handlers)
   - [Requesting inside a request: gather before the handler](#requesting-inside-a-request-gather-before-the-handler)
   - [Asking directly: IScatterGatherClient](#asking-directly-iscattergatherclient)
   - [Failures: the result pattern](#failures-the-result-pattern)
@@ -61,7 +63,7 @@ ArchitectureTesting package's `ConventionalLayerDependencyTests` enforces it (se
 | Folder | What |
 |---|---|
 | `Extensions/` | `AddMessageBus` |
-| `Configuration/` | `MessageBusBuilder`, `RabbitMqConnection`, the transport (RabbitMQ or in memory), the default bus configuration strategy |
+| `Configuration/` | `MessageBusBuilder`, `RabbitMqConnection`, `RabbitMqOptions` (the `MessageBus` section), the transport (RabbitMQ or in memory), the default bus configuration strategy |
 | `Broker/` | `BrokerConnectionWatcher`: restarts the buses as soon as RabbitMQ is back |
 | `Abstractions/` | The strategy interfaces: `IBusConfigurationStrategy`, `IMessageSerializationStrategy`, `IRateLimiterStrategy` |
 | `ScatterGather/` | The requester side: reply queue, pending batches, the mediator adapter |
@@ -108,19 +110,43 @@ answered.
 // using Resrcify.SharedKernel.MessageBus.Extensions;     (AddMessageBus)
 // using Resrcify.SharedKernel.MessageBus.Configuration;  (RabbitMqConnection, MessageBusBuilder)
 services.AddMessageBus(bus => bus
-    .UseRabbitMq(provider =>
-    {
-        var options = provider.GetRequiredService<IOptions<MessageBusOptions>>().Value;   // the service's own options
-        return new RabbitMqConnection(options.Host, options.Port, options.Username, options.Password);
-    })
+    .UseRabbitMqFromConfiguration()   // the MessageBus section: Host, Port, Username, Password
+    .WithServiceName("shardmanagement")
     .AddRequest<PlayerArenaProfileRequest, PlayerArenaProfileResponse>()   // sent to the PlayerArenaProfileRequest queue
     .AddScatterGather());
 ```
 
+### Connecting
+
+`UseRabbitMqFromConfiguration()` reads the `MessageBus` section every service already has, so a service needs no
+options class of its own for it:
+
+| Key | Environment variable | |
+|---|---|---|
+| `MessageBus:Host` | `MessageBus__Host` | required |
+| `MessageBus:Port` | `MessageBus__Port` | 5672 by default |
+| `MessageBus:Username` | `MessageBus__Username` | required |
+| `MessageBus:Password` | `MessageBus__Password` | required |
+| `MessageBus:VirtualHost` | `MessageBus__VirtualHost` | `/` by default |
+| `MessageBus:UseTls` | `MessageBus__UseTls` | `false` by default (`amqps://`) |
+
+These are the keys the services' appsettings and Kubernetes manifests set and `ServiceHostFixture` writes. The section
+is validated when the host starts, like `AddPostgresDbContext`'s `Database` section: a missing or wrong key stops the
+start, naming it (`MessageBus:Host is required.`). It isn't checked once nothing connects with it (the test harness, or
+`UseInMemory()` afterwards). The settings are `RabbitMqOptions`, registered as the default `IOptions<RabbitMqOptions>`:
+a service that opens a connection of its own reads them there (`options.Value.ToConnection()`). Another section:
+`UseRabbitMqFromConfiguration("Bus")`.
+
+To build the connection yourself, `UseRabbitMq(new RabbitMqConnection(host, port, username, password))`, or
+`UseRabbitMq(provider => ...)` to resolve it when the bus starts. A `RabbitMqConnection` prints without its password.
+
 A virtual host other than `/`, or TLS, goes on the connection (`new RabbitMqConnection(...) { VirtualHost = "svc",
-UseTls = true }`), so every connection the package makes uses it: each bus', and the broker watcher's that the health
-check and the restarts after an outage rely on. Certificates and other connection-factory settings go in the
-configuration strategy, in both `ConfigureTransport` (the buses) and `ConfigureConnectionFactory` (the watcher).
+UseTls = true }`, or the section's `VirtualHost` / `UseTls`), so every connection the package makes uses it: each bus',
+and the broker watcher's that the health check and the restarts after an outage rely on. Certificates and other
+connection-factory settings go in the configuration strategy, in both `ConfigureTransport` (the buses) and
+`ConfigureConnectionFactory` (the watcher).
+
+### Handlers
 
 `AddScatterGather` opens a reply queue private to this service instance (deleted when the instance goes
 away), so with several instances each one receives only its own replies. Handlers need no registration:
@@ -412,8 +438,8 @@ all work within the process. Use it for local runs without a broker and in tests
 ```csharp
 services.AddMessageBus(bus =>
 {
-    if (options.Host is { Length: > 0 })
-        bus.UseRabbitMq(new RabbitMqConnection(options.Host, options.Port, options.Username, options.Password));
+    if (configuration["MessageBus:Host"] is { Length: > 0 })
+        bus.UseRabbitMqFromConfiguration();
     else
         bus.UseInMemory();
     ...

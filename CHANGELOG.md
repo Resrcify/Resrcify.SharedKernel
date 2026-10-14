@@ -12,6 +12,18 @@ every package in the repository is released together under one version.
 - **`BaseArchitectureTest(IReadOnlyDictionary<string, Assembly>)` and
   `ConventionalLayerDependencyTests(IReadOnlyDictionary<string, Assembly>)`** (ArchitectureTesting): check the given
   layer assemblies instead of the ones found by naming convention.
+- **The message bus binds the `MessageBus` section itself:** `bus.UseRabbitMqFromConfiguration()` (optionally with
+  another section name) connects as the host's configuration says, validated when the host starts like
+  `AddPostgresDbContext`'s `Database` section: a missing or wrong key stops the start, naming it
+  (`MessageBus:Host is required.`). The keys are the ones the services' appsettings, their Kubernetes manifests
+  (`MessageBus__Host`, `__Port`, `__Username`, `__Password`) and `ServiceHostFixture` already use, plus optional
+  `VirtualHost` and `UseTls`. It isn't checked while nothing connects with it (the test harness, `UseInMemory()`
+  afterwards), so a harness test needs no dummy `MessageBus:*` settings. The settings are the new `RabbitMqOptions`
+  (`SectionName`, `ToConnection()`), registered as the default `IOptions<RabbitMqOptions>` for a service's own
+  connection (Sentinel's RabbitMQ health check). `UseRabbitMq(RabbitMqConnection)` / `UseRabbitMq(Func<…>)` are
+  unchanged. A service deletes its `MessageBusOptions` class, its `AddOptions<MessageBusOptions>()` registration and
+  the `UseRabbitMq(provider => …)` mapping, and calls `UseRabbitMqFromConfiguration()`. The MessageBus package now
+  references `Microsoft.Extensions.Options.ConfigurationExtensions`.
 
 ### Fixed
 

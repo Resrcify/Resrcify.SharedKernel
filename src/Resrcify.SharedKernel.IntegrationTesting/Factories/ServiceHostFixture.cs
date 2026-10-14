@@ -22,7 +22,8 @@ namespace Resrcify.SharedKernel.IntegrationTesting.Factories;
 /// When it starts (<see cref="InitializeAsync"/>) it starts the containers, then gives the host:
 /// <c>Database:Host</c>, <c>Database:Port</c>, <c>Database:Database</c>, <c>Database:Username</c>,
 /// <c>Database:Password</c>; with RabbitMQ <c>MessageBus:Host</c>, <c>MessageBus:Port</c>, <c>MessageBus:Username</c>,
-/// <c>MessageBus:Password</c>; and <c>Migrations:Run</c> = <c>true</c>. A service adds or changes settings in
+/// <c>MessageBus:Password</c> (what <c>AddPostgresDbContext</c> and the bus' <c>UseRabbitMqFromConfiguration</c> read);
+/// and <c>Migrations:Run</c> = <c>true</c>. A service adds or changes settings in
 /// <see cref="ConfigureSettings"/> and replaces services in <see cref="ConfigureTestServices"/>. Two fixtures (two
 /// collections) each see their own containers: nothing is shared through the process' environment.
 /// </para>
