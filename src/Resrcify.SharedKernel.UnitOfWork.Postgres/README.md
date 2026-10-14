@@ -151,7 +151,11 @@ Two things EF Core refuses under a retrying strategy, so change them before turn
 - a transaction begun by hand (`IUnitOfWork.BeginTransactionAsync` + `CommitTransactionAsync`, as Tournament's jobs
   do): use `ExecuteInTransactionAsync`;
 - `DbContext.SaveChangesAsync()` of domain events with `OnConflictDoNothing` (that insert opens a transaction of its
-  own): save through `IUnitOfWork`.
+  own): save through `IUnitOfWork` (`CompleteAsync`, `TryCompleteAsync`, `ExecuteInTransactionAsync`), or run the save
+  under the strategy yourself (`context.Database.CreateExecutionStrategy().ExecuteAsync(ct => context.SaveChangesAsync(ct), ct)`).
+  A direct save throws an `InvalidOperationException` that says so, before anything is written (the events stay on
+  their aggregates). It can't be made to work from inside the save: the strategy must run the whole save, so that a
+  retry saves it all again, and the outbox interceptor only runs within it. A save without domain events is unaffected.
 
 ### The service's own options
 

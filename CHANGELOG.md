@@ -60,6 +60,16 @@ every package in the repository is released together under one version.
   check is validated at start-up (the host doesn't start, and says which call is missing); a container used without a
   host gets a check reporting the same message with its failure status, never an exception. Found by Shard, Tournament
   and Sentinel adopting 4.0.0.
+- **A direct `DbContext.SaveChangesAsync()` of domain events under `RetryOnFailure()` with `OnConflictDoNothing` says
+  what to do.** It failed with EF Core's "The configured execution strategy 'NpgsqlRetryingExecutionStrategy' does not
+  support user-initiated transactions", though the caller began none (the outbox's ON CONFLICT insert does, around the
+  save). The outbox interceptor now refuses it first, before anything is written, with an `InvalidOperationException`
+  that names the cause and both ways out: save through `IUnitOfWork.CompleteAsync` / `TryCompleteAsync` /
+  `ExecuteInTransactionAsync`, or run the save under `context.Database.CreateExecutionStrategy().ExecuteAsync(...)`.
+  The save isn't wrapped automatically: an interceptor runs inside `SaveChangesAsync`, and the strategy has to run the
+  whole save so that a retry saves it all again; doing so from inside would run every interceptor and `SavingChanges`
+  handler twice and can't see `acceptAllChangesOnSuccess`. Same exception type as before; a save without domain events,
+  or through the unit of work, is unaffected. Found by Sentinel in a test.
 
 ## 4.0.0 (2026-10-13)
 

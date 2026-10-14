@@ -330,6 +330,12 @@ services.AddDbContext<AppDbContext>((provider, options) => options
 
 The constructors are unchanged, so `new` still works. On PostgreSQL `AddPostgresDbContext` does all of this.
 
+Under a retrying execution strategy (`EnableRetryOnFailure`), an insert strategy that writes the messages itself
+(`PostgresOnConflictOutboxInsertStrategy`) needs a transaction around the save, which the strategy allows only inside
+its own execution: save through `IUnitOfWork` (`CompleteAsync` and `ExecuteInTransactionAsync` run under it), or run
+the save with `context.Database.CreateExecutionStrategy().ExecuteAsync(...)`. A `DbContext.SaveChangesAsync()` of
+domain events called directly throws an `InvalidOperationException` that says so, before anything is written.
+
 ### Outbox processing job
 
 The job reads a batch with a no-tracking projection (served by the covering index).
