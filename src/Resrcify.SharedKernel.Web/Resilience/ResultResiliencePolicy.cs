@@ -1,6 +1,7 @@
 using System;
 using System.Net.Http;
 using Polly;
+using Polly.CircuitBreaker;
 using Polly.Timeout;
 using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.Web.Extensions;
@@ -32,10 +33,11 @@ internal sealed class ResultResiliencePolicy(
     }
 
     /// <summary>
-    /// A network error, a timed-out attempt, or a response whose status is not in <c>NeverRetry</c> and is in
-    /// <c>AlsoRetry</c> or a failure of a transient error type. The caller's cancellation is never retried, nor a
-    /// response whose <c>Retry-After</c> asks for at least what is left of the total timeout (known from
-    /// <paramref name="context"/>): waiting for it would only end in a timeout, so the caller gets the response now.
+    /// A network error, a timed-out attempt, or a response whose status is retried: in <c>RetryOnly</c> when it is set;
+    /// otherwise not in <c>NeverRetry</c>, and in <c>AlsoRetry</c> or a failure of a transient error type. The caller's
+    /// cancellation is never retried, nor a response whose <c>Retry-After</c> asks for at least what is left of the
+    /// total timeout (known from <paramref name="context"/>): waiting for it would only end in a timeout, so the caller
+    /// gets the response now.
     /// </summary>
     public bool ShouldRetry(
         Outcome<HttpResponseMessage> outcome,
@@ -44,17 +46,16 @@ internal sealed class ResultResiliencePolicy(
         if (outcome.Result is not { } response)
             return IsTransientException(outcome.Exception);
 
-        var status = (int)response.StatusCode;
-        if (options.NeverRetry.Contains(status))
-            return false;
-
-        if (!options.AlsoRetry.Contains(status) && !IsTransientFailure(response))
+        if (!IsRetriedStatus(response))
             return false;
 
         return RetryAfter(response) is not { } wait || wait < TimeLeft(context);
     }
 
-    /// <summary>What the circuit counts as a failure: what is retried, but not the statuses of <c>AlsoRetry</c>.</summary>
+    /// <summary>
+    /// What the circuit counts as a failure: what is retried, but not a status whose error type isn't transient (those
+    /// of <c>AlsoRetry</c>, or a 4xx in <c>RetryOnly</c>).
+    /// </summary>
     public bool CountsAgainstTheCircuit(
         Outcome<HttpResponseMessage> outcome)
         => outcome.Result is { } response
@@ -78,15 +79,45 @@ internal sealed class ResultResiliencePolicy(
         return null;
     }
 
+    /// <summary>
+    /// Whether the pipeline answers <paramref name="exception"/> in the service's place (see
+    /// <see cref="ResultResilienceErrors"/>): a timeout or an open circuit, unless they are thrown. Never the caller's
+    /// cancellation (an <see cref="OperationCanceledException"/>, which neither of them is).
+    /// </summary>
+    public bool AnswersInPlaceOf(
+        Exception? exception)
+        => !options.ThrowTimeoutsAndOpenCircuits
+            && exception is TimeoutRejectedException or BrokenCircuitException;
+
+    private bool IsRetriedStatus(
+        HttpResponseMessage response)
+    {
+        var status = (int)response.StatusCode;
+        if (options.RetryOnly is { } retryOnly)
+            return retryOnly.Contains(status);
+
+        if (options.NeverRetry.Contains(status))
+            return false;
+
+        return options.AlsoRetry.Contains(status) || IsTransientFailure(response);
+    }
+
     private bool IsTransientFailure(
         HttpResponseMessage response)
     {
         var status = (int)response.StatusCode;
-        if (response.IsSuccessStatusCode || status < 400 || options.NeverRetry.Contains(status))
+        if (response.IsSuccessStatusCode || status < 400 || IsLeftUnretried(status))
             return false;
 
         return HttpResultExtensions.GetErrorType(status).IsTransient();
     }
+
+    // Left out of RetryOnly when it is set, otherwise listed in NeverRetry.
+    private bool IsLeftUnretried(
+        int status)
+        => options.RetryOnly is { } retryOnly
+            ? !retryOnly.Contains(status)
+            : options.NeverRetry.Contains(status);
 
     private TimeSpan TimeLeft(
         ResilienceContext? context)

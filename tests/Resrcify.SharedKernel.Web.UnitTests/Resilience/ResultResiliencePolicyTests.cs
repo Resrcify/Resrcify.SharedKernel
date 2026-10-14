@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using Microsoft.Extensions.Time.Testing;
 using Polly;
+using Polly.CircuitBreaker;
 using Polly.Timeout;
 using Resrcify.SharedKernel.Web.Resilience;
 using Shouldly;
@@ -98,6 +100,75 @@ public sealed class ResultResiliencePolicyTests
         using var response = new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
 
         Policy().CountsAgainstTheCircuit(Outcome.FromResult(response)).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void ShouldRetry_ShouldRetryOnlyTheListedStatuses_WhenRetryOnlyIsSet()
+    {
+        var policy = Policy(options => options.RetryOnly = ResultResilienceOptions.SafeToRetryStatuses);
+
+        for (var status = 400; status < 600; status++)
+        {
+            using var response = new HttpResponseMessage((HttpStatusCode)status);
+            policy.ShouldRetry(Outcome.FromResult(response)).ShouldBe(status is 408 or 429 or 503, $"status {status}");
+        }
+    }
+
+    [Fact]
+    public void ShouldRetry_ShouldRetryANetworkErrorAndATimedOutAttempt_WhenRetryOnlyIsEmpty()
+    {
+        var policy = Policy(options => options.RetryOnly = new HashSet<int>());
+
+        policy.ShouldRetry(Outcome.FromException<HttpResponseMessage>(new HttpRequestException("refused"))).ShouldBeTrue();
+        policy.ShouldRetry(Outcome.FromException<HttpResponseMessage>(new TimeoutRejectedException())).ShouldBeTrue();
+        policy.ShouldRetry(Outcome.FromException<HttpResponseMessage>(new OperationCanceledException())).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void ShouldRetry_ShouldRetryAListedAnswer_WhenRetryOnlyListsIt()
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.NotFound);
+
+        Policy(options => options.RetryOnly = new HashSet<int> { 404 })
+            .ShouldRetry(Outcome.FromResult(response))
+            .ShouldBeTrue();
+    }
+
+    [Theory]
+    [InlineData(503, true)]
+    [InlineData(500, false)]
+    [InlineData(504, false)]
+    [InlineData(408, true)]
+    [InlineData(404, false)]
+    public void CountsAgainstTheCircuit_ShouldCountOnlyListedTransientStatuses_WhenRetryOnlyIsSet(
+        int status,
+        bool counted)
+    {
+        using var response = new HttpResponseMessage((HttpStatusCode)status);
+
+        Policy(options => options.RetryOnly = new HashSet<int> { 503, 408, 404 })
+            .CountsAgainstTheCircuit(Outcome.FromResult(response))
+            .ShouldBe(counted);
+    }
+
+    [Fact]
+    public void AnswersInPlaceOf_ShouldBeATimeoutOrAnOpenCircuit_NeverACancellation()
+    {
+        Policy().AnswersInPlaceOf(new TimeoutRejectedException()).ShouldBeTrue();
+        Policy().AnswersInPlaceOf(new BrokenCircuitException()).ShouldBeTrue();
+        Policy().AnswersInPlaceOf(new IsolatedCircuitException()).ShouldBeTrue();
+        Policy().AnswersInPlaceOf(new OperationCanceledException()).ShouldBeFalse();
+        Policy().AnswersInPlaceOf(new HttpRequestException("refused")).ShouldBeFalse();
+        Policy().AnswersInPlaceOf(null).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void AnswersInPlaceOf_ShouldBeNothing_WhenTheyAreThrown()
+    {
+        var policy = Policy(options => options.ThrowTimeoutsAndOpenCircuits = true);
+
+        policy.AnswersInPlaceOf(new TimeoutRejectedException()).ShouldBeFalse();
+        policy.AnswersInPlaceOf(new BrokenCircuitException()).ShouldBeFalse();
     }
 
     [Theory]

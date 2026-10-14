@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
 using Polly;
+using Polly.Fallback;
 using Resrcify.SharedKernel.Web.Resilience;
 
 namespace Resrcify.SharedKernel.Web.Extensions;
@@ -24,9 +25,19 @@ public static class ResultResilienceHttpClientBuilderExtensions
     /// A <c>Retry-After</c> at least as long as what is left of the total timeout isn't waited for: the caller gets
     /// that response (e.g. a 429) at once, rather than a timeout once the wait has used up the call's time.
     /// The service references <c>Microsoft.Extensions.Http.Resilience</c> itself. After the retries the caller gets the
-    /// last response, which <c>ToResultAsync</c> turns into a failure; a timeout or an open circuit throws
+    /// last response, which <c>ToResultAsync</c> turns into a failure. A timeout (an attempt's, after the retries, or
+    /// the whole call's) or an open circuit is answered in the service's place, outermost, with a response that
+    /// <c>ToResultAsync</c> reads as <see cref="ResultResilienceErrors.Timeout"/> or
+    /// <see cref="ResultResilienceErrors.CircuitOpen"/>; with
+    /// <see cref="ResultResilienceOptions.ThrowTimeoutsAndOpenCircuits"/> they throw instead
     /// (<c>TimeoutRejectedException</c>, <c>BrokenCircuitException</c>), as <c>AddStandardResilienceHandler</c> does.
+    /// The caller's own cancellation always throws <see cref="OperationCanceledException"/>.
     /// </remarks>
+    /// <exception cref="InvalidOperationException">
+    /// The options contradict each other: <see cref="ResultResilienceOptions.RetryOnly"/> with
+    /// <see cref="ResultResilienceOptions.AlsoRetry"/> or <see cref="ResultResilienceOptions.NeverRetry"/>, or a status
+    /// outside 400-599 in it.
+    /// </exception>
     public static IHttpResiliencePipelineBuilder AddResultResilience(
         this IHttpClientBuilder builder,
         Action<ResultResilienceOptions>? configure = null)
@@ -35,6 +46,7 @@ public static class ResultResilienceHttpClientBuilderExtensions
 
         var options = new ResultResilienceOptions();
         configure?.Invoke(options);
+        options.Validate();
 
         return builder.AddResilienceHandler(
             PipelineName,
@@ -51,6 +63,9 @@ public static class ResultResilienceHttpClientBuilderExtensions
     {
         var policy = new ResultResiliencePolicy(options, timeProvider);
         pipeline.TimeProvider = timeProvider;
+
+        if (!options.ThrowTimeoutsAndOpenCircuits)
+            pipeline.AddFallback(AnswerInPlace(policy));
 
         pipeline.AddTimeout(new HttpTimeoutStrategyOptions
         {
@@ -81,6 +96,18 @@ public static class ResultResilienceHttpClientBuilderExtensions
             // Its own reading of Retry-After, so a date is measured on the TimeProvider's clock.
             ShouldRetryAfterHeader = false,
             DelayGenerator = arguments => ValueTask.FromResult(policy.RetryAfter(arguments.Outcome.Result)),
+        };
+
+    // Outermost, around the total timeout: a timeout or an open circuit, whichever strategy gave up, becomes a response.
+    private static FallbackStrategyOptions<HttpResponseMessage> AnswerInPlace(
+        ResultResiliencePolicy policy)
+        => new()
+        {
+            Name = "AnswerInPlace",
+            ShouldHandle = arguments => ValueTask.FromResult(policy.AnswersInPlaceOf(arguments.Outcome.Exception)),
+            FallbackAction = arguments => Outcome.FromResultAsValueTask(ResultResilienceAnswer.For(
+                arguments.Outcome.Exception!,
+                arguments.Context.GetRequestMessage())),
         };
 
     private static HttpCircuitBreakerStrategyOptions CircuitBreaker(

@@ -3,6 +3,61 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.0.1 (unreleased)
+
+### Added
+
+- **Web: `ResultResilienceOptions.RetryOnly`, an allow-list of the statuses retried**, and
+  `ResultResilienceOptions.SafeToRetryStatuses` (408, 429, 503), the list for a service whose callee retries its own
+  failures. Set, only the listed statuses are retried (network errors and timed-out attempts still are, a 429 still
+  after its `Retry-After`); any other status is returned at once and doesn't count against the circuit. It replaces
+  the hand-written "every 5xx but 503" `NeverRetry` lists, which are easy to get wrong (Oracle and Tournament still
+  retried 501 and 505):
+
+  ```csharp
+  client.AddResultResilience(resilience => resilience.RetryOnly = ResultResilienceOptions.SafeToRetryStatuses);
+  ```
+
+  It can't be combined with `AlsoRetry` or `NeverRetry`, and holds 400–599 only: `AddResultResilience` throws
+  `InvalidOperationException` as the service registers the client, rather than pick a precedence silently.
+- **Web: `ResultResilienceErrors`** (`Timeout`, `CircuitOpen`, the `Resrcify-Resilience` header) and
+  `ResultResilienceOptions.ThrowTimeoutsAndOpenCircuits`: see the fix below.
+- **IntegrationTesting: `ServiceHostFixture.StartDependenciesAsync(cancellationToken)`**, a hook that starts what else
+  a service needs (another service's container on `Network`, say), once PostgreSQL, RabbitMQ and the network are up
+  and the conventional `Settings` are in place, before `ConfigureSettings` and the host; `ConfigureSettings` reads
+  what it started (a URL). **`DisposeWithFixture(x)`** (an `IAsyncDisposable`, or an `IAsyncLifetime` such as a
+  container fixture) has the fixture dispose `x` on teardown: after the host has stopped, before RabbitMQ,
+  PostgreSQL and the network, last first. A service that had to hand-write its fixture to start one more container
+  (Sentinel's system tests, with SwgohApi's image) can use `ServiceHostFixture`.
+- **IntegrationTesting: a `ServiceHostFixture` without PostgreSQL.** `CreatePostgres()` may return `null` (it returns
+  `PostgresContainerFixture?`; an override returning the non-nullable type still compiles): no container, no
+  `Database:*` or `Migrations:Run` settings, and `Postgres` throws `InvalidOperationException`. Discord's bot, which has
+  no database, couldn't use the fixture.
+
+### Fixed
+
+- **`AddResultResilience` answers a timeout or an open circuit with a failed response instead of throwing.** A
+  `TimeoutRejectedException` (the last attempt's or the whole call's) and a `BrokenCircuitException` escaped the
+  pipeline, so a caller reading the response with `ToResultAsync` needed a try/catch (Sentinel's `UpdateGuildsJob`
+  caught the timeout by hand; in Shard it became a 500). The pipeline now answers in the service's place, outermost:
+  a 504 whose problem details `ToResultAsync` reads as `ResultResilienceErrors.Timeout` (`Http.ResilienceTimeout`,
+  `ErrorType.Timeout`), or a 502 read as `ResultResilienceErrors.CircuitOpen` (`Http.CircuitOpen`,
+  `ErrorType.ExternalFailure`, transient). The response carries the header `Resrcify-Resilience: timeout` /
+  `circuit-open` and the request, and `EnsureSuccessStatusCode` throws `HttpRequestException` for it, as for a real 504
+  from a proxy. The caller's own cancellation still throws `OperationCanceledException`. **On by default:** every
+  service using the preset reads its responses with `ToResultAsync`, where a timeout is a failed call like a 503, not
+  an exceptional one; a `catch (TimeoutRejectedException)` around such a call is now dead code and can go. Set
+  `ThrowTimeoutsAndOpenCircuits = true` to keep the exceptions (as 4.0.0 and `AddStandardResilienceHandler` do).
+- **A `ServiceHostFixture` whose start fails tears down what it had started.** A failure in a container,
+  `StartDependenciesAsync` or `ConfigureSettings` disposes what was started (as on teardown) before `InitializeAsync`
+  throws, instead of relying on xUnit to dispose a fixture that never finished starting; the teardown then runs once.
+- **The settings of `IntegrationFactoryBase` / `ServiceHostFixture` win over `appsettings.json` on the generic
+  host.** They reached the host only through `UseSetting`, i.e. the host configuration, which
+  `Host.CreateDefaultBuilder` puts before `appsettings*.json` and environment variables: a `Program` on the generic
+  host (with a `Startup`) got its `appsettings.json` value instead of the fixture's. They are now also added as the
+  last configuration source, so they win in both hosting models (`WebApplication` already let them win while
+  registering, and still sees them then).
+
 ## 4.0.0 (2026-10-13)
 
 Upgrading a service: work through **Breaking changes** below, top to bottom.
