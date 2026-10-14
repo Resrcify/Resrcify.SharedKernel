@@ -3,7 +3,6 @@ using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Hosting;
 using Quartz;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
@@ -56,6 +55,7 @@ public static class OutboxServiceCollectionExtensions
         ArgumentOutOfRangeException.ThrowIfLessThan(options.MaxRetryCount, 1);
         ArgumentOutOfRangeException.ThrowIfNegative(options.DelayInSecondsBeforeStart);
         ArgumentOutOfRangeException.ThrowIfNegative(options.ProcessedRetentionInDays);
+        ArgumentOutOfRangeException.ThrowIfLessThan(options.BacklogCheckIntervalInSeconds, 1);
         var time = options.TimeProvider ?? RegisteredTimeProvider(services) ?? TimeProvider.System;
 
         services.TryAddSingleton(serializer);
@@ -77,13 +77,12 @@ public static class OutboxServiceCollectionExtensions
             time));
 
         // The backlog monitor behind the outbox.messages.* gauges and the outbox health check (AddOutbox<TDbContext>).
-        ArgumentOutOfRangeException.ThrowIfLessThan(options.BacklogCheckIntervalInSeconds, 1);
-        services.AddSingleton(new OutboxBacklogSettings<TDbContext>(
-            options.MaxRetryCount,
-            TimeSpan.FromSeconds(options.BacklogCheckIntervalInSeconds)));
-        services.TryAddSingleton<OutboxBacklogMonitor<TDbContext>>();
-        services.TryAddScoped<OutboxAdministration<TDbContext>>();
-        services.AddSingleton<IHostedService>(provider => provider.GetRequiredService<OutboxBacklogMonitor<TDbContext>>());
+        // The job registration above registered it with the default interval; these options replace that.
+        services.AddOutboxBacklogMonitor(
+            new OutboxBacklogSettings<TDbContext>(
+                options.MaxRetryCount,
+                TimeSpan.FromSeconds(options.BacklogCheckIntervalInSeconds)),
+            replace: true);
 
         // Outbox lanes (e.g. scatter-gather) with defaults, unless AddOutboxLanes tuned them already; either way they
         // claim with the outbox's claim when they have none of their own (several instances run the lanes too).

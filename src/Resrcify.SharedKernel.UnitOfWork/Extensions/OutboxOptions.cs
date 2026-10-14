@@ -9,6 +9,9 @@ namespace Resrcify.SharedKernel.UnitOfWork.Extensions;
 /// </summary>
 public sealed class OutboxOptions
 {
+    /// <summary>The default of <see cref="BacklogCheckIntervalInSeconds"/>.</summary>
+    internal const int DefaultBacklogCheckIntervalInSeconds = 30;
+
     /// <summary>Maximum number of messages claimed per processing cycle (at least 1).</summary>
     public int BatchSize { get; set; } = 20;
 
@@ -34,7 +37,7 @@ public sealed class OutboxOptions
     /// Seconds between measurements of the backlog (waiting and given-up messages, the oldest one's age) for the
     /// <c>outbox.messages.*</c> gauges and the outbox health check.
     /// </summary>
-    public int BacklogCheckIntervalInSeconds { get; set; } = 30;
+    public int BacklogCheckIntervalInSeconds { get; set; } = DefaultBacklogCheckIntervalInSeconds;
 
     /// <summary>
     /// Claims each message for its processing transaction, so several service instances don't each publish it: the

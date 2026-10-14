@@ -3,6 +3,25 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.0.1 (unreleased)
+
+### Behaviour changes
+
+- **`AddProcessOutboxMessagesJob` also runs the outbox backlog monitor**, a hosted service that measures the outbox
+  every 30 s (one snapshot of four counts), as `AddOutboxProcessing` always did. A service registering the bare job now
+  gets the `outbox.messages.*` gauges and a working `AddOutbox<TDbContext>()` check, for that query every 30 s.
+- **`AddHealthChecks().AddOutbox<TDbContext>()` without any outbox processing fails the host's start** (an
+  `OptionsValidationException` naming the missing call) instead of answering 500 on every health request.
+
+### Fixed
+
+- **`AddHealthChecks().AddOutbox<TDbContext>()` no longer throws when the check runs** (a 500 on `/health` and
+  `/health/ready`) for an outbox registered with `quartz.AddProcessOutboxMessagesJob<TDbContext>()` instead of
+  `AddOutboxProcessing<TDbContext>()`: the job now registers the backlog monitor the check reads. Without either, the
+  check is validated at start-up (the host doesn't start, and says which call is missing); a container used without a
+  host gets a check reporting the same message with its failure status, never an exception. Found by Shard, Tournament
+  and Sentinel adopting 4.0.0.
+
 ## 4.0.0 (2026-10-13)
 
 Upgrading a service: work through **Breaking changes** below, top to bottom.

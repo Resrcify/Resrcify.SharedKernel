@@ -493,7 +493,10 @@ builder.Services.AddHealthChecks().AddOutbox<ShardDbContext>(tags: ["ready"]);
 | `outbox.oldest_waiting.age` | gauge (s) | `context` | How long the oldest waiting message has waited. |
 
 The gauges come from a backlog monitor that measures every 30 s (`BacklogCheckIntervalInSeconds`), so neither a
-scrape nor a health check queries the database. `AddOutbox<TDbContext>` fails (degraded by default) when the oldest
+scrape nor a health check queries the database. Both outbox registrations run it: `AddOutboxProcessing<TDbContext>`
+and the bare `quartz.AddProcessOutboxMessagesJob<TDbContext>()` (every 30 s; `AddOutboxProcessing` sets its own
+interval). Registering `AddOutbox<TDbContext>` with neither fails the host's start, with a message naming the missing
+call (a container used without a host gets a check that reports it instead). `AddOutbox<TDbContext>` fails (degraded by default) when the oldest
 waiting message has waited longer than 5 minutes (`maxWaitingAge`; keep it above the processing interval) or when the
 backlog can't be measured. Messages that gave up don't fail it; the `OutboxMessagesGaveUp` alert covers them.
 
