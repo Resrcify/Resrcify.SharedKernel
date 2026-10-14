@@ -3,6 +3,41 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.0.1 (unreleased)
+
+### Added
+
+- **Web: `ResultResilienceOptions.RetryOnly`, an allow-list of the statuses retried**, and
+  `ResultResilienceOptions.SafeToRetryStatuses` (408, 429, 503), the list for a service whose callee retries its own
+  failures. Set, only the listed statuses are retried (network errors and timed-out attempts still are, a 429 still
+  after its `Retry-After`); any other status is returned at once and doesn't count against the circuit. It replaces
+  the hand-written "every 5xx but 503" `NeverRetry` lists, which are easy to get wrong (Oracle and Tournament still
+  retried 501 and 505):
+
+  ```csharp
+  client.AddResultResilience(resilience => resilience.RetryOnly = ResultResilienceOptions.SafeToRetryStatuses);
+  ```
+
+  It can't be combined with `AlsoRetry` or `NeverRetry`, and holds 400–599 only: `AddResultResilience` throws
+  `InvalidOperationException` as the service registers the client, rather than pick a precedence silently.
+- **Web: `ResultResilienceErrors`** (`Timeout`, `CircuitOpen`, the `Resrcify-Resilience` header) and
+  `ResultResilienceOptions.ThrowTimeoutsAndOpenCircuits`: see the fix below.
+
+### Fixed
+
+- **`AddResultResilience` answers a timeout or an open circuit with a failed response instead of throwing.** A
+  `TimeoutRejectedException` (the last attempt's or the whole call's) and a `BrokenCircuitException` escaped the
+  pipeline, so a caller reading the response with `ToResultAsync` needed a try/catch (Sentinel's `UpdateGuildsJob`
+  caught the timeout by hand; in Shard it became a 500). The pipeline now answers in the service's place, outermost:
+  a 504 whose problem details `ToResultAsync` reads as `ResultResilienceErrors.Timeout` (`Http.ResilienceTimeout`,
+  `ErrorType.Timeout`), or a 502 read as `ResultResilienceErrors.CircuitOpen` (`Http.CircuitOpen`,
+  `ErrorType.ExternalFailure`, transient). The response carries the header `Resrcify-Resilience: timeout` /
+  `circuit-open` and the request, and `EnsureSuccessStatusCode` throws `HttpRequestException` for it, as for a real 504
+  from a proxy. The caller's own cancellation still throws `OperationCanceledException`. **On by default:** every
+  service using the preset reads its responses with `ToResultAsync`, where a timeout is a failed call like a 503, not
+  an exceptional one; a `catch (TimeoutRejectedException)` around such a call is now dead code and can go. Set
+  `ThrowTimeoutsAndOpenCircuits = true` to keep the exceptions (as 4.0.0 and `AddStandardResilienceHandler` do).
+
 ## 4.0.0 (2026-10-13)
 
 Upgrading a service: work through **Breaking changes** below, top to bottom.

@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 
 namespace Resrcify.SharedKernel.Web.Resilience;
 
@@ -8,7 +11,7 @@ namespace Resrcify.SharedKernel.Web.Resilience;
 /// result pattern: a status whose <c>ErrorType</c> (as <c>HttpResponseMessage.ToResultAsync</c> reads it) is
 /// transient (<c>Failure</c>, <c>ExternalFailure</c>, <c>Timeout</c>, <c>RateLimit</c>: a 5xx, a 408 or a 429), plus
 /// network errors and attempts that timed out. Any other 4xx (400, 404, 409, 422, …) is an answer, not retried, unless
-/// listed in <see cref="AlsoRetry"/>.
+/// listed in <see cref="AlsoRetry"/>. <see cref="RetryOnly"/> replaces that rule with a list of its own.
 /// </summary>
 public sealed class ResultResilienceOptions
 {
@@ -56,4 +59,80 @@ public sealed class ResultResilienceOptions
 
     /// <summary>Statuses never retried (nor counted against the circuit), although their error type is transient.</summary>
     public ISet<int> NeverRetry { get; } = new HashSet<int>();
+
+    /// <summary>
+    /// The only statuses retried, when set (default <see langword="null"/>: the error type decides, with
+    /// <see cref="AlsoRetry"/> and <see cref="NeverRetry"/>). Network errors (<c>HttpRequestException</c>) and attempts
+    /// that timed out are still retried; any status not listed is returned at once and doesn't count against the
+    /// circuit. A listed status counts against the circuit when its error type is transient, as without the list. An
+    /// empty set retries no status at all. E.g. <see cref="SafeToRetryStatuses"/> for a service that retries its own
+    /// failures, or <c>new HashSet&lt;int&gt;(ResultResilienceOptions.SafeToRetryStatuses) { 404 }</c> for more.
+    /// </summary>
+    /// <remarks>
+    /// It lists every status retried, so it can't be combined with <see cref="AlsoRetry"/> or <see cref="NeverRetry"/>,
+    /// and holds error statuses (400–599) only: <c>AddResultResilience</c> throws an
+    /// <see cref="InvalidOperationException"/> as the service registers it otherwise, rather than pick one silently.
+    /// </remarks>
+    public IReadOnlySet<int>? RetryOnly { get; set; }
+
+    /// <summary>
+    /// Throw a timeout (<c>TimeoutRejectedException</c>, an attempt's or the whole call's) and an open circuit
+    /// (<c>BrokenCircuitException</c>) to the caller, as 4.0.0 did. Off by default: the caller gets a response made up
+    /// in their place instead, which <c>ToResultAsync</c> reads as <see cref="ResultResilienceErrors.Timeout"/> (504) or
+    /// <see cref="ResultResilienceErrors.CircuitOpen"/> (502), like any other failed answer (see
+    /// <see cref="ResultResilienceErrors"/>). The caller's own cancellation throws <c>OperationCanceledException</c>
+    /// either way.
+    /// </summary>
+    public bool ThrowTimeoutsAndOpenCircuits { get; set; }
+
+    /// <summary>
+    /// 408, 429 and 503, for <see cref="RetryOnly"/>: what is safe to retry when the service called retries its own
+    /// failures, so that any other 5xx is its final answer. The request didn't arrive in time (408), the service asks to
+    /// come back later (429, after its <c>Retry-After</c>) or isn't up yet (503, e.g. restarting).
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// client.AddResultResilience(resilience => resilience.RetryOnly = ResultResilienceOptions.SafeToRetryStatuses);
+    /// </code>
+    /// </example>
+    public static IReadOnlySet<int> SafeToRetryStatuses { get; } = new[]
+    {
+        StatusCodes.RequestTimeout,
+        StatusCodes.TooManyRequests,
+        StatusCodes.ServiceUnavailable,
+    }.ToFrozenSet();
+
+    /// <summary>
+    /// Throws on a contradictory configuration, as the service registers the client; takes a copy of
+    /// <see cref="RetryOnly"/>, so that changing the set given afterwards changes nothing.
+    /// </summary>
+    internal void Validate()
+    {
+        if (RetryOnly is not { } retryOnly)
+            return;
+
+        if (AlsoRetry.Count > 0 || NeverRetry.Count > 0)
+            throw new InvalidOperationException(
+                "ResultResilienceOptions.RetryOnly lists every status retried, so it can't be combined with AlsoRetry "
+                + "or NeverRetry: add the statuses to RetryOnly, or leave them out of it.");
+
+        var notErrorStatuses = retryOnly
+            .Where(status => status is < 400 or > 599)
+            .Order()
+            .Select(status => status.ToString(CultureInfo.InvariantCulture))
+            .ToList();
+        if (notErrorStatuses.Count > 0)
+            throw new InvalidOperationException(
+                "ResultResilienceOptions.RetryOnly holds error statuses (400-599) only, not "
+                + string.Join(", ", notErrorStatuses) + ".");
+
+        RetryOnly = retryOnly.ToFrozenSet();
+    }
+
+    private static class StatusCodes
+    {
+        public const int RequestTimeout = 408;
+        public const int TooManyRequests = 429;
+        public const int ServiceUnavailable = 503;
+    }
 }

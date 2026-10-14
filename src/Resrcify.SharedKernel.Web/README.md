@@ -313,14 +313,27 @@ services
 ```
 
 Built on Microsoft.Extensions.Http.Resilience (Polly 8), which the service references itself. Outermost to
-innermost: the total timeout (30 s), the retries, the circuit breaker, the attempt timeout (10 s).
+innermost: the answer for a timeout or an open circuit, the total timeout (30 s), the retries, the circuit breaker,
+the attempt timeout (10 s).
 
 - **What is retried** (3 times by default, `MaxRetries`; 1 s doubling to at most 30 s, with jitter): a response whose
   status `ToResultAsync` reads as a transient `ErrorType` (`Failure`, `ExternalFailure`, `Timeout`, `RateLimit`: a
-  5xx, a 429, and any other status it doesn't map, such as 408), a network error (`HttpRequestException`), an attempt
-  that timed out. Not a 400, 401, 403, 404, 409 or 422: those are answers. Never the caller's cancellation.
+  5xx, a 408 or a 429), a network error (`HttpRequestException`), an attempt that timed out. Not a 400, 401, 403, 404,
+  409 or 422: those are answers. Never the caller's cancellation.
 - **`AlsoRetry`** adds statuses (e.g. 404 from an upstream that is still catching up); **`NeverRetry`** removes
   them, and wins over `AlsoRetry`.
+- **`RetryOnly`** replaces the rule with a list: only those statuses are retried (network errors and timed-out
+  attempts still are), any other is returned at once and doesn't count against the circuit. It can't be combined
+  with `AlsoRetry` or `NeverRetry` and holds 400–599 only: `AddResultResilience` throws `InvalidOperationException`
+  as the service registers the client otherwise. `ResultResilienceOptions.SafeToRetryStatuses` (408, 429, 503) is
+  the list for a service that retries its own failures, so that its other 5xx are final:
+
+  ```csharp
+  // Was: foreach (var status in Enumerable.Range(500, 100).Where(s => s != 503)) resilience.NeverRetry.Add(status);
+  client.AddResultResilience(resilience => resilience.RetryOnly = ResultResilienceOptions.SafeToRetryStatuses);
+  // More: resilience.RetryOnly = new HashSet<int>(ResultResilienceOptions.SafeToRetryStatuses) { 404 };
+  ```
+
 - **`Retry-After`** (a delay or a date) on a retried response is waited instead of the computed delay; one at least
   as long as what is left of `TotalTimeout` isn't waited for, and the caller gets that response (e.g. a 429) at once.
 - **The circuit breaker** opens when 10 % of at least 100 calls in 30 s fail transiently (`AlsoRetry` statuses don't
@@ -328,8 +341,19 @@ innermost: the total timeout (30 s), the retries, the circuit breaker, the attem
 - **Time** is the `TimeProvider` in the container: every delay, timeout and `Retry-After` date runs on a
   `FakeTimeProvider` in tests.
 
-After the retries the caller gets the last response (`ToResultAsync` turns it into a failure); a timeout or an open
-circuit throws `TimeoutRejectedException` / `BrokenCircuitException`, as with `AddStandardResilienceHandler`.
+After the retries the caller gets the last response (`ToResultAsync` turns it into a failure). A timeout (the last
+attempt's, or the whole call's) or an open circuit is answered in the service's place, so `ToResultAsync` reads it as
+a failure like any other, with no try/catch:
+
+| Gave up on | Response | `ToResultAsync`'s error |
+|---|---|---|
+| a timeout (`TimeoutRejectedException`) | 504, problem details | `ResultResilienceErrors.Timeout` (`Http.ResilienceTimeout`, `Timeout`) |
+| an open circuit (`BrokenCircuitException`) | 502, problem details | `ResultResilienceErrors.CircuitOpen` (`Http.CircuitOpen`, `ExternalFailure`) |
+
+The made-up response carries the header `Resrcify-Resilience: timeout` / `circuit-open` (a response from the service
+called never does) and the request; `EnsureSuccessStatusCode` throws `HttpRequestException` for it, as for a real 504.
+The caller's own cancellation still throws `OperationCanceledException`. `ThrowTimeoutsAndOpenCircuits = true` throws
+`TimeoutRejectedException` / `BrokenCircuitException` instead, as `AddStandardResilienceHandler` (and 4.0.0) does.
 
 Before (Shard and Tournament):
 
