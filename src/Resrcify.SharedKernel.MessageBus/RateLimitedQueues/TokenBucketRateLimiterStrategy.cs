@@ -23,15 +23,23 @@ public sealed class TokenBucketRateLimiterStrategy : IRateLimiterStrategy
     /// 1/PerSecond seconds undershoots at high rates (11 ms steps at 90/s gave ~70/s); refilling several tokens
     /// per step of at least this long keeps the rate exact.
     /// </summary>
-    private static readonly TimeSpan MinimumRefillStep = TimeSpan.FromMilliseconds(50);
+    internal static readonly TimeSpan MinimumRefillStep = TimeSpan.FromMilliseconds(50);
 
     public static TokenBucketRateLimiterStrategy Instance { get; } = new();
 
     public RateLimiter CreateLimiter(string queueName, RateLimitedQueueOptions options)
+        => new TokenBucketRateLimiter(CreateOptions(options));
+
+    /// <summary>
+    /// The bucket for <paramref name="options"/>: refilled a step of at least <see cref="MinimumRefillStep"/> at a
+    /// time (one token per step when that is already slower), averaging <see cref="RateLimitedQueueOptions.PerSecond"/>,
+    /// and replenished automatically.
+    /// </summary>
+    internal static TokenBucketRateLimiterOptions CreateOptions(RateLimitedQueueOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
         var tokensPerStep = Math.Max(1, (int)Math.Ceiling(options.PerSecond * MinimumRefillStep.TotalSeconds));
-        return new TokenBucketRateLimiter(new TokenBucketRateLimiterOptions
+        return new TokenBucketRateLimiterOptions
         {
             // At least one step's worth, or the refill would overflow the bucket and the rate drop.
             TokenLimit = Math.Max(options.Burst, tokensPerStep),
@@ -40,6 +48,6 @@ public sealed class TokenBucketRateLimiterStrategy : IRateLimiterStrategy
             QueueLimit = 100_000,
             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
             AutoReplenishment = true,
-        });
+        };
     }
 }

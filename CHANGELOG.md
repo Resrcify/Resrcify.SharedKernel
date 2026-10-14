@@ -3,6 +3,17 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.2.0 (unreleased)
+
+### Fixed
+
+- **The token-bucket limiter's rate test no longer counts wall-clock time** (Resrcify.SharedKernel.MessageBus, tests
+  only; the limiter is unchanged). It counted the tokens granted in 2 s of real time at 90/s + 10 and expected 165–195;
+  a busy CI runner got 131. `TokenBucketRateLimiterStrategy.CreateOptions` (internal), which `CreateLimiter` now builds
+  its bucket from, is tested instead: for 1 to 1000/s the refill averages `PerSecond` in steps of at least 50 ms, the
+  bucket holds at least `Burst` and one step, and 2 simulated seconds grant exactly `2 × PerSecond + Burst` (190 at
+  90/s + 10).
+
 ## 4.1.0 (2026-10-14)
 
 ### Behaviour changes
