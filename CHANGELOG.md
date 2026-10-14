@@ -101,6 +101,19 @@ every package in the repository is released together under one version.
   PostgreSQL and the network, last first. A service that had to hand-write its fixture to start one more container
   (Sentinel's system tests, with SwgohApi's image) can use `ServiceHostFixture`.
 
+- **Observability: `app.UseServiceRequestLogging(Action<RequestLoggingOptions>? configure = null)`**, Serilog's request
+  logging the same way in every service, in place of `app.UseSerilogRequestLogging()` (which Shard and Sentinel kept
+  beside `AddServiceTelemetry`). One line per request; none for the probes and the scrape (`/health`, `/health/ready`,
+  `/health/live`, `/metrics`: the `UntracedPaths` the tracing already leaves out, the same list, so a path added there
+  leaves both); `Error` for a 5xx or an exception, `Information` otherwise, a 4xx included (a failed result answered
+  as problem details is an expected answer, not a fault of the service). Each line carries `RequestHost`, `ClientIp`
+  (the connection's remote address) and `UserId` (the `ClaimTypes.NameIdentifier` claim `GetUserId()` reads, when
+  present), named by the new `RequestLogProperties`, plus the request span's `TraceId` and `SpanId`, and is written
+  through the host's Serilog logger rather than the static `Log.Logger`. `configure` runs on the defaults (replace
+  `GetLevel`, chain onto `EnrichDiagnosticContext`). It throws `InvalidOperationException` without
+  `AddServiceTelemetry` or without Serilog as the logger. The package now references `Serilog.AspNetCore` (privately,
+  like its other dependencies): a service calling it references `Serilog.AspNetCore` itself, as Shard and Sentinel do.
+
 - **IntegrationTesting: `ServiceHostFixture.OnHostStartedAsync(IServiceProvider services, CancellationToken
   cancellationToken)`**, a hook that gets the started host ready for the tests: it runs once, at the end of
   `InitializeAsync`, after the host (and its hosted services) has started and before the first test, with the host's

@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Resrcify.SharedKernel.Observability.Extensions;
+using Resrcify.SharedKernel.Observability.UnitTests.Support;
 using Shouldly;
 using Xunit;
 
@@ -20,6 +21,7 @@ namespace Resrcify.SharedKernel.Observability.UnitTests.Extensions;
     "Performance",
     "CA1515:Consider making public types internal",
     Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
+[Collection(TelemetryCollection.Name)]
 public sealed class ServiceTelemetryEndpointRouteBuilderExtensionsTests
 {
     [Fact]

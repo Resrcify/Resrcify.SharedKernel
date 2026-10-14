@@ -58,8 +58,11 @@ public sealed class ServiceTelemetryOptions
     public bool OtlpExporter { get; set; } = true;
 
     /// <summary>
-    /// Requests that aren't traced, by path prefix: the scrape endpoint and the health probes by default, which
-    /// would otherwise fill the traces every few seconds. Their metrics are still recorded.
+    /// Requests that aren't traced, nor logged by <c>UseServiceRequestLogging()</c>, by path prefix (whole segments,
+    /// ignoring case): the scrape endpoint and the health probes (<c>/health</c>, <c>/health/ready</c>,
+    /// <c>/health/live</c>) by default, which would otherwise fill the traces and the logs every few seconds. Their
+    /// metrics are still recorded. A service serving its metrics elsewhere
+    /// (<c>MapServiceMetrics("/internal/metrics")</c>) adds that path.
     /// </summary>
     public ICollection<string> UntracedPaths { get; } = ["/metrics", "/health"];
 

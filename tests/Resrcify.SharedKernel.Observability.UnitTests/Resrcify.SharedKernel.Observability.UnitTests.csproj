@@ -27,6 +27,7 @@
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="Serilog.Extensions.Hosting" />
     <PackageReference Include="Serilog.Settings.Configuration" />
+    <PackageReference Include="Serilog.AspNetCore" />
     <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" />
     <!-- Only for QuartzInstrumentation's names, checked against TelemetrySources. -->
     <PackageReference Include="Quartz" />
