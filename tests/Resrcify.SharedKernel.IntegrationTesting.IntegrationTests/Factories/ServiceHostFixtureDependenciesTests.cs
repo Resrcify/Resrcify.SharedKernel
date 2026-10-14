@@ -57,7 +57,7 @@ public sealed class ServiceHostFixtureDependenciesTests(
     [Fact]
     public async Task DisposeAsync_ShouldStopTheHost_ThenDisposeTheDependenciesLastFirst_ThenDeleteTheNetwork()
     {
-        await using var recording = new RecordingServiceHostFixture(failInTheHook: false);
+        await using var recording = new RecordingServiceHostFixture(RecordingServiceHostFixture.Failure.None);
         IAsyncLifetime lifetime = recording;
         await lifetime.InitializeAsync();
         var container = recording.DependencyId.ShouldNotBeNull();
@@ -75,12 +75,13 @@ public sealed class ServiceHostFixtureDependenciesTests(
     [Fact]
     public async Task InitializeAsync_ShouldTearDownWhatItStarted_WhenStartDependenciesFails()
     {
-        await using var recording = new RecordingServiceHostFixture(failInTheHook: true);
+        await using var recording = new RecordingServiceHostFixture(RecordingServiceHostFixture.Failure.StartDependencies);
         IAsyncLifetime lifetime = recording;
 
         var thrown = await Should.ThrowAsync<InvalidOperationException>(lifetime.InitializeAsync);
 
         thrown.Message.ShouldBe(RecordingServiceHostFixture.HookFailure);
+        recording.HostStartedRuns.ShouldBe(0);
         recording.Stopped.ShouldBe(["last, container up", "first, container gone"]);
         (await DockerResources.ContainerExistsAsync(recording.DependencyId.ShouldNotBeNull())).ShouldBeFalse();
         (await DockerResources.NetworkExistsAsync(recording.NetworkName.ShouldNotBeNull())).ShouldBeFalse();

@@ -65,6 +65,15 @@ every package in the repository is released together under one version.
   in `SharedKernelPackageRestrictions`) if that is deliberate. Discord's override adding `Bot` wherever Web is
   restricted gives the same rules and can be deleted.
 
+- **`ServiceHostFixture` starts the host in `InitializeAsync`** (Resrcify.SharedKernel.IntegrationTesting), after
+  `ConfigureSettings` and before the new `OnHostStartedAsync`, instead of on the first `CreateClient()` / `Services`
+  as a plain `WebApplicationFactory` does. A host that can't start (a hosted service that throws, a missing setting
+  validated on start) now fails the fixture, which tears down its containers before it throws, rather than the first
+  test, with the containers left to xUnit's teardown. ⚠️ **Behaviour change:** a fixture that changed something its
+  host reads (a property `ConfigureTestServices` uses, say) after `InitializeAsync` and before the first
+  `CreateClient()` no longer sees the change; set it in the constructor, `StartDependenciesAsync` or
+  `ConfigureSettings`.
+
 ### Added
 
 - **Web: `ResultResilienceOptions.RetryOnly`, an allow-list of the statuses retried**, and
@@ -91,6 +100,15 @@ every package in the repository is released together under one version.
   container fixture) has the fixture dispose `x` on teardown: after the host has stopped, before RabbitMQ,
   PostgreSQL and the network, last first. A service that had to hand-write its fixture to start one more container
   (Sentinel's system tests, with SwgohApi's image) can use `ServiceHostFixture`.
+
+- **IntegrationTesting: `ServiceHostFixture.OnHostStartedAsync(IServiceProvider services, CancellationToken
+  cancellationToken)`**, a hook that gets the started host ready for the tests: it runs once, at the end of
+  `InitializeAsync`, after the host (and its hosted services) has started and before the first test, with the host's
+  root provider and a token cancelled on teardown. Sentinel's system fixture pauses its Quartz jobs there (the tests
+  run them on demand) and seeds data. A failure in it tears down the host, what `DisposeWithFixture` was given and the
+  containers before `InitializeAsync` throws; it doesn't run when the start failed earlier. There is no built-in
+  "pause Quartz" switch: the package doesn't depend on Quartz, and which jobs to hold differs per service (the
+  README shows the three lines).
 
 - **IntegrationTesting: a `ServiceHostFixture` without PostgreSQL.** `CreatePostgres()` may return `null` (it returns
   `PostgresContainerFixture?`; an override returning the non-nullable type still compiles): no container, no
@@ -148,8 +166,9 @@ every package in the repository is released together under one version.
 ### Fixed
 
 - **A `ServiceHostFixture` whose start fails tears down what it had started.** A failure in a container,
-  `StartDependenciesAsync` or `ConfigureSettings` disposes what was started (as on teardown) before `InitializeAsync`
-  throws, instead of relying on xUnit to dispose a fixture that never finished starting; the teardown then runs once.
+  `StartDependenciesAsync`, `ConfigureSettings`, the host's own start or `OnHostStartedAsync` disposes what was started
+  (as on teardown) before `InitializeAsync` throws, instead of relying on xUnit to dispose a fixture that never
+  finished starting; the teardown then runs once.
 
 - **The settings of `IntegrationFactoryBase` / `ServiceHostFixture` win over `appsettings.json` on the generic
   host.** They reached the host only through `UseSetting`, i.e. the host configuration, which

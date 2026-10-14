@@ -28,8 +28,10 @@ namespace Resrcify.SharedKernel.IntegrationTesting.Factories;
 /// the bus' <c>UseRabbitMqFromConfiguration</c> read). Then it runs
 /// <see cref="StartDependenciesAsync"/>, where a service starts what else it needs (another service's container on
 /// <see cref="Network"/>, say), and <see cref="ConfigureSettings"/>, where it adds or changes settings (that
-/// container's address). A service replaces services in <see cref="ConfigureTestServices"/>. Two fixtures (two
-/// collections) each see their own containers: nothing is shared through the process' environment.
+/// container's address). Then it builds and starts the host, and runs <see cref="OnHostStartedAsync"/>, where a service
+/// gets the started host ready for its tests (pauses its scheduled jobs, seeds data). A service replaces services in
+/// <see cref="ConfigureTestServices"/>. Two fixtures (two collections) each see their own containers: nothing is shared
+/// through the process' environment.
 /// </para>
 /// <para>
 /// The settings reach the host through <c>UseSetting</c>, so a <c>Program</c> sees them in <c>builder.Configuration</c>
@@ -44,8 +46,8 @@ namespace Resrcify.SharedKernel.IntegrationTesting.Factories;
 /// <para>
 /// Tearing down (<c>IAsyncLifetime.DisposeAsync</c>) stops the host, then disposes what was handed to
 /// <see cref="DisposeWithFixture{TDependency}"/> (last first), then RabbitMQ, PostgreSQL and the network. A start that
-/// fails, in a container, <see cref="StartDependenciesAsync"/> or <see cref="ConfigureSettings"/>, tears down what it
-/// had started the same way before it throws.
+/// fails, in a container, <see cref="StartDependenciesAsync"/>, <see cref="ConfigureSettings"/>, the host's own start or
+/// <see cref="OnHostStartedAsync"/>, tears down what it had started the same way before it throws.
 /// </para>
 /// </remarks>
 /// <example>
@@ -69,6 +71,12 @@ namespace Resrcify.SharedKernel.IntegrationTesting.Factories;
 ///     {
 ///         settings["SwgohApiService:Url"] = _swgohApi.Url.ToString();
 ///         settings["Patreon:Token"] = "test";
+///     }
+///
+///     protected override async Task OnHostStartedAsync(IServiceProvider services, CancellationToken cancellationToken)
+///     {
+///         var scheduler = await services.GetRequiredService&lt;ISchedulerFactory&gt;().GetScheduler(cancellationToken);
+///         await scheduler.PauseAll(cancellationToken);   // the tests run the jobs themselves
 ///     }
 /// }
 /// </code>
@@ -158,6 +166,23 @@ public abstract class ServiceHostFixture<TProgram>
         // Nothing to add by default.
     }
 
+    /// <summary>
+    /// Gets the started host ready for the tests, e.g. pauses its scheduled jobs (Quartz's <c>IScheduler.PauseAll()</c>,
+    /// so the tests run them on demand) or seeds data. Runs once, at the end of <see cref="InitializeAsync"/>, after
+    /// the host has started (its hosted services included) and before the first test. Nothing by default.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="services"/> is the host's root provider: create a scope for scoped services (a <c>DbContext</c>).
+    /// A failure tears down the host and everything started before it, as any failed start does. A job whose trigger
+    /// fires as the scheduler starts may run once before this pauses it.
+    /// </remarks>
+    /// <param name="services">The started host's services (<c>Services</c>).</param>
+    /// <param name="cancellationToken">Cancelled when the fixture is torn down.</param>
+    protected virtual Task OnHostStartedAsync(
+        IServiceProvider services,
+        CancellationToken cancellationToken)
+        => Task.CompletedTask;
+
     /// <summary>Replaces the host's services (<c>ConfigureTestServices</c>): runs after the service's own registrations.</summary>
     protected virtual void ConfigureTestServices(IServiceCollection services)
     {
@@ -191,8 +216,8 @@ public abstract class ServiceHostFixture<TProgram>
     }
 
     /// <summary>
-    /// Starts the containers, <see cref="StartDependenciesAsync"/> and the settings. On a failure it tears down what it
-    /// had started, then throws.
+    /// Starts the containers, <see cref="StartDependenciesAsync"/>, the settings, then the host, and runs
+    /// <see cref="OnHostStartedAsync"/>. On a failure it tears down what it had started, then throws.
     /// </summary>
     public async Task InitializeAsync()
     {
@@ -261,6 +286,11 @@ public abstract class ServiceHostFixture<TProgram>
 
         await StartDependenciesAsync(_lifetime.Token);
         ConfigureSettings(_settings);
+
+        // WebApplicationFactory builds and starts the host on first use (Services, CreateClient): start it here, so a
+        // host that can't start fails the fixture (and tears it down) rather than the first test.
+        var services = Services;
+        await OnHostStartedAsync(services, _lifetime.Token);
     }
 
     // Every step runs whatever the one before did (a container that failed to build, a host that failed to stop), so

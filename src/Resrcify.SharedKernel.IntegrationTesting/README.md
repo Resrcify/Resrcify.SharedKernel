@@ -12,6 +12,7 @@ RabbitMQ in Testcontainers, and a host fixture that runs a service's `Program` i
   - [Settings](#settings)
   - [A shared network](#a-shared-network)
   - [Starting more: `StartDependenciesAsync`](#starting-more-startdependenciesasync)
+  - [Getting the started host ready: `OnHostStartedAsync`](#getting-the-started-host-ready-onhoststartedasync)
   - [A service without a database](#a-service-without-a-database)
   - [What a service changes](#what-a-service-changes)
   - [A Program with its own configuration builder](#a-program-with-its-own-configuration-builder)
@@ -21,7 +22,8 @@ RabbitMQ in Testcontainers, and a host fixture that runs a service's `Program` i
 
 - `ServiceHostFixture<TProgram>` (`Factories/`): a `WebApplicationFactory<TProgram>` and xUnit fixture that starts
   PostgreSQL (unless the service has none), RabbitMQ when asked and whatever else the service starts in
-  `StartDependenciesAsync`, and hands the host the conventional settings through its configuration.
+  `StartDependenciesAsync`, hands the host the conventional settings through its configuration, starts the host and
+  lets the service get it ready in `OnHostStartedAsync` (pause its jobs, seed data).
 - `IntegrationFactoryBase<TProgram>` (`Factories/`): a `WebApplicationFactory` whose subclass supplies settings, for
   hosts that own no containers. The settings win over `appsettings*.json` and environment variables, with
   `WebApplication.CreateBuilder` and `Host.CreateDefaultBuilder` alike.
@@ -68,11 +70,13 @@ public sealed class ShardIntegrationCollection
 ```
 
 When it starts (`InitializeAsync`) it starts the containers (at once), adds the conventional settings, runs
-`StartDependenciesAsync`, then `ConfigureSettings`. The host itself is built on first use (`CreateClient()`,
-`Services`), as with any `WebApplicationFactory`. `Postgres`, `RabbitMq`, `Network` and `Settings` are there for the
-tests. Disposing it stops the host, then what was handed to `DisposeWithFixture` (last first), then the containers,
-then deletes the network. A start that fails (a container, `StartDependenciesAsync`, `ConfigureSettings`) tears down
-what it had started the same way before it throws, so nothing is left running.
+`StartDependenciesAsync`, then `ConfigureSettings`, then builds and starts the host (a plain `WebApplicationFactory`
+would wait for the first `CreateClient()` or `Services`), then runs `OnHostStartedAsync`. `Postgres`, `RabbitMq`,
+`Network` and `Settings` are there for the tests. Disposing it stops the host, then what was handed to
+`DisposeWithFixture` (last first), then the containers, then deletes the network. A start that fails (a container,
+`StartDependenciesAsync`, `ConfigureSettings`, the host's own start, `OnHostStartedAsync`) tears down what it had
+started the same way before it throws, so nothing is left running, and the failure is the fixture's, not the first
+test's.
 
 ### Settings
 
@@ -133,6 +137,40 @@ container, returned for chaining) or an `IAsyncLifetime` (a container fixture of
 any time (a test that starts another pod later hands it over too). Hand a container over *before* starting it
 (`var c = DisposeWithFixture(builder.Build()); await c.StartAsync(cancellationToken);`), so it is removed even if its
 own start fails. The token is cancelled when the fixture is torn down.
+
+### Getting the started host ready: `OnHostStartedAsync`
+
+`OnHostStartedAsync(services, cancellationToken)` runs once, at the end of `InitializeAsync`: after the host has
+started (its hosted services too, so Quartz's scheduler is running) and before the first test. `services` is the host's
+root provider (`Services`); create a scope for scoped services. Sentinel's system tests pause the scheduled jobs, which
+the tests then run on demand, and leave the outbox's on its schedule:
+
+```csharp
+public sealed class SentinelSystemHostFixture
+    : ServiceHostFixture<Program>
+{
+    private static readonly string[] ScheduledJobs = ["UpdateGuildsJob", "UpdateTrackedPlayersJob", /* … */];
+
+    protected override async Task OnHostStartedAsync(IServiceProvider services, CancellationToken cancellationToken)
+    {
+        var scheduler = await services.GetRequiredService<ISchedulerFactory>().GetScheduler(cancellationToken);
+        foreach (var job in ScheduledJobs)
+            await scheduler.PauseJob(new JobKey(job), cancellationToken);
+        // or every job, the outbox's included: await scheduler.PauseAll(cancellationToken);
+
+        await using var scope = services.CreateAsyncScope();
+        await SeedAsync(scope.ServiceProvider, cancellationToken);   // data every test reads
+    }
+}
+```
+
+A failure in it tears down the host and everything started before it, like any failed start; it doesn't run when the
+start failed earlier (the host's own start included). A job whose trigger fires as the scheduler starts may run once
+before the hook pauses it: give such a job a start delay if a test can't tolerate that run.
+
+There is no built-in "pause Quartz" switch: this package doesn't depend on Quartz (a service without jobs shouldn't
+ship it), and which jobs to hold differs per service (Sentinel keeps the outbox running). The hook is the three lines
+above.
 
 ### A service without a database
 
