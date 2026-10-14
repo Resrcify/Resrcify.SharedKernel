@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Reflection;
 using NetArchTest.Rules;
 using Resrcify.SharedKernel.ArchitectureTesting.Helpers;
 using Shouldly;
@@ -21,7 +22,9 @@ namespace Resrcify.SharedKernel.ArchitectureTesting.Tests;
 /// </list>
 ///
 /// Override <see cref="LayerTiers"/> to add custom layers (Bot,
-/// SourceGenerators, Client, …) or change tier assignments. Override
+/// SourceGenerators, Client, …) or change tier assignments. A custom layer
+/// gets the SharedKernel package restrictions of the layers at its tier, or of
+/// the layer <see cref="PackageRestrictionsLike"/> names. Override
 /// <see cref="ExtraForbiddenDependencies"/> to add bespoke rules. Layers
 /// absent from the consumer's solution are silently skipped.
 /// </summary>
@@ -31,6 +34,19 @@ namespace Resrcify.SharedKernel.ArchitectureTesting.Tests;
     Justification = "xUnit discovers tests on public abstract bases via inheritance.")]
 public abstract class ConventionalLayerDependencyTests : BaseArchitectureTest
 {
+    /// <summary>Checks the layer assemblies found by naming convention (see <see cref="LayerAssemblyResolver"/>).</summary>
+    protected ConventionalLayerDependencyTests()
+    {
+    }
+
+    /// <summary>
+    /// Checks the given layer assemblies (layer name → assembly) instead of the ones found by naming convention.
+    /// </summary>
+    protected ConventionalLayerDependencyTests(IReadOnlyDictionary<string, Assembly> layerAssemblies)
+        : base(layerAssemblies)
+    {
+    }
+
     /// <summary>
     /// Layer → tier map. Lower tier is more inner / core. Same-tier layers are
     /// peers. Override to extend with custom layers or re-tier existing ones.
@@ -110,8 +126,26 @@ public abstract class ConventionalLayerDependencyTests : BaseArchitectureTest
     /// layer that wires it; inner layers reach it through <c>Resrcify.SharedKernel.Abstractions</c>. Contracts,
     /// <c>Results</c> and <c>DomainDrivenDesign</c> are allowed everywhere. Override to loosen or tighten a package.
     /// </summary>
+    /// <remarks>
+    /// Names the conventional layers only: a custom layer (one <see cref="LayerTiers"/> adds) is added where the layer
+    /// it is restricted like is (see <see cref="PackageRestrictionsLike"/>). A custom layer named here is taken as
+    /// configured here and inherits nothing, unless <see cref="PackageRestrictionsLike"/> maps it.
+    /// </remarks>
     protected virtual IReadOnlyDictionary<SharedKernelPackage, string[]> SharedKernelPackageRestrictions
         => DefaultSharedKernelPackageRestrictions;
+
+    /// <summary>
+    /// Custom layer → the layer whose SharedKernel package restrictions it takes, e.g. <c>{ ["Bot"] = Layers.Web }</c>
+    /// for a host that isn't called Web. A custom layer of <see cref="LayerTiers"/> that isn't mapped here is
+    /// restricted like the conventional layers at its tier: like Web at tier 4, like Infrastructure and Presentation
+    /// together at tier 3 (map it to one of them to loosen that); at a tier without one, like those at the nearest tier
+    /// (the inner one on a tie). Empty by default.
+    /// </summary>
+    protected virtual IReadOnlyDictionary<string, string> PackageRestrictionsLike
+        => NoPackageRestrictionsLike;
+
+    private static readonly IReadOnlyDictionary<string, string> NoPackageRestrictionsLike
+        = new Dictionary<string, string>(StringComparer.Ordinal);
 
     private static readonly string[] AllLayers =
         [Layers.Domain, Layers.Application, Layers.Persistence, Layers.Infrastructure, Layers.Presentation, Layers.Web];
@@ -144,8 +178,13 @@ public abstract class ConventionalLayerDependencyTests : BaseArchitectureTest
     public virtual void Layers_ShouldNotDependOnSharedKernelPackagesOutsideTheirLayers()
     {
         var failures = new List<string>();
+        var restrictions = PackageRestrictionInheritance.Resolve(
+            SharedKernelPackageRestrictions,
+            LayerTiers,
+            PackageRestrictionsLike,
+            AllLayers);
 
-        foreach (var (package, layers) in SharedKernelPackageRestrictions)
+        foreach (var (package, layers) in restrictions.Restrictions)
         {
             foreach (var layer in layers)
             {
@@ -160,7 +199,7 @@ public abstract class ConventionalLayerDependencyTests : BaseArchitectureTest
                     .GetResult();
 
                 if (!result.IsSuccessful && result.FailingTypeNames is { } failing)
-                    failures.AddRange(failing.Select(typeName => $"{layer} → {package}: {typeName}"));
+                    failures.AddRange(failing.Select(typeName => $"{layer} → {package}: {typeName}{restrictions.DescribeOrigin(layer)}"));
             }
         }
 

@@ -5,8 +5,27 @@ every package in the repository is released together under one version.
 
 ## 4.0.1 (unreleased)
 
+### Added
+
+- **`ConventionalLayerDependencyTests.PackageRestrictionsLike`** (ArchitectureTesting): custom layer → the layer whose
+  SharedKernel package restrictions it takes, e.g. `{ ["Bot"] = Layers.Web }`.
+- **`BaseArchitectureTest(IReadOnlyDictionary<string, Assembly>)` and
+  `ConventionalLayerDependencyTests(IReadOnlyDictionary<string, Assembly>)`** (ArchitectureTesting): check the given
+  layer assemblies instead of the ones found by naming convention.
+
 ### Fixed
 
+- **A custom layer gets the SharedKernel package restrictions** (Resrcify.SharedKernel.ArchitectureTesting). A layer
+  added through `LayerTiers` (Discord's `Bot`) got the tier rules but no package restrictions, so it could use any
+  SharedKernel package unless the service rebuilt `SharedKernelPackageRestrictions` itself. It is now restricted like
+  the conventional layers at its tier (like Web at tier 4; like Infrastructure and Presentation together at tier 3;
+  at a tier without one, like the nearest tier's, the inner one on a tie), or like the layer the new
+  `PackageRestrictionsLike` (custom layer → layer) names, and a failure says so (`Bot → Repository: … (restricted
+  like Web; …)`). A custom layer an overridden `SharedKernelPackageRestrictions` already names keeps exactly what it
+  was given. ⚠️ **Behaviour change:** a custom layer using a package its tier may not use now fails
+  `Layers_ShouldNotDependOnSharedKernelPackagesOutsideTheirLayers`; map it with `PackageRestrictionsLike` (or name it
+  in `SharedKernelPackageRestrictions`) if that is deliberate. Discord's override adding `Bot` wherever Web is
+  restricted gives the same rules and can be deleted.
 - **The mediator's documentation gives the standard behaviors' real order:** Logging → Idempotency → Validation →
   Transaction → UnitOfWork → Caching. `AddStandardBehaviors`, the `StandardBehavior` enum and the 4.0.0 notes left
   idempotency out, though it has run right after logging since 4.0.0 (nothing changes at run time). `StandardBehavior.Idempotency`
