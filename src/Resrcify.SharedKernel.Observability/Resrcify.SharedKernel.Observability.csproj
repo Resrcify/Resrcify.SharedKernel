@@ -36,6 +36,10 @@
     <PackageReference Include="Serilog.Settings.Configuration">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <!-- UseServiceRequestLogging (Serilog's request logging): its RequestLoggingOptions is in the signature. -->
+    <PackageReference Include="Serilog.AspNetCore">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
   </ItemGroup>
 
   <!-- Only ever published as a prerelease, which a stable package can't depend on (NU5104): the service references it

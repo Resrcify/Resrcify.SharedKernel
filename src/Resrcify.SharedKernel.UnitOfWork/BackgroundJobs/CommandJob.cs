@@ -30,13 +30,12 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 /// <typeparam name="TCommand">The command sent.</typeparam>
 /// <typeparam name="TResponse">The command's result type.</typeparam>
 [DisallowConcurrentExecution]
-public abstract partial class CommandJob<TCommand, TResponse>
+public abstract class CommandJob<TCommand, TResponse>
     : IJob
     where TCommand : IRequest<TResponse>
     where TResponse : Result
 {
-    private readonly ISender _sender;
-    private readonly ILogger _logger;
+    private readonly CommandJobRun<TCommand, TResponse> _run;
 
     protected CommandJob(
         ISender sender,
@@ -45,21 +44,163 @@ public abstract partial class CommandJob<TCommand, TResponse>
         ArgumentNullException.ThrowIfNull(sender);
         ArgumentNullException.ThrowIfNull(logger);
         CommandJobs.EnsureReturns<TCommand, TResponse>();
-        _sender = sender;
-        _logger = logger;
+        _run = new CommandJobRun<TCommand, TResponse>(sender, logger);
     }
 
-    public async ValueTask Execute(
+    public ValueTask Execute(
         IJobExecutionContext context,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
+        return _run.ExecuteAsync(
+            context,
+            _ => ValueTask.FromResult(CommandJobRun<TCommand, TResponse>.Send(CreateCommand(context))),
+            cancellationToken);
+    }
+
+    /// <summary>The command to send this run.</summary>
+    protected abstract TCommand CreateCommand(IJobExecutionContext context);
+}
+
+/// <summary>
+/// A Quartz job that works out, asynchronously, whether there is a command to send this run and which, then sends it
+/// through the mediator (<see cref="ISender"/>) and reports how it went, as <see cref="CommandJob{TCommand, TResponse}"/>
+/// does. It is for a job that reads the database (or anything else) first and may have nothing to do: when
+/// <see cref="CreateCommandAsync"/> returns <see langword="null"/>, the run is skipped, logged at
+/// <see cref="LogLevel.Debug"/>, and ends normally, so it counts as a heartbeat for the <c>AddQuartzJobs</c> liveness
+/// check like any other run.
+/// <list type="bullet">
+/// <item>a failed result is logged with its errors, at <see cref="LogLevel.Warning"/> when another try may pass and at
+/// <see cref="LogLevel.Information"/> when it is an expected answer; the trigger keeps its schedule;</item>
+/// <item>a cancellation (the scheduler shutting down, or the job interrupted), also while the command is made, goes
+/// through as it is;</item>
+/// <item>any other exception, from <see cref="CreateCommandAsync"/> too, is logged at <see cref="LogLevel.Error"/> and
+/// thrown again as a <see cref="JobExecutionException"/> (the trigger keeps its schedule).</item>
+/// </list>
+/// Runs never overlap (<see cref="DisallowConcurrentExecutionAttribute"/>, which derived jobs inherit). Quartz builds
+/// the job in a DI scope of its own for every run, so a repository or a <c>DbContext</c> can be taken in the
+/// constructor. Schedule it with <c>AddIntervalJob&lt;TJob&gt;</c> or <c>AddCronJob&lt;TJob&gt;</c>.
+/// </summary>
+/// <example>
+/// <code>
+/// [DisallowConcurrentExecution]
+/// internal sealed class AddPlayersJob(
+///     ISender sender,
+///     ILogger&lt;AddPlayersJob&gt; logger,
+///     ITournamentRepository tournaments)
+///     : AsyncCommandJob&lt;AddPlayersCommand&gt;(sender, logger)
+/// {
+///     protected override async ValueTask&lt;AddPlayersCommand?&gt; CreateCommandAsync(
+///         IJobExecutionContext context,
+///         CancellationToken cancellationToken)
+///         =&gt; await tournaments.GetLatestTournament(cancellationToken) is { } tournament
+///             ? new AddPlayersCommand(tournament.Id)
+///             : null;   // nothing to do this run
+/// }
+/// </code>
+/// </example>
+/// <typeparam name="TCommand">The command sent; a reference type, so <see langword="null"/> can mean "none".</typeparam>
+/// <typeparam name="TResponse">The command's result type.</typeparam>
+[DisallowConcurrentExecution]
+public abstract class AsyncCommandJob<TCommand, TResponse>
+    : IJob
+    where TCommand : class, IRequest<TResponse>
+    where TResponse : Result
+{
+    private readonly CommandJobRun<TCommand, TResponse> _run;
+
+    protected AsyncCommandJob(
+        ISender sender,
+        ILogger logger)
+    {
+        ArgumentNullException.ThrowIfNull(sender);
+        ArgumentNullException.ThrowIfNull(logger);
+        CommandJobs.EnsureReturns<TCommand, TResponse>();
+        _run = new CommandJobRun<TCommand, TResponse>(sender, logger);
+    }
+
+    public ValueTask Execute(
+        IJobExecutionContext context,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return _run.ExecuteAsync(
+            context,
+            token => CreateAsync(context, token),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// The command to send this run, or <see langword="null"/> when there is nothing to send (the run is skipped and
+    /// logged at <see cref="LogLevel.Debug"/>).
+    /// </summary>
+    protected abstract ValueTask<TCommand?> CreateCommandAsync(
+        IJobExecutionContext context,
+        CancellationToken cancellationToken);
+
+    private async ValueTask<CommandJobRun<TCommand, TResponse>.CommandToSend> CreateAsync(
+        IJobExecutionContext context,
+        CancellationToken cancellationToken)
+    {
+        var command = await CreateCommandAsync(context, cancellationToken);
+        return command is null
+            ? CommandJobRun<TCommand, TResponse>.Skip
+            : CommandJobRun<TCommand, TResponse>.Send(command);
+    }
+}
+
+/// <summary>An <see cref="AsyncCommandJob{TCommand, TResponse}"/> for a command returning a <see cref="Result"/>.</summary>
+/// <typeparam name="TCommand">The command sent.</typeparam>
+public abstract class AsyncCommandJob<TCommand>(
+    ISender sender,
+    ILogger logger)
+    : AsyncCommandJob<TCommand, Result>(sender, logger)
+    where TCommand : class, IRequest<Result>;
+
+/// <summary>
+/// One run of a command job: makes the command, sends it and logs how it went. Shared by
+/// <see cref="CommandJob{TCommand, TResponse}"/> and <see cref="AsyncCommandJob{TCommand, TResponse}"/>.
+/// </summary>
+internal sealed partial class CommandJobRun<TCommand, TResponse>
+    where TCommand : IRequest<TResponse>
+    where TResponse : Result
+{
+    private readonly ISender _sender;
+    private readonly ILogger _logger;
+
+    public CommandJobRun(
+        ISender sender,
+        ILogger logger)
+    {
+        _sender = sender;
+        _logger = logger;
+    }
+
+    /// <summary>No command this run.</summary>
+    public static CommandToSend Skip => default;
+
+    /// <summary>Send <paramref name="command"/> this run.</summary>
+    public static CommandToSend Send(TCommand command)
+        => new(true, command);
+
+    public async ValueTask ExecuteAsync(
+        IJobExecutionContext context,
+        Func<CancellationToken, ValueTask<CommandToSend>> createCommand,
+        CancellationToken cancellationToken)
+    {
         var job = context.JobDetail.Key.Name;
 
         TResponse response;
         try
         {
-            response = await _sender.Send<TResponse>(CreateCommand(context), cancellationToken);
+            var toSend = await createCommand(cancellationToken);
+            if (!toSend.HasCommand)
+            {
+                LogSkippedRun(job);
+                return;
+            }
+
+            response = await _sender.Send<TResponse>(toSend.Command, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -75,8 +216,11 @@ public abstract partial class CommandJob<TCommand, TResponse>
             LogFailure(job, response);
     }
 
-    /// <summary>The command to send this run.</summary>
-    protected abstract TCommand CreateCommand(IJobExecutionContext context);
+    private void LogSkippedRun(string job)
+    {
+        if (_logger.IsEnabled(LogLevel.Debug))
+            LogSkipped(job, typeof(TCommand).Name);
+    }
 
     // At Error with the stack unless the mediator's behaviors did so already; the run is where the exception ends, so
     // its mark is released: the same instance thrown in a later run is logged again.
@@ -111,6 +255,9 @@ public abstract partial class CommandJob<TCommand, TResponse>
         LogFailed(level, job, typeof(TCommand).Name, errors);
     }
 
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Job {Job} had no {Command} to send this run; skipped")]
+    private partial void LogSkipped(string job, string command);
+
     [LoggerMessage(Message = "Job {Job} sent {Command}, which failed: {Errors}")]
     private partial void LogFailed(LogLevel level, string job, string command, string errors);
 
@@ -119,6 +266,9 @@ public abstract partial class CommandJob<TCommand, TResponse>
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Job {Job} sent {Command}, which threw {ExceptionType} (logged already)")]
     private partial void LogThrewLoggedAlready(string job, string command, string exceptionType);
+
+    /// <summary>Whether a run has a command to send, and which.</summary>
+    internal readonly record struct CommandToSend(bool HasCommand, TCommand Command);
 }
 
 /// <summary>Checks shared by the command jobs and their registration.</summary>

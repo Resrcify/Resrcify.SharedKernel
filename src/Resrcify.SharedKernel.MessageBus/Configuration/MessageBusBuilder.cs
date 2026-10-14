@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Rebus.Config;
 using Rebus.Handlers;
 using Rebus.Transport.InMem;
@@ -43,6 +44,34 @@ public sealed class MessageBusBuilder
     /// <inheritdoc cref="UseRabbitMq(Func{IServiceProvider, RabbitMqConnection})"/>
     public MessageBusBuilder UseRabbitMq(RabbitMqConnection connection)
         => UseRabbitMq(_ => connection);
+
+    /// <summary>
+    /// Connects to RabbitMQ as the <paramref name="sectionName"/> section of the host's configuration says
+    /// (<see cref="RabbitMqOptions"/>: <c>Host</c>, <c>Port</c>, <c>Username</c>, <c>Password</c>, optionally
+    /// <c>VirtualHost</c> and <c>UseTls</c>), the section <c>ServiceHostFixture</c> writes and the services' Kubernetes
+    /// manifests set (<c>MessageBus__Host</c>, …). The section is validated when the host starts, naming each key that is
+    /// missing or wrong (<c>MessageBus:Host is required.</c>), unless the bus no longer connects with it (switched to
+    /// memory, e.g. by the test harness, or given another connection afterwards). The options are the default
+    /// <c>IOptions&lt;RabbitMqOptions&gt;</c>, for the service to read too.
+    /// </summary>
+    /// <remarks>
+    /// The configuration is the container's <c>IConfiguration</c>, which every host registers; a bare
+    /// <see cref="IServiceCollection"/> needs one registered.
+    /// </remarks>
+    /// <param name="sectionName">The section to read; <c>MessageBus</c> by default.</param>
+    /// <example><c>services.AddMessageBus(bus =&gt; bus.UseRabbitMqFromConfiguration().WithInputQueue("shardmanagement"))</c></example>
+    public MessageBusBuilder UseRabbitMqFromConfiguration(string sectionName = RabbitMqOptions.SectionName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sectionName);
+        Func<IServiceProvider, RabbitMqConnection> connection =
+            provider => provider.GetRequiredService<IOptions<RabbitMqOptions>>().Value.ToConnection();
+        Services
+            .AddOptions<RabbitMqOptions>()
+            .BindConfiguration(sectionName)
+            .ValidateOnStart();
+        Services.AddSingleton<IValidateOptions<RabbitMqOptions>>(new RabbitMqOptionsValidator(Settings, connection, sectionName));
+        return UseRabbitMq(connection);
+    }
 
     /// <summary>
     /// Runs every bus of this service in memory instead of on RabbitMQ: for local runs without a broker, and

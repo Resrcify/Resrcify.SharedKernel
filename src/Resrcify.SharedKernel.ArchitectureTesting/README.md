@@ -7,7 +7,7 @@ architecture-test project and xUnit runs its tests there; no rules to write.
 
 | Base class | Checks |
 |---|---|
-| `ConventionalLayerDependencyTests` | Dependencies point inward: a layer never depends on a higher tier or on a peer (Domain 0, Application 1, Persistence 2, Infrastructure and Presentation 3, Web 4), Web never reaches Domain and Presentation never reaches Persistence. Also which SharedKernel packages each layer may use. |
+| `ConventionalLayerDependencyTests` | Dependencies point inward: a layer never depends on a higher tier or on a peer (Domain 0, Application 1, Persistence 2, Infrastructure and Presentation 3, Web 4), Web never reaches Domain and Presentation never reaches Persistence. Also which SharedKernel packages each layer may use (a custom layer: what the layers at its tier may use). |
 | `ConventionalDomainTests` | Domain events are sealed and end with `Event`; entities have a private constructor. |
 | `ConventionalApplicationTests` | Commands, queries, requests and their handlers are sealed and named by convention (`…Command`, `…CommandHandler`, `…Query`, `…QueryHandler`, `…Request`, `…RequestHandler`); handlers return `Task<Result>`. |
 | `ConventionalPresentationTests` | Endpoints implement `IEndpoint`, are sealed, expose a single map method and go through the mediator; so do controllers. |
@@ -55,6 +55,24 @@ public sealed class LayerTests : ConventionalLayerDependencyTests
         => [.. base.ExtraForbiddenDependencies, ("Bot", Layers.Domain)];
 }
 ```
+
+A layer added this way also gets the SharedKernel package restrictions (`SharedKernelPackageRestrictions`, which name
+only the conventional layers): those of the conventional layers at its tier. The `Bot` above, at tier 4, may use what
+Web may use; a layer at tier 3 is restricted like Infrastructure and Presentation together; one at a tier without a
+conventional layer, like the nearest tier's (the inner one on a tie). A failure says where the rule came from
+(`Bot → Repository: … (restricted like Web; …)`). Choose the layer yourself with `PackageRestrictionsLike`:
+
+```csharp
+protected override IReadOnlyDictionary<string, string> PackageRestrictionsLike
+    => new Dictionary<string, string> { ["Client"] = Layers.Infrastructure };
+```
+
+A custom layer that an overridden `SharedKernelPackageRestrictions` already names is left as configured there (unless
+`PackageRestrictionsLike` maps it), so an override that adds it by hand keeps working; it is no longer needed.
+
+To check assemblies that aren't named `<Root>.<Layer>`, pass them to the base's constructor
+(`ConventionalLayerDependencyTests(IReadOnlyDictionary<string, Assembly> layerAssemblies)`, also on
+`BaseArchitectureTest`).
 
 ## Sample project
 

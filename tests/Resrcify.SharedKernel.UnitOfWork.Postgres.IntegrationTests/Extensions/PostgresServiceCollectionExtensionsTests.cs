@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,9 +56,12 @@ public sealed class PostgresServiceCollectionExtensionsTests(PostgresFixture pos
         (await context.OutboxMessages.CountAsync()).ShouldBe(1);
     }
 
-    /// <summary>What the README warns about: saving with the context itself bypasses the unit of work's strategy.</summary>
+    /// <summary>
+    /// What the README warns about: saving with the context itself bypasses the unit of work's strategy. Sentinel hit it
+    /// in a test, with EF Core's "does not support user-initiated transactions", which names neither cause nor fix.
+    /// </summary>
     [Fact]
-    public async Task RetryOnFailure_ShouldRefuseADirectSaveOfEvents_WithTheOnConflictInsert()
+    public async Task RetryOnFailure_ShouldRefuseADirectSaveOfEvents_WithTheOnConflictInsert_SayingWhatToDo()
     {
         await using var host = await TestHost.CreateAsync(postgres, db => db
             .WithOutbox(outbox => outbox.OnConflictDoNothing = true)
@@ -68,7 +72,33 @@ public sealed class PostgresServiceCollectionExtensionsTests(PostgresFixture pos
         shard.Rename("direct save");
         context.Shards.Add(shard);
 
-        await Should.ThrowAsync<InvalidOperationException>(() => context.SaveChangesAsync());
+        var thrown = await Should.ThrowAsync<InvalidOperationException>(() => context.SaveChangesAsync());
+
+        thrown.Message.ShouldContain("Save through IUnitOfWork.CompleteAsync");
+        await using var check = host.Services.CreateAsyncScope();
+        var database = check.ServiceProvider.GetRequiredService<TestDbContext>();
+        (await database.Shards.AnyAsync(saved => saved.Id == shard.Id)).ShouldBeFalse();
+        (await database.OutboxMessages.CountAsync()).ShouldBe(0);
+    }
+
+    /// <summary>The way out the error names, besides the unit of work: the save run under the execution strategy.</summary>
+    [Fact]
+    public async Task RetryOnFailure_ShouldSaveEventsDirectly_UnderTheExecutionStrategy_WithTheOnConflictInsert()
+    {
+        await using var host = await TestHost.CreateAsync(postgres, db => db
+            .WithOutbox(outbox => outbox.OnConflictDoNothing = true)
+            .RetryOnFailure());
+        await using var scope = host.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+        var shard = new Shard(Guid.NewGuid(), "direct");
+        shard.Rename("direct save");
+        context.Shards.Add(shard);
+
+        await context.Database
+            .CreateExecutionStrategy()
+            .ExecuteAsync(token => context.SaveChangesAsync(token), CancellationToken.None);
+
+        (await context.OutboxMessages.CountAsync()).ShouldBe(1);
     }
 
     [Fact]

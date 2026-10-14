@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Quartz;
@@ -86,6 +87,38 @@ public sealed class QuartzJobsHealthCheckTests
     }
 
     [Fact]
+    public async Task CheckHealthAsync_ShouldJudgeAnAddCronJob_ByItsSchedule()
+    {
+        // Every 15 minutes: the default limit is 3 × 15 + 2 = 47 minutes of silence.
+        await using var host = await BuildAsync(quartz => quartz.AddCronJob<NoopJob>("0 0/15 * * * ?"));
+        host.Registry.Beat(Ranks);
+
+        host.Clock.Advance(TimeSpan.FromMinutes(46));
+        (await host.CheckAsync()).Status.ShouldBe(HealthStatus.Healthy);
+
+        host.Clock.Advance(TimeSpan.FromMinutes(2));
+        (await host.CheckAsync()).Status.ShouldBe(HealthStatus.Unhealthy);
+    }
+
+    [Fact]
+    public async Task CheckHealthAsync_ShouldNotCountADailyCronJobAsStalled_BeforeItsFirstFire()
+    {
+        // 16:00 UTC every day, registered at 12:00: silent for hours before its first fire, as scheduled.
+        await using var host = await BuildAsync(quartz => quartz.AddCronJob<NoopJob>("0 0 16 * * ?"));
+
+        host.Clock.Advance(new TimeSpan(3, 59, 0));   // 15:59
+        (await host.CheckAsync()).Status.ShouldBe(HealthStatus.Healthy);
+
+        // Due at 16:00. The limit for a daily job is 3 days + 2 minutes, one interval of it before the due fire: so up
+        // to 2 days and 2 minutes after it.
+        host.Clock.Advance(TimeSpan.FromMinutes(1) + TimeSpan.FromDays(2));   // two days after the due fire
+        (await host.CheckAsync()).Status.ShouldBe(HealthStatus.Healthy);
+
+        host.Clock.Advance(TimeSpan.FromMinutes(3));
+        (await host.CheckAsync()).Status.ShouldBe(HealthStatus.Unhealthy);
+    }
+
+    [Fact]
     public async Task CheckHealthAsync_ShouldWaitForTheNextDueFire_WhenTheScheduleIsUneven()
     {
         // Every 5 minutes from 09:00 to 17:55 (UTC): after 17:55 the next fire is 09:00 the next day, not 18:00.
@@ -137,7 +170,72 @@ public sealed class QuartzJobsHealthCheckTests
     }
 
     [Fact]
-    public async Task AddQuartzJobs_ShouldSayWhatIsMissing_WithoutHeartbeats()
+    public async Task CheckHealthAsync_ShouldLeaveTheOutboxJobsOut_ByDefault()
+    {
+        // A broker outage stalling the outbox mustn't restart every replica: the outbox's own check alerts on it.
+        await using var host = await BuildAsync(quartz => quartz.AddProcessOutboxMessagesJob<TestDbContext>(
+            processIntervalInSeconds: 20,
+            delayInSecondsBeforeStart: 0,
+            timeProvider: new FakeTimeProvider(Start)));
+
+        host.Clock.Advance(TimeSpan.FromHours(3));
+        var result = await host.CheckAsync();
+
+        result.Status.ShouldBe(HealthStatus.Healthy);
+        result.Data.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task CheckHealthAsync_ShouldWatchTheOutboxJobs_WhenAskedTo()
+    {
+        await using var host = await BuildAsync(
+            quartz => quartz.AddProcessOutboxMessagesJob<TestDbContext>(
+                processIntervalInSeconds: 20,
+                delayInSecondsBeforeStart: 0,
+                timeProvider: new FakeTimeProvider(Start)),
+            jobs: jobs => jobs.WatchOutboxJobs = true);
+
+        host.Clock.Advance(TimeSpan.FromHours(3));
+        var result = await host.CheckAsync();
+
+        result.Status.ShouldBe(HealthStatus.Unhealthy);
+        result.Description.ShouldNotBeNull().ShouldContain(OutboxJobs.Process<TestDbContext>().ToString());
+        result.Description.ShouldContain(OutboxJobs.Cleanup<TestDbContext>().ToString());
+    }
+
+    [Fact]
+    public async Task CheckHealthAsync_ShouldLeaveAnExcludedJobOut_AndWatchTheRest()
+    {
+        var excludedByKey = new JobKey("excluded-by-key");
+        var excludedByGroup = new JobKey("excluded-by-group", "reports");
+        await using var host = await BuildAsync(
+            quartz => quartz
+                .AddIntervalJob<NoopJob>(TimeSpan.FromMinutes(1))
+                .AddIntervalJob<GenericJob<PingCommand>>(TimeSpan.FromMinutes(1))
+                .AddJob<NoopJob>(job => job.WithIdentity(excludedByKey))
+                .AddTrigger(trigger => trigger
+                    .ForJob(excludedByKey)
+                    .StartAt(Start)
+                    .WithSimpleSchedule(schedule => schedule.WithInterval(TimeSpan.FromMinutes(1)).RepeatForever()))
+                .AddJob<NoopJob>(job => job.WithIdentity(excludedByGroup))
+                .AddTrigger(trigger => trigger
+                    .ForJob(excludedByGroup)
+                    .StartAt(Start)
+                    .WithSimpleSchedule(schedule => schedule.WithInterval(TimeSpan.FromMinutes(1)).RepeatForever())),
+            jobs: jobs => jobs
+                .Exclude<NoopJob>()
+                .Exclude(excludedByKey)
+                .Exclude(job => job.Group == "reports"));
+
+        host.Clock.Advance(TimeSpan.FromHours(1));
+        var result = await host.CheckAsync();
+
+        result.Status.ShouldBe(HealthStatus.Unhealthy);
+        result.Data.Keys.ShouldBe([IntervalJobSetup.JobKeyFor<GenericJob<PingCommand>>().ToString()]);
+    }
+
+    [Fact]
+    public async Task AddQuartzJobs_ShouldReportWhatIsMissing_InsteadOfThrowing_WithoutHeartbeats()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -146,15 +244,37 @@ public sealed class QuartzJobsHealthCheckTests
         await using var provider = services.BuildServiceProvider();
 
         var registration = provider.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations.Single();
+        var result = await registration.Factory(provider).CheckHealthAsync(new HealthCheckContext { Registration = registration });
 
         registration.Tags.ShouldContain("live");
         registration.FailureStatus.ShouldBe(HealthStatus.Unhealthy);
-        Should.Throw<InvalidOperationException>(() => registration.Factory(provider)).Message.ShouldContain("AddJobHeartbeats");
+        result.Status.ShouldBe(HealthStatus.Unhealthy);
+        result.Description.ShouldNotBeNull().ShouldContain("AddJobHeartbeats()");
     }
+
+    [Fact]
+    public async Task AddQuartzJobs_ShouldFailTheHostsStart_WithoutHeartbeats()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings());
+        builder.Services.AddQuartz();
+        builder.Services.AddHealthChecks().AddQuartzJobs(tags: ["live"]);
+        using var host = builder.Build();
+
+        var thrown = await Should.ThrowAsync<OptionsValidationException>(() => host.StartAsync());
+
+        thrown.Message.ShouldContain("AddJobHeartbeats()");
+    }
+
+    [Fact]
+    public void AddQuartzJobs_ShouldRefuseNoWindow()
+        => Should.Throw<ArgumentException>(() => new ServiceCollection()
+            .AddHealthChecks()
+            .AddQuartzJobs(jobs => jobs.MaxSilence = null!));
 
     private static async Task<TestHost> BuildAsync(
         Action<IQuartzBuilder> configure,
-        Func<TimeSpan, TimeSpan>? maxSilence = null)
+        Func<TimeSpan, TimeSpan>? maxSilence = null,
+        Action<QuartzJobsHealthCheckOptions>? jobs = null)
     {
         var clock = new FakeTimeProvider(Start);
         var services = new ServiceCollection();
@@ -165,7 +285,10 @@ public sealed class QuartzJobsHealthCheckTests
             quartz.AddJobHeartbeats();
             configure(quartz);
         });
-        services.AddHealthChecks().AddQuartzJobs(maxSilence);
+        if (jobs is null)
+            services.AddHealthChecks().AddQuartzJobs(maxSilence);
+        else
+            services.AddHealthChecks().AddQuartzJobs(jobs);
         var provider = services.BuildServiceProvider();
         // Made now, as the listener makes it when the scheduler starts: its start is the process start. The scheduler
         // too, as the host builds it at start-up: its triggers' start times are set then.

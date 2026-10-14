@@ -17,6 +17,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.ArchitectureTesting.UnitTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Resrcify.SharedKernel.Abstractions\Resrcify.SharedKernel.Abstractions.csproj" />
     <ProjectReference Include="..\Resrcify.SharedKernel.DomainDrivenDesign\Resrcify.SharedKernel.DomainDrivenDesign.csproj" />
     <ProjectReference Include="..\Resrcify.SharedKernel.Results\Resrcify.SharedKernel.Results.csproj" />

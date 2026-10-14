@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -9,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using Polly.CircuitBreaker;
 using Polly.Timeout;
+using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.Web.Extensions;
 using Resrcify.SharedKernel.Web.Resilience;
 using Resrcify.SharedKernel.Web.UnitTests.Support;
@@ -215,30 +219,74 @@ public sealed class ResultResilienceHttpClientBuilderExtensionsTests
     }
 
     [Fact]
-    public async Task AddResultResilience_ShouldGiveUp_WhenTheTotalTimeoutPasses()
+    public async Task AddResultResilience_ShouldAnswerATimeout_WhenTheTotalTimeoutPasses()
     {
-        using var upstream = new ScriptedHandler(_time, async (_, cancellationToken) =>
-        {
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-            return new HttpResponseMessage(HttpStatusCode.OK);
-        });
+        using var upstream = Hanging();
         using var provider = Provider(upstream, options => options.TotalTimeout = TimeSpan.FromHours(2));
+
+        using var response = await SendAsync(provider);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.GatewayTimeout);
+        response.Headers.GetValues(ResultResilienceErrors.Header).ShouldBe([ResultResilienceErrors.TimeoutMarker]);
+        response.RequestMessage.ShouldNotBeNull().RequestUri.ShouldBe(new Uri("http://upstream/players"));
+        await ShouldReadAsAsync(response, ResultResilienceErrors.Timeout);
+    }
+
+    [Fact]
+    public async Task AddResultResilience_ShouldAnswerATimeout_WhenTheLastAttemptTimesOut()
+    {
+        using var upstream = Hanging();
+        using var provider = Provider(upstream, options =>
+        {
+            options.MaxRetries = 2;
+            options.AttemptTimeout = TimeSpan.FromMinutes(30);
+        });
+
+        using var response = await SendAsync(provider);
+
+        upstream.Calls.ShouldBe(3);
+        response.StatusCode.ShouldBe(HttpStatusCode.GatewayTimeout);
+        await ShouldReadAsAsync(response, ResultResilienceErrors.Timeout);
+    }
+
+    [Fact]
+    public async Task AddResultResilience_ShouldThrowTheTimeout_WhenAskedTo()
+    {
+        using var upstream = Hanging();
+        using var provider = Provider(upstream, options =>
+        {
+            options.TotalTimeout = TimeSpan.FromHours(2);
+            options.ThrowTimeoutsAndOpenCircuits = true;
+        });
 
         await Should.ThrowAsync<TimeoutRejectedException>(() => SendAsync(provider));
     }
 
     [Fact]
-    public async Task AddResultResilience_ShouldBreakTheCircuit_WhenCallsKeepFailing()
+    public async Task AddResultResilience_ShouldAnswerAnOpenCircuit_WhenCallsKeepFailing()
+    {
+        using var upstream = Upstream(_ => HttpStatusCode.ServiceUnavailable);
+        using var provider = Provider(upstream, BreakingQuickly);
+
+        (await SendAsync(provider)).Dispose();
+        (await SendAsync(provider)).Dispose();
+
+        using var response = await SendAsync(provider);
+
+        upstream.Calls.ShouldBe(2);
+        response.StatusCode.ShouldBe(HttpStatusCode.BadGateway);
+        response.Headers.GetValues(ResultResilienceErrors.Header).ShouldBe([ResultResilienceErrors.CircuitOpenMarker]);
+        await ShouldReadAsAsync(response, ResultResilienceErrors.CircuitOpen);
+    }
+
+    [Fact]
+    public async Task AddResultResilience_ShouldThrowTheOpenCircuit_WhenAskedTo()
     {
         using var upstream = Upstream(_ => HttpStatusCode.ServiceUnavailable);
         using var provider = Provider(upstream, options =>
         {
-            options.MaxRetries = 0;
-            options.CircuitBreaker = true;
-            options.CircuitBreakerMinimumThroughput = 2;
-            options.CircuitBreakerFailureRatio = 0.5;
-            options.CircuitBreakerSamplingDuration = TimeSpan.FromDays(1);
-            options.CircuitBreakerBreakDuration = TimeSpan.FromDays(1);
+            BreakingQuickly(options);
+            options.ThrowTimeoutsAndOpenCircuits = true;
         });
 
         (await SendAsync(provider)).Dispose();
@@ -247,6 +295,127 @@ public sealed class ResultResilienceHttpClientBuilderExtensionsTests
         await Should.ThrowAsync<BrokenCircuitException>(() => SendAsync(provider));
         upstream.Calls.ShouldBe(2);
     }
+
+    [Fact]
+    public async Task AddResultResilience_ShouldFailEnsureSuccessStatusCode_OnAnAnsweredTimeout()
+    {
+        using var upstream = Hanging();
+        using var provider = Provider(upstream, options => options.TotalTimeout = TimeSpan.FromHours(2));
+
+        using var response = await SendAsync(provider);
+
+        Should.Throw<HttpRequestException>(response.EnsureSuccessStatusCode)
+            .StatusCode.ShouldBe(HttpStatusCode.GatewayTimeout);
+    }
+
+    [Fact]
+    public async Task AddResultResilience_ShouldThrowTheCallersCancellation_WhenTimeoutsAreAnswered()
+    {
+        using var cancellation = new CancellationTokenSource();
+        using var upstream = new ScriptedHandler(_time, async (_, cancellationToken) =>
+        {
+            await cancellation.CancelAsync();
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+        using var provider = Provider(upstream, options =>
+        {
+            options.TotalTimeout = TimeSpan.FromHours(2);
+            options.AttemptTimeout = TimeSpan.FromMinutes(30);
+        });
+
+        var thrown = await Should.ThrowAsync<OperationCanceledException>(() => SendAsync(provider, cancellation.Token));
+
+        thrown.ShouldNotBeOfType<TimeoutRejectedException>();
+        upstream.Calls.ShouldBe(1);
+    }
+
+    [Theory]
+    [MemberData(nameof(ErrorStatuses))]
+    public async Task AddResultResilience_ShouldRetryOnlyTheListedStatuses_WhenRetryOnlyIsSet(
+        int status)
+    {
+        using var upstream = Upstream(_ => (HttpStatusCode)status);
+        using var provider = Provider(upstream, options =>
+        {
+            options.MaxRetries = 2;
+            options.RetryOnly = ResultResilienceOptions.SafeToRetryStatuses;
+        });
+
+        using var response = await SendAsync(provider);
+
+        ((int)response.StatusCode).ShouldBe(status);
+        upstream.Calls.ShouldBe(status is 408 or 429 or 503 ? 3 : 1);
+    }
+
+    [Fact]
+    public async Task AddResultResilience_ShouldStillRetryANetworkErrorAndATimedOutAttempt_WhenRetryOnlyIsEmpty()
+    {
+        using var upstream = new ScriptedHandler(_time, async (call, cancellationToken) =>
+        {
+            if (call == 1)
+                throw new HttpRequestException("Connection refused");
+            if (call == 2)
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return new HttpResponseMessage(call == 3 ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.OK);
+        });
+        using var provider = Provider(upstream, options =>
+        {
+            options.MaxRetries = 5;
+            options.AttemptTimeout = TimeSpan.FromMinutes(30);
+            options.RetryOnly = new HashSet<int>();
+        });
+
+        using var response = await SendAsync(provider);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
+        upstream.Calls.ShouldBe(3);
+    }
+
+    [Fact]
+    public void AddResultResilience_ShouldThrow_WhenRetryOnlyIsCombinedWithAlsoRetry()
+        => Should.Throw<InvalidOperationException>(() => Register(options =>
+            {
+                options.RetryOnly = ResultResilienceOptions.SafeToRetryStatuses;
+                options.AlsoRetry.Add(StatusCodes.NotFound);
+            }))
+            .Message.ShouldContain("AlsoRetry");
+
+    [Fact]
+    public void AddResultResilience_ShouldThrow_WhenRetryOnlyIsCombinedWithNeverRetry()
+        => Should.Throw<InvalidOperationException>(() => Register(options =>
+            {
+                options.RetryOnly = ResultResilienceOptions.SafeToRetryStatuses;
+                options.NeverRetry.Add(StatusCodes.ServiceUnavailable);
+            }))
+            .Message.ShouldContain("NeverRetry");
+
+    [Theory]
+    [InlineData(200)]
+    [InlineData(302)]
+    [InlineData(399)]
+    [InlineData(600)]
+    public void AddResultResilience_ShouldThrow_WhenRetryOnlyHoldsAStatusThatIsNoError(
+        int status)
+        => Should.Throw<InvalidOperationException>(() => Register(options =>
+                options.RetryOnly = new HashSet<int> { StatusCodes.ServiceUnavailable, status }))
+            .Message.ShouldContain(status.ToString(CultureInfo.InvariantCulture));
+
+    [Fact]
+    public async Task AddResultResilience_ShouldKeepTheRetryOnlyItWasGiven_WhenTheSetChangesAfterwards()
+    {
+        var retryOnly = new HashSet<int> { StatusCodes.ServiceUnavailable };
+        using var upstream = Upstream(_ => HttpStatusCode.InternalServerError);
+        using var provider = Provider(upstream, options => options.RetryOnly = retryOnly);
+        retryOnly.Add(StatusCodes.InternalServerError);
+
+        using var response = await SendAsync(provider);
+
+        upstream.Calls.ShouldBe(1);
+    }
+
+    public static TheoryData<int> ErrorStatuses()
+        => [.. Enumerable.Range(400, 200)];
 
     [Fact]
     public async Task AddResultResilience_ShouldNotRetry_WhenTheCallerCancels()
@@ -267,6 +436,44 @@ public sealed class ResultResilienceHttpClientBuilderExtensionsTests
     private ScriptedHandler Upstream(
         Func<int, HttpStatusCode> status)
         => new(_time, (call, _) => Task.FromResult(new HttpResponseMessage(status(call))));
+
+    // An upstream that never answers: every attempt runs until a timeout cancels it.
+    private ScriptedHandler Hanging()
+        => new(_time, async (_, cancellationToken) =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+
+    private static void BreakingQuickly(
+        ResultResilienceOptions options)
+    {
+        options.MaxRetries = 0;
+        options.CircuitBreaker = true;
+        options.CircuitBreakerMinimumThroughput = 2;
+        options.CircuitBreakerFailureRatio = 0.5;
+        options.CircuitBreakerSamplingDuration = TimeSpan.FromDays(1);
+        options.CircuitBreakerBreakDuration = TimeSpan.FromDays(1);
+    }
+
+    private static async Task ShouldReadAsAsync(
+        HttpResponseMessage response,
+        Error expected)
+    {
+        var result = await response.ToResultAsync<string>();
+
+        result.IsFailure.ShouldBeTrue();
+        var error = result.Errors.ShouldHaveSingleItem();
+        error.Code.ShouldBe(expected.Code);
+        error.Type.ShouldBe(expected.Type);
+        error.Message.ShouldBe(expected.Message);
+    }
+
+    private static void Register(
+        Action<ResultResilienceOptions> configure)
+        => new ServiceCollection()
+            .AddHttpClient("upstream")
+            .AddResultResilience(configure);
 
     private static HttpResponseMessage RateLimited(
         RetryConditionHeaderValue retryAfter)
@@ -321,6 +528,7 @@ public sealed class ResultResilienceHttpClientBuilderExtensionsTests
     private static class StatusCodes
     {
         public const int NotFound = 404;
+        public const int InternalServerError = 500;
         public const int ServiceUnavailable = 503;
     }
 }

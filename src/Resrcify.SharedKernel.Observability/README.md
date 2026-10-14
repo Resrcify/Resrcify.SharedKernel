@@ -13,6 +13,7 @@ lead to their trace.
   - [Install](#install)
   - [Quick Start](#quick-start)
   - [Configuration](#configuration)
+  - [Request logging](#request-logging)
   - [Turning parts off, adding more](#turning-parts-off-adding-more)
   - [Moving a service to it: before and after](#moving-a-service-to-it-before-and-after)
   - [Related modules](#related-modules)
@@ -33,6 +34,10 @@ lead to their trace.
 
 `app.MapServiceMetrics(path = "/metrics")` maps the Prometheus scrape endpoint, open to anonymous callers whatever the
 authorization fallback policy.
+
+`app.UseServiceRequestLogging(configure?)` logs one line per request with Serilog's request logging, leaving out the
+probes and the scrape (the same `UntracedPaths` the tracing leaves out), at `Error` for a 5xx or an exception, with the
+host, the client's IP, the user id and the request's trace: see [Request logging](#request-logging).
 
 The SharedKernel sources and meters are matched by the wildcard `TelemetrySources.SharedKernel`
 (`Resrcify.SharedKernel.*`), so the package depends on none of the other SharedKernel packages and a new source in
@@ -61,6 +66,8 @@ names those libraries publish (`RebusDiagnosticConstants`, `QuartzInstrumentatio
 <PackageReference Include="Serilog.Extensions.Hosting" />
 <PackageReference Include="Serilog.Settings.Configuration" />
 <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.19.1-beta.1" />
+<!-- For UseServiceRequestLogging only (its RequestLoggingOptions is in the signature): -->
+<PackageReference Include="Serilog.AspNetCore" />
 ```
 
 Use the versions in SharedKernel's `Directory.Packages.props` (or newer). Most services reference these already.
@@ -76,6 +83,10 @@ services.AddServiceTelemetry("shardmanagement", configuration, telemetry =>
 });
 
 // Program.cs
+app.UseExceptionHandler();
+app.UseServiceRequestLogging();
+app.UseRouting();
+// ...
 app.MapServiceMetrics();
 ```
 
@@ -103,6 +114,51 @@ is used as is.
 Logs carry `TraceId` and `SpanId` as properties: a JSON formatter writes them, a text template shows them with
 `{TraceId}`. A service using Serilog.Enrichers.Span's `WithSpan` can drop it (a property already set is kept).
 
+## Request logging
+
+`app.UseServiceRequestLogging()` (`Resrcify.SharedKernel.Observability.Extensions`) replaces
+`app.UseSerilogRequestLogging()`, in the same place: after `UseExceptionHandler()`, before `UseRouting()`. One line per
+request, Serilog's `HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms`:
+
+| Request | Line |
+|---|---|
+| `UntracedPaths` (`/health`, `/health/ready`, `/health/live`, `/metrics` by default) | none |
+| 5xx, or an exception (logged with the line; the exception handler then answers 500) | `Error` |
+| anything else, 4xx included | `Information` |
+
+- **The probes and the scrape aren't logged at all**, rather than at `Verbose`: they come every few seconds and say
+  nothing a metric doesn't. They are the paths the tracing leaves out, from the same list (`UntracedPaths`), so a path
+  added there (a metrics endpoint mapped elsewhere) leaves both.
+- **A 4xx is `Information`**: in these services a 4xx is a failed result answered as problem details (validation,
+  not found, conflict, unauthorized), an expected answer rather than a fault of the service, and it would bury the
+  real warnings. A service that wants them louder sets `GetLevel` (below).
+- **Properties** (`RequestLogProperties`): `RequestHost` (the `Host` header), `ClientIp` (the connection's remote
+  address, IPv4 written as IPv4; behind a proxy, the proxy's unless `UseForwardedHeaders()` runs first) and `UserId`
+  (the `ClaimTypes.NameIdentifier` claim, the one Web's `GetUserId()` reads, when the request is authenticated; read
+  when the request ends, so wherever `UseAuthentication()` is). Every line also carries `TraceId` and `SpanId`, those of
+  the request's span, from `AddServiceTelemetry`'s enricher.
+- It writes through the host's own Serilog logger, not the static `Log.Logger`.
+
+It needs `AddServiceTelemetry` (for the paths) with Serilog as the logger (`Logging` on, or the service's own
+`AddSerilog`); without them it throws `InvalidOperationException` saying which. `configure` runs on Serilog's
+`RequestLoggingOptions` already holding these defaults: replace one, or chain onto the enrichment to add a field:
+
+```csharp
+app.UseServiceRequestLogging(logging =>
+{
+    logging.GetLevel = (context, _, exception) => exception is not null || context.Response.StatusCode >= 500
+        ? LogEventLevel.Error
+        : context.Response.StatusCode >= 400 ? LogEventLevel.Warning : LogEventLevel.Information;
+
+    var enrich = logging.EnrichDiagnosticContext;
+    logging.EnrichDiagnosticContext = (diagnostics, context) =>
+    {
+        enrich?.Invoke(diagnostics, context);
+        diagnostics.Set("UserAgent", context.Request.Headers.UserAgent.ToString());
+    };
+});
+```
+
 ## Turning parts off, adding more
 
 | Option | Default | |
@@ -113,7 +169,7 @@ Logs carry `TraceId` and `SpanId` as properties: a JSON formatter writes them, a
 | `QuartzInstrumentation` | on | Quartz 4's source and meter. |
 | `PrometheusExporter` | on | The exporter `MapServiceMetrics` serves. |
 | `OtlpExporter` | on | Still needs `Observability:OtlpEndpoint`. |
-| `UntracedPaths` | `/metrics`, `/health` | Request path prefixes left out of the traces (their metrics stay). |
+| `UntracedPaths` | `/metrics`, `/health` | Request path prefixes left out of the traces and the request log (their metrics stay). |
 | `ActivitySources`, `Meters` | empty | More names to subscribe to, e.g. `Npgsql`; wildcards allowed. |
 | `ConfigureTracing`, `ConfigureMetrics`, `ConfigureLogging` | none | Run last on the tracer, the meter provider and the Serilog configuration. |
 
@@ -164,6 +220,8 @@ services
     });
 
 // Program.cs
+app.UseSerilogRequestLogging();
+// ...
 app.MapPrometheusScrapingEndpoint().AllowAnonymous();
 ```
 
@@ -175,13 +233,17 @@ services.AddServiceTelemetry("shardmanagement", configuration, telemetry =>
     telemetry.ActivitySources.Add("Npgsql"));
 
 // Program.cs
+app.UseServiceRequestLogging();
+// ...
 app.MapServiceMetrics();
 ```
 
 Then delete the service's `ObservabilityOptions` class. Keep its package references (the ones listed under
-[Install](#install), the Serilog sinks and the Prometheus exporter), since this package's are private; drop
-`Serilog.AspNetCore` if `Serilog.Extensions.Hosting` is all it used. The configuration doesn't change. What the service gains: the mediator's spans and metrics and the Quartz meter (which
-most services didn't subscribe to), trace ids on every log line, and no spans for the probes and the scrape.
+[Install](#install), the Serilog sinks and the Prometheus exporter), since this package's are private; keep
+`Serilog.AspNetCore` for `UseServiceRequestLogging`, or drop it if the service logs no requests and
+`Serilog.Extensions.Hosting` is all it used. The configuration doesn't change. What the service gains: the mediator's spans and metrics and the Quartz meter (which
+most services didn't subscribe to), trace ids on every log line, no spans and no request lines for the probes and the
+scrape, and the host, client IP and user id on every request line.
 
 ## Related modules
 

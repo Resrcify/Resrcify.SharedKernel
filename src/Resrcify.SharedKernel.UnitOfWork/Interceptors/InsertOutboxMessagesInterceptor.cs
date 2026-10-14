@@ -33,6 +33,12 @@ namespace Resrcify.SharedKernel.UnitOfWork.Interceptors;
 /// <item>The events of one save are given increasing <see cref="OutboxMessage.OccurredOnUtc"/> times (a microsecond
 /// apart, in the order raised), so the outbox, which reads in that order, publishes them in that order.</item>
 /// <item>Saving domain events needs <c>SaveChangesAsync</c>: the synchronous <c>SaveChanges</c> throws rather than drop them.</item>
+/// <item>Under a retrying execution strategy (<c>EnableRetryOnFailure</c>, the Postgres package's <c>RetryOnFailure</c>),
+/// a strategy that writes outside the save (<c>PostgresOnConflictOutboxInsertStrategy</c>) needs the save to run under the
+/// execution strategy: <c>IUnitOfWork.CompleteAsync</c> / <c>ExecuteInTransactionAsync</c> do, or
+/// <c>Database.CreateExecutionStrategy().ExecuteAsync(...)</c>. A <c>DbContext.SaveChangesAsync()</c> called directly
+/// with domain events throws an <see cref="InvalidOperationException"/> saying so, before anything is written. (It isn't
+/// wrapped from here: an interceptor runs inside <c>SaveChangesAsync</c>, and a retry must run the whole save again.)</item>
 /// <item>Once a save wrote messages, the <paramref name="observers"/> are told (see <see cref="IOutboxSaveObserver"/>).</item>
 /// <item>One instance serves every context and save (it keeps no state of its own), so it can be a singleton: built by
 /// the container (<c>AddOutboxInterceptor</c>), it takes the registered serializer, insert strategy, clock and observers.</item>
@@ -195,6 +201,7 @@ public sealed partial class InsertOutboxMessagesInterceptor(
     {
         if (context.Database.CurrentTransaction is not { } outer)
         {
+            EnsureNoRetryingStrategyOutside(context);
             save.Pending = PendingEntry.Capture(saving, context);
             save.Transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
             return;
@@ -206,6 +213,28 @@ public sealed partial class InsertOutboxMessagesInterceptor(
         save.Outer = outer;
         save.Savepoint = $"outbox_{Guid.NewGuid():N}";
         await outer.CreateSavepointAsync(save.Savepoint, cancellationToken).ConfigureAwait(false);
+    }
+
+    // A retrying execution strategy (EnableRetryOnFailure) refuses a transaction begun outside it, and this save would
+    // begin one: EF Core's own error ("does not support user-initiated transactions") names neither the cause nor the
+    // fix. Its RetriesOnFailure is false inside a strategy's execution (IUnitOfWork.CompleteAsync), where the
+    // transaction is allowed. A save can't be wrapped from here: an interceptor runs inside SaveChangesAsync, and the
+    // strategy has to run the whole save (a retry saves again from the start).
+    private static void EnsureNoRetryingStrategyOutside(DbContext context)
+    {
+        if (!context.Database.CreateExecutionStrategy().RetriesOnFailure)
+            return;
+
+        var name = context.GetType().Name;
+        throw new InvalidOperationException(
+            $"{name}.SaveChangesAsync() was called directly on a context with a retrying execution strategy "
+            + "(RetryOnFailure / EnableRetryOnFailure) to save domain events, and its outbox insert writes them itself "
+            + "(OnConflictDoNothing / PostgresOnConflictOutboxInsertStrategy), in a transaction around the save, which the "
+            + "strategy refuses unless it runs the save. Save through IUnitOfWork.CompleteAsync (or TryCompleteAsync / "
+            + "ExecuteInTransactionAsync), which runs the save under the strategy, so a transient failure saves it all "
+            + "again; or run it under the strategy yourself: await context.Database.CreateExecutionStrategy().ExecuteAsync("
+            + "ct => context.SaveChangesAsync(ct), cancellationToken). Nothing was saved, and the domain events stay on "
+            + "their aggregates.");
     }
 
     private static async Task CommitAsync(

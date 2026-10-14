@@ -1,3 +1,4 @@
+using System;
 using Microsoft.EntityFrameworkCore;
 using Quartz;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
@@ -8,15 +9,31 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 /// <summary>The outbox's Quartz job keys: one set per DbContext, so two contexts with an outbox don't collide.</summary>
 public static class OutboxJobs
 {
+    private const string ProcessPrefix = "ProcessOutboxMessagesJob-";
+    private const string CleanupPrefix = "CleanupOutboxMessagesJob-";
+
     /// <summary>The key of <typeparamref name="TDbContext"/>'s processing job: <c>ProcessOutboxMessagesJob-&lt;DbContext&gt;</c>.</summary>
     public static JobKey Process<TDbContext>()
         where TDbContext : DbContext
-        => new($"ProcessOutboxMessagesJob-{typeof(TDbContext).Name}");
+        => new(ProcessPrefix + typeof(TDbContext).Name);
 
     /// <summary>The key of <typeparamref name="TDbContext"/>'s cleanup job: <c>CleanupOutboxMessagesJob-&lt;DbContext&gt;</c>.</summary>
     public static JobKey Cleanup<TDbContext>()
         where TDbContext : DbContext
-        => new($"CleanupOutboxMessagesJob-{typeof(TDbContext).Name}");
+        => new(CleanupPrefix + typeof(TDbContext).Name);
+
+    /// <summary>
+    /// Whether <paramref name="job"/> is one of an outbox's jobs (processing or cleanup, of any DbContext): a key
+    /// <see cref="Process{TDbContext}"/> or <see cref="Cleanup{TDbContext}"/> gives. The <c>AddQuartzJobs</c> liveness
+    /// check leaves them out unless told otherwise.
+    /// </summary>
+    public static bool IsOutboxJob(JobKey job)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+        return job.Group == JobKey.DefaultGroup
+            && (job.Name.StartsWith(ProcessPrefix, StringComparison.Ordinal)
+                || job.Name.StartsWith(CleanupPrefix, StringComparison.Ordinal));
+    }
 }
 
 /// <summary>The claim the regular outbox job of <typeparamref name="TDbContext"/> uses, if any.</summary>

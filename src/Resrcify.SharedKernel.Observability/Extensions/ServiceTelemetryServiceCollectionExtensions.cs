@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -51,6 +51,10 @@ public static class ServiceTelemetryServiceCollectionExtensions
         var options = new ServiceTelemetryOptions();
         configure?.Invoke(options);
 
+        // Read by the tracing filter below and by UseServiceRequestLogging, so both leave out the same requests.
+        var untraced = new UntracedRequests(options.UntracedPaths);
+        services.Replace(ServiceDescriptor.Singleton(untraced));
+
         var section = configuration.GetSection(ObservabilityOptions.SectionName);
         services
             .AddOptions<ObservabilityOptions>()
@@ -64,7 +68,7 @@ public static class ServiceTelemetryServiceCollectionExtensions
             AddSerilog(services, configuration, options);
 
         if (options.Tracing || options.Metrics)
-            AddOpenTelemetry(services, serviceName, section.Get<ObservabilityOptions>(), options);
+            AddOpenTelemetry(services, serviceName, section.Get<ObservabilityOptions>(), options, untraced);
 
         return services;
     }
@@ -90,14 +94,15 @@ public static class ServiceTelemetryServiceCollectionExtensions
         IServiceCollection services,
         string serviceName,
         ObservabilityOptions? observability,
-        ServiceTelemetryOptions options)
+        ServiceTelemetryOptions options,
+        UntracedRequests untraced)
     {
         var builder = services
             .AddOpenTelemetry()
             .ConfigureResource(resource => resource.AddService(serviceName));
 
         if (options.Tracing)
-            builder.WithTracing(tracing => ConfigureTracing(tracing, options, observability?.OtlpEndpointUri));
+            builder.WithTracing(tracing => ConfigureTracing(tracing, options, untraced, observability?.OtlpEndpointUri));
 
         if (options.Tracing && options.OtlpExporter && observability?.OtlpEndpointUri is { } otlpEndpoint)
             services.PostConfigure<OtlpExporterOptions>(
@@ -115,11 +120,12 @@ public static class ServiceTelemetryServiceCollectionExtensions
     private static void ConfigureTracing(
         TracerProviderBuilder tracing,
         ServiceTelemetryOptions options,
+        UntracedRequests untraced,
         Uri? otlpEndpoint)
     {
         if (options.AspNetCoreInstrumentation)
             tracing.AddAspNetCoreInstrumentation(aspNetCore => aspNetCore.Filter = context
-                => !IsUntraced(context.Request.Path, options.UntracedPaths));
+                => !untraced.Contains(context.Request.Path));
 
         if (options.HttpClientInstrumentation)
             tracing.AddHttpClientInstrumentation();
@@ -194,11 +200,6 @@ public static class ServiceTelemetryServiceCollectionExtensions
         if (options.QuartzInstrumentation)
             yield return TelemetrySources.Quartz;
     }
-
-    private static bool IsUntraced(
-        PathString path,
-        IEnumerable<string> untracedPaths)
-        => untracedPaths.Any(untraced => path.StartsWithSegments(untraced, StringComparison.OrdinalIgnoreCase));
 
     // The exporter's assembly is the service's own reference (see the csproj): say so at start-up, rather than fail
     // with a missing assembly when the meter provider is first built.

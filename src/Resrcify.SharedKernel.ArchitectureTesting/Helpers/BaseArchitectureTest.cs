@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
@@ -21,6 +22,16 @@ public abstract class BaseArchitectureTest
 
     protected BaseArchitectureTest()
         => LayerAssemblies = LayerAssemblyResolver.Resolve(GetType().Assembly);
+
+    /// <summary>
+    /// Checks the given layer assemblies (layer name → assembly) instead of the ones found by naming convention: for
+    /// assemblies that aren't named <c>&lt;Root&gt;.&lt;Layer&gt;</c>, or to test the rules themselves.
+    /// </summary>
+    protected BaseArchitectureTest(IReadOnlyDictionary<string, Assembly> layerAssemblies)
+    {
+        ArgumentNullException.ThrowIfNull(layerAssemblies);
+        LayerAssemblies = layerAssemblies;
+    }
 
     protected Assembly? GetLayerAssembly(string layer)
         => LayerAssemblies.TryGetValue(layer, out var asm) ? asm : null;

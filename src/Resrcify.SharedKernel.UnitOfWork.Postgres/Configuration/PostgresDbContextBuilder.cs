@@ -81,7 +81,10 @@ public sealed class PostgresDbContextBuilder
     /// (a retry runs the whole transaction again). EF Core refuses a transaction begun by hand under it: replace
     /// <c>BeginTransactionAsync</c> / <c>CommitTransactionAsync</c> with <c>ExecuteInTransactionAsync</c> first, and save
     /// through <c>IUnitOfWork</c> rather than <c>DbContext.SaveChangesAsync</c> when the outbox inserts with
-    /// <see cref="PostgresOutboxOptions.OnConflictDoNothing"/> (that insert opens a transaction of its own).
+    /// <see cref="PostgresOutboxOptions.OnConflictDoNothing"/> (that insert opens a transaction of its own). A direct
+    /// <c>SaveChangesAsync</c> of domain events then throws an <see cref="InvalidOperationException"/> naming both ways
+    /// out (<c>IUnitOfWork.CompleteAsync</c>, or the save run under <c>Database.CreateExecutionStrategy()</c>) before
+    /// anything is written.
     /// </remarks>
     public PostgresDbContextBuilder RetryOnFailure(
         int maxRetryCount = 6,

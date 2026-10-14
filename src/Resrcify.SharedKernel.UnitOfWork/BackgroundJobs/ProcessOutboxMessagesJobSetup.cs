@@ -20,6 +20,11 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 /// </code>
 /// Both the job and the trigger are built when the scheduler is, not when this is called, so
 /// <paramref name="delayInSecondsBeforeStart"/> still counts from scheduler start-up, as it did before.
+/// <para>
+/// <see cref="AddProcessOutboxMessagesJob{TDbContext}"/> also registers the backlog monitor (a hosted service measuring
+/// the outbox every 30 s) that the <c>outbox.messages.*</c> gauges and the <c>AddOutbox&lt;TDbContext&gt;</c> health
+/// check read, as <c>AddOutboxProcessing</c> does, so the health check works with either registration.
+/// </para>
 /// </remarks>
 public static class ProcessOutboxMessagesJobSetup
 {
@@ -59,6 +64,11 @@ public static class ProcessOutboxMessagesJobSetup
         quartz.Services.TryAddSingleton<OutboxWakeUp<TDbContext>>();
         quartz.Services.RemoveAll<OutboxJobClaim<TDbContext>>();
         quartz.Services.AddSingleton(new OutboxJobClaim<TDbContext>(claim));
+        // The backlog monitor the outbox gauges and health check (AddOutbox<TDbContext>) read, measuring every 30 s;
+        // AddOutboxProcessing replaces the interval with its BacklogCheckIntervalInSeconds.
+        quartz.Services.AddOutboxBacklogMonitor(
+            new OutboxBacklogSettings<TDbContext>(processMaxRetryCount, OutboxBacklogMonitorRegistration.DefaultInterval),
+            replace: false);
         if (processedRetentionInDays > 0)
             quartz.AddCleanupOutboxMessagesJob<TDbContext>(processedRetentionInDays, time);
 

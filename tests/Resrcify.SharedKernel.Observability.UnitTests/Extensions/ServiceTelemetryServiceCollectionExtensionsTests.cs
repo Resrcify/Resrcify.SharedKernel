@@ -34,6 +34,7 @@ namespace Resrcify.SharedKernel.Observability.UnitTests.Extensions;
     "Performance",
     "CA1515:Consider making public types internal",
     Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
+[Collection(TelemetryCollection.Name)]
 public sealed partial class ServiceTelemetryServiceCollectionExtensionsTests
 {
     [Theory]
