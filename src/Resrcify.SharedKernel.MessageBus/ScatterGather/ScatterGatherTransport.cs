@@ -26,11 +26,12 @@ using Resrcify.SharedKernel.Results.Primitives;
 namespace Resrcify.SharedKernel.MessageBus.ScatterGather;
 
 /// <summary>
-/// Sends scatter requests from this instance and collects their replies in memory. Replies come back
-/// on a queue private to this instance (a unique name, non-durable, deleted by RabbitMQ when the instance
-/// disconnects), so with several instances each one receives only the replies it is waiting for.
-/// Not exclusive: RabbitMQ ties an exclusive queue to one connection, and Rebus uses more than one.
-/// Also the service's <see cref="IScatterGatherClient"/>.
+/// Sends scatter requests from this instance and collects their replies in memory. Replies come back on a queue private
+/// to this instance (<see cref="ReplyQueueName"/>: named after the service, unique to the instance), so with several
+/// instances each one receives only the replies it is waiting for. The queue is durable and the broker deletes it once
+/// unused for 30 minutes (<c>x-expires</c>): RabbitMQ 4.3 refuses a transient non-exclusive queue, and it isn't
+/// exclusive because RabbitMQ ties an exclusive queue to one connection (Rebus uses more than one, and a reconnect
+/// would lose it with the replies that came meanwhile). Also the service's <see cref="IScatterGatherClient"/>.
 /// </summary>
 /// <remarks>
 /// A timeout must be positive and at most <see cref="MaxTimeout"/>; an empty batch is answered at once. When the broker
@@ -57,7 +58,6 @@ internal sealed partial class ScatterGatherTransport(
     private readonly Lock _gate = new();
     private readonly CancellationTokenSource _stopping = new();
     private Action? _unsubscribeFromBroker;
-    private string? _queue;
     private BuiltinHandlerActivator? _activator;
     private IBus? _bus;
     // Completed while a bus runs; a new, pending one from each stop. A request sent while the bus restarts waits on it.
@@ -71,13 +71,28 @@ internal sealed partial class ScatterGatherTransport(
     /// <summary>Whether the transport was started (and not stopped): it is then meant to run.</summary>
     public bool IsStarted => Volatile.Read(ref _started);
 
+    /// <summary>The queue this instance's replies come back on, once started.</summary>
+    public string? ReplyQueue { get; private set; }
+
+    /// <summary>
+    /// A new reply queue name for this instance: <c>&lt;service&gt;.scatter.replies.&lt;machine&gt;-&lt;guid&gt;</c>, where
+    /// the service is the name given with <c>WithServiceName</c>, else the input queue; <c>scatter.replies.…</c> when
+    /// neither is set. The machine name and a new GUID keep it unique per instance (and per start of the transport).
+    /// </summary>
+    public static string ReplyQueueName(MessageBusSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        var instance = string.Create(CultureInfo.InvariantCulture, $"{Environment.MachineName}-{Guid.NewGuid():N}");
+        return (settings.ServiceNameOverride ?? settings.InputQueue) is { } service
+            ? $"{service}.scatter.replies.{instance}"
+            : $"scatter.replies.{instance}";
+    }
+
     public Task StartAsync(CancellationToken cancellationToken)
     {
         // One queue name for the instance's lifetime: a restarted bus keeps receiving the replies to requests
         // sent before it restarted.
-        _queue = string.Create(
-            CultureInfo.InvariantCulture,
-            $"{settings.InputQueue ?? "scatter"}.replies.{Environment.MachineName}-{Guid.NewGuid():N}");
+        ReplyQueue = ReplyQueueName(settings);
         lock (_gate)
         {
             StartBus();
@@ -88,7 +103,7 @@ internal sealed partial class ScatterGatherTransport(
             watcher.Recovered += OnBrokerRecovered;
             _unsubscribeFromBroker = () => watcher.Recovered -= OnBrokerRecovered;
         }
-        LogStarted(_queue);
+        LogStarted(ReplyQueue);
         return Task.CompletedTask;
     }
 
@@ -148,12 +163,12 @@ internal sealed partial class ScatterGatherTransport(
                     StopBus();
                     StartBus();
                 }
-                LogRestarted(_queue!);
+                LogRestarted(ReplyQueue!);
                 return;
             }
             catch (Exception exception) when (exception is not OutOfMemoryException)
             {
-                LogRestartFailed(exception, _queue!, delay.TotalSeconds);
+                LogRestartFailed(exception, ReplyQueue!, delay.TotalSeconds);
             }
 
             try
@@ -193,9 +208,9 @@ internal sealed partial class ScatterGatherTransport(
     private IBus ConfigureBus(BuiltinHandlerActivator activator, IBusConfigurationStrategy strategy)
         => Configure.With(activator)
             .Logging(logging => logging.Use(new RebusLoggerFactory(serviceProvider.GetRequiredService<ILoggerFactory>())))
-            .Transport(transport => settings.ConfigureTransport(transport, serviceProvider, _queue, strategy, rabbitMq => rabbitMq
+            .Transport(transport => settings.ConfigureTransport(transport, serviceProvider, ReplyQueue, strategy, rabbitMq => rabbitMq
                 // Durable, deleted by the broker once unused for ReplyQueueExpiry: RabbitMQ 4.3 refuses a transient
-                // non-exclusive queue (transient_nonexcl_queues), and an exclusive one would go with every reconnect,
+                // non-exclusive queue (transient_nonexclReplyQueues), and an exclusive one would go with every reconnect,
                 // losing the replies that came meanwhile. This one outlives a reconnect; a stopped instance's goes.
                 .InputQueueOptions(options => options
                     .SetDurable(true)

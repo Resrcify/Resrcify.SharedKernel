@@ -33,7 +33,7 @@ public static class MessageBusServiceCollectionExtensions
     /// <example>
     /// <code>
     /// services.AddMessageBus(bus => bus
-    ///     .UseRabbitMq(new RabbitMqConnection(host, port, username, password))
+    ///     .UseRabbitMqFromConfiguration()   // the MessageBus section; or UseRabbitMq(new RabbitMqConnection(...))
     ///     .WithInputQueue("shardmanagement")
     ///     .AddMessage&lt;PlayerArenaProfileRequest&gt;("swgohapi.player-arena-profile.request.v1", sendTo: "swgohapi.player-arena-profile")
     ///     .AddMessage&lt;PlayerArenaProfileResponse&gt;("swgohapi.player-arena-profile.response.v1")

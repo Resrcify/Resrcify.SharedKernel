@@ -111,7 +111,7 @@ public static class DependencyInjection
             cfg.RegisterServicesFromAssemblies(
                 Assembly.GetExecutingAssembly());
 
-            // Logging -> Validation -> Transaction -> UnitOfWork -> Caching (the first is the outermost).
+            // Logging -> Idempotency -> Validation -> Transaction -> UnitOfWork -> Caching (the first is the outermost).
             cfg.AddStandardBehaviors();
 
             cfg.UseNotificationPublishStrategy(NotificationPublishStrategy.Sequential);
@@ -380,6 +380,12 @@ Our services run the same chain; `AddStandardBehaviors` adds it, after any behav
 ```csharp
 cfg.AddStandardBehaviors();   // Logging -> Idempotency -> Validation -> Transaction -> UnitOfWork -> Caching
 ```
+
+Idempotency runs right after logging: before validation, so a repeat gets the first answer even when a rule that reads
+the data ("the shard must not exist yet") would refuse it now; and outside the transaction and the unit of work, so a
+result is kept only once committed, and a repeat opens neither. A behavior inserted before `Validation` therefore runs
+after idempotency. (The `StandardBehavior` enum doesn't declare its members in this order: `Idempotency`, added last,
+kept its value. Order by name, never by value.)
 
 Leave one out, or put the service's own behaviors in place:
 

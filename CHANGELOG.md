@@ -33,6 +33,23 @@ every package in the repository is released together under one version.
   `PostgresContainerFixture?`; an override returning the non-nullable type still compiles): no container, no
   `Database:*` or `Migrations:Run` settings, and `Postgres` throws `InvalidOperationException`. Discord's bot, which has
   no database, couldn't use the fixture.
+- **`ConventionalLayerDependencyTests.PackageRestrictionsLike`** (ArchitectureTesting): custom layer → the layer whose
+  SharedKernel package restrictions it takes, e.g. `{ ["Bot"] = Layers.Web }`.
+- **`BaseArchitectureTest(IReadOnlyDictionary<string, Assembly>)` and
+  `ConventionalLayerDependencyTests(IReadOnlyDictionary<string, Assembly>)`** (ArchitectureTesting): check the given
+  layer assemblies instead of the ones found by naming convention.
+- **The message bus binds the `MessageBus` section itself:** `bus.UseRabbitMqFromConfiguration()` (optionally with
+  another section name) connects as the host's configuration says, validated when the host starts like
+  `AddPostgresDbContext`'s `Database` section: a missing or wrong key stops the start, naming it
+  (`MessageBus:Host is required.`). The keys are the ones the services' appsettings, their Kubernetes manifests
+  (`MessageBus__Host`, `__Port`, `__Username`, `__Password`) and `ServiceHostFixture` already use, plus optional
+  `VirtualHost` and `UseTls`. It isn't checked while nothing connects with it (the test harness, `UseInMemory()`
+  afterwards), so a harness test needs no dummy `MessageBus:*` settings. The settings are the new `RabbitMqOptions`
+  (`SectionName`, `ToConnection()`), registered as the default `IOptions<RabbitMqOptions>` for a service's own
+  connection (Sentinel's RabbitMQ health check). `UseRabbitMq(RabbitMqConnection)` / `UseRabbitMq(Func<…>)` are
+  unchanged. A service deletes its `MessageBusOptions` class, its `AddOptions<MessageBusOptions>()` registration and
+  the `UseRabbitMq(provider => …)` mapping, and calls `UseRabbitMqFromConfiguration()`. The MessageBus package now
+  references `Microsoft.Extensions.Options.ConfigurationExtensions`.
 
 ### Fixed
 
@@ -57,6 +74,32 @@ every package in the repository is released together under one version.
   host (with a `Startup`) got its `appsettings.json` value instead of the fixture's. They are now also added as the
   last configuration source, so they win in both hosting models (`WebApplication` already let them win while
   registering, and still sees them then).
+- **The scatter-gather reply queue is named after the service** (Resrcify.SharedKernel.MessageBus):
+  `<service>.scatter.replies.<machine>-<guid>`, the service being the `WithServiceName` name, else the input queue.
+  A service with a name but no input queue (Tournament, Oracle) got the anonymous `scatter.replies.<machine>-<guid>`;
+  one with neither still does. It stays unique per instance, durable, not exclusive and deleted by the broker 30
+  minutes after its instance stops using it, so it still starts on RabbitMQ 4.3 (a quorum queue where quorum is the
+  default type). ⚠️ **Behaviour change:** the reply queue of a service with an input queue moves from
+  `<input queue>.replies.…` to `<input queue>.scatter.replies.…`, and a service with both a name and an input queue
+  names it after the name. Nothing is lost: an instance's queue is its own, and the old ones expire 30 minutes after the
+  last instance using them stops. Update a test, policy or alert matching the old names (Tournament's
+  `MessageBusRegistrationTests` looks for `scatter.replies.`).
+- **A custom layer gets the SharedKernel package restrictions** (Resrcify.SharedKernel.ArchitectureTesting). A layer
+  added through `LayerTiers` (Discord's `Bot`) got the tier rules but no package restrictions, so it could use any
+  SharedKernel package unless the service rebuilt `SharedKernelPackageRestrictions` itself. It is now restricted like
+  the conventional layers at its tier (like Web at tier 4; like Infrastructure and Presentation together at tier 3;
+  at a tier without one, like the nearest tier's, the inner one on a tie), or like the layer the new
+  `PackageRestrictionsLike` (custom layer → layer) names, and a failure says so (`Bot → Repository: … (restricted
+  like Web; …)`). A custom layer an overridden `SharedKernelPackageRestrictions` already names keeps exactly what it
+  was given. ⚠️ **Behaviour change:** a custom layer using a package its tier may not use now fails
+  `Layers_ShouldNotDependOnSharedKernelPackagesOutsideTheirLayers`; map it with `PackageRestrictionsLike` (or name it
+  in `SharedKernelPackageRestrictions`) if that is deliberate. Discord's override adding `Bot` wherever Web is
+  restricted gives the same rules and can be deleted.
+- **The mediator's documentation gives the standard behaviors' real order:** Logging → Idempotency → Validation →
+  Transaction → UnitOfWork → Caching. `AddStandardBehaviors`, the `StandardBehavior` enum and the 4.0.0 notes left
+  idempotency out, though it has run right after logging since 4.0.0 (nothing changes at run time). `StandardBehavior.Idempotency`
+  is documented, and the enum says its members aren't declared in that order (`Idempotency` keeps its value): order by
+  name, never by value. A behavior inserted before `Validation` runs after idempotency.
 
 ## 4.0.0 (2026-10-13)
 
@@ -427,8 +470,8 @@ Upgrading a service: work through **Breaking changes** below, top to bottom.
   `MediatorDiagnostics.ActivitySourceName` / `MeterName` (`Resrcify.SharedKernel.Mediator`). One span per request
   (outcome, error code and type, exception) and the histogram `mediator.request.duration` (s, tags `request`,
   `outcome`). A single check when nothing listens.
-- **`AddStandardBehaviors()`** on the mediator configuration: Logging → Validation → Transaction → UnitOfWork →
-  Caching, with `Without(...)`, `InsertBefore(...)` and `InsertAfter(...)` for a service's own behaviors.
+- **`AddStandardBehaviors()`** on the mediator configuration: Logging → Idempotency → Validation → Transaction →
+  UnitOfWork → Caching, with `Without(...)`, `InsertBefore(...)` and `InsertAfter(...)` for a service's own behaviors.
 - **`LoggingPipelineOptions`** (`cfg.ConfigureLogging(...)`): `RequestLevel` for the start/complete lines (default
   `Information`), `SlowRequestThreshold` (a Warning when exceeded; off by default). The logging behavior also logs a
   handler's exception at `Error`, letting it through unchanged.

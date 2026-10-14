@@ -193,6 +193,50 @@ public sealed class ServiceCollectionExtensionsTests
             ]);
     }
 
+    // The documented order (StandardBehavior, AddStandardBehaviors, the README): idempotency right after logging,
+    // whatever order the enum declares its members in.
+    [Fact]
+    public void AddMediator_ShouldRegisterIdempotencyRightAfterLogging_WhenTheStandardBehaviorsAreAddedUnchanged()
+    {
+        var services = new ServiceCollection();
+
+        services.AddMediator(config => config.AddStandardBehaviors());
+
+        services
+            .Where(descriptor => descriptor.ServiceType == typeof(IPipelineBehavior<,>))
+            .Select(descriptor => descriptor.ImplementationType)
+            .ShouldBe(
+            [
+                typeof(LoggingPipelineBehavior<,>),
+                typeof(IdempotencyPipelineBehavior<,>),
+                typeof(ValidationPipelineBehavior<,>),
+                typeof(TransactionPipelineBehavior<,>),
+                typeof(UnitOfWorkPipelineBehavior<,>),
+                typeof(CachingPipelineBehavior<,>),
+            ]);
+    }
+
+    [Fact]
+    public void AddMediator_ShouldPutABehaviorInsertedBeforeValidationAfterIdempotency_WhenAskedFor()
+    {
+        var services = new ServiceCollection();
+
+        services.AddMediator(config => config
+            .AddStandardBehaviors(standard => standard.InsertBefore(StandardBehavior.Validation, typeof(ScopedOpenBehavior<,>))));
+
+        services
+            .Where(descriptor => descriptor.ServiceType == typeof(IPipelineBehavior<,>))
+            .Select(descriptor => descriptor.ImplementationType)
+            .Take(4)
+            .ShouldBe(
+            [
+                typeof(LoggingPipelineBehavior<,>),
+                typeof(IdempotencyPipelineBehavior<,>),
+                typeof(ScopedOpenBehavior<,>),
+                typeof(ValidationPipelineBehavior<,>),
+            ]);
+    }
+
     [Fact]
     public async Task AddMediator_ShouldRunTheProcessors_WhenTheyAreAddedOpenOrClosed()
     {

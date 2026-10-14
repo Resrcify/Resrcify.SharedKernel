@@ -16,7 +16,7 @@ namespace Resrcify.SharedKernel.Mediator.Configuration;
 ///     .InsertAfter(StandardBehavior.Validation, typeof(GuestAuthPipelineBehavior&lt;,&gt;), typeof(SingleFlightPipelineBehavior&lt;,&gt;))
 ///     .Without(StandardBehavior.Caching));
 /// </code>
-/// gives Logging → Validation → GuestAuth → SingleFlight → Transaction → UnitOfWork.
+/// gives Logging → Idempotency → Validation → GuestAuth → SingleFlight → Transaction → UnitOfWork.
 /// </example>
 public sealed class StandardBehaviorsOptions
 {

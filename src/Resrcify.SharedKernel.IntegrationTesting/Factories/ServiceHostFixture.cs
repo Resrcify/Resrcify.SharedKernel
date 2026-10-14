@@ -24,7 +24,8 @@ namespace Resrcify.SharedKernel.IntegrationTesting.Factories;
 /// When it starts (<see cref="InitializeAsync"/>) it starts the containers and gives the host: with PostgreSQL
 /// <c>Database:Host</c>, <c>Database:Port</c>, <c>Database:Database</c>, <c>Database:Username</c>,
 /// <c>Database:Password</c> and <c>Migrations:Run</c> = <c>true</c>; with RabbitMQ <c>MessageBus:Host</c>,
-/// <c>MessageBus:Port</c>, <c>MessageBus:Username</c>, <c>MessageBus:Password</c>. Then it runs
+/// <c>MessageBus:Port</c>, <c>MessageBus:Username</c>, <c>MessageBus:Password</c> (what <c>AddPostgresDbContext</c> and
+/// the bus' <c>UseRabbitMqFromConfiguration</c> read). Then it runs
 /// <see cref="StartDependenciesAsync"/>, where a service starts what else it needs (another service's container on
 /// <see cref="Network"/>, say), and <see cref="ConfigureSettings"/>, where it adds or changes settings (that
 /// container's address). A service replaces services in <see cref="ConfigureTestServices"/>. Two fixtures (two

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Rebus.Transport.InMem;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
+using Resrcify.SharedKernel.MessageBus.Configuration;
 using Resrcify.SharedKernel.MessageBus.ScatterGather;
 using Resrcify.SharedKernel.MessageBus.UnitTests.Support;
 using Resrcify.SharedKernel.Results.Primitives;
@@ -170,6 +171,51 @@ public sealed class ScatterGatherTransportTests
         reply.Errors[0].Type.ShouldBe(ErrorType.Timeout);
         (DateTime.UtcNow - started).ShouldBeLessThan(TimeSpan.FromSeconds(3));   // within its timeout, not after it
     }
+
+    [Fact]
+    public async Task ReplyQueue_ShouldBeNamedAfterTheService_WhenItHasAServiceNameButNoInputQueue()
+    {
+        // Tournament and Oracle: a service name, no input queue. Their reply queues were scatter.replies.<instance>.
+        var network = new InMemNetwork();
+        var queue = $"echo-{Guid.NewGuid():N}";
+        using var responder = await InMemoryServices.StartAsync(
+            network,
+            bus => bus.AddRateLimitedQueue<Echo, Echoed, EchoHandler>(queue),
+            services => services.AddSingleton(new EchoCalls()));
+        using var first = await InMemoryServices.StartAsync(
+            network,
+            bus => bus.WithServiceName("tournamentmanagement").AddRequest<Echo, Echoed>(queue).AddScatterGather());
+        using var second = await InMemoryServices.StartAsync(
+            network,
+            bus => bus.WithServiceName("tournamentmanagement").AddRequest<Echo, Echoed>(queue).AddScatterGather());
+
+        var firstQueue = first.Services.GetRequiredService<ScatterGatherTransport>().ReplyQueue;
+        var secondQueue = second.Services.GetRequiredService<ScatterGatherTransport>().ReplyQueue;
+
+        firstQueue.ShouldStartWith($"tournamentmanagement.scatter.replies.{Environment.MachineName}-");
+        secondQueue.ShouldStartWith("tournamentmanagement.scatter.replies.");
+        secondQueue.ShouldNotBe(firstQueue);
+        (await Client(first).RequestAsync<Echo, Echoed>(new Echo("one"), TimeSpan.FromSeconds(5))).IsSuccess.ShouldBeTrue();
+        (await Client(second).RequestAsync<Echo, Echoed>(new Echo("two"), TimeSpan.FromSeconds(5))).IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void ReplyQueueName_ShouldPreferTheServiceNameToTheInputQueue()
+    {
+        var settings = new MessageBusSettings { InputQueue = "shard-input", ServiceNameOverride = "shardmanagement" };
+
+        ScatterGatherTransport.ReplyQueueName(settings).ShouldStartWith("shardmanagement.scatter.replies.");
+    }
+
+    [Fact]
+    public void ReplyQueueName_ShouldBeNamedAfterTheInputQueue_WhenTheServiceHasNoName()
+        => ScatterGatherTransport.ReplyQueueName(new MessageBusSettings { InputQueue = "shardmanagement" })
+            .ShouldStartWith("shardmanagement.scatter.replies.");
+
+    [Fact]
+    public void ReplyQueueName_ShouldStayGeneric_WhenTheServiceHasNeitherANameNorAnInputQueue()
+        => ScatterGatherTransport.ReplyQueueName(new MessageBusSettings())
+            .ShouldStartWith($"scatter.replies.{Environment.MachineName}-");
 
     private static async Task<(
         Microsoft.Extensions.Hosting.IHost Responder,

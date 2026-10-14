@@ -22,6 +22,7 @@
     <Project Path="src/Resrcify.SharedKernel.Web/Resrcify.SharedKernel.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Resrcify.SharedKernel.ArchitectureTesting.UnitTests/Resrcify.SharedKernel.ArchitectureTesting.UnitTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.Caching.UnitTests/Resrcify.SharedKernel.Caching.UnitTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.DomainDrivenDesign.UnitTests/Resrcify.SharedKernel.DomainDrivenDesign.UnitTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.IntegrationTesting.GenericHostTestService/Resrcify.SharedKernel.IntegrationTesting.GenericHostTestService.csproj" />
