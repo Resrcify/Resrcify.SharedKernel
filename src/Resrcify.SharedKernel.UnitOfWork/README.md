@@ -27,6 +27,7 @@
   - [Migrations on start-up](#migrations-on-start-up)
   - [Quartz jobs](#quartz-jobs)
     - [Interval jobs](#interval-jobs)
+    - [Cron jobs](#cron-jobs)
     - [Command jobs](#command-jobs)
     - [Job heartbeats and liveness](#job-heartbeats-and-liveness)
   - [Related modules](#related-modules)
@@ -37,7 +38,7 @@
 - EF Core-backed `UnitOfWork<TDbContext>` implementation, with `TryCompleteAsync` returning a concurrency conflict,
   a duplicate or a serialization failure as a `Result` (`PersistenceErrors`).
 - Outbox/background-job helpers in `BackgroundJobs/`: the outbox job (draining a backlog in one run), its lanes,
-  `OutboxWakeUp`, and Quartz helpers (`AddIntervalJob`, `CommandJob`, job heartbeats and a liveness check).
+  `OutboxWakeUp`, and Quartz helpers (`AddIntervalJob`, `AddCronJob`, `CommandJob`, `AsyncCommandJob`, job heartbeats and a liveness check).
 - Interceptors for domain events and auditable/deletable entities, registrable in the container
   (`AddEntityInterceptors`, `AddOutboxInterceptor`).
 - `AddMigrationsOnStartup<TDbContext>(configuration)`: migrations applied while the host starts.
@@ -281,9 +282,17 @@ no longer depends on Newtonsoft.Json.)
 
 ### Wiring it up
 
-`AddOutboxProcessing` registers the read side (unit of work, serializer, Quartz job).
-Add the `InsertOutboxMessagesInterceptor` to the `DbContext` yourself, passing the
-**same** serializer instance:
+`AddOutboxProcessing` registers the read side (unit of work, serializer, Quartz job). It reads with the registered
+`IOutboxSerializer`, the one the interceptor writes with:
+
+- `AddOutboxProcessing<AppDbContext>()` or `AddOutboxProcessing<AppDbContext>(options => ...)`, without a serializer,
+  uses the registered one (on PostgreSQL, `AddPostgresDbContext(... WithOutbox())` registers it), or registers
+  `SystemTextJsonOutboxSerializer` when none is;
+- a serializer passed in is registered when none is; when one is, it must be that instance or of its type, or
+  `AddOutboxProcessing` throws `InvalidOperationException` (it used to ignore it, and the jobs read with the other one).
+
+Without the Postgres package, add the `InsertOutboxMessagesInterceptor` to the `DbContext` yourself, passing the
+**same** serializer instance (or let the container build it, see [Interceptors from the container](#interceptors-from-the-container)):
 
 ```csharp
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
@@ -320,6 +329,12 @@ services.AddDbContext<AppDbContext>((provider, options) => options
 ```
 
 The constructors are unchanged, so `new` still works. On PostgreSQL `AddPostgresDbContext` does all of this.
+
+Under a retrying execution strategy (`EnableRetryOnFailure`), an insert strategy that writes the messages itself
+(`PostgresOnConflictOutboxInsertStrategy`) needs a transaction around the save, which the strategy allows only inside
+its own execution: save through `IUnitOfWork` (`CompleteAsync` and `ExecuteInTransactionAsync` run under it), or run
+the save with `context.Database.CreateExecutionStrategy().ExecuteAsync(...)`. A `DbContext.SaveChangesAsync()` of
+domain events called directly throws an `InvalidOperationException` that says so, before anything is written.
 
 ### Outbox processing job
 
@@ -440,12 +455,31 @@ services.AddQuartz(quartz => quartz
 (`IntervalJobSetup.JobKeyFor<TJob>()`; a generic job's type arguments follow a dash, as in
 `ProcessOutboxMessagesJob-ShardDbContext`) with a trigger repeating every `interval`, first `startAfter` after the
 scheduler is built. Runs never overlap (the job is registered as `DisallowConcurrentExecution`; mark the class too,
-so it says so where it is written). It replaces a `*JobSetup` class per job. Cron schedules stay `AddJob` +
-`AddTrigger`.
+so it says so where it is written). It replaces a `*JobSetup` class per job.
+
+### Cron jobs
+
+```csharp
+services.AddQuartz(quartz => quartz
+    .AddJobHeartbeats()
+    .AddCronJob<UpdateShardsWithRotatingPayoutsJob>("0 0/15 * * * ?")          // every 15 minutes
+    .AddCronCommandJob<ProcessUnitChangesCommand>("0 0 16 * * ?")                // 16:00 UTC every day
+    .AddCronJob<SendDailyDigestJob>("0 0 8 * * ?", TimeZoneInfo.FindSystemTimeZoneById("Europe/Stockholm")));
+```
+
+`AddCronJob<TJob>(cronExpression, timeZone = UTC, timeProvider = DI's)` is the cron counterpart of `AddIntervalJob`:
+the same key (`IntervalJobSetup.JobKeyFor<TJob>()`), runs that never overlap, and a trigger starting when the
+scheduler is built (read from the registered `TimeProvider`), first firing at the expression's next time. The
+expression is a Quartz one (seconds first: `"0 0/15 * * * ?"`), read in UTC unless a zone is given (so a schedule
+doesn't follow the host's zone or its daylight saving time); one that doesn't parse or never fires throws an
+`ArgumentException` at registration. A fire missed while the scheduler was busy or down fires once as soon as it can
+(Quartz's default). `AddCronCommandJob<TCommand>` / `AddCronCommandJob<TCommand, TResponse>` send a `new TCommand()`
+with `SendCommandJob`, as `AddIntervalCommandJob` does. The liveness check judges a cron job by the fire that is due
+(a nightly job isn't stalled at noon), as for any cron trigger.
 
 ### Command jobs
 
-Most jobs send one command. `AddIntervalCommandJob<TCommand>` needs no job class at all (`SendCommandJob<TCommand>`
+Most jobs send one command. `AddIntervalCommandJob<TCommand>` (or `AddCronCommandJob<TCommand>`) needs no job class at all (`SendCommandJob<TCommand>`
 sends a `new TCommand()`); a job that builds its command derives from `CommandJob<TCommand>` (or
 `CommandJob<TCommand, TResponse>`) and overrides `CreateCommand(context)`. Either one:
 
@@ -456,6 +490,31 @@ sends a `new TCommand()`); a job that builds its command derives from `CommandJo
   listeners and Quartz's telemetry see the failed run, and the trigger keeps its schedule (no refire). The services'
   jobs either swallowed the exception after logging it (Quartz never knew) or let it out raw (Quartz logged it as an
   unhandled error).
+
+A job that reads first and may have nothing to send derives from `AsyncCommandJob<TCommand>` (or
+`AsyncCommandJob<TCommand, TResponse>`; `TCommand` is a class) and overrides `CreateCommandAsync(context, ct)`, which
+returns the command or `null`. A `null` skips the run: it is logged at `Debug` and ends normally, so the job's
+heartbeat is fresh and the liveness check sees a healthy job. An exception or a cancellation while the command is made
+is handled as one from the send. Quartz builds the job in a scope of its own per run, so it can take repositories:
+
+```csharp
+[DisallowConcurrentExecution]
+internal sealed class AddPlayersJob(
+    ISender sender,
+    ILogger<AddPlayersJob> logger,
+    ITournamentRepository tournaments)
+    : AsyncCommandJob<AddPlayersCommand>(sender, logger)
+{
+    protected override async ValueTask<AddPlayersCommand?> CreateCommandAsync(
+        IJobExecutionContext context,
+        CancellationToken cancellationToken)
+        => await tournaments.GetLatestTournament(cancellationToken) is { } tournament
+            ? new AddPlayersCommand(tournament.Id)
+            : null;   // nothing to do this run
+}
+
+services.AddQuartz(quartz => quartz.AddIntervalJob<AddPlayersJob>(TimeSpan.FromMinutes(1)));
+```
 
 ### Job heartbeats and liveness
 
@@ -472,7 +531,30 @@ alike); a paused, finished or one-off trigger isn't checked, and a job not due y
 and fails keeps beating, so an upstream outage doesn't restart the pod. It is meant for `/health/live`: a scheduler
 that stopped firing (Shard's rank updates froze for ~29 h) is fixed by a restart. A run counts as silence until it
 ends, so give long-running jobs room (`maxSilence: interval => interval * 3 + TimeSpan.FromMinutes(30)`). Time is the
-registered `TimeProvider`.
+registered `TimeProvider`. Without `AddJobHeartbeats()` the host fails to start, with a message saying so (a container
+used without a host gets a check that reports it).
+
+**Which jobs it watches.** Every scheduled job but the outbox's (`OutboxJobs.IsOutboxJob`: the processing and cleanup
+jobs of every context). An outbox stalls on its broker or its database, which a restart doesn't fix: watched on
+`/health/live`, a broker outage would restart every replica, over and over. The outbox has its own signal for a stall,
+`AddOutbox<TDbContext>` (the oldest waiting message's age, Degraded on `/health/ready`) and the `outbox.messages.*`
+gauges, and a scheduler that stopped firing is still caught by every other job. Leave other jobs out, or watch the
+outbox's after all, with the options overload:
+
+```csharp
+services.AddHealthChecks().AddQuartzJobs(
+    jobs => jobs
+        .Exclude<ImportArchiveJob>()                       // by type (the key AddIntervalJob / AddCronJob give it)
+        .Exclude(new JobKey("nightly-report"))             // by key
+        .Exclude(job => job.Group == "reports"),           // by predicate
+    tags: [HealthTags.Live]);
+
+// A service whose only jobs are the outbox's, and would rather restart than alert:
+services.AddHealthChecks().AddQuartzJobs(jobs => jobs.WatchOutboxJobs = true, tags: [HealthTags.Live]);
+```
+
+`jobs.MaxSilence` sets the window, as `maxSilence` does. Exclude a job rather than give it an endless window
+(`TimeSpan.MaxValue`).
 
 ### Monitoring the outbox
 
@@ -493,7 +575,10 @@ builder.Services.AddHealthChecks().AddOutbox<ShardDbContext>(tags: ["ready"]);
 | `outbox.oldest_waiting.age` | gauge (s) | `context` | How long the oldest waiting message has waited. |
 
 The gauges come from a backlog monitor that measures every 30 s (`BacklogCheckIntervalInSeconds`), so neither a
-scrape nor a health check queries the database. `AddOutbox<TDbContext>` fails (degraded by default) when the oldest
+scrape nor a health check queries the database. Both outbox registrations run it: `AddOutboxProcessing<TDbContext>`
+and the bare `quartz.AddProcessOutboxMessagesJob<TDbContext>()` (every 30 s; `AddOutboxProcessing` sets its own
+interval). Registering `AddOutbox<TDbContext>` with neither fails the host's start, with a message naming the missing
+call (a container used without a host gets a check that reports it instead). `AddOutbox<TDbContext>` fails (degraded by default) when the oldest
 waiting message has waited longer than 5 minutes (`maxWaitingAge`; keep it above the processing interval) or when the
 backlog can't be measured. Messages that gave up don't fail it; the `OutboxMessagesGaveUp` alert covers them.
 

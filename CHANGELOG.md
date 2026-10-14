@@ -5,6 +5,26 @@ every package in the repository is released together under one version.
 
 ## 4.0.1 (unreleased)
 
+### Behaviour changes
+
+- **`AddProcessOutboxMessagesJob` also runs the outbox backlog monitor**, a hosted service that measures the outbox
+  every 30 s (one snapshot of four counts), as `AddOutboxProcessing` always did. A service registering the bare job now
+  gets the `outbox.messages.*` gauges and a working `AddOutbox<TDbContext>()` check, for that query every 30 s.
+- **`AddHealthChecks().AddOutbox<TDbContext>()` without any outbox processing fails the host's start** (an
+  `OptionsValidationException` naming the missing call) instead of answering 500 on every health request.
+- **`AddOutboxProcessing<TDbContext>(serializer)` throws when `serializer` isn't the registered `IOutboxSerializer`**
+  (that instance, or one of its type), e.g. a custom serializer passed after `AddPostgresDbContext(... WithOutbox())`
+  registered the built-in one. It used to be ignored silently, and the jobs read with the registered one. Passing
+  `new SystemTextJsonOutboxSerializer()` next to `WithOutbox()`, as the services do, still works.
+- **The `AddQuartzJobs` liveness check no longer watches the outbox's jobs** (processing and cleanup, every context's):
+  a broker or database outage that stalls a run would restart every replica, which doesn't fix the outage, over and
+  over. The outbox's stalls are reported by `AddOutbox<TDbContext>()` (Degraded on `/health/ready`) and the
+  `outbox.messages.*` gauges instead, and a scheduler that stopped firing is still caught by every other job. To watch
+  them as before: `AddQuartzJobs(jobs => jobs.WatchOutboxJobs = true, ...)`. Tournament's check watched them (an outbox run
+  hung for about 3 minutes failed `/health/live`); Shard had excluded them by hand.
+- **`AddHealthChecks().AddQuartzJobs(...)` without `AddJobHeartbeats()` fails the host's start**, naming the missing
+  call, instead of answering 500 on every liveness probe.
+
 ### Added
 
 - **Web: `ResultResilienceOptions.RetryOnly`, an allow-list of the statuses retried**, and
@@ -50,6 +70,30 @@ every package in the repository is released together under one version.
   unchanged. A service deletes its `MessageBusOptions` class, its `AddOptions<MessageBusOptions>()` registration and
   the `UseRabbitMq(provider => …)` mapping, and calls `UseRabbitMqFromConfiguration()`. The MessageBus package now
   references `Microsoft.Extensions.Options.ConfigurationExtensions`.
+- **`AddOutboxProcessing<TDbContext>(configure)`, and no serializer needed.** The serializer parameter of
+  `AddOutboxProcessing<TDbContext>(serializer = null, configure = null)` is optional: without one it reads with the
+  registered `IOutboxSerializer` (the one `AddPostgresDbContext(... WithOutbox())` or `AddOutboxInterceptor`
+  registered), or registers `SystemTextJsonOutboxSerializer` when none is. A service on the Postgres package writes
+  `services.AddOutboxProcessing<ShardDbContext>(outbox => outbox.ProcessIntervalInSeconds = 20)`.
+- **`AsyncCommandJob<TCommand>` / `AsyncCommandJob<TCommand, TResponse>`**: a command job whose
+  `ValueTask<TCommand?> CreateCommandAsync(IJobExecutionContext context, CancellationToken cancellationToken)` can read
+  first (a repository taken in its constructor) and return `null` for "nothing to send this run". A skipped run is
+  logged at `Debug` and ends normally, so it beats like any run for the `AddQuartzJobs` liveness check. Failed results,
+  exceptions (from `CreateCommandAsync` too) and cancellations are handled as in `CommandJob`. For jobs like
+  Tournament's and Sentinel's, which may have nothing to do; `CommandJob` is unchanged.
+- **`AddCronJob<TJob>(cronExpression, timeZone = null, timeProvider = null)`**, the cron counterpart of
+  `AddIntervalJob`, with `AddCronCommandJob<TCommand>` / `AddCronCommandJob<TCommand, TResponse>` for the command jobs
+  (`CronJobSetup`). Same job key (`IntervalJobSetup.JobKeyFor<TJob>()`, so a job moved from a hand-written setup keyed
+  `nameof(TJob)` keeps its key), runs that never overlap, the trigger's start read from the registered `TimeProvider`.
+  The expression is read in UTC unless a zone is given, and one that doesn't parse or never fires throws an
+  `ArgumentException` at registration instead of a `FormatException` when the scheduler starts. The `AddQuartzJobs`
+  liveness check judges it by the fire that is due. Replaces Shard's payouts, Sentinel's processing and Oracle's
+  `*JobSetup` classes.
+- **`AddQuartzJobs(Action<QuartzJobsHealthCheckOptions> configure, name, failureStatus, tags)`** chooses which jobs the
+  liveness check watches: `Exclude(JobKey)`, `Exclude<TJob>()` (the key `AddIntervalJob` / `AddCronJob` give it),
+  `Exclude(Func<JobKey, bool>)`, `WatchOutboxJobs` (off by default) and `MaxSilence`. Replaces Shard's
+  `JobLivenessWindows.Unwatched` (`TimeSpan.MaxValue` as "don't watch"). `OutboxJobs.IsOutboxJob(JobKey)` says whether a
+  key is an outbox job's.
 
 ### Fixed
 
@@ -100,6 +144,23 @@ every package in the repository is released together under one version.
   idempotency out, though it has run right after logging since 4.0.0 (nothing changes at run time). `StandardBehavior.Idempotency`
   is documented, and the enum says its members aren't declared in that order (`Idempotency` keeps its value): order by
   name, never by value. A behavior inserted before `Validation` runs after idempotency.
+- **`AddHealthChecks().AddOutbox<TDbContext>()` no longer throws when the check runs** (a 500 on `/health` and
+  `/health/ready`) for an outbox registered with `quartz.AddProcessOutboxMessagesJob<TDbContext>()` instead of
+  `AddOutboxProcessing<TDbContext>()`: the job now registers the backlog monitor the check reads. Without either, the
+  check is validated at start-up (the host doesn't start, and says which call is missing); a container used without a
+  host gets a check reporting the same message with its failure status, never an exception. Found by Shard, Tournament
+  and Sentinel adopting 4.0.0.
+- **A direct `DbContext.SaveChangesAsync()` of domain events under `RetryOnFailure()` with `OnConflictDoNothing` says
+  what to do.** It failed with EF Core's "The configured execution strategy 'NpgsqlRetryingExecutionStrategy' does not
+  support user-initiated transactions", though the caller began none (the outbox's ON CONFLICT insert does, around the
+  save). The outbox interceptor now refuses it first, before anything is written, with an `InvalidOperationException`
+  that names the cause and both ways out: save through `IUnitOfWork.CompleteAsync` / `TryCompleteAsync` /
+  `ExecuteInTransactionAsync`, or run the save under `context.Database.CreateExecutionStrategy().ExecuteAsync(...)`.
+  The save isn't wrapped automatically: an interceptor runs inside `SaveChangesAsync`, and the strategy has to run the
+  whole save so that a retry saves it all again; doing so from inside would run every interceptor and `SavingChanges`
+  handler twice and can't see `acceptAllChangesOnSuccess`. Same exception type as before; a save without domain events,
+  or through the unit of work, is unaffected. Found by Sentinel in a test.
+
 
 ## 4.0.0 (2026-10-13)
 

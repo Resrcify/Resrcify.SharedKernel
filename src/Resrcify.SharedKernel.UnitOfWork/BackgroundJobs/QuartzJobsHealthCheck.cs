@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Quartz;
+using Resrcify.SharedKernel.UnitOfWork.Extensions;
 
 namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 
@@ -14,7 +15,7 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 /// <c>maxSilence(interval)</c> less one interval, the interval being the gap from that fire to the one after it, so
 /// uneven schedules (business hours, weekdays, fixed times) are judged by the fire that is actually due, not by the
 /// short gaps of another part of the day. A job without a repeating, active trigger (paused, finished, a one-off)
-/// isn't checked.
+/// isn't checked, nor is a job the options leave out (the outbox's, unless watched, and any excluded one).
 /// </summary>
 /// <remarks>
 /// Meant for <c>/health/live</c>: a scheduler that stopped firing is fixed by a restart, which re-arms it. Before a
@@ -25,7 +26,7 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 internal sealed class QuartzJobsHealthCheck(
     JobHeartbeatRegistry registry,
     ISchedulerFactory schedulerFactory,
-    Func<TimeSpan, TimeSpan> maxSilence,
+    QuartzJobsHealthCheckOptions options,
     TimeProvider time)
     : IHealthCheck
 {
@@ -43,13 +44,16 @@ internal sealed class QuartzJobsHealthCheck(
         var data = new Dictionary<string, object>(StringComparer.Ordinal);
         foreach (var job in await scheduler.GetJobKeys(GroupMatcher<JobKey>.AnyGroup(), cancellationToken))
         {
+            if (!options.Watches(job))
+                continue;
+
             var lastBeat = registry.LastBeat(job);
             if (await DueFireOfAsync(scheduler, job, lastBeat, cancellationToken) is not { } due)
                 continue;
 
             var silence = now - (lastBeat ?? due.Since);
             data[job.ToString()] = Math.Round(Math.Max(0, silence.TotalSeconds));
-            var limit = maxSilence(due.Interval);
+            var limit = options.MaxSilence(due.Interval);
             var allowance = limit > due.Interval ? limit - due.Interval : TimeSpan.Zero;
             if (now - due.At > allowance)
                 stalled.Add(string.Create(

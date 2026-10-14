@@ -108,8 +108,16 @@ With two contexts each reads its own section.
 `outbox.Serializer`): the same one `AddOutboxProcessing` reads with. `outbox.OnConflictDoNothing = true` inserts with
 `PostgresOnConflictOutboxInsertStrategy` (`ON CONFLICT ("DedupKey") ... DO NOTHING`, what the services use; needs
 `PostgresOutboxIndexes.PartialUniqueDedup` on the outbox mapping). Processing stays `AddOutboxProcessing` or
-`AddProcessOutboxMessagesJob`. A context without `.WithOutbox()` doesn't get the interceptor, even when another
-context of the service has it.
+`AddProcessOutboxMessagesJob`; pass `AddOutboxProcessing` no serializer, and it reads with the one `.WithOutbox()`
+registered:
+
+```csharp
+services.AddPostgresDbContext<ShardDbContext>(configuration, db => db.WithOutbox());
+services.AddOutboxProcessing<ShardDbContext>(outbox => outbox.ProcessIntervalInSeconds = 20);
+```
+
+(A serializer of another type passed to `AddOutboxProcessing` throws, rather than being ignored.) A context without
+`.WithOutbox()` doesn't get the interceptor, even when another context of the service has it.
 
 ### Waking the outbox on commit
 
@@ -143,7 +151,11 @@ Two things EF Core refuses under a retrying strategy, so change them before turn
 - a transaction begun by hand (`IUnitOfWork.BeginTransactionAsync` + `CommitTransactionAsync`, as Tournament's jobs
   do): use `ExecuteInTransactionAsync`;
 - `DbContext.SaveChangesAsync()` of domain events with `OnConflictDoNothing` (that insert opens a transaction of its
-  own): save through `IUnitOfWork`.
+  own): save through `IUnitOfWork` (`CompleteAsync`, `TryCompleteAsync`, `ExecuteInTransactionAsync`), or run the save
+  under the strategy yourself (`context.Database.CreateExecutionStrategy().ExecuteAsync(ct => context.SaveChangesAsync(ct), ct)`).
+  A direct save throws an `InvalidOperationException` that says so, before anything is written (the events stay on
+  their aggregates). It can't be made to work from inside the save: the strategy must run the whole save, so that a
+  retry saves it all again, and the outbox interceptor only runs within it. A save without domain events is unaffected.
 
 ### The service's own options
 
