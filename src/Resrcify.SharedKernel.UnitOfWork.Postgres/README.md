@@ -108,8 +108,16 @@ With two contexts each reads its own section.
 `outbox.Serializer`): the same one `AddOutboxProcessing` reads with. `outbox.OnConflictDoNothing = true` inserts with
 `PostgresOnConflictOutboxInsertStrategy` (`ON CONFLICT ("DedupKey") ... DO NOTHING`, what the services use; needs
 `PostgresOutboxIndexes.PartialUniqueDedup` on the outbox mapping). Processing stays `AddOutboxProcessing` or
-`AddProcessOutboxMessagesJob`. A context without `.WithOutbox()` doesn't get the interceptor, even when another
-context of the service has it.
+`AddProcessOutboxMessagesJob`; pass `AddOutboxProcessing` no serializer, and it reads with the one `.WithOutbox()`
+registered:
+
+```csharp
+services.AddPostgresDbContext<ShardDbContext>(configuration, db => db.WithOutbox());
+services.AddOutboxProcessing<ShardDbContext>(outbox => outbox.ProcessIntervalInSeconds = 20);
+```
+
+(A serializer of another type passed to `AddOutboxProcessing` throws, rather than being ignored.) A context without
+`.WithOutbox()` doesn't get the interceptor, even when another context of the service has it.
 
 ### Waking the outbox on commit
 

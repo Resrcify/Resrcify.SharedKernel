@@ -20,13 +20,44 @@ namespace Resrcify.SharedKernel.UnitOfWork.Extensions;
 public static class OutboxServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers outbox processing for <typeparamref name="TDbContext"/>: the unit
-    /// of work, the <paramref name="serializer"/> the job reads with, and the Quartz
-    /// processing job.
+    /// Registers outbox processing for <typeparamref name="TDbContext"/> with the serializer already registered (or
+    /// <c>SystemTextJsonOutboxSerializer</c> when none is), tuned by <paramref name="configure"/>: what
+    /// <see cref="AddOutboxProcessing{TDbContext}(IServiceCollection, IOutboxSerializer?, Action{OutboxOptions}?)"/>
+    /// registers without a serializer. On PostgreSQL, <c>AddPostgresDbContext(..., db =&gt; db.WithOutbox())</c> registers
+    /// the serializer the interceptor writes with, so this reads with the same one:
+    /// <code>
+    /// services.AddPostgresDbContext&lt;AppDbContext&gt;(configuration, db =&gt; db.WithOutbox());
+    /// services.AddOutboxProcessing&lt;AppDbContext&gt;(outbox =&gt; outbox.ProcessIntervalInSeconds = 20);
+    /// </code>
+    /// </summary>
+    public static IServiceCollection AddOutboxProcessing<TDbContext>(
+        this IServiceCollection services,
+        Action<OutboxOptions> configure)
+        where TDbContext : DbContext
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+        return services.AddOutboxProcessing<TDbContext>(serializer: null, configure);
+    }
+
+    /// <summary>
+    /// Registers outbox processing for <typeparamref name="TDbContext"/>: the unit of work, the serializer the job reads
+    /// with, and the Quartz processing job.
     /// <para>
-    /// The write side stays explicit — add <c>InsertOutboxMessagesInterceptor</c> to
-    /// the DbContext yourself, passing the <em>same</em> <paramref name="serializer"/>
-    /// instance so the write and read sides cannot drift apart:
+    /// The serializer is the registered <see cref="IOutboxSerializer"/>, the one the outbox interceptor writes with:
+    /// <list type="bullet">
+    /// <item><paramref name="serializer"/> <see langword="null"/> (or left out) uses the registered one, or registers
+    /// <c>SystemTextJsonOutboxSerializer</c> when none is (e.g. <c>AddPostgresDbContext(... WithOutbox())</c> registered
+    /// one already);</item>
+    /// <item>a <paramref name="serializer"/> is registered when none is; when one is, it must be that instance or of its
+    /// type (the built-in serializer is stateless, so two of them read and write alike), or this throws an
+    /// <see cref="InvalidOperationException"/>: the jobs and the interceptor would read and write with different ones.
+    /// It is never silently ignored.</item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// Without the Postgres package, the write side stays explicit: add <c>InsertOutboxMessagesInterceptor</c> to the
+    /// DbContext yourself with the <em>same</em> serializer instance, or let the container build it
+    /// (<c>AddOutboxInterceptor</c>, which uses the registered serializer):
     /// </para>
     /// <code>
     /// var serializer = new SystemTextJsonOutboxSerializer();
@@ -39,13 +70,16 @@ public static class OutboxServiceCollectionExtensions
     /// <see cref="OutboxModelBuilderExtensions.ApplyOutboxMessageConfiguration"/> and
     /// start the scheduler with <c>AddQuartzHostedService()</c>; the Quartz registration itself is made here.
     /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// <paramref name="serializer"/> is of another type than the <see cref="IOutboxSerializer"/> already registered.
+    /// </exception>
     public static IServiceCollection AddOutboxProcessing<TDbContext>(
         this IServiceCollection services,
-        IOutboxSerializer serializer,
+        IOutboxSerializer? serializer = null,
         Action<OutboxOptions>? configure = null)
         where TDbContext : DbContext
     {
-        ArgumentNullException.ThrowIfNull(serializer);
+        ArgumentNullException.ThrowIfNull(services);
 
         var options = new OutboxOptions();
         configure?.Invoke(options);
@@ -58,7 +92,7 @@ public static class OutboxServiceCollectionExtensions
         ArgumentOutOfRangeException.ThrowIfLessThan(options.BacklogCheckIntervalInSeconds, 1);
         var time = options.TimeProvider ?? RegisteredTimeProvider(services) ?? TimeProvider.System;
 
-        services.TryAddSingleton(serializer);
+        UseOneSerializer<TDbContext>(services, serializer);
         // The clock outbox processing, cleanup and the lanes read; replace it (e.g. with FakeTimeProvider) in tests.
         services.TryAddSingleton(time);
         services.TryAddScoped<IUnitOfWork, UnitOfWork<TDbContext>>();
@@ -92,6 +126,49 @@ public static class OutboxServiceCollectionExtensions
             services.ClaimOutboxLanesWith<TDbContext>(options.Claim);
 
         return services;
+    }
+
+    // The interceptor writes with the registered serializer and every outbox job reads with it, so there is one: a
+    // serializer given here that isn't (an equivalent of) the registered one would read messages it didn't write.
+    private static void UseOneSerializer<TDbContext>(
+        IServiceCollection services,
+        IOutboxSerializer? serializer)
+        where TDbContext : DbContext
+    {
+        var registered = services.LastOrDefault(descriptor =>
+            descriptor.ServiceType == typeof(IOutboxSerializer) && !descriptor.IsKeyedService);
+        if (registered is null)
+        {
+            if (serializer is null)
+                services.AddSingleton<IOutboxSerializer, SystemTextJsonOutboxSerializer>();
+            else
+                services.AddSingleton(serializer);
+            return;
+        }
+
+        if (serializer is null || IsSameSerializer(registered, serializer))
+            return;
+
+        var registeredName = (registered.ImplementationInstance?.GetType() ?? registered.ImplementationType)?.Name
+            ?? "a serializer built by a factory";
+        var context = typeof(TDbContext).Name;
+        throw new InvalidOperationException(
+            $"AddOutboxProcessing<{context}> was given {serializer.GetType().Name}, but {registeredName} is registered "
+            + "already as the IOutboxSerializer (by AddPostgresDbContext(... WithOutbox()), AddOutboxInterceptor or an "
+            + "earlier registration): the outbox interceptor writes with that one, and the jobs read with it. Pass no "
+            + $"serializer (AddOutboxProcessing<{context}>(outbox => ...)) to use the registered one, or register the "
+            + "same serializer everywhere (WithOutbox(outbox => outbox.Serializer = ...)).");
+    }
+
+    private static bool IsSameSerializer(
+        ServiceDescriptor registered,
+        IOutboxSerializer serializer)
+    {
+        if (ReferenceEquals(registered.ImplementationInstance, serializer))
+            return true;
+
+        var registeredType = registered.ImplementationInstance?.GetType() ?? registered.ImplementationType;
+        return registeredType == serializer.GetType();
     }
 
     private static TimeProvider? RegisteredTimeProvider(IServiceCollection services)

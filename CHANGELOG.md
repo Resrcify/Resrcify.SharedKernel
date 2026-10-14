@@ -12,6 +12,18 @@ every package in the repository is released together under one version.
   gets the `outbox.messages.*` gauges and a working `AddOutbox<TDbContext>()` check, for that query every 30 s.
 - **`AddHealthChecks().AddOutbox<TDbContext>()` without any outbox processing fails the host's start** (an
   `OptionsValidationException` naming the missing call) instead of answering 500 on every health request.
+- **`AddOutboxProcessing<TDbContext>(serializer)` throws when `serializer` isn't the registered `IOutboxSerializer`**
+  (that instance, or one of its type), e.g. a custom serializer passed after `AddPostgresDbContext(... WithOutbox())`
+  registered the built-in one. It used to be ignored silently, and the jobs read with the registered one. Passing
+  `new SystemTextJsonOutboxSerializer()` next to `WithOutbox()`, as the services do, still works.
+
+### Added
+
+- **`AddOutboxProcessing<TDbContext>(configure)`, and no serializer needed.** The serializer parameter of
+  `AddOutboxProcessing<TDbContext>(serializer = null, configure = null)` is optional: without one it reads with the
+  registered `IOutboxSerializer` (the one `AddPostgresDbContext(... WithOutbox())` or `AddOutboxInterceptor`
+  registered), or registers `SystemTextJsonOutboxSerializer` when none is. A service on the Postgres package writes
+  `services.AddOutboxProcessing<ShardDbContext>(outbox => outbox.ProcessIntervalInSeconds = 20)`.
 
 ### Fixed
 

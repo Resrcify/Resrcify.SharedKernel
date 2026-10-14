@@ -281,9 +281,17 @@ no longer depends on Newtonsoft.Json.)
 
 ### Wiring it up
 
-`AddOutboxProcessing` registers the read side (unit of work, serializer, Quartz job).
-Add the `InsertOutboxMessagesInterceptor` to the `DbContext` yourself, passing the
-**same** serializer instance:
+`AddOutboxProcessing` registers the read side (unit of work, serializer, Quartz job). It reads with the registered
+`IOutboxSerializer`, the one the interceptor writes with:
+
+- `AddOutboxProcessing<AppDbContext>()` or `AddOutboxProcessing<AppDbContext>(options => ...)`, without a serializer,
+  uses the registered one (on PostgreSQL, `AddPostgresDbContext(... WithOutbox())` registers it), or registers
+  `SystemTextJsonOutboxSerializer` when none is;
+- a serializer passed in is registered when none is; when one is, it must be that instance or of its type, or
+  `AddOutboxProcessing` throws `InvalidOperationException` (it used to ignore it, and the jobs read with the other one).
+
+Without the Postgres package, add the `InsertOutboxMessagesInterceptor` to the `DbContext` yourself, passing the
+**same** serializer instance (or let the container build it, see [Interceptors from the container](#interceptors-from-the-container)):
 
 ```csharp
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
