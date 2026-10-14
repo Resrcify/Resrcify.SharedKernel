@@ -37,7 +37,7 @@
 - EF Core-backed `UnitOfWork<TDbContext>` implementation, with `TryCompleteAsync` returning a concurrency conflict,
   a duplicate or a serialization failure as a `Result` (`PersistenceErrors`).
 - Outbox/background-job helpers in `BackgroundJobs/`: the outbox job (draining a backlog in one run), its lanes,
-  `OutboxWakeUp`, and Quartz helpers (`AddIntervalJob`, `CommandJob`, job heartbeats and a liveness check).
+  `OutboxWakeUp`, and Quartz helpers (`AddIntervalJob`, `CommandJob`, `AsyncCommandJob`, job heartbeats and a liveness check).
 - Interceptors for domain events and auditable/deletable entities, registrable in the container
   (`AddEntityInterceptors`, `AddOutboxInterceptor`).
 - `AddMigrationsOnStartup<TDbContext>(configuration)`: migrations applied while the host starts.
@@ -464,6 +464,31 @@ sends a `new TCommand()`); a job that builds its command derives from `CommandJo
   listeners and Quartz's telemetry see the failed run, and the trigger keeps its schedule (no refire). The services'
   jobs either swallowed the exception after logging it (Quartz never knew) or let it out raw (Quartz logged it as an
   unhandled error).
+
+A job that reads first and may have nothing to send derives from `AsyncCommandJob<TCommand>` (or
+`AsyncCommandJob<TCommand, TResponse>`; `TCommand` is a class) and overrides `CreateCommandAsync(context, ct)`, which
+returns the command or `null`. A `null` skips the run: it is logged at `Debug` and ends normally, so the job's
+heartbeat is fresh and the liveness check sees a healthy job. An exception or a cancellation while the command is made
+is handled as one from the send. Quartz builds the job in a scope of its own per run, so it can take repositories:
+
+```csharp
+[DisallowConcurrentExecution]
+internal sealed class AddPlayersJob(
+    ISender sender,
+    ILogger<AddPlayersJob> logger,
+    ITournamentRepository tournaments)
+    : AsyncCommandJob<AddPlayersCommand>(sender, logger)
+{
+    protected override async ValueTask<AddPlayersCommand?> CreateCommandAsync(
+        IJobExecutionContext context,
+        CancellationToken cancellationToken)
+        => await tournaments.GetLatestTournament(cancellationToken) is { } tournament
+            ? new AddPlayersCommand(tournament.Id)
+            : null;   // nothing to do this run
+}
+
+services.AddQuartz(quartz => quartz.AddIntervalJob<AddPlayersJob>(TimeSpan.FromMinutes(1)));
+```
 
 ### Job heartbeats and liveness
 

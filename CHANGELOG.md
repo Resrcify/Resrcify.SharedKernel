@@ -24,6 +24,12 @@ every package in the repository is released together under one version.
   registered `IOutboxSerializer` (the one `AddPostgresDbContext(... WithOutbox())` or `AddOutboxInterceptor`
   registered), or registers `SystemTextJsonOutboxSerializer` when none is. A service on the Postgres package writes
   `services.AddOutboxProcessing<ShardDbContext>(outbox => outbox.ProcessIntervalInSeconds = 20)`.
+- **`AsyncCommandJob<TCommand>` / `AsyncCommandJob<TCommand, TResponse>`**: a command job whose
+  `ValueTask<TCommand?> CreateCommandAsync(IJobExecutionContext context, CancellationToken cancellationToken)` can read
+  first (a repository taken in its constructor) and return `null` for "nothing to send this run". A skipped run is
+  logged at `Debug` and ends normally, so it beats like any run for the `AddQuartzJobs` liveness check. Failed results,
+  exceptions (from `CreateCommandAsync` too) and cancellations are handled as in `CommandJob`. For jobs like
+  Tournament's and Sentinel's, which may have nothing to do; `CommandJob` is unchanged.
 
 ### Fixed
 
