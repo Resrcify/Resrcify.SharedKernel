@@ -10,16 +10,12 @@
     <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.UnitOfWork.Postgres\Resrcify.SharedKernel.UnitOfWork.Postgres.csproj" />
   </ItemGroup>
 
+  <!-- EF Core, Npgsql's provider, Quartz and the hosting come with UnitOfWork.Postgres; dotnet ef needs these two. -->
   <ItemGroup>
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.13" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.13">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.13" />
-    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.13" />
-    <PackageReference Include="Quartz" Version="4.5.0" />
   </ItemGroup>
 </Project>

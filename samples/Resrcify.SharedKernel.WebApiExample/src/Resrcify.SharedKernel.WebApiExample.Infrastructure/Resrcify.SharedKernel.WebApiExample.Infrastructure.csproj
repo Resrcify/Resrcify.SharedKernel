@@ -15,19 +15,10 @@
     <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.Web\Resrcify.SharedKernel.Web.csproj" />
   </ItemGroup>
 
-  <!-- SharedKernel's dependencies are private: the service references what it ships. -->
+  <!-- OpenTelemetry, Serilog's hosting, HTTP resilience and Quartz come with the SharedKernel packages. The service
+       references the Prometheus exporter (a prerelease, so no package's dependency) and its Serilog sinks. -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.11.0" />
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.19.1" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.19.0" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.19.0" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.19.0" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.19.1" />
     <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.19.1-beta.1" />
-    <PackageReference Include="Quartz" Version="4.5.0" />
-    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
-    <PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
-    <PackageReference Include="Serilog.Settings.Configuration" Version="10.0.1" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
   </ItemGroup>
 </Project>

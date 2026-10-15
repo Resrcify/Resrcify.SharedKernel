@@ -8,16 +8,8 @@
 
   <ItemGroup>
     <PackageReference Include="Npgsql" />
-    <!-- Observability's dependencies are private: a service references them itself. -->
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <!-- What a service references itself next to Observability: a prerelease, so no dependency of the package. -->
     <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" />
-    <PackageReference Include="Serilog.Extensions.Hosting" />
-    <PackageReference Include="Serilog.Settings.Configuration" />
-    <PackageReference Include="Serilog.AspNetCore" />
   </ItemGroup>
 
   <!-- Turned on by settings, for the fixture's log capture and message bus tests. -->

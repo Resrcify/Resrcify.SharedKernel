@@ -4,15 +4,10 @@
   </PropertyGroup>
 
   <!-- Only what the Application layer may use: the mediator (and through it Abstractions and Results). The repository
-       and unit-of-work packages belong to Persistence (see the SharedKernel README's layer table). -->
+       and unit-of-work packages belong to Persistence (see the SharedKernel README's layer table). FluentValidation
+       and logging come with the mediator. -->
   <ItemGroup>
     <ProjectReference Include="..\Resrcify.SharedKernel.WebApiExample.Domain\Resrcify.SharedKernel.WebApiExample.Domain.csproj" />
     <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.Mediator\Resrcify.SharedKernel.Mediator.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="FluentValidation" Version="12.2.0" />
-    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.2.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.13" />
   </ItemGroup>
 </Project>
