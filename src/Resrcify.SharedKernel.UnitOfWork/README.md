@@ -36,7 +36,8 @@
 
 - `IUnitOfWork` contract in `Resrcify.SharedKernel.Abstractions.UnitOfWork`.
 - EF Core-backed `UnitOfWork<TDbContext>` implementation, with `TryCompleteAsync` returning a concurrency conflict,
-  a duplicate or a serialization failure as a `Result` (`PersistenceErrors`).
+  a broken constraint (unique, foreign key, not null, check, too long) or a serialization failure as a `Result`
+  (`PersistenceErrors`).
 - Outbox/background-job helpers in `BackgroundJobs/`: the outbox job (draining a backlog in one run), its lanes,
   `OutboxWakeUp`, and Quartz helpers (`AddIntervalJob`, `AddCronJob`, `CommandJob`, `AsyncCommandJob`, job heartbeats and a liveness check).
 - Interceptors for domain events and auditable/deletable entities, registrable in the container
@@ -165,8 +166,20 @@ scope doesn't save half of it; the mediator's unit-of-work behavior sends every 
 |---|---|---|
 | `DbUpdateConcurrencyException` (a row changed since it was read) | `Persistence.Concurrency` | `Conflict` |
 | `SQLSTATE 23505` (a unique constraint) | `Persistence.UniqueViolation` | `Conflict` |
+| `23503` (a foreign key), or `23001` (an `ON DELETE RESTRICT` key, EF Core's `DeleteBehavior.Restrict`) | `Persistence.ForeignKeyViolation` | `Conflict` |
+| `23502` (a `NOT NULL` column left empty) | `Persistence.NotNullViolation` | `Validation` |
+| `23514` (a check constraint) | `Persistence.CheckViolation` | `Validation` |
+| `22001` (a string longer than its column) | `Persistence.ValueTooLong` | `Validation` |
 | `40001` (a serialization failure), outside a transaction | `Persistence.SerializationFailure` | `Failure` (transient) |
 | `40P01` (a deadlock), outside a transaction | `Persistence.Deadlock` | `Failure` (transient) |
+
+The constraint violations (all but the unique one) name what was broken in the message, when the driver reports it:
+`A value the database requires is missing (table "Members", column "Nickname").`, `The data refers to data that
+doesn't exist, or other data still refers to it (constraint "FK_Members_Shards_ShardId", table "Members").`. The names
+are read from `Exception.Data` (`ConstraintName`, `TableName`, `ColumnName`), where Npgsql's `PostgresException` puts
+them; never a value (PostgreSQL's detail, which holds the row's data, isn't read). PostgreSQL names no column for
+`22001`. So match on `Code`, not on the whole error. A `Validation` answers 400 and a `Conflict` 409 through the Web
+package's problem details, where the exception would have been a 500.
 
 Anything else still throws. After a refused save the pending changes are discarded (and their events dropped), so
 the scope's next save doesn't send them again: read the data again to retry. The `SQLSTATE` is read from the BCL's

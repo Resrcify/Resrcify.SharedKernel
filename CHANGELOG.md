@@ -3,6 +3,30 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.3.0 (unreleased)
+
+### Behaviour changes
+
+- **`TryCompleteAsync` returns the other constraint violations a caller can answer** (Resrcify.SharedKernel.UnitOfWork),
+  and so does a command under `ReturnPersistenceFailures`: a not-null violation (`SQLSTATE 23502`), a check-constraint
+  violation (`23514`) and a string longer than its column (`22001`) as a `Validation` error (400), a foreign-key
+  violation (`23503`, or `23001` for an `ON DELETE RESTRICT` key, as EF Core's `DeleteBehavior.Restrict` declares it)
+  as a `Conflict` (409). They threw a `DbUpdateException`, which a service answered with a 500. As for a unique
+  violation, the refused save's pending changes are discarded (added rows untracked, changed or deleted ones put back),
+  whether or not a transaction is open. ⚠️ A caller catching `DbUpdateException` around `TryCompleteAsync` for these
+  gets a failed `Result` instead; `CompleteAsync` still throws.
+
+### Added
+
+- **UnitOfWork: `PersistenceErrors.NotNullViolation`, `CheckViolation`, `ValueTooLong` and `ForeignKeyViolation`**
+  (codes `Persistence.NotNullViolation`, `Persistence.CheckViolation`, `Persistence.ValueTooLong`,
+  `Persistence.ForeignKeyViolation`), with their `SQLSTATE`s (`NotNullViolationSqlState`, `CheckViolationSqlState`,
+  `ValueTooLongSqlState`, `ForeignKeyViolationSqlState`, `RestrictViolationSqlState`). The error returned names what
+  was broken in its message when the driver reports it, e.g. `A value the database requires is missing (table
+  "Members", column "Nickname").`, read from `Exception.Data` (`ConstraintName`, `TableName`, `ColumnName`, where
+  Npgsql's `PostgresException` puts them), so UnitOfWork still references no provider. Never a value: PostgreSQL's
+  detail, which holds the row's data, isn't read. Its message differs from the field's, so match on `Code`.
+
 ## 4.2.0 (2026-10-14)
 
 ### Added

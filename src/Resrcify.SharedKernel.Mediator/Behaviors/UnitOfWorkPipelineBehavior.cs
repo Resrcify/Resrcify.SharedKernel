@@ -12,7 +12,7 @@ namespace Resrcify.SharedKernel.Mediator.Behaviors;
 /// <summary>
 /// Saves a command's work (<c>IUnitOfWork.CompleteAsync</c>) when its handler succeeded. With
 /// <see cref="UnitOfWorkPipelineOptions.ReturnPersistenceFailures"/>, a save the database refuses in a way the caller can
-/// answer (a concurrency conflict, a duplicate) is returned as the command's failure instead of thrown. When the command
+/// answer (a concurrency conflict, a duplicate, a broken constraint) is returned as the command's failure instead of thrown. When the command
 /// fails (a failure, a refused save or an exception), what it changed is undone in the change tracker
 /// (<c>IUnitOfWork.ExecuteAsync</c>), so a later save in the same scope doesn't save half its work.
 /// </summary>

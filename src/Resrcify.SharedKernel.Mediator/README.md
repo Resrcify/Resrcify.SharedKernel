@@ -340,8 +340,9 @@ The package includes the following built-in behaviors in `src/Resrcify.SharedKer
       the change tracker and a later save in the scope doesn't save half of it.
     - With `cfg.ConfigureUnitOfWork(uow => uow.ReturnPersistenceFailures = true)`, saves with
       `IUnitOfWork.TryCompleteAsync` instead and returns its failure as the command's result (`ResultFactory.Failure`):
-      a concurrency conflict or a duplicate is a `Conflict` (409), a serialization failure or a deadlock outside a
-      transaction a transient `Failure`; anything else still throws. Off by default. See
+      a concurrency conflict, a duplicate or a foreign-key violation is a `Conflict` (409), a not-null or check
+      violation or a string too long for its column a `Validation` error (400), a serialization failure or a deadlock
+      outside a transaction a transient `Failure`; anything else still throws. Off by default. See
       [Unit-of-work options](#unit-of-work-options).
     - Constraint: `TRequest : IBaseCommand`, `TResponse : Result`.
 
@@ -440,7 +441,10 @@ cfg.ConfigureUnitOfWork(uow => uow.ReturnPersistenceFailures = true);
 
 A command whose save hits a concurrency conflict (`PersistenceErrors.Concurrency`, e.g. an `xmin` row version on
 PostgreSQL) or a unique constraint (`PersistenceErrors.UniqueViolation`) then fails with that error, which the Web
-package answers with a 409, instead of throwing a `DbUpdateException` (a 500). The logging behavior logs it at
+package answers with a 409, instead of throwing a `DbUpdateException` (a 500). So does a foreign key
+(`PersistenceErrors.ForeignKeyViolation`, 409), and a not-null or check constraint or a string too long for its column
+(`NotNullViolation`, `CheckViolation`, `ValueTooLong`: `Validation`, a 400), whose message names the constraint, table
+and column when the database reports them (match on `Code`). The logging behavior logs it at
 `Information`, as an expected answer. Inside a transactional command, a serialization failure or a deadlock still
 throws: it aborted the whole transaction, so the transaction behavior's execution strategy (with retries on) runs the
 command again; the transaction behavior needs no option of its own, since it rolls back on the failure the

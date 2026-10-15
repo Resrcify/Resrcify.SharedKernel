@@ -13,8 +13,10 @@ public interface IUnitOfWork : IDisposable
 
     /// <summary>
     /// <see cref="CompleteAsync"/>, with the failures a caller can answer returned instead of thrown: a concurrency
-    /// conflict and a unique-constraint violation are a <c>Conflict</c>; a serialization failure or a deadlock (outside a
-    /// transaction, where nothing else retries it) is a transient <c>Failure</c>. Anything else still throws.
+    /// conflict, a unique-constraint violation and a foreign-key violation are a <c>Conflict</c>; a not-null violation, a
+    /// check-constraint violation and a string too long for its column are a <c>Validation</c> error; a serialization
+    /// failure or a deadlock (outside a transaction, where nothing else retries it) is a transient <c>Failure</c>.
+    /// Anything else still throws. The pending changes of a refused save are discarded.
     /// </summary>
     Task<Result> TryCompleteAsync(
         CancellationToken cancellationToken = default);
