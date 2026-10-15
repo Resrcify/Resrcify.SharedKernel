@@ -109,7 +109,7 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
             if (_healthGate is not null)
                 await _healthGate.FirstCheck.WaitAsync(stoppingToken);
             var stopped = Task.Delay(Timeout.Infinite, stoppingToken);
-            var time = serviceProvider.GetService<TimeProvider>() ?? TimeProvider.System;
+            var time = serviceProvider.GetRequiredService<TimeProvider>();
             while (!stoppingToken.IsCancellationRequested)
             {
                 // Take the signals before acting, so a check or a restart request meanwhile wakes the next round.
@@ -229,7 +229,7 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
         CancellationToken consuming)
     {
         var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
-        var time = serviceProvider.GetService<TimeProvider>() ?? TimeProvider.System;
+        var time = serviceProvider.GetRequiredService<TimeProvider>();
         var rateLimitStep = new RateLimitStep(limiter, queueName, time, consuming);
         Configure.With(activator)
             .Logging(logging => logging.Use(new RebusLoggerFactory(loggerFactory)))
@@ -282,7 +282,7 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
 
     private async Task HandleAsync(IBus bus, IMessageContext context, TRequest request, CancellationToken consuming)
     {
-        var time = serviceProvider.GetService<TimeProvider>() ?? TimeProvider.System;
+        var time = serviceProvider.GetRequiredService<TimeProvider>();
         var remaining = MessageDeadline.Remaining(context.Headers, time.GetUtcNow()) ?? Timeout.InfiniteTimeSpan;
         if (remaining != Timeout.InfiniteTimeSpan && remaining <= TimeSpan.Zero)
         {

@@ -39,6 +39,8 @@ public static class OutboxLaneServiceCollectionExtensions
 
         services.RemoveAll<OutboxLaneSettings<TDbContext>>();
         services.AddSingleton(new OutboxLaneSettings<TDbContext>(options, retryLimits));
+        // The clock the lanes read; a later registration (e.g. a FakeTimeProvider in a test) replaces it.
+        services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<OutboxLaneRegistry>();
         services.TryAddSingleton<OutboxWakeUp<TDbContext>>();
         services.TryAddScoped<OutboxAdministration<TDbContext>>();

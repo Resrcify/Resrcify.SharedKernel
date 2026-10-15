@@ -33,6 +33,7 @@ internal static class OutboxBacklogMonitorRegistration
         if (replace)
             services.RemoveAll<OutboxBacklogSettings<TDbContext>>();
         services.TryAddSingleton(settings);
+        services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<OutboxAdministration<TDbContext>>();
 
         // A second hosted-service registration would start the same monitor twice.

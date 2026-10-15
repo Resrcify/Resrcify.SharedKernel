@@ -2,6 +2,7 @@ using System;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Http.Resilience;
 using Polly;
 using Polly.Fallback;
@@ -20,7 +21,8 @@ public static class ResultResilienceHttpClientBuilderExtensions
     /// transient (see <see cref="ResultResilienceOptions"/>): a 5xx, a 408 or a 429 (after its <c>Retry-After</c>), network
     /// errors and timed-out attempts, with exponential, jittered delays. Outermost to innermost: the total timeout,
     /// the retries, the circuit breaker, the attempt timeout. Every wait is on the <see cref="TimeProvider"/>
-    /// registered in the container (the system clock otherwise), so tests can drive it with a fake one.
+    /// registered in the container (this registers the system clock when none is), so tests can drive it with a fake one
+    /// registered before or after.
     /// </summary>
     /// <remarks>
     /// A <c>Retry-After</c> at least as long as what is left of the total timeout isn't waited for: the caller gets
@@ -55,13 +57,14 @@ public static class ResultResilienceHttpClientBuilderExtensions
         configure?.Invoke(options);
         options.Validate();
         builder.Services.AddTransientFailureRule<PollyTransientFailureRule>();
+        builder.Services.TryAddSingleton(TimeProvider.System);
 
         return builder.AddResilienceHandler(
             PipelineName,
             (pipeline, context) => Configure(
                 pipeline,
                 options,
-                context.ServiceProvider.GetService<TimeProvider>() ?? TimeProvider.System));
+                context.ServiceProvider.GetRequiredService<TimeProvider>()));
     }
 
     private static void Configure(

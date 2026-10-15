@@ -94,7 +94,7 @@ public sealed class CleanupOutboxMessagesJobTests(PostgresFixture pg)
         var job = new CleanupOutboxMessagesJob<TestDbContext>(
             _services.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<CleanupOutboxMessagesJob<TestDbContext>>.Instance,
-            clock);
+            clock ?? TimeProvider.System);
         var context = Substitute.For<IJobExecutionContext>();
         context.MergedJobDataMap.Returns(new JobDataMap { ["ProcessedRetentionInDays"] = retentionInDays });
         await job.Execute(context);

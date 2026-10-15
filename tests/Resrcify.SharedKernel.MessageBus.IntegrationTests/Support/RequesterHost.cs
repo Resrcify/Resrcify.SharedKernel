@@ -45,7 +45,7 @@ internal sealed class RequesterHost : IAsyncDisposable
         var outboxSerializer = new SystemTextJsonOutboxSerializer();
         builder.Services.AddDbContext<TestDbContext>(options => options
             .UseNpgsql(databaseConnectionString)
-            .AddInterceptors(new InsertOutboxMessagesInterceptor(outboxSerializer, new PostgresOnConflictOutboxInsertStrategy())));
+            .AddInterceptors(new InsertOutboxMessagesInterceptor(outboxSerializer, TimeProvider.System, new PostgresOnConflictOutboxInsertStrategy())));
         builder.Services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(RequesterHost).Assembly));
         builder.Services.AddOutboxLanes<TestDbContext>(lanes =>
         {

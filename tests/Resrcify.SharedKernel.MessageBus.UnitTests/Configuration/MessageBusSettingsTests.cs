@@ -32,7 +32,10 @@ public sealed class MessageBusSettingsTests
     private static readonly string Large = new('x', 100_000);
 
     /// <summary>A container with nothing in it: the bus' clock falls back to the system clock.</summary>
-    private static readonly IServiceProvider EmptyServices = new ServiceCollection().BuildServiceProvider();
+    // What AddMessageBus registers, and the bus reads: the clock.
+    private static readonly IServiceProvider EmptyServices = new ServiceCollection()
+        .AddSingleton(TimeProvider.System)
+        .BuildServiceProvider();
 
     [Fact]
     public void OtherPublisherOf_ShouldReportEachClashingPublisherOnce_WhenItKeepsPublishing()

@@ -346,7 +346,7 @@ public sealed class MessageBusBuilder
         Services.RegisterScatterGatherHandlers(additionalAssemblies);
         Services.AddSingleton(provider => new ScatterGatherTransport(
             Settings,
-            provider.GetService<TimeProvider>() ?? TimeProvider.System,
+            provider.GetRequiredService<TimeProvider>(),
             provider,
             provider.GetRequiredService<ILogger<ScatterGatherTransport>>()));
         Services.AddSingleton<IScatterGatherClient>(provider => provider.GetRequiredService<ScatterGatherTransport>());

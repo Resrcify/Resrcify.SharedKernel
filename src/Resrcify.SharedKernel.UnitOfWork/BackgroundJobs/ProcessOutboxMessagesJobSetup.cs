@@ -47,12 +47,6 @@ public static class ProcessOutboxMessagesJobSetup
     /// Claims each message for its processing transaction, so several service instances don't each publish it.
     /// <see langword="null"/> is fine for one instance; use <c>PostgresOutboxLaneClaim.Instance</c> on PostgreSQL.
     /// </param>
-    /// <param name="timeProvider">
-    /// The clock the first start is computed from; <see cref="TimeProvider.System"/> when <see langword="null"/>.
-    /// This only sets when the triggers first fire: Quartz 4 runs the scheduler itself on the
-    /// <see cref="TimeProvider"/> registered in DI (or one given with <c>UseTimeProvider</c>), so register a fake
-    /// one there to drive the schedule in tests.
-    /// </param>
     /// <param name="transientRetries">
     /// The attempts and waits a message gets when its tries fail for a transient reason (the container's
     /// <c>ITransientFailureClassifier</c>: a <c>TransientFailureException</c>, a cancellation or timeout, a transient
@@ -72,7 +66,6 @@ public static class ProcessOutboxMessagesJobSetup
         RetrySchedule? retries = null,
         int processedRetentionInDays = CleanupOutboxMessagesJob<DbContext>.DefaultRetentionInDays,
         IOutboxLaneClaim? claim = null,
-        TimeProvider? timeProvider = null,
         RetrySchedule? transientRetries = null)
         where TDbContext : DbContext
     {
@@ -88,8 +81,7 @@ public static class ProcessOutboxMessagesJobSetup
             delayInSecondsBeforeStart,
             limits,
             processedRetentionInDays,
-            claim,
-            timeProvider);
+            claim);
     }
 
     // The registration, with the retry limits its callers made (OutboxRetryLimits.Create): the attempts, delays and
@@ -101,13 +93,14 @@ public static class ProcessOutboxMessagesJobSetup
         int delayInSecondsBeforeStart,
         OutboxRetryLimits retryLimits,
         int processedRetentionInDays,
-        IOutboxLaneClaim? claim,
-        TimeProvider? timeProvider)
+        IOutboxLaneClaim? claim)
         where TDbContext : DbContext
     {
         ArgumentNullException.ThrowIfNull(quartz);
         ArgumentNullException.ThrowIfNull(retryLimits);
-        var time = timeProvider ?? TimeProvider.System;
+        // The clock the jobs read and their first runs are computed from, the container's (as Quartz 4 runs the
+        // scheduler on it); a later registration (e.g. a FakeTimeProvider in a test) replaces it.
+        quartz.Services.TryAddSingleton(TimeProvider.System);
         quartz.Services.AddOutboxMessageContext();
         // A concurrency conflict, a serialization failure or a deadlock: transient, so a failed try gets the transient tries.
         quartz.Services.AddTransientFailureRule<PersistenceTransientFailureRule>();
@@ -122,7 +115,7 @@ public static class ProcessOutboxMessagesJobSetup
                 OutboxBacklogMonitorRegistration.DefaultInterval),
             replace: false);
         if (processedRetentionInDays > 0)
-            quartz.AddCleanupOutboxMessagesJob<TDbContext>(processedRetentionInDays, time);
+            quartz.AddCleanupOutboxMessagesJob<TDbContext>(processedRetentionInDays);
 
         var jobKey = OutboxJobs.Process<TDbContext>();
 
@@ -159,9 +152,9 @@ public static class ProcessOutboxMessagesJobSetup
                 .UsingJobData(
                     ProcessOutboxMessagesJob<TDbContext>.ProcessTransientRetryJitterKey,
                     retryLimits.TransientRetries.Jitter))
-            .AddTrigger<ProcessOutboxMessagesJob<TDbContext>>(trigger => trigger
+            .AddTrigger<ProcessOutboxMessagesJob<TDbContext>>((provider, trigger) => trigger
                 .ForJob(jobKey)
-                .StartAt(time.GetUtcNow().AddSeconds(delayInSecondsBeforeStart))
+                .StartAt(provider.GetRequiredService<TimeProvider>().GetUtcNow().AddSeconds(delayInSecondsBeforeStart))
                 .WithSimpleSchedule(schedule => schedule
                     .WithInterval(TimeSpan.FromSeconds(processIntervalInSeconds))
                     .RepeatForever()));
@@ -171,28 +164,23 @@ public static class ProcessOutboxMessagesJobSetup
     /// Deletes processed outbox messages older than <paramref name="processedRetentionInDays"/> every hour (first run
     /// five minutes after start-up). <see cref="AddProcessOutboxMessagesJob{TDbContext}"/> adds it, with 7 days.
     /// </summary>
-    /// <param name="timeProvider">
-    /// The clock the first start is computed from; <see cref="TimeProvider.System"/> when <see langword="null"/>.
-    /// The scheduler itself runs on the <see cref="TimeProvider"/> registered in DI (Quartz 4).
-    /// </param>
     public static IQuartzBuilder AddCleanupOutboxMessagesJob<TDbContext>(
         this IQuartzBuilder quartz,
-        int processedRetentionInDays = CleanupOutboxMessagesJob<DbContext>.DefaultRetentionInDays,
-        TimeProvider? timeProvider = null)
+        int processedRetentionInDays = CleanupOutboxMessagesJob<DbContext>.DefaultRetentionInDays)
         where TDbContext : DbContext
     {
         ArgumentNullException.ThrowIfNull(quartz);
         ArgumentOutOfRangeException.ThrowIfLessThan(processedRetentionInDays, 1);
 
-        var time = timeProvider ?? TimeProvider.System;
+        quartz.Services.TryAddSingleton(TimeProvider.System);
         var jobKey = OutboxJobs.Cleanup<TDbContext>();
         return quartz
             .AddJob<CleanupOutboxMessagesJob<TDbContext>>(job => job
                 .WithIdentity(jobKey)
                 .UsingJobData(CleanupOutboxMessagesJob<TDbContext>.RetentionInDaysKey, processedRetentionInDays))
-            .AddTrigger<CleanupOutboxMessagesJob<TDbContext>>(trigger => trigger
+            .AddTrigger<CleanupOutboxMessagesJob<TDbContext>>((provider, trigger) => trigger
                 .ForJob(jobKey)
-                .StartAt(time.GetUtcNow().AddMinutes(5))
+                .StartAt(provider.GetRequiredService<TimeProvider>().GetUtcNow().AddMinutes(5))
                 .WithSimpleSchedule(schedule => schedule
                     .WithInterval(TimeSpan.FromHours(1))
                     .RepeatForever()));

@@ -282,7 +282,7 @@ public sealed class UnitOfWorkExecuteInTransactionAsyncTests
                 .UseNpgsql(
                     connectionString,
                     npgsql => npgsql.EnableRetryOnFailure(3, TimeSpan.FromMilliseconds(50), null))
-                .AddInterceptors(new InsertOutboxMessagesInterceptor(new SystemTextJsonOutboxSerializer()));
+                .AddInterceptors(new InsertOutboxMessagesInterceptor(new SystemTextJsonOutboxSerializer(), TimeProvider.System));
             if (failOnce is not null)
                 options.AddInterceptors(failOnce);
         });

@@ -34,7 +34,7 @@ public sealed class InsertOutboxMessagesInterceptorExecutionStrategyTests
     {
         var options = new DbContextOptionsBuilder<TestDbContext>()
             .UseSqlite(_connection, sqlite => sqlite.ExecutionStrategy(dependencies => new RetryingStrategy(dependencies)))
-            .AddInterceptors(new InsertOutboxMessagesInterceptor(new SystemTextJsonOutboxSerializer(), new OutsideTheSaveInsertStrategy()))
+            .AddInterceptors(new InsertOutboxMessagesInterceptor(new SystemTextJsonOutboxSerializer(), TimeProvider.System, new OutsideTheSaveInsertStrategy()))
             .Options;
         _context = new TestDbContext(options);
     }

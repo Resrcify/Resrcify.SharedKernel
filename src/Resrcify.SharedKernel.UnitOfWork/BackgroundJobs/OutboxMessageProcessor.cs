@@ -75,7 +75,7 @@ internal static class OutboxMessageProcessor<TDbContext>
         await using (var scope = scopeFactory.CreateAsyncScope())
         {
             var provider = scope.ServiceProvider;
-            time = provider.GetService<TimeProvider>() ?? TimeProvider.System;
+            time = provider.GetRequiredService<TimeProvider>();
             logger = provider.GetService<ILoggerFactory>()?.CreateLogger(OutboxProcessLog.Category) ?? NullLogger.Instance;
             classifier = provider.GetService<ITransientFailureClassifier>();
             started = time.GetTimestamp();

@@ -29,7 +29,7 @@ public class LoggingPipelineBehaviorTests
     public LoggingPipelineBehaviorTests()
     {
         _logger = Substitute.For<ILogger<LoggingPipelineBehavior<MockRequest, Result>>>();
-        _behavior = new LoggingPipelineBehavior<MockRequest, Result>(_logger);
+        _behavior = new LoggingPipelineBehavior<MockRequest, Result>(_logger, TimeProvider.System);
     }
 
     [Fact]
@@ -82,6 +82,7 @@ public class LoggingPipelineBehaviorTests
         _logger.IsEnabled(Arg.Any<LogLevel>()).Returns(true);
         var behavior = new LoggingPipelineBehavior<MockRequest, Result>(
             _logger,
+            TimeProvider.System,
             options: new LoggingPipelineOptions { RequestLevel = LogLevel.Debug });
 
         await behavior.Handle(new MockRequest(), _ => Task.FromResult(Result.Success()), CancellationToken.None);
@@ -164,7 +165,7 @@ public class LoggingPipelineBehaviorTests
         _logger.IsEnabled(Arg.Any<LogLevel>()).Returns(true);
         var classifier = Substitute.For<ITransientFailureClassifier>();
         classifier.IsTransient(Arg.Any<Exception>()).Returns(true);
-        var behavior = new LoggingPipelineBehavior<MockRequest, Result>(_logger, transientFailures: classifier);
+        var behavior = new LoggingPipelineBehavior<MockRequest, Result>(_logger, TimeProvider.System, transientFailures: classifier);
 
         await Should.ThrowAsync<InvalidOperationException>(() => behavior.Handle(
             new MockRequest(),

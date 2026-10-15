@@ -37,7 +37,7 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 [DisallowConcurrentExecution]
 public sealed class ProcessOutboxMessagesJob<TDbContext>(
     IServiceScopeFactory scopeFactory,
-    TimeProvider? timeProvider = null,
+    TimeProvider timeProvider,
     OutboxWakeUp<TDbContext>? wakeUp = null)
     : IJob
     where TDbContext : DbContext
@@ -58,7 +58,7 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
     /// <summary>The share of the trigger's interval a run spends starting batches: 80%.</summary>
     public const double DrainBudgetShare = 0.8;
 
-    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
+    private readonly TimeProvider _time = timeProvider;
 
     public async ValueTask Execute(
         IJobExecutionContext context,

@@ -23,7 +23,7 @@ namespace Resrcify.SharedKernel.MessageBus.PublishSubscribe;
 /// <see cref="LongestWait"/>, so a bug can delay events but never stop them.
 /// </para>
 /// </remarks>
-internal sealed class ReceiveOrder(TimeProvider? timeProvider = null)
+internal sealed class ReceiveOrder(TimeProvider timeProvider)
 {
     /// <summary>The transaction context item that holds a received message's number.</summary>
     public const string ItemKey = "resrcify-receive-order";
@@ -65,7 +65,7 @@ internal sealed class ReceiveOrder(TimeProvider? timeProvider = null)
 
         try
         {
-            await turn.Task.WaitAsync(LongestWait, timeProvider ?? TimeProvider.System, cancellationToken);
+            await turn.Task.WaitAsync(LongestWait, timeProvider, cancellationToken);
         }
         catch (TimeoutException)
         {

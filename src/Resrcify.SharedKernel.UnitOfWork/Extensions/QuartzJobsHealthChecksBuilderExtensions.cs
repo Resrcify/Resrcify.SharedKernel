@@ -97,7 +97,7 @@ public static class QuartzJobsHealthChecksBuilderExtensions
             registry,
             provider.GetRequiredService<ISchedulerFactory>(),
             options,
-            provider.GetService<TimeProvider>() ?? TimeProvider.System);
+            provider.GetRequiredService<TimeProvider>());
     }
 }
 

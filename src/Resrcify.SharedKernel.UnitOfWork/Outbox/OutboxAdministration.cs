@@ -131,7 +131,7 @@ public sealed class OutboxAdministration<TDbContext>(TDbContext context, IServic
     private async Task<int> RetryAsync(IQueryable<OutboxMessage> messages, CancellationToken cancellationToken)
     {
         // Due now: the last failure wrote a later try.
-        var now = (services.GetService<TimeProvider>() ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+        var now = services.GetRequiredService<TimeProvider>().GetUtcNow().UtcDateTime;
         var retried = await messages.ExecuteUpdateAsync(
             set => set
                 .SetProperty(message => message.ProcessedOnUtc, (DateTime?)null)

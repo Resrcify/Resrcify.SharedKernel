@@ -70,7 +70,7 @@ public static class OutboxHealthChecksBuilderExtensions
         return new OutboxHealthCheck<TDbContext>(
             monitor,
             maxWaitingAge,
-            provider.GetService<TimeProvider>() ?? TimeProvider.System);
+            provider.GetRequiredService<TimeProvider>());
     }
 
     private static string MissingProcessing<TDbContext>()

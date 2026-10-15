@@ -36,7 +36,7 @@ internal sealed partial class HealthGate : IDisposable
         _intervalTicks = interval.Ticks;
         _serviceProvider = serviceProvider;
         _logger = logger;
-        _time = serviceProvider.GetService<TimeProvider>() ?? TimeProvider.System;
+        _time = serviceProvider.GetRequiredService<TimeProvider>();
         _ = Task.Run(() => RunAsync(_stopping.Token), _stopping.Token);
     }
 

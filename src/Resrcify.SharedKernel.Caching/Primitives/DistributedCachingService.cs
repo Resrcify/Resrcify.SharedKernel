@@ -32,11 +32,14 @@ public sealed class DistributedCachingService
     private readonly TimeProvider _time;
 
     /// <param name="distributedCache">Where entries are kept; it measures their expiry on its own clock.</param>
-    /// <param name="timeProvider">The clock a lifetime is checked against (the system clock by default).</param>
-    public DistributedCachingService(IDistributedCache distributedCache, TimeProvider? timeProvider = null)
+    /// <param name="timeProvider">The clock a lifetime is checked against (the container's).</param>
+    public DistributedCachingService(
+        IDistributedCache distributedCache,
+        TimeProvider timeProvider)
     {
         _distributedCache = distributedCache;
-        _time = timeProvider ?? TimeProvider.System;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _time = timeProvider;
     }
 
     public async Task<T?> GetAsync<T>(

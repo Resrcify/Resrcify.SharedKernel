@@ -196,7 +196,7 @@ public sealed class UnitOfWorkTransactionAtomicityTests
         collection.AddDbContext<TestDbContext>(options =>
             options
                 .UseNpgsql(connectionString)
-                .AddInterceptors(new InsertOutboxMessagesInterceptor(_serializer, strategy)));
+                .AddInterceptors(new InsertOutboxMessagesInterceptor(_serializer, TimeProvider.System, strategy)));
 
         collection.AddScoped<IUnitOfWork, UnitOfWork<TestDbContext>>();
 

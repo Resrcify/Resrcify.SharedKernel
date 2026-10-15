@@ -47,6 +47,7 @@ public sealed class OutboxDedupTests
                 .UseNpgsql(connectionString)
                 .AddInterceptors(new InsertOutboxMessagesInterceptor(
                     _serializer,
+                    TimeProvider.System,
                     new PostgresOnConflictOutboxInsertStrategy())));
 
         _services = collection.BuildServiceProvider();

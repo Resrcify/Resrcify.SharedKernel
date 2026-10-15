@@ -46,8 +46,8 @@ namespace Resrcify.SharedKernel.UnitOfWork.Interceptors;
 /// </remarks>
 public sealed partial class InsertOutboxMessagesInterceptor(
     IOutboxSerializer serializer,
+    TimeProvider timeProvider,
     IOutboxInsertStrategy? insertStrategy = null,
-    TimeProvider? timeProvider = null,
     IEnumerable<IOutboxSaveObserver>? observers = null,
     ILogger<InsertOutboxMessagesInterceptor>? logger = null)
     : SaveChangesInterceptor
@@ -325,7 +325,7 @@ public sealed partial class InsertOutboxMessagesInterceptor(
     {
         var outboxMessages = new List<OutboxMessage>();
         var dedupKeysSeen = new HashSet<string>(StringComparer.Ordinal);
-        var now = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+        var now = timeProvider.GetUtcNow().UtcDateTime;
 
         foreach (var domainEvent in aggregates.SelectMany(aggregate => aggregate.GetDomainEvents()))
         {

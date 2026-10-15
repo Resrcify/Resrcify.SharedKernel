@@ -95,11 +95,11 @@ public static class OutboxServiceCollectionExtensions
         ArgumentOutOfRangeException.ThrowIfNegative(options.DelayInSecondsBeforeStart);
         ArgumentOutOfRangeException.ThrowIfNegative(options.ProcessedRetentionInDays);
         ArgumentOutOfRangeException.ThrowIfLessThan(options.BacklogCheckIntervalInSeconds, 1);
-        var time = options.TimeProvider ?? RegisteredTimeProvider(services) ?? TimeProvider.System;
 
         UseOneSerializer<TDbContext>(services, serializer);
-        // The clock outbox processing, cleanup and the lanes read; replace it (e.g. with FakeTimeProvider) in tests.
-        services.TryAddSingleton(time);
+        // The clock outbox processing, cleanup and the lanes read, and the jobs' first runs are computed from, resolved
+        // when the container is built: a later registration (e.g. a FakeTimeProvider in a test) replaces it.
+        services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<IUnitOfWork, UnitOfWork<TDbContext>>();
         services.AddOutboxMessageContext();
         services.AddTransientFailureRule<PersistenceTransientFailureRule>();
@@ -114,8 +114,7 @@ public static class OutboxServiceCollectionExtensions
             options.DelayInSecondsBeforeStart,
             retryLimits,
             options.ProcessedRetentionInDays,
-            options.Claim,
-            time));
+            options.Claim));
 
         // The backlog monitor behind the outbox.messages.* gauges and the outbox health check (AddOutbox<TDbContext>).
         // The job registration above registered it with the default interval; these options replace that.
@@ -177,8 +176,4 @@ public static class OutboxServiceCollectionExtensions
         var registeredType = registered.ImplementationInstance?.GetType() ?? registered.ImplementationType;
         return registeredType == serializer.GetType();
     }
-
-    private static TimeProvider? RegisteredTimeProvider(IServiceCollection services)
-        => services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(TimeProvider))?.ImplementationInstance
-            as TimeProvider;
 }

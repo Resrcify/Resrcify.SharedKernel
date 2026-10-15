@@ -30,12 +30,13 @@ public class LoggingPipelineBehavior<TRequest, TResponse>
 
     public LoggingPipelineBehavior(
         ILogger<LoggingPipelineBehavior<TRequest, TResponse>> logger,
-        TimeProvider? timeProvider = null,
+        TimeProvider timeProvider,
         LoggingPipelineOptions? options = null,
         ITransientFailureClassifier? transientFailures = null)
     {
         _logger = logger;
-        _time = timeProvider ?? TimeProvider.System;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _time = timeProvider;
         _options = options ?? new LoggingPipelineOptions();
         _transientFailures = transientFailures;
     }

@@ -1,12 +1,16 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Rebus.Config;
 using Rebus.Retry.Simple;
 using Rebus.Transport.InMem;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
 using Resrcify.SharedKernel.MessageBus.Abstractions;
+using Resrcify.SharedKernel.MessageBus.Extensions;
+using Resrcify.SharedKernel.MessageBus.PublishSubscribe;
 using Resrcify.SharedKernel.MessageBus.UnitTests.Support;
 using Shouldly;
 using Xunit;
@@ -20,6 +24,24 @@ namespace Resrcify.SharedKernel.MessageBus.UnitTests.Extensions;
     Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public sealed class MessageBusServiceCollectionExtensionsTests
 {
+    [Fact]
+    public async Task AddMessageBus_ShouldWaitOnAFakeClock_RegisteredAfterIt()
+    {
+        // As ConfigureTestServices does: the fake clock comes after the bus' own registration of the system one.
+        var clock = new FakeTimeProvider();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddMessageBus(bus => bus.UseInMemory(new InMemNetwork()));
+        services.AddSingleton<TimeProvider>(clock);
+        await using var provider = services.BuildServiceProvider();
+
+        var turn = provider.GetRequiredService<ReceiveOrder>().WaitForTurnAsync(2, CancellationToken.None);
+        clock.Advance(ReceiveOrder.LongestWait);
+
+        await turn.WaitAsync(TimeSpan.FromSeconds(5));   // gave up waiting on the fake clock, not the system one
+        turn.IsCompletedSuccessfully.ShouldBeTrue();
+    }
+
     [Fact]
     public async Task AddMessageBus_ShouldKeepTheServicesErrorQueue_WhenAStrategyChangesTheDeliveryAttempts()
     {

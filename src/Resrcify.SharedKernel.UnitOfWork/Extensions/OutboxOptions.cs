@@ -65,11 +65,4 @@ public sealed class OutboxOptions
     /// PostgreSQL.
     /// </summary>
     public IOutboxLaneClaim? Claim { get; set; }
-
-    /// <summary>
-    /// The clock the jobs' first runs are scheduled on. <see langword="null"/>: the <see cref="System.TimeProvider"/>
-    /// registered before <c>AddOutboxProcessing</c> (e.g. a <c>FakeTimeProvider</c> in a test), else the system clock.
-    /// Quartz runs the schedule on the container's clock, so the two must be the same for a fake one to drive it.
-    /// </summary>
-    public TimeProvider? TimeProvider { get; set; }
 }

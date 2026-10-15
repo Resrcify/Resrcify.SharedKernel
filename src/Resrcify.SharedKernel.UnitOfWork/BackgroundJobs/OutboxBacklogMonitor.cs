@@ -35,11 +35,11 @@ internal sealed partial class OutboxBacklogMonitor<TDbContext>(
     IServiceScopeFactory scopeFactory,
     OutboxBacklogSettings<TDbContext> settings,
     ILogger<OutboxBacklogMonitor<TDbContext>> logger,
-    TimeProvider? timeProvider = null)
+    TimeProvider timeProvider)
     : BackgroundService
     where TDbContext : DbContext
 {
-    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
+    private readonly TimeProvider _time = timeProvider;
     private OutboxBacklog? _latest;
     private StrongBox<DateTimeOffset>? _startedAt;
 

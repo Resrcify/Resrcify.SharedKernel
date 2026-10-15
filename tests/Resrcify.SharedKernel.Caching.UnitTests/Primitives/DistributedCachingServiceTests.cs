@@ -28,7 +28,7 @@ public class DistributedCachingServiceTests
     private readonly DistributedCachingService _cachingService;
 
     public DistributedCachingServiceTests()
-        => _cachingService = new DistributedCachingService(_mockCache);
+        => _cachingService = new DistributedCachingService(_mockCache, TimeProvider.System);
 
     [Fact]
     public async Task GetAsync_ShouldReturnDeserializedObject_WhenDataExists()
@@ -349,7 +349,8 @@ public class DistributedCachingServiceTests
     {
         // Arrange
         var cachingService = new DistributedCachingService(
-            new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())));
+            new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
+            TimeProvider.System);
         using var start = new ManualResetEventSlim();
 
         // Act
@@ -372,7 +373,8 @@ public class DistributedCachingServiceTests
     {
         // Arrange
         var cachingService = new DistributedCachingService(
-            new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())));
+            new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())),
+            TimeProvider.System);
         (await cachingService.TryClaimForAsync("claim-key", TimeSpan.FromMinutes(5))).ShouldBeTrue();
         (await cachingService.TryClaimForAsync("claim-key", TimeSpan.FromMinutes(5))).ShouldBeFalse();
 

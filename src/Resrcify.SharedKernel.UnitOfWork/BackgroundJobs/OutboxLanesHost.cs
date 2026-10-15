@@ -34,13 +34,13 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
     OutboxLaneSettings<TDbContext> settings,
     IServiceScopeFactory scopeFactory,
     ILogger<OutboxLanesHost<TDbContext>> logger,
-    TimeProvider? timeProvider = null,
+    TimeProvider timeProvider,
     OutboxWakeUp<TDbContext>? wakeUp = null)
     : BackgroundService
     where TDbContext : DbContext
 {
     private readonly OutboxLaneOptions options = settings.Options;
-    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
+    private readonly TimeProvider _time = timeProvider;
 
     /// <summary>Messages another instance held, and when this one may look at them again.</summary>
     private readonly ConcurrentDictionary<Guid, DateTimeOffset> _backingOff = new();

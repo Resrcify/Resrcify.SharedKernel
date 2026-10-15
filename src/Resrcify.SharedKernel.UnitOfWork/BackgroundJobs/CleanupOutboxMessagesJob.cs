@@ -20,7 +20,7 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 public sealed partial class CleanupOutboxMessagesJob<TDbContext>(
     IServiceScopeFactory scopeFactory,
     ILogger<CleanupOutboxMessagesJob<TDbContext>> logger,
-    TimeProvider? timeProvider = null)
+    TimeProvider timeProvider)
     : IJob
     where TDbContext : DbContext
 {
@@ -39,7 +39,7 @@ public sealed partial class CleanupOutboxMessagesJob<TDbContext>(
         var deleted = await DeleteProcessedAsync(
             scopeFactory,
             TimeSpan.FromDays(retentionInDays),
-            timeProvider ?? TimeProvider.System,
+            timeProvider,
             cancellationToken);
         if (deleted > 0)
             LogDeleted(deleted, retentionInDays);

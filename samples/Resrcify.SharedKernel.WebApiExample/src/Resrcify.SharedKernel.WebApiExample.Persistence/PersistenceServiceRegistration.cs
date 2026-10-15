@@ -1,3 +1,4 @@
+using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,9 +22,9 @@ public static class PersistenceServiceRegistration
         {
             option.UseNpgsql(configuration.GetConnectionString("Database"));
             option.AddInterceptors(
-                new InsertOutboxMessagesInterceptor(outboxSerializer),
-                new UpdateAuditableEntitiesInterceptor(),
-                new UpdateDeletableEntitiesInterceptor());
+                new InsertOutboxMessagesInterceptor(outboxSerializer, TimeProvider.System),
+                new UpdateAuditableEntitiesInterceptor(TimeProvider.System),
+                new UpdateDeletableEntitiesInterceptor(TimeProvider.System));
         });
 
         // Read side: unit of work, the serializer for the job, and the Quartz job.

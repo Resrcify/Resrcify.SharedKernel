@@ -511,10 +511,10 @@ services.AddQuartz(quartz => quartz
     .AddIntervalCommandJob<RequestShardMemberRankSyncCommand>(TimeSpan.FromMinutes(1)));
 ```
 
-`AddIntervalJob<TJob>(interval, startAfter = 30 s, timeProvider = DI's)` registers the job under its type name
+`AddIntervalJob<TJob>(interval, startAfter = 30 s)` registers the job under its type name
 (`IntervalJobSetup.JobKeyFor<TJob>()`; a generic job's type arguments follow a dash, as in
 `ProcessOutboxMessagesJob-ShardDbContext`) with a trigger repeating every `interval`, first `startAfter` after the
-scheduler is built. Runs never overlap (the job is registered as `DisallowConcurrentExecution`; mark the class too,
+scheduler is built, on the container's `TimeProvider`. Runs never overlap (the job is registered as `DisallowConcurrentExecution`; mark the class too,
 so it says so where it is written). It replaces a `*JobSetup` class per job.
 
 ### Cron jobs
@@ -527,7 +527,7 @@ services.AddQuartz(quartz => quartz
     .AddCronJob<SendDailyDigestJob>("0 0 8 * * ?", TimeZoneInfo.FindSystemTimeZoneById("Europe/Stockholm")));
 ```
 
-`AddCronJob<TJob>(cronExpression, timeZone = UTC, timeProvider = DI's)` is the cron counterpart of `AddIntervalJob`:
+`AddCronJob<TJob>(cronExpression, timeZone = UTC)` is the cron counterpart of `AddIntervalJob`:
 the same key (`IntervalJobSetup.JobKeyFor<TJob>()`), runs that never overlap, and a trigger starting when the
 scheduler is built (read from the registered `TimeProvider`), first firing at the expression's next time. The
 expression is a Quartz one (seconds first: `"0 0/15 * * * ?"`), read in UTC unless a zone is given (so a schedule
@@ -545,8 +545,7 @@ sends a `new TCommand()`); a job that builds its command derives from `CommandJo
 
 A command without a parameterless constructor (a record whose parameters are all optional, so `new()` can't make it), or
 one built from services, takes the overloads with a `createCommand` factory: `AddIntervalCommandJob<TCommand>(interval,
-createCommand, startAfter, timeProvider)`, `AddCronCommandJob<TCommand>(cronExpression, createCommand, timeZone,
-timeProvider)`, and their `<TCommand, TResponse>` forms. The factory, a `Func<IServiceProvider, TCommand>`, is called on
+createCommand, startAfter)`, `AddCronCommandJob<TCommand>(cronExpression, createCommand, timeZone)`, and their `<TCommand, TResponse>` forms. The factory, a `Func<IServiceProvider, TCommand>`, is called on
 every run with that run's DI scope (Quartz builds the job in a scope of its own per run), so it can read a
 `TimeProvider` or a scoped service. The job's key is the one the `new()` overload gives (`SendCommandJob-<command>`), so
 moving to the factory doesn't rename the job. A command type has one factory: registering a second one, with either
@@ -663,18 +662,20 @@ backlog can't be measured. Messages that gave up don't fail it; the `OutboxMessa
 ### Time
 
 Every timestamp and delay the outbox reads (`OccurredOnUtc`, `ProcessedOnUtc`, `CreatedOnUtc`, `DeletedOnUtc`, the
-cleanup cutoff, the lanes' retry delays and polling) comes from `TimeProvider`: the one registered in DI (the system
-clock by default), or the one passed to an interceptor's constructor. In tests, register a `FakeTimeProvider`
-(Microsoft.Extensions.TimeProvider.Testing) and pass it to the interceptors you create (or let the container build
-them: `AddEntityInterceptors` / `AddOutboxInterceptor`, see [Interceptors from the container](#interceptors-from-the-container)),
-then move time with `Advance`:
+cleanup cutoff, the lanes' retry delays and polling, the jobs' first runs) comes from the `TimeProvider` registered in
+DI, and only from it. Every registration (`AddOutboxProcessing`, `AddProcessOutboxMessagesJob`, `AddOutboxLanes`, the
+interval and cron jobs, the heartbeats, the interceptors, the migrations) registers the system clock with
+`TryAddSingleton`, so a service needs no registration of its own, and one registered before or after them wins: a
+`FakeTimeProvider` added in `ConfigureTestServices` drives the jobs' schedule too. The interceptors take the clock as a
+required constructor argument: let the container build them (`AddEntityInterceptors` / `AddOutboxInterceptor`, see
+[Interceptors from the container](#interceptors-from-the-container)), or hand one made with `new` the container's. In
+tests, register a `FakeTimeProvider` (Microsoft.Extensions.TimeProvider.Testing), then move time with `Advance`:
 
 ```csharp
 var clock = new FakeTimeProvider(new DateTimeOffset(2026, 10, 5, 12, 0, 0, TimeSpan.Zero));
-services.AddSingleton<TimeProvider>(clock);
-services.AddDbContext<AppDbContext>(o => o.AddInterceptors(
-    new InsertOutboxMessagesInterceptor(serializer, timeProvider: clock),
-    new UpdateAuditableEntitiesInterceptor(clock)));
+services.AddSingleton<TimeProvider>(clock);   // before or after the SharedKernel registrations
+services.AddEntityInterceptors().AddOutboxInterceptor();
+services.AddDbContext<AppDbContext>((provider, o) => o.AddSaveChangesInterceptors(provider));
 
 clock.Advance(TimeSpan.FromDays(8));   // e.g. past the 7-day cleanup
 ```

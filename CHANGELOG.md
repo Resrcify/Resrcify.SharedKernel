@@ -61,6 +61,42 @@ every package in the repository is released together under one version.
   Every Titan service (Sentinel, Tournament, Shard, Oracle, Discord, SwgohApi, Sandbox, Identity) deletes its
   `config.EnableDiTimePipelineComposition();` line in `Application/ApplicationServiceRegistration.cs`; nothing else.
 
+- **One clock path: the container's `TimeProvider`, and only it** (Resrcify.SharedKernel.UnitOfWork,
+  UnitOfWork.Postgres, Mediator, MessageBus, Caching, Web). The clock was found four ways: from the container when
+  used, the one registered *before* `AddOutboxProcessing` (captured at registration, so a `FakeTimeProvider` added
+  later in `ConfigureTestServices` was silently ignored for the jobs' first runs), `OutboxOptions.TimeProvider`, and
+  `timeProvider` parameters defaulting to the system clock. Now every SharedKernel type reads the container's, resolved
+  when it is used (a job trigger's first run when the scheduler is built), and every registration
+  (`AddOutboxProcessing`, `AddProcessOutboxMessagesJob`, `AddCleanupOutboxMessagesJob`, `AddOutboxLanes`, the interval
+  and cron job helpers, `AddJobHeartbeats`, `AddEntityInterceptors` / `AddOutboxInterceptor`, `AddMigrationsOnStartup`,
+  `AddMediator`, `AddMessageBus`, `AddResultResilience`) makes `services.TryAddSingleton(TimeProvider.System)`, so a
+  clock registered before or after it wins. Removed or changed:
+
+  | Was | Now |
+  |---|---|
+  | `OutboxOptions.TimeProvider` | removed: register the clock in the container |
+  | `AddIntervalJob` / `AddIntervalCommandJob` (4 overloads) / `AddCronJob` / `AddCronCommandJob` (4 overloads)`(..., TimeProvider? timeProvider = null)` | the parameter is removed |
+  | `AddProcessOutboxMessagesJob(..., IOutboxLaneClaim? claim, TimeProvider? timeProvider, RetrySchedule? transientRetries)` | `(..., IOutboxLaneClaim? claim, RetrySchedule? transientRetries)` |
+  | `AddCleanupOutboxMessagesJob(int processedRetentionInDays, TimeProvider? timeProvider = null)` | `(int processedRetentionInDays)` |
+  | `new InsertOutboxMessagesInterceptor(serializer, insertStrategy?, timeProvider?, observers?, logger?)` | `new InsertOutboxMessagesInterceptor(serializer, timeProvider, insertStrategy?, observers?, logger?)`: the clock is required and second |
+  | `new UpdateAuditableEntitiesInterceptor(TimeProvider? = null)`, `new UpdateDeletableEntitiesInterceptor(TimeProvider? = null)` | the clock is required |
+  | `ProcessOutboxMessagesJob(scopeFactory, TimeProvider? = null, wakeUp?)`, `CleanupOutboxMessagesJob(scopeFactory, logger, TimeProvider? = null)`, `JobHeartbeatRegistry(TimeProvider? = null)` | the clock is required (the container passes it) |
+  | `LoggingPipelineBehavior(logger, TimeProvider? = null, options?, transientFailures?)` (Mediator), `DistributedCachingService(cache, TimeProvider? = null)` (Caching) | the clock is required (the container passes it) |
+
+  The internal hosted services (outbox lanes, backlog monitor, migrations, the PostgreSQL outbox listener) and the
+  message bus' receive order take it the same way. A service's own `services.TryAddSingleton(TimeProvider.System)` is
+  now redundant wherever it registers any of these (Sentinel and Oracle in `Application/ApplicationServiceRegistration.cs`,
+  Discord in `Application/ApplicationServiceRegistration.cs`, Tournament, Shard and SwgohApi in
+  `Infrastructure/InfrastructureServiceRegistration.cs`, Sandbox in `Infrastructure/InfrastructureServiceRegistration.cs`):
+  delete it, or keep it as documentation; it does no harm. A service that registers `DistributedCachingService`
+  itself without any SharedKernel registration making the clock must register one (or use `AddDistributedCaching`,
+  see Added). **Sandbox and Identity** build the interceptors with `new` in `PersistenceServiceRegistration.cs` and their
+  design-time factories: pass the clock (`new InsertOutboxMessagesInterceptor(serializer, sp.GetRequiredService<TimeProvider>(),
+  new PostgresOnConflictOutboxInsertStrategy())`, `new UpdateAuditableEntitiesInterceptor(sp.GetRequiredService<TimeProvider>())`;
+  `TimeProvider.System` in a design-time factory), or register them with `AddEntityInterceptors().AddOutboxInterceptor()`
+  and `options.AddSaveChangesInterceptors(provider)`. No Titan service passed a `timeProvider` argument or set
+  `OutboxOptions.TimeProvider`.
+
 ### Behaviour changes
 
 - **One transient contract, owned by SharedKernel, with a DI hook** (Resrcify.SharedKernel.Results, Abstractions,

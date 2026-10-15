@@ -255,7 +255,7 @@ public sealed class InsertOutboxMessagesInterceptorTests(PostgresFixture pg)
                     if (retryOnFailure)
                         npgsql.EnableRetryOnFailure(3, TimeSpan.FromMilliseconds(50), null);
                 })
-                .AddInterceptors(new InsertOutboxMessagesInterceptor(Serializer, insertStrategy))
+                .AddInterceptors(new InsertOutboxMessagesInterceptor(Serializer, TimeProvider.System, insertStrategy))
                 .AddInterceptors(moreInterceptors))
             .BuildServiceProvider();
         await using var scope = services.CreateAsyncScope();

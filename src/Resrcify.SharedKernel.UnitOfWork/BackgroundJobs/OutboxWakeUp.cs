@@ -52,7 +52,7 @@ public sealed partial class OutboxWakeUp<TDbContext>(
     public async Task DrainAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
     {
         var limit = timeout ?? DefaultDrainTimeout;
-        var time = provider.GetService<TimeProvider>() ?? TimeProvider.System;
+        var time = provider.GetRequiredService<TimeProvider>();
         var started = TimeProvider.System.GetTimestamp();
         while (true)
         {

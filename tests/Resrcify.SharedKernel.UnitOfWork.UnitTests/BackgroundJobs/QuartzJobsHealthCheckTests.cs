@@ -175,8 +175,7 @@ public sealed class QuartzJobsHealthCheckTests
         // A broker outage stalling the outbox mustn't restart every replica: the outbox's own check alerts on it.
         await using var host = await BuildAsync(quartz => quartz.AddProcessOutboxMessagesJob<TestDbContext>(
             processIntervalInSeconds: 20,
-            delayInSecondsBeforeStart: 0,
-            timeProvider: new FakeTimeProvider(Start)));
+            delayInSecondsBeforeStart: 0));
 
         host.Clock.Advance(TimeSpan.FromHours(3));
         var result = await host.CheckAsync();
@@ -191,8 +190,7 @@ public sealed class QuartzJobsHealthCheckTests
         await using var host = await BuildAsync(
             quartz => quartz.AddProcessOutboxMessagesJob<TestDbContext>(
                 processIntervalInSeconds: 20,
-                delayInSecondsBeforeStart: 0,
-                timeProvider: new FakeTimeProvider(Start)),
+                delayInSecondsBeforeStart: 0),
             jobs: jobs => jobs.WatchOutboxJobs = true);
 
         host.Clock.Advance(TimeSpan.FromHours(3));

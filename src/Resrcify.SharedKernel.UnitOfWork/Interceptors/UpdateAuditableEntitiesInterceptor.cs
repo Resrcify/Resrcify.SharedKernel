@@ -9,8 +9,8 @@ using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Interceptors;
 
-/// <summary>Sets <c>CreatedOnUtc</c> / <c>ModifiedOnUtc</c> from <paramref name="timeProvider"/> (the system clock by default).</summary>
-public sealed class UpdateAuditableEntitiesInterceptor(TimeProvider? timeProvider = null)
+/// <summary>Sets <c>CreatedOnUtc</c> / <c>ModifiedOnUtc</c> from <paramref name="timeProvider"/> (the container's clock: register it with <c>AddEntityInterceptors</c>).</summary>
+public sealed class UpdateAuditableEntitiesInterceptor(TimeProvider timeProvider)
     : SaveChangesInterceptor
 {
     public override InterceptionResult<int> SavingChanges(
@@ -44,7 +44,7 @@ public sealed class UpdateAuditableEntitiesInterceptor(TimeProvider? timeProvide
         DbContextEventData saving,
         DbContext context)
     {
-        DateTime utcNow = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+        DateTime utcNow = timeProvider.GetUtcNow().UtcDateTime;
         List<EntityEntry<IAuditableEntity>> entries = SaveChangesEntries.Where<IAuditableEntity>(
             saving,
             context,

@@ -242,7 +242,7 @@ internal sealed class MessageBusSettings
         options.EnableDiagnosticSources();
         // Rebus' clock (a message's sent time, its expiry) is the container's, as every other clock here: with a
         // FakeTimeProvider a request's deadline is measured on one clock, not the sender's real one against a fake now.
-        var time = provider.GetService<TimeProvider>() ?? TimeProvider.System;
+        var time = provider.GetRequiredService<TimeProvider>();
         options.Register<IRebusTime>(_ => new TimeProviderRebusTime(time));
         options.Decorate<IPipeline>(context => WithCompression(context.Get<IPipeline>()));
         foreach (var instrumentation in provider.GetServices<IBusInstrumentation>())

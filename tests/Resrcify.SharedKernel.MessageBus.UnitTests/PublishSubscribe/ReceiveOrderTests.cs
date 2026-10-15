@@ -18,7 +18,7 @@ public sealed class ReceiveOrderTests
     [Fact]
     public async Task WaitForTurnAsync_ShouldCompleteAtOnce_WhenItIsTheFirstMessage()
     {
-        var order = new ReceiveOrder();
+        var order = new ReceiveOrder(TimeProvider.System);
 
         var turn = order.WaitForTurnAsync(1, CancellationToken.None);
 
@@ -29,7 +29,7 @@ public sealed class ReceiveOrderTests
     [Fact]
     public async Task WaitForTurnAsync_ShouldWait_UntilEveryEarlierMessageIsAdmitted()
     {
-        var order = new ReceiveOrder();
+        var order = new ReceiveOrder(TimeProvider.System);
 
         var turn = order.WaitForTurnAsync(3, CancellationToken.None);
         order.Admit(2);
@@ -43,7 +43,7 @@ public sealed class ReceiveOrderTests
     [Fact]
     public async Task WaitForTurnAsync_ShouldCompleteAtOnce_WhenEarlierMessagesWereAdmittedOutOfOrder()
     {
-        var order = new ReceiveOrder();
+        var order = new ReceiveOrder(TimeProvider.System);
         order.Admit(2);
         order.Admit(1);
 
@@ -56,7 +56,7 @@ public sealed class ReceiveOrderTests
     [Fact]
     public async Task Admit_ShouldDoNothing_WhenTheMessageWasAdmittedAlready()
     {
-        var order = new ReceiveOrder();
+        var order = new ReceiveOrder(TimeProvider.System);
         order.Admit(1);
         order.Admit(1);
 
@@ -71,7 +71,7 @@ public sealed class ReceiveOrderTests
     [Fact]
     public async Task WaitForTurnAsync_ShouldStop_WhenCancelled()
     {
-        var order = new ReceiveOrder();
+        var order = new ReceiveOrder(TimeProvider.System);
         using var cancellation = new CancellationTokenSource();
 
         var turn = order.WaitForTurnAsync(2, cancellation.Token);

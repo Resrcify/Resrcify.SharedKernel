@@ -40,7 +40,7 @@ domain-driven design primitives, result handling, messaging behaviors, repositor
 - Ensure the namespace root reflects the owning module path (for example, `Abstractions/Mediator` maps to `Resrcify.SharedKernel.Abstractions.Mediator`).
 - When moving files between folders, update namespace declarations and related `using` directives in the same change.
 - Preserve existing project style and avoid unrelated refactors while applying namespace corrections.
-- Read the clock through `TimeProvider` (from DI, or an optional constructor parameter defaulting to `TimeProvider.System`), never `DateTime.UtcNow` / `DateTimeOffset.UtcNow`, and wait with its overloads (`Task.Delay(delay, timeProvider, ct)`, `new PeriodicTimer(interval, timeProvider)`), so services can test time with `FakeTimeProvider`.
+- Read the clock through `TimeProvider` from DI, and only from DI: a required constructor parameter (no `= null` defaulting to `TimeProvider.System`, no options property, no registration-time capture), with the registration making `services.TryAddSingleton(TimeProvider.System)` so a clock registered before or after it wins. Never `DateTime.UtcNow` / `DateTimeOffset.UtcNow`, and wait with its overloads (`Task.Delay(delay, timeProvider, ct)`, `new PeriodicTimer(interval, timeProvider)`), so services can test time with `FakeTimeProvider`.
 - Record every change a consumer can notice in `CHANGELOG.md`, under the unreleased version: a breaking one under "Breaking changes" with what the consumer must do, the rest under Added / Fixed / Removed.
 
 ## Naming and solution conventions

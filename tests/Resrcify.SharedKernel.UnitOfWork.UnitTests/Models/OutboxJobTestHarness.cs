@@ -41,7 +41,7 @@ internal sealed class OutboxJobTestHarness : IAsyncDisposable
         Queries = queries;
         Job = new ProcessOutboxMessagesJob<TestDbContext>(
             provider.GetRequiredService<IServiceScopeFactory>(),
-            clock,
+            clock ?? TimeProvider.System,
             provider.GetService<OutboxWakeUp<TestDbContext>>());
     }
 
@@ -75,6 +75,7 @@ internal sealed class OutboxJobTestHarness : IAsyncDisposable
         services.AddScoped<IUnitOfWork, UnitOfWork<TestDbContext>>();
         services.AddSingleton(publisher);
         services.AddSingleton<IOutboxSerializer>(new SystemTextJsonOutboxSerializer());
+        services.AddSingleton(clock ?? TimeProvider.System);
         configure?.Invoke(services);
 
         var provider = services.BuildServiceProvider();

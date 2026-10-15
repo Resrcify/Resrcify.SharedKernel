@@ -38,12 +38,12 @@ internal sealed partial class PostgresOutboxListener<TContext>(
     OutboxWakeUpSettings<TContext> settings,
     OutboxWakeUp<TContext> wakeUp,
     ILogger<PostgresOutboxListener<TContext>> logger,
-    TimeProvider? timeProvider = null)
+    TimeProvider timeProvider)
     : BackgroundService
     where TContext : DbContext
 {
     private readonly OutboxWakeUpOptions _options = settings.Options;
-    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
+    private readonly TimeProvider _time = timeProvider;
     private readonly string _context = typeof(TContext).Name;
     /// <summary>How long a drain waits for a notification already on its way before taking the burst as read.</summary>
     private const int DrainWaitMilliseconds = 1;

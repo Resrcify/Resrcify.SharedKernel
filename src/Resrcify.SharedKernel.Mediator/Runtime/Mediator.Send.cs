@@ -166,7 +166,7 @@ internal sealed partial class Mediator
         CancellationToken cancellationToken)
         where TRequest : IRequest<TResponse>
     {
-        var time = serviceProvider.GetService<TimeProvider>() ?? TimeProvider.System;
+        var time = serviceProvider.GetRequiredService<TimeProvider>();
         var started = time.GetTimestamp();
         using var activity = MediatorDiagnostics.StartSend(typeof(TRequest));
         try

@@ -115,10 +115,10 @@ public static class PostgresServiceCollectionExtensions
         services.RemoveAll<PostgresOutboxInterceptor<TContext>>();
         services.AddSingleton(provider => new PostgresOutboxInterceptor<TContext>(new InsertOutboxMessagesInterceptor(
             provider.GetRequiredService<IOutboxSerializer>(),
+            provider.GetRequiredService<TimeProvider>(),
             outbox.OnConflictDoNothing
                 ? new PostgresOnConflictOutboxInsertStrategy()
                 : provider.GetService<IOutboxInsertStrategy>(),
-            provider.GetService<TimeProvider>(),
             provider.GetServices<IOutboxSaveObserver>(),
             provider.GetService<ILogger<InsertOutboxMessagesInterceptor>>())));
     }

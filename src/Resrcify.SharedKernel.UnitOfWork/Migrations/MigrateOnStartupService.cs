@@ -41,13 +41,13 @@ internal sealed partial class MigrateOnStartupService<TContext>(
     MigrateOnStartupSettings<TContext> settings,
     IServiceScopeFactory scopeFactory,
     ILogger<MigrateOnStartupService<TContext>> logger,
-    TimeProvider? timeProvider = null)
+    TimeProvider timeProvider)
     : IHostedLifecycleService
     where TContext : DbContext
 {
     internal const string RunKey = "Run";
 
-    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
+    private readonly TimeProvider _time = timeProvider;
 
     public async Task StartingAsync(CancellationToken cancellationToken)
     {
