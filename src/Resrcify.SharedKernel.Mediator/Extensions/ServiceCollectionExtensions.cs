@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using FluentValidation;
 using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.Mediator.Behaviors;
 using Resrcify.SharedKernel.Mediator.Publishing;
@@ -18,8 +19,8 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Registers the mediator: the handlers of the assemblies <paramref name="configure"/> names
-    /// (<see cref="MediatorConfiguration.RegisterServicesFromAssemblies"/>) and the behaviors and processors it adds,
-    /// in order. Each request's pipeline (its handler, behaviors and processors) is
+    /// (<see cref="MediatorConfiguration.RegisterServicesFromAssemblies"/>), their FluentValidation validators (unless
+    /// <see cref="MediatorConfiguration.SkipValidatorScan"/>), and the behaviors and processors it adds, in order. Each request's pipeline (its handler, behaviors and processors) is
     /// resolved from the container as one service, so the container builds it with their lifetimes: transient unless
     /// registered otherwise, the mediator too (<see cref="MediatorConfiguration.UseMediatorLifetime"/>).
     /// </summary>
@@ -32,6 +33,8 @@ public static class ServiceCollectionExtensions
         configure(configuration);
 
         services.RegisterMediatorTypes(configuration.Assemblies);
+        if (configuration.ScansValidators)
+            services.RegisterValidators(configuration.Assemblies);
         if (configuration.ChecksBehaviors)
             BehaviorCheck.Run(
                 services,
@@ -163,6 +166,51 @@ public static class ServiceCollectionExtensions
 
         services.AnnounceAssemblyScan(assemblies);
         return services;
+    }
+
+    /// <summary>
+    /// Registers every FluentValidation validator of <paramref name="assemblies"/>, internal ones included, as
+    /// <c>AddValidatorsFromAssembly</c> does (scoped, as its <c>IValidator&lt;T&gt;</c> and as itself), and with its
+    /// semantics: a validator registered already (by <c>AddValidatorsFromAssembly</c>, before or after, or by hand) isn't
+    /// registered again, so the validation behavior never runs one twice.
+    /// </summary>
+    private static void RegisterValidators(
+        this IServiceCollection services,
+        IReadOnlyCollection<Assembly> assemblies)
+    {
+        // Only an assembly that references FluentValidation can hold a validator, and only then is FluentValidation sure
+        // to be deployed (this package references it privately): a service without validators needs none of it, so the
+        // scan, which loads it, runs only over those.
+        var withValidators = assemblies
+            .Where(ReferencesFluentValidation)
+            .ToList();
+        if (withValidators.Count > 0)
+            RegisterValidatorsOf(services, withValidators);
+    }
+
+    private static bool ReferencesFluentValidation(Assembly assembly)
+        => assembly
+            .GetReferencedAssemblies()
+            .Any(reference => reference.Name == FluentValidationAssemblyName);
+
+    private const string FluentValidationAssemblyName = "FluentValidation";
+
+    // Kept out of line, so FluentValidation is loaded only when an assembly references it.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void RegisterValidatorsOf(
+        IServiceCollection services,
+        List<Assembly> assemblies)
+    {
+        foreach (var assembly in assemblies)
+        {
+            foreach (var validator in AssemblyScanner.FindValidatorsInAssembly(assembly, includeInternalTypes: true))
+            {
+                services.TryAddEnumerable(
+                    ServiceDescriptor.Scoped(validator.InterfaceType, validator.ValidatorType));
+                services.TryAdd(
+                    ServiceDescriptor.Scoped(validator.ValidatorType, validator.ValidatorType));
+            }
+        }
     }
 
     /// <summary>

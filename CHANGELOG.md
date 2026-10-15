@@ -242,6 +242,19 @@ every package in the repository is released together under one version.
   sent): then the line names its type and message only. ⚠️ An alert on `Error` logs fires for a handler's non-transient
   failure and every give-up.
 
+- **`AddMediator` registers the scanned assemblies' FluentValidation validators** (Resrcify.SharedKernel.Mediator).
+  `cfg.RegisterServicesFromAssemblies(...)` now also registers every `IValidator<T>` in those assemblies, internal ones
+  included, scoped (as its `IValidator<T>` and as itself), as `AddValidatorsFromAssembly(assembly, includeInternalTypes:
+  true)` does and with its `TryAddEnumerable` semantics: a validator registered already (by `AddValidatorsFromAssembly`
+  before or after `AddMediator`, or by hand) is registered once, so the validation behavior never runs it twice. Only
+  assemblies referencing FluentValidation are scanned for them, so a service without validators still needs no
+  FluentValidation. `cfg.SkipValidatorScan()` turns it off. ⚠️ **Tournament's internal validators run for the first
+  time**: its `AddValidatorsFromAssembly(Assembly.GetExecutingAssembly())` skipped internal types, so a request they
+  reject now fails with a validation error (400) where it went through. Every service can delete its
+  `services.AddValidatorsFromAssembly(...)` line (Sentinel, Tournament, Shard, Oracle and Discord in
+  `Application/ApplicationServiceRegistration.cs`; Sandbox and Identity there too), and, when nothing else uses it, the
+  `using FluentValidation;` with it; keeping it changes nothing.
+
 ### Added
 
 - **Abstractions: `RetrySchedule`** (`Resilience`; see Breaking changes), and the options that take one:
@@ -295,6 +308,9 @@ every package in the repository is released together under one version.
   `AddResultProblemDetails()` turns on `RouteHandlerOptions.ThrowOnBadRequest`, so a binding failure reaches
   `ResultExceptionHandler` in every environment. The code of a binding failure's error when the exception names no
   parameter is `ErrorCodes.Request.Binding` (`"Request"`).
+
+- **Mediator: `MediatorConfiguration.SkipValidatorScan()`**, to keep `RegisterServicesFromAssemblies` from registering
+  the validators (see Behaviour changes).
 
 ### Fixed
 

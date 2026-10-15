@@ -320,6 +320,8 @@ The package includes the following built-in behaviors in `src/Resrcify.SharedKer
     - Constraint: `TResponse : Result`.
 - `ValidationPipelineBehavior<TRequest, TResponse>`
     - Runs the request's `FluentValidation.IValidator<TRequest>`s one at a time (they often share a scoped DbContext) and returns a validation `Result` failure when invalid.
+    - The validators are registered by `RegisterServicesFromAssemblies` (see [Registration phase](#registration-phase)):
+      no `AddValidatorsFromAssembly` needed.
     - Constraint: `TResponse : Result`.
 - `IdempotencyPipelineBehavior<TRequest, TResponse>`
     - Answers an `IIdempotentRequest` sent again with its `IdempotencyKey` with the first one's result instead of
@@ -523,6 +525,12 @@ When nothing listens, a send costs one check: no span, no clock reading, no tags
 - request handlers (`IRequestHandler<,>`, `IValueTaskRequestHandler<,>`)
 - stream handlers (`IStreamRequestHandler<,>`)
 - notification handlers (`INotificationHandler<>`)
+- FluentValidation validators (every `IValidator<T>`, internal ones included, scoped, as itself too), as
+  `AddValidatorsFromAssembly(assembly, includeInternalTypes: true)` registers them and with its semantics: one
+  registered already, by that call before or after `AddMediator` or by hand, isn't registered again, so the validation
+  behavior never runs one twice. Only assemblies referencing FluentValidation are scanned for them (a service without
+  validators needs no FluentValidation). `cfg.SkipValidatorScan()` turns it off, for a service registering its
+  validators with another lifetime or a filter.
 
 Behaviors and pre/post processors are registered only as added (`AddOpenBehavior`, `AddStandardBehaviors`,
 `AddRequestPreProcessor`, `AddRequestPostProcessor`, or the container), in that order. Then it runs
@@ -571,7 +579,8 @@ Use `Sequential` when handler order/serialization matters; use `Parallel` for th
 - **"No request handler registered for '...'"**
     - Ensure `RegisterServicesFromAssemblies(...)` includes the assembly containing your handler.
 - **Validation behavior does nothing**
-    - Ensure validators are registered and behavior is added with `AddOpenBehavior` (or `AddStandardBehaviors`).
+    - Ensure the validators' assembly is scanned (`RegisterServicesFromAssemblies`, without `SkipValidatorScan()`) and
+      the behavior is added with `AddOpenBehavior` (or `AddStandardBehaviors`).
 - **A behavior or processor in my assembly doesn't run**
     - The scan registers handlers only: add it with `AddOpenBehavior` / `AddRequestPreProcessor` /
       `AddRequestPostProcessor`, or register a closed one in the container.
