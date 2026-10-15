@@ -24,13 +24,15 @@ lead to their trace.
 
 - **Tracing**: ASP.NET Core (without the `/metrics` and `/health…` requests: `UntracedPaths`), HttpClient, every
   SharedKernel source (`Resrcify.SharedKernel.*`: the mediator, the outbox), Rebus.Diagnostics (the message bus' send
-  and handle spans) and Quartz 4 (a span per job run). The service is named `serviceName` (`service.name`).
+  and handle spans), Quartz 4 (a span per job run) and Npgsql (a span per database command; harmless without
+  PostgreSQL). The service is named `serviceName` (`service.name`).
 - **Metrics**: ASP.NET Core, HttpClient, the .NET runtime, every SharedKernel meter (the mediator, the outbox, the
   message bus), Rebus.Diagnostics and Quartz 4, exported to Prometheus.
 - **OTLP**: traces exported to `Observability:OtlpEndpoint` when it is set (the section and key the services already
   have), nothing otherwise.
 - **Serilog** as the logger: `ReadFrom.Configuration` (the `Serilog` section), Serilog's self-log to standard error,
-  and every event enriched with `TraceId` and `SpanId` (the names Serilog.Enrichers.Span uses).
+  every event enriched with `TraceId` and `SpanId` (the names Serilog.Enrichers.Span uses, so `WithSpan` is redundant),
+  and a destructured property (`{@...}`) bounded to 4 levels, 20 items a collection and 1,024 characters a string.
 
 `app.MapServiceMetrics(path = "/metrics")` maps the Prometheus scrape endpoint, open to anonymous callers whatever the
 authorization fallback policy.
@@ -76,11 +78,7 @@ Use the versions in SharedKernel's `Directory.Packages.props` (or newer). Most s
 
 ```csharp
 // Infrastructure
-services.AddServiceTelemetry("shardmanagement", configuration, telemetry =>
-{
-    telemetry.ActivitySources.Add("Npgsql");
-    telemetry.Meters.Add("Npgsql");
-});
+services.AddServiceTelemetry("shardmanagement", configuration);   // Npgsql's spans included
 
 // Program.cs
 app.UseServiceRequestLogging();   // before UseExceptionHandler(): it logs the status the handler answers
@@ -112,7 +110,20 @@ app.MapServiceMetrics();
 is used as is.
 
 Logs carry `TraceId` and `SpanId` as properties: a JSON formatter writes them, a text template shows them with
-`{TraceId}`. A service using Serilog.Enrichers.Span's `WithSpan` can drop it (a property already set is kept).
+`{TraceId}`. **`Serilog.Enrichers.Span` / `"WithSpan"` is redundant**: drop the package reference, and
+`"Serilog.Enrichers.Span"` from `Serilog:Using` and `"WithSpan"` from `Serilog:Enrich` in the configuration (a property
+already set is kept, so leaving it changes nothing but costs a package).
+
+A destructured property (`{@Payload}`) is bounded by default, so a whole event message destructured by mistake (a
+Sentinel change event is ~100 KB) stays a few KB: 4 levels deep (`MaximumDestructuringDepth`), 20 items a collection
+(`MaximumDestructuredCollectionCount`), 1,024 characters a string (`MaximumDestructuredStringLength`). They are set
+before the `Serilog` section is read, so the section overrides any of them:
+
+```json
+"Serilog": { "Destructure": [ { "Name": "ToMaximumCollectionCount", "Args": { "maximumCollectionCount": 100 } } ] }
+```
+
+and so does `ConfigureLogging`; set an option to `null` to keep Serilog's own (depth 10, the rest unbounded).
 
 ## Request logging
 
@@ -186,10 +197,12 @@ app.UseServiceRequestLogging(logging =>
 | `AspNetCoreInstrumentation`, `HttpClientInstrumentation`, `RuntimeInstrumentation` | on | The instrumentation libraries. |
 | `SharedKernelInstrumentation` | on | `Resrcify.SharedKernel.*` and Rebus.Diagnostics. |
 | `QuartzInstrumentation` | on | Quartz 4's source and meter. |
+| `NpgsqlInstrumentation` | on | Npgsql's activity source (`TelemetrySources.Npgsql`); harmless without PostgreSQL. |
 | `PrometheusExporter` | on | The exporter `MapServiceMetrics` serves. |
 | `OtlpExporter` | on | Still needs `Observability:OtlpEndpoint`. |
 | `UntracedPaths` | `/metrics`, `/health` | Request path prefixes left out of the traces and the request log (their metrics stay). |
-| `ActivitySources`, `Meters` | empty | More names to subscribe to, e.g. `Npgsql`; wildcards allowed. |
+| `ActivitySources`, `Meters` | empty | More names to subscribe to, e.g. `StackExchange.Redis`, or the `Npgsql` meter; wildcards allowed. |
+| `MaximumDestructuringDepth`, `MaximumDestructuredCollectionCount`, `MaximumDestructuredStringLength` | 4, 20, 1024 | Serilog's destructuring bounds; the `Serilog` section and `ConfigureLogging` override them, `null` turns one off. |
 | `ConfigureTracing`, `ConfigureMetrics`, `ConfigureLogging` | none | Run last on the tracer, the meter provider and the Serilog configuration. |
 
 ```csharp
@@ -248,8 +261,7 @@ After:
 
 ```csharp
 // InfrastructureServiceRegistration
-services.AddServiceTelemetry("shardmanagement", configuration, telemetry =>
-    telemetry.ActivitySources.Add("Npgsql"));
+services.AddServiceTelemetry("shardmanagement", configuration);
 
 // Program.cs
 app.UseServiceRequestLogging();

@@ -293,6 +293,22 @@ every package in the repository is released together under one version.
   `.AddQuartzJobs()`, `.AddQuartzJobs(jobs => ...)`); `tags: []` registers a check with none. ⚠️ A check registered
   without tags now runs on the readiness (or liveness) probe.
 
+- **`AddServiceTelemetry` traces Npgsql and bounds Serilog's destructuring by default** (Resrcify.SharedKernel.Observability).
+  - The `"Npgsql"` activity source (`TelemetrySources.Npgsql`) is traced (a span per database command; nothing in a
+    service without PostgreSQL); `NpgsqlInstrumentation = false` leaves it out. Oracle, Sentinel, Shard and
+    Tournament delete `telemetry.ActivitySources.Add("Npgsql")` (`Infrastructure/InfrastructureServiceRegistration.cs`;
+    `AddServiceTelemetry(name, configuration)` needs no `configure` left in Oracle, Sentinel, Shard and Tournament).
+  - A destructured property (`{@...}`) is written at most 4 levels deep, 20 items a collection and 1,024 characters a
+    string (`MaximumDestructuringDepth`, `MaximumDestructuredCollectionCount`, `MaximumDestructuredStringLength`; `null`
+    turns one off). They are set before the `Serilog` section is read, so its `Destructure` entries and
+    `ConfigureLogging` override them. ⚠️ A log line destructuring something bigger is cut (Serilog writes `…`). Discord
+    deletes its `LimitDestructuring` method and `telemetry.ConfigureLogging = LimitDestructuring;`
+    (`Infrastructure/InfrastructureServiceRegistration.cs`): the defaults are its values.
+  - Documented: `Serilog.Enrichers.Span` / `"WithSpan"` is redundant (the `TraceId` / `SpanId` enricher was already
+    there). Oracle, Sentinel, Shard, Tournament and SwgohApi drop the `Serilog.Enrichers.Span` `PackageReference`
+    (`Infrastructure/*.csproj`) and its `PackageVersion`, and `"Serilog.Enrichers.Span"` from `Serilog:Using` and
+    `"WithSpan"` from `Serilog:Enrich` (`Web/appsettings.Production.json`).
+
 ### Added
 
 - **Abstractions: `RetrySchedule`** (`Resilience`; see Breaking changes), and the options that take one:
@@ -382,6 +398,10 @@ every package in the repository is released together under one version.
   1024 * 1024 * 1024)`, which becomes `services.AddDistributedCaching(cache => cache.SizeLimit = 1024 * 1024 * 1024)`.
   With it the `IClaimStore` is registered too (it was found through `ICachingService` before: same instance, same
   behaviour).
+
+- **Observability: `ServiceTelemetryOptions.NpgsqlInstrumentation`, `MaximumDestructuringDepth`,
+  `MaximumDestructuredCollectionCount`, `MaximumDestructuredStringLength`, and `TelemetrySources.Npgsql`** (see
+  Behaviour changes).
 
 ### Fixed
 

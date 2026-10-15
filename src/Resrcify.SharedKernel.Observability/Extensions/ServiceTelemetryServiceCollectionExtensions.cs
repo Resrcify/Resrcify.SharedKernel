@@ -28,8 +28,9 @@ public static class ServiceTelemetryServiceCollectionExtensions
     /// HttpClient, the runtime, every SharedKernel source and meter, Rebus.Diagnostics, Quartz), the Prometheus
     /// exporter (map its endpoint with <c>MapServiceMetrics()</c>), traces over OTLP when
     /// <c>Observability:OtlpEndpoint</c> is set, and Serilog from the <c>Serilog</c> section with every event carrying
-    /// its <c>TraceId</c> and <c>SpanId</c>. Each part can be turned off, and more sources, meters or anything else
-    /// added, through <paramref name="configure"/>.
+    /// its <c>TraceId</c> and <c>SpanId</c> (no <c>Serilog.Enrichers.Span</c> / <c>"WithSpan"</c> needed) and
+    /// destructuring bounded (4 levels, 20 items, 1,024 characters). Npgsql's spans are traced too. Each part can be
+    /// turned off, and more sources, meters or anything else added, through <paramref name="configure"/>.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="serviceName">The service's name on its traces and metrics (<c>service.name</c>), e.g. <c>"shardmanagement"</c>.</param>
@@ -83,11 +84,26 @@ public static class ServiceTelemetryServiceCollectionExtensions
 
         services.AddSerilog(logger =>
         {
+            // First, so the Serilog section's Destructure entries and ConfigureLogging override them.
+            LimitDestructuring(logger, options);
             logger.ReadFrom
                 .Configuration(configuration)
                 .Enrich.With<TraceContextEnricher>();
             options.ConfigureLogging?.Invoke(logger);
         });
+    }
+
+    // Bounds what a destructured property can add to a log line, unless an option is turned off (null).
+    internal static void LimitDestructuring(
+        LoggerConfiguration logger,
+        ServiceTelemetryOptions options)
+    {
+        if (options.MaximumDestructuringDepth is { } depth)
+            logger.Destructure.ToMaximumDepth(depth);
+        if (options.MaximumDestructuredCollectionCount is { } count)
+            logger.Destructure.ToMaximumCollectionCount(count);
+        if (options.MaximumDestructuredStringLength is { } length)
+            logger.Destructure.ToMaximumStringLength(length);
     }
 
     private static void AddOpenTelemetry(
@@ -181,7 +197,14 @@ public static class ServiceTelemetryServiceCollectionExtensions
 
     private static IEnumerable<string> SourceNames(
         ServiceTelemetryOptions options)
-        => BuiltInNames(options).Concat(options.ActivitySources);
+    {
+        var names = BuiltInNames(options);
+        if (options.NpgsqlInstrumentation)
+            names = names.Append(TelemetrySources.Npgsql);
+        return names
+            .Concat(options.ActivitySources)
+            .Distinct(StringComparer.Ordinal);
+    }
 
     private static IEnumerable<string> MeterNames(
         ServiceTelemetryOptions options)

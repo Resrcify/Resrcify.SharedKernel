@@ -26,4 +26,10 @@ public static class TelemetrySources
     /// Quartz 4 doesn't.
     /// </summary>
     public const string Quartz = "Quartz";
+
+    /// <summary>
+    /// Npgsql's activity source: a span per database command. Traced by default; harmless in a service without
+    /// PostgreSQL (nothing writes to it).
+    /// </summary>
+    public const string Npgsql = "Npgsql";
 }
