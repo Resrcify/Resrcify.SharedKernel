@@ -63,9 +63,23 @@ Symptom -> Root cause -> Fix -> Verification.
         regular policy, which can say -1: `rabbitmqctl set_policy --apply-to quorum_queues unlimited-delivery ".*"
         '{"delivery-limit":-1}'`; a queue gets one regular policy, the highest priority, so a later one matching these
         queues must repeat the limit. Don't put `x-delivery-limit` on a classic queue: the broker refuses it.)
-     3. Check the services' queues are empty (`rabbitmqctl list_queues name type messages`) and delete them
-        (`rabbitmqctl delete_queue <name>`); messages still in one are lost with it.
-     4. Start the services: their queues come back as quorum.
+     3. Delete **every** classic durable queue on the vhost, not only the services' named ones: `rabbitmqctl
+        list_queues name type durable messages`, then `rabbitmqctl delete_queue <name> --if-empty` for each
+        `classic` one. That includes the bus's default `error` queue (a service without an input queue declares it),
+        the queues of a service already running this package (a responder's request queues,
+        `<service>.scatter.replies.*`), and MassTransit's. Then check that the list shows no `classic` queue before
+        anything starts. If one is left, every service that declares it fails to start (`Queue declaration for
+        'error' failed`, on the `x-queue-type` mismatch). A queue still holding messages loses them when it's
+        deleted, so drain it first: stop its publishers and let its consumer empty it. This bus can't read
+        MassTransit's messages, so a MassTransit queue must be empty before it goes.
+     4. Start the subscribers first, and start the publishers only once the subscribers' queues are bound
+        (`rabbitmqctl list_bindings`). An event published to a topic with no queue bound to it goes nowhere, and the
+        outbox has already marked it processed.
+
+     The Resrcify production cut-over (MassTransit to this bus in the same window) has its own full procedure,
+     rehearsed on 2026-10-15 with production copies. It lives in Resrcify.Kubernetes,
+     [`docs/OPERATIONS.md`, "RabbitMQ: quorum queues"](https://github.com/Resrcify/Resrcify.Kubernetes/blob/master/docs/OPERATIONS.md#rabbitmq-quorum-queues).
+     Follow that one for production; these steps are the general rule.
 
 - **Verification:** `rabbitmqctl environment` shows `{quorum_cluster_size,1}` with `initial_cluster_size = 1`, and
   `rabbitmqctl list_queues name type members` one member per queue; `rabbitmqctl list_vhosts name default_queue_type` shows `quorum`; `rabbitmqctl list_operator_policies`
