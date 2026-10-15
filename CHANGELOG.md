@@ -428,9 +428,9 @@ every package in the repository is released together under one version.
 - **MessageBus' README: `AddMessageBus()`'s health check replaces a RabbitMQ check.** It watches the bus' own
   connection: Sentinel and Shard delete `.AddRabbitMQ(name: "rabbitmq", tags: [HealthTags.Ready])`, the
   `services.AddSingleton<IConnection>(...)` built for it (`Infrastructure/InfrastructureServiceRegistration.cs`) and
-  the `AspNetCore.HealthChecks.Rabbitmq` package (`Infrastructure/*.csproj`, `Directory.Packages.props`); SwgohApi
-  likewise (its `IConnection` and `healthChecks.AddRabbitMQ(...)`, in `Infrastructure/InfrastructureServiceRegistration.cs`),
-  adding `.AddMessageBus()` if it hasn't one.
+  the `AspNetCore.HealthChecks.Rabbitmq` package (`Infrastructure/*.csproj`, `Directory.Packages.props`). SwgohApi's
+  `IConnection` and `healthChecks.AddRabbitMQ(...)` (`Infrastructure/InfrastructureServiceRegistration.cs`) also watch
+  the broker MassTransit uses: they go with MassTransit, for `.AddMessageBus()` on the SharedKernel bus.
 
 - **Caching: `services.AddDistributedCaching(Action<MemoryDistributedCacheOptions>? configure = null)`**
   (`Resrcify.SharedKernel.Caching.Extensions`): the in-memory `IDistributedCache` (unless one is registered already),
