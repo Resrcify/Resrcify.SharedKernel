@@ -49,30 +49,26 @@ names those libraries publish (`RebusDiagnosticConstants`, `QuartzInstrumentatio
 ## Prerequisites
 
 - .NET 10 SDK, an ASP.NET Core host.
-- **The packages it wires, referenced by the service.** Like every SharedKernel package, this one keeps its
-  dependencies private, so a service lists what it ships: the OpenTelemetry host, instrumentation and exporter
-  packages and the Serilog host packages below. A missing one fails at start-up naming the assembly; the Prometheus
-  exporter (only ever published as a prerelease) gets a message of its own, or set `PrometheusExporter = false`.
+- **The packages it wires come with it**: the OpenTelemetry host, instrumentation and OTLP exporter packages and the
+  Serilog host packages (`Serilog.Extensions.Hosting`, `Serilog.Settings.Configuration`, `Serilog.AspNetCore`) are
+  dependencies of this package, so NuGet gives the service at least the versions it was built against (a lower one
+  is refused at restore, instead of a `MissingMethodException` at run time). A service references one itself only
+  to move it higher.
+- **The Prometheus exporter, referenced by the service.** `OpenTelemetry.Exporter.Prometheus.AspNetCore` is only
+  ever published as a prerelease, which a stable package can't depend on (NU5104): the service references it. A
+  missing one gets a message of its own at start-up, or set `PrometheusExporter = false`.
 - A `Serilog` configuration section and the sinks it names (e.g. `Serilog.Sinks.Console`), as today.
 
 ## Install
 
 ```xml
 <PackageReference Include="Resrcify.SharedKernel.Observability" Version="<latest>" />
-<!-- What it wires (its own references are private, so the service lists them): -->
-<PackageReference Include="OpenTelemetry.Extensions.Hosting" />
-<PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
-<PackageReference Include="OpenTelemetry.Instrumentation.Http" />
-<PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
-<PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
-<PackageReference Include="Serilog.Extensions.Hosting" />
-<PackageReference Include="Serilog.Settings.Configuration" />
+<!-- A prerelease, so not a dependency of the package: the service references it. -->
 <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.19.1-beta.1" />
-<!-- For UseServiceRequestLogging only (its RequestLoggingOptions is in the signature): -->
-<PackageReference Include="Serilog.AspNetCore" />
 ```
 
-Use the versions in SharedKernel's `Directory.Packages.props` (or newer). Most services reference these already.
+The OpenTelemetry and Serilog host packages come with it. The sinks the `Serilog` section names
+(`Serilog.Sinks.Console`, ...) are the service's.
 
 ## Quick Start
 
@@ -269,10 +265,9 @@ app.UseServiceRequestLogging();
 app.MapServiceMetrics();
 ```
 
-Then delete the service's `ObservabilityOptions` class. Keep its package references (the ones listed under
-[Install](#install), the Serilog sinks and the Prometheus exporter), since this package's are private; keep
-`Serilog.AspNetCore` for `UseServiceRequestLogging`, or drop it if the service logs no requests and
-`Serilog.Extensions.Hosting` is all it used. The configuration doesn't change. What the service gains: the mediator's spans and metrics and the Quartz meter (which
+Then delete the service's `ObservabilityOptions` class, and the package references this package brings (the
+OpenTelemetry host, instrumentation and OTLP exporter packages, `Serilog.Extensions.Hosting`,
+`Serilog.Settings.Configuration`, `Serilog.AspNetCore`); keep the Serilog sinks and the Prometheus exporter. The configuration doesn't change. What the service gains: the mediator's spans and metrics and the Quartz meter (which
 most services didn't subscribe to), trace ids on every log line, no spans and no request lines for the probes and the
 scrape, and the host, client IP and user id on every request line.
 

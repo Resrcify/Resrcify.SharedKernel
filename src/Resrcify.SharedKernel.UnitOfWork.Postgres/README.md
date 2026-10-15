@@ -45,30 +45,26 @@ factory `dotnet ef` needs and an `xmin` concurrency token.
 ## Prerequisites
 
 - .NET 10 SDK, PostgreSQL.
-- **The packages it uses, referenced by the service.** Like every SharedKernel package, this one keeps its
-  dependencies private, so the service lists what it ships:
+- **The packages it uses come with it**, at least at the versions it was built against (NuGet refuses a lower one at
+  restore):
 
   | Package | Why |
   |---|---|
-  | `Npgsql.EntityFrameworkCore.PostgreSQL` | the EF Core provider (its builder types are in this package's API) |
+  | `Npgsql.EntityFrameworkCore.PostgreSQL` (and Npgsql) | the EF Core provider (its builder types are in this package's API) |
   | `Microsoft.EntityFrameworkCore`, `Microsoft.EntityFrameworkCore.Relational` | EF Core |
-  | `Microsoft.Extensions.Hosting` | the configuration providers and options binding (a web host has them; a Persistence project running `dotnet ef` needs them) |
-  | `Quartz` | only with `WithOutboxWakeUp()` and the outbox job (UnitOfWork's requirement already) |
+  | `Microsoft.Extensions.Hosting` | the configuration providers and options binding (a Persistence project running `dotnet ef` needs them) |
+  | `Quartz` | the outbox job and `WithOutboxWakeUp()` (through UnitOfWork) |
 
-  Every service's Persistence project references the first three already, and its Application project
-  `Microsoft.Extensions.Hosting`.
+  A service references one itself only to move it higher (and `Microsoft.EntityFrameworkCore.Design` for `dotnet ef`,
+  which is never a dependency).
 
 ## Install
 
 ```xml
 <PackageReference Include="Resrcify.SharedKernel.UnitOfWork.Postgres" Version="<latest>" />
-<!-- What it uses (its own references are private, so the service lists them): -->
-<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
-<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
-<PackageReference Include="Microsoft.Extensions.Hosting" />
 ```
 
-It references `Resrcify.SharedKernel.UnitOfWork`, which comes along.
+It references `Resrcify.SharedKernel.UnitOfWork`, EF Core, Npgsql's provider and Quartz, which come along.
 
 ## Quick Start
 

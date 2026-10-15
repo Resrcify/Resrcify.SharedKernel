@@ -11,15 +11,12 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
-  <!-- Used only by the service that calls AddResultResilience / AddResrcifyJwtBearer, which references the package
-       itself (both appear in those methods' signatures, so a missing reference is a compile error). -->
+  <!-- Real dependencies: AddResultResilience returns Microsoft.Extensions.Http.Resilience's
+       IHttpResiliencePipelineBuilder, AddResrcifyJwtBearer takes JwtBearerOptions, so a service gets them from this
+       reference, at least at the versions this package was built against. -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Http.Resilience">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Resrcify.SharedKernel.Abstractions\Resrcify.SharedKernel.Abstractions.csproj" />

@@ -18,7 +18,7 @@ public static class ResrcifyJwtBearerServiceCollectionExtensions
     /// audience, lifetime and signature are checked. <paramref name="configure"/> runs after, for anything else
     /// (events, claim mapping). Authorization policies stay the service's own.
     /// </summary>
-    /// <remarks>The service references <c>Microsoft.AspNetCore.Authentication.JwtBearer</c> itself.</remarks>
+    /// <remarks><c>Microsoft.AspNetCore.Authentication.JwtBearer</c> comes with this package.</remarks>
     public static AuthenticationBuilder AddResrcifyJwtBearer(
         this IServiceCollection services,
         IConfiguration configuration,

@@ -63,9 +63,10 @@ The contracts live in `Resrcify.SharedKernel.Abstractions.Mediator`, so the Doma
 
 - .NET 10 SDK (current target is `net10.0`).
 - Dependency injection via `Microsoft.Extensions.DependencyInjection`.
+- `FluentValidation` (the validation behavior and the validator scan) and `Microsoft.Extensions.Logging` (the
+  behaviors' logging) come with the package, at least at the versions it was built against: the Application project
+  needs no reference of its own to them.
 - Optional dependencies depending on chosen behaviors:
-    - `FluentValidation` (validation behavior)
-    - `Microsoft.Extensions.Logging` (logging behavior)
     - Caching abstraction implementation (`ICachingService`) for caching behavior
     - Unit-of-work implementation (`IUnitOfWork`) for transaction/unit-of-work behaviors
 
@@ -528,8 +529,8 @@ When nothing listens, a send costs one check: no span, no clock reading, no tags
 - FluentValidation validators (every `IValidator<T>`, internal ones included, scoped, as itself too), as
   `AddValidatorsFromAssembly(assembly, includeInternalTypes: true)` registers them and with its semantics: one
   registered already, by that call before or after `AddMediator` or by hand, isn't registered again, so the validation
-  behavior never runs one twice. Only assemblies referencing FluentValidation are scanned for them (a service without
-  validators needs no FluentValidation). `cfg.SkipValidatorScan()` turns it off, for a service registering its
+  behavior never runs one twice. Only assemblies referencing FluentValidation are scanned for them.
+  `cfg.SkipValidatorScan()` turns it off, for a service registering its
   validators with another lifetime or a filter.
 
 Behaviors and pre/post processors are registered only as added (`AddOpenBehavior`, `AddStandardBehaviors`,

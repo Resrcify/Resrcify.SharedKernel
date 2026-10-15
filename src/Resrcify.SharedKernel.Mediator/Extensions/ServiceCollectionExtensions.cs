@@ -178,14 +178,11 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IReadOnlyCollection<Assembly> assemblies)
     {
-        // Only an assembly that references FluentValidation can hold a validator, and only then is FluentValidation sure
-        // to be deployed (this package references it privately): a service without validators needs none of it, so the
-        // scan, which loads it, runs only over those.
+        // Only an assembly that references FluentValidation can hold a validator: the others aren't scanned.
         var withValidators = assemblies
             .Where(ReferencesFluentValidation)
             .ToList();
-        if (withValidators.Count > 0)
-            RegisterValidatorsOf(services, withValidators);
+        RegisterValidatorsOf(services, withValidators);
     }
 
     private static bool ReferencesFluentValidation(Assembly assembly)
@@ -195,8 +192,6 @@ public static class ServiceCollectionExtensions
 
     private const string FluentValidationAssemblyName = "FluentValidation";
 
-    // Kept out of line, so FluentValidation is loaded only when an assembly references it.
-    [MethodImpl(MethodImplOptions.NoInlining)]
     private static void RegisterValidatorsOf(
         IServiceCollection services,
         List<Assembly> assemblies)

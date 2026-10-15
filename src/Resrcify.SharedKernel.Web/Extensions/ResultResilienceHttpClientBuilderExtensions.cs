@@ -30,7 +30,7 @@ public static class ResultResilienceHttpClientBuilderExtensions
     /// <remarks>
     /// A <c>Retry-After</c> at least as long as what is left of the total timeout isn't waited for: the caller gets
     /// that response (e.g. a 429) at once, rather than a timeout once the wait has used up the call's time.
-    /// The service references <c>Microsoft.Extensions.Http.Resilience</c> itself. After the retries the caller gets the
+    /// <c>Microsoft.Extensions.Http.Resilience</c> comes with this package. After the retries the caller gets the
     /// last response, which <c>ToResultAsync</c> turns into a failure. A timeout (an attempt's, after the retries, or
     /// the whole call's), an open circuit or a service that couldn't be reached after the retries (an
     /// <see cref="HttpRequestException"/> without a status) is answered in the service's place, outermost, with a

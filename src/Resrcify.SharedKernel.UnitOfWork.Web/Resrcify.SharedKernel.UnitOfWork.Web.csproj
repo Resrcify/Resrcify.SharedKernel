@@ -12,11 +12,9 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
-  <!-- Private, like every SharedKernel package's dependencies: the service references EF Core itself. -->
+  <!-- MapOutboxAdministration<TDbContext> is constrained to EF Core's DbContext. -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
   </ItemGroup>
 
   <ItemGroup>

@@ -12,34 +12,19 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
-  <!-- Private, like every SharedKernel package's public dependencies: the service references each one itself, so it
-       knows what it ships (see the README's "Packages the service references"). -->
+  <!-- Real dependencies: their types are in this package's API (TracerProviderBuilder, MeterProviderBuilder, Serilog's
+       LoggerConfiguration and RequestLoggingOptions), so a service gets them from this reference, at least at the
+       versions this package was built against (NuGet refuses a lower one at restore). -->
   <ItemGroup>
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="Serilog.Extensions.Hosting">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="Serilog.Settings.Configuration">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="Serilog.Extensions.Hosting" />
+    <PackageReference Include="Serilog.Settings.Configuration" />
     <!-- UseServiceRequestLogging (Serilog's request logging): its RequestLoggingOptions is in the signature. -->
-    <PackageReference Include="Serilog.AspNetCore">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    <PackageReference Include="Serilog.AspNetCore" />
   </ItemGroup>
 
   <!-- Only ever published as a prerelease, which a stable package can't depend on (NU5104): the service references it

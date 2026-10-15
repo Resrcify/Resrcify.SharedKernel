@@ -132,6 +132,77 @@ every package in the repository is released together under one version.
   `outbox.ProcessInterval = TimeSpan.FromSeconds(20)` for `outbox.ProcessIntervalInSeconds = 20`
   (`Infrastructure/InfrastructureServiceRegistration.cs`).
 
+- **The packages a SharedKernel package's API is built on are its dependencies, no longer private**
+  (Resrcify.SharedKernel.Observability, Web, UnitOfWork, UnitOfWork.Postgres, Repository, Mediator, Caching). Their
+  `PackageReference`s were `PrivateAssets="all"`, though their types are in the packages' API (`TracerProviderBuilder`,
+  Serilog's `LoggerConfiguration` and `RequestLoggingOptions`, `IHttpResiliencePipelineBuilder`, `JwtBearerOptions`,
+  EF Core's `DbContext`, Quartz's `IJob`, Npgsql's EF builder, FluentValidation's `IValidator<T>`, `IDistributedCache`):
+  every service listed 12–14 of them itself, in lockstep, and one at a lower version than SharedKernel was built
+  against failed at run time with a `MissingMethodException` (or a `FileNotFoundException`, for one it didn't list),
+  not at restore. They are now ordinary dependencies, in each package's `.nuspec`, so NuGet brings them and refuses a
+  lower version at restore (`NU1605`, a downgrade, is an error):
+
+  | Package | Now depends on (at least) |
+  |---|---|
+  | Observability | `OpenTelemetry.Extensions.Hosting` 1.19.1, `OpenTelemetry.Instrumentation.AspNetCore` / `.Http` / `.Runtime` 1.19.0, `OpenTelemetry.Exporter.OpenTelemetryProtocol` 1.19.1, `Serilog.AspNetCore` 10.0.0, `Serilog.Extensions.Hosting` 10.0.0, `Serilog.Settings.Configuration` 10.0.1 |
+  | Web | `Microsoft.Extensions.Http.Resilience` 10.11.0 (and with it `Microsoft.Extensions.Http`), `Microsoft.AspNetCore.Authentication.JwtBearer` 10.0.13 |
+  | UnitOfWork | `Microsoft.EntityFrameworkCore`, `Microsoft.EntityFrameworkCore.Relational`, `Microsoft.Extensions.Diagnostics.HealthChecks` 10.0.13, `Quartz` 4.5.0 |
+  | UnitOfWork.Postgres | UnitOfWork's, `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 (and Npgsql), `Microsoft.Extensions.Hosting` 10.0.13 |
+  | Repository | `Microsoft.EntityFrameworkCore`, `Microsoft.EntityFrameworkCore.Relational` 10.0.13 |
+  | Mediator | `FluentValidation`, `FluentValidation.DependencyInjectionExtensions` 12.2.0, `Microsoft.Extensions.Logging` 10.0.13 |
+  | Caching | `Microsoft.Extensions.Caching.Abstractions`, `Microsoft.Extensions.Caching.Memory` 10.0.13 |
+
+  Still private: SonarAnalyzer (build only), and `OpenTelemetry.Exporter.Prometheus.AspNetCore` (Observability), only
+  ever published as a prerelease, which a stable package can't depend on (`NU5104`): the service keeps referencing it.
+  Abstractions, Results and DomainDrivenDesign, which Domain references, have no such dependency (Abstractions'
+  `Microsoft.Extensions.DependencyInjection.Abstractions` was public already). **Mediator and Caching were kept private
+  on purpose before; not any more**: Mediator's `ValidationPipelineBehavior` takes `IValidator<T>` and its assembly scan
+  (4.3.0, see Behaviour changes) calls FluentValidation's, so a service deleting its own
+  `FluentValidation.DependencyInjectionExtensions` along with `AddValidatorsFromAssembly` would have failed at start-up;
+  Mediator is referenced by Application (where the validators are), never by Domain. Caching is used by
+  Infrastructure only (inner layers take `ICachingService` from Abstractions), so nothing reaches Domain or
+  Application through it. ⚠️ **A service pinning one of these lower than SharedKernel fails to restore** (`NU1605`):
+  **SwgohApi** pins `Microsoft.Extensions.Logging`, `Microsoft.Extensions.Caching.Abstractions` and
+  `Microsoft.Extensions.Diagnostics.HealthChecks` at 10.0.12 (`Directory.Packages.props`): raise them to 10.0.13 (or
+  delete the references, see below). A service may keep any of these references (to move one higher); none is needed.
+  What each service can delete (`PackageReference`s in its `*.csproj`, and their `PackageVersion`s in
+  `Directory.Packages.props` once no project references them):
+  - **Shard**: `Application`: `FluentValidation`, `FluentValidation.DependencyInjectionExtensions`. `Infrastructure`:
+    `OpenTelemetry.Extensions.Hosting`, `OpenTelemetry.Instrumentation.AspNetCore`, `OpenTelemetry.Instrumentation.Http`,
+    `OpenTelemetry.Instrumentation.Runtime`, `OpenTelemetry.Exporter.OpenTelemetryProtocol`, `Serilog.AspNetCore`,
+    `Serilog.Extensions.Hosting`, `Serilog.Settings.Configuration`, `Microsoft.Extensions.Http`,
+    `Microsoft.Extensions.Http.Resilience`, `Quartz`, `Microsoft.Extensions.Diagnostics.HealthChecks`. `Persistence`:
+    `Microsoft.EntityFrameworkCore`, `Microsoft.EntityFrameworkCore.Relational`, `Npgsql.EntityFrameworkCore.PostgreSQL`.
+    `tests/*.IntegrationTests` and `tests/*.SystemTests`: `Microsoft.EntityFrameworkCore`,
+    `Microsoft.EntityFrameworkCore.Relational`, `Npgsql.EntityFrameworkCore.PostgreSQL`, `Quartz`.
+  - **Sentinel**: `Application`: `FluentValidation`, `FluentValidation.DependencyInjectionExtensions`.
+    `Infrastructure`: the same twelve as Shard's. `Persistence`: `Microsoft.EntityFrameworkCore`,
+    `Microsoft.EntityFrameworkCore.Relational`, `Microsoft.EntityFrameworkCore.Abstractions`,
+    `Npgsql.EntityFrameworkCore.PostgreSQL`. `tests/*.IntegrationTests`: the three EF Core / Npgsql ones;
+    `tests/*.SystemTests`: those and `Quartz`.
+  - **Oracle**: `Application`: `FluentValidation`, `FluentValidation.DependencyInjectionExtensions`. `Infrastructure`:
+    the same twelve as Shard's. `Persistence`: `Microsoft.EntityFrameworkCore`, `Microsoft.EntityFrameworkCore.Relational`,
+    `Npgsql.EntityFrameworkCore.PostgreSQL`, `Microsoft.Extensions.Hosting`. `tests/*.IntegrationTests`: the three
+    EF Core / Npgsql ones.
+  - **Tournament**: `Application`: `FluentValidation`, `FluentValidation.DependencyInjectionExtensions`.
+    `Infrastructure`: the same twelve as Shard's. `Persistence`: `Microsoft.EntityFrameworkCore`,
+    `Microsoft.EntityFrameworkCore.Relational`, `Npgsql.EntityFrameworkCore.PostgreSQL`. `tests/*.IntegrationTests`:
+    the three EF Core / Npgsql ones.
+  - **Discord**: `Application`: `FluentValidation`, `FluentValidation.DependencyInjectionExtensions`,
+    `Microsoft.Extensions.Logging`. `Infrastructure`: the five `OpenTelemetry.*` above, `Serilog.Settings.Configuration`,
+    `Serilog.Extensions.Logging`, `Microsoft.Extensions.Http`, `Microsoft.Extensions.Http.Resilience`,
+    `Microsoft.Extensions.Diagnostics.HealthChecks`. `Bot`: `Serilog.Extensions.Hosting`,
+    `Serilog.Settings.Configuration` (keep `Serilog`: it pins 4.4.0, above SharedKernel's).
+  - **SwgohApi**: `Application`: `FluentValidation`, `FluentValidation.DependencyInjectionExtensions`,
+    `Microsoft.Extensions.Logging`. `Infrastructure`: `Microsoft.Extensions.Diagnostics.HealthChecks`; once it moves to
+    the Observability package, its `OpenTelemetry.*` (but the Prometheus exporter and
+    `OpenTelemetry.Instrumentation.StackExchangeRedis`) and `Serilog.AspNetCore`.
+
+  Every service keeps the Prometheus exporter, its Serilog sinks, formatters and enrichers (`Serilog.Sinks.Console`,
+  `Serilog.Formatting.Compact`, `Serilog.Enrichers.Environment`), `Microsoft.EntityFrameworkCore.Design` / `.Tools` /
+  `.Analyzers` (never dependencies), and `Microsoft.Extensions.Hosting` / `Microsoft.Extensions.Caching.Abstractions`
+  in Application (no package it references there brings them).
+
 ### Behaviour changes
 
 - **One transient contract, owned by SharedKernel, with a DI hook** (Resrcify.SharedKernel.Results, Abstractions,
@@ -282,8 +353,8 @@ every package in the repository is released together under one version.
   included, scoped (as its `IValidator<T>` and as itself), as `AddValidatorsFromAssembly(assembly, includeInternalTypes:
   true)` does and with its `TryAddEnumerable` semantics: a validator registered already (by `AddValidatorsFromAssembly`
   before or after `AddMediator`, or by hand) is registered once, so the validation behavior never runs it twice. Only
-  assemblies referencing FluentValidation are scanned for them, so a service without validators still needs no
-  FluentValidation. `cfg.SkipValidatorScan()` turns it off. ⚠️ **Tournament's internal validators run for the first
+  assemblies referencing FluentValidation are scanned for them (FluentValidation comes with the package: see "The
+  packages a SharedKernel package's API is built on" under Breaking changes). `cfg.SkipValidatorScan()` turns it off. ⚠️ **Tournament's internal validators run for the first
   time**: its `AddValidatorsFromAssembly(Assembly.GetExecutingAssembly())` skipped internal types, so a request they
   reject now fails with a validation error (400) where it went through. Every service can delete its
   `services.AddValidatorsFromAssembly(...)` line (Sentinel, Tournament, Shard, Oracle and Discord in
@@ -436,7 +507,7 @@ every package in the repository is released together under one version.
   (`Resrcify.SharedKernel.Caching.Extensions`): the in-memory `IDistributedCache` (unless one is registered already),
   `DistributedCachingService` as the `ICachingService` and the `IClaimStore` (one singleton; one registered before is
   kept) and the system `TimeProvider` (unless one is registered), in one call. The package references
-  `Microsoft.Extensions.Caching.Memory` (private, as its other dependencies; ASP.NET Core has it). It replaces the
+  `Microsoft.Extensions.Caching.Memory` (a dependency, see Breaking changes). It replaces the
   two lines `services.AddDistributedMemoryCache(); services.AddSingleton<ICachingService, DistributedCachingService>();`
   in Discord, Shard and Tournament (`Infrastructure/InfrastructureServiceRegistration.cs`; Sandbox and Identity there
   too, and SwgohApi's in-memory branch), and Sentinel's with `AddDistributedMemoryCache(options => options.SizeLimit =

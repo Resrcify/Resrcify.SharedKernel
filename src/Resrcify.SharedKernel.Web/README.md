@@ -343,7 +343,7 @@ services
     .AddResultResilience(resilience => resilience.AlsoRetry.Add(StatusCodes.Status404NotFound));
 ```
 
-Built on Microsoft.Extensions.Http.Resilience (Polly 8), which the service references itself. Outermost to
+Built on Microsoft.Extensions.Http.Resilience (Polly 8), which comes with the package. Outermost to
 innermost: the answer for a timeout or an open circuit, the total timeout (30 s), the retries, the circuit breaker,
 the attempt timeout (10 s).
 
@@ -469,8 +469,8 @@ The `Jwt` section (`ResrcifyJwtOptions`) is bound and validated at start-up (`Au
 `Issuer` and `Audience` set). JWT bearer becomes the default scheme; its signing keys come from the authority's
 discovery document (JWKS, refreshed when Identity rotates its keys), and the issuer, audience, lifetime and signature
 are checked. `RequireHttpsMetadata` is off unless set: the services reach Identity over plain HTTP in the cluster.
-The optional `Action<JwtBearerOptions>` runs after, for events or claim mapping. The service references
-`Microsoft.AspNetCore.Authentication.JwtBearer` itself. It replaces Sandbox's `JwtOptions` and `ConfigureJwtOptions`
+The optional `Action<JwtBearerOptions>` runs after, for events or claim mapping.
+`Microsoft.AspNetCore.Authentication.JwtBearer` comes with the package. It replaces Sandbox's `JwtOptions` and `ConfigureJwtOptions`
 (same section, same keys).
 
 ## Common issues

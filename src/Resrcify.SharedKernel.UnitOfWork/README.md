@@ -47,17 +47,17 @@
   object property.
 - On PostgreSQL, `Resrcify.SharedKernel.UnitOfWork.Postgres` sets the DbContext up in one call.
 
-### Packages the service references
+### Packages that come with it
 
-This package's own references are private, so a service references what it uses: `Microsoft.EntityFrameworkCore`
-and `Microsoft.EntityFrameworkCore.Relational` (and its provider), `Quartz` for the outbox job and the Quartz helpers,
-and `Microsoft.Extensions.Diagnostics.HealthChecks` for the health checks (an ASP.NET Core host has it).
+`Microsoft.EntityFrameworkCore` and `Microsoft.EntityFrameworkCore.Relational`, `Quartz` (the outbox job and the Quartz
+helpers) and `Microsoft.Extensions.Diagnostics.HealthChecks` are dependencies of this package, at least at the versions
+it was built against (NuGet refuses a lower one at restore). The service references its database provider (or
+`Resrcify.SharedKernel.UnitOfWork.Postgres`, which brings Npgsql's), and one of these only to move it higher.
 
 ## Prerequisites
 
 - .NET 10 SDK.
-- Entity Framework Core in the consuming project.
-- Optional Quartz integration for scheduled outbox processing.
+- An EF Core database provider in the consuming project (EF Core and Quartz come with the package).
 
 ## Install
 
