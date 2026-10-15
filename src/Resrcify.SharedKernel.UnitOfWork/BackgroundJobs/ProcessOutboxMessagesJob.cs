@@ -28,6 +28,9 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 /// time, up to 5 min (<c>OutboxOptions.RetryDelay</c> and <c>MaxRetryDelay</c>). The time is written to
 /// <see cref="OutboxMessage.NextAttemptOnUtc"/> with the failure, and a run reads only the messages that are due, so a
 /// handler failing through an outage of a few minutes doesn't spend its tries in the first minute of it.</item>
+/// <item>A transient failure (a timeout, an HTTP 5xx, a transient database failure) gets more tries than any other:
+/// <c>OutboxOptions.MaxTransientRetryCount</c> (12, about 30 minutes with the default backoff) against
+/// <c>MaxRetryCount</c> (3).</item>
 /// </list>
 /// </remarks>
 [DisallowConcurrentExecution]
@@ -40,11 +43,13 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
 {
     internal const string ProcessBatchSizeKey = "ProcessBatchSize";
     internal const string ProcessMaxRetryCountKey = "ProcessMaxRetryCount";
+    internal const string ProcessMaxTransientRetryCountKey = "ProcessMaxTransientRetryCount";
     internal const string ProcessIntervalInSecondsKey = "ProcessIntervalInSeconds";
     internal const string ProcessRetryDelayInMillisecondsKey = "ProcessRetryDelayInMilliseconds";
     internal const string ProcessMaxRetryDelayInMillisecondsKey = "ProcessMaxRetryDelayInMilliseconds";
     internal const int DefaultProcessBatchSize = 20;
-    internal const int DefaultProcessMaxRetryCount = 3;
+    internal const int DefaultProcessMaxRetryCount = OutboxRetryLimits.DefaultMaxRetryCount;
+    internal const int DefaultProcessMaxTransientRetryCount = OutboxRetryLimits.DefaultMaxTransientRetryCount;
     internal const int DefaultProcessIntervalInSeconds = 60;
 
     /// <summary>The share of the trigger's interval a run spends starting batches: 80%.</summary>
@@ -64,10 +69,7 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
             context.MergedJobDataMap,
             ProcessBatchSizeKey,
             DefaultProcessBatchSize);
-        var maxRetryCount = ReadInt(
-            context.MergedJobDataMap,
-            ProcessMaxRetryCountKey,
-            DefaultProcessMaxRetryCount);
+        var limits = ReadRetryLimits(context.MergedJobDataMap);
         var retryDelay = ReadDelay(
             context.MergedJobDataMap,
             ProcessRetryDelayInMillisecondsKey,
@@ -89,7 +91,7 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
         {
             var messages = await ReadBatchAsync(
                 batchSize,
-                maxRetryCount,
+                limits.ReadLimit,
                 passedOver,
                 cancellationToken);
 
@@ -99,7 +101,7 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
                     scopeFactory,
                     message,
                     claim,
-                    maxRetryCount,
+                    limits,
                     OutboxRetryBackoff.Delay(message.RetryCount + 1, retryDelay, maxRetryDelay),
                     cancellationToken);
                 if (outcome != OutboxProcessOutcome.Processed)
@@ -125,6 +127,23 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
             return repeat * DrainBudgetShare;
 
         return TimeSpan.FromSeconds(DefaultProcessIntervalInSeconds) * DrainBudgetShare;
+    }
+
+    // The tries a message gets. A job stored without the transient limit (or with one below the other) gives a
+    // transient failure the default 12 tries, or the other limit when that is higher.
+    private static OutboxRetryLimits ReadRetryLimits(JobDataMap data)
+    {
+        var maxRetryCount = ReadInt(
+            data,
+            ProcessMaxRetryCountKey,
+            DefaultProcessMaxRetryCount);
+        var maxTransientRetryCount = ReadInt(
+            data,
+            ProcessMaxTransientRetryCountKey,
+            DefaultProcessMaxTransientRetryCount);
+        return new OutboxRetryLimits(
+            maxRetryCount,
+            Math.Max(maxRetryCount, maxTransientRetryCount));
     }
 
     // A delay stored in milliseconds (an int, a long or a string, or a TimeSpan); a negative or unusable one falls back.
@@ -174,13 +193,14 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
 
     // No-tracking projection — only the columns the job needs, so the covering index
     // can serve the read. Messages that gave up have a ProcessedOnUtc (OutboxMessage.GivenUpProcessedOnUtc), so the
-    // read doesn't meet them; the retry limit still skips one that gave up before they were marked. Event types that
-    // belong to an outbox lane are skipped too: the lane processes those itself. So is a message waiting for a later try
-    // (NextAttemptOnUtc ahead): a residual filter on the unprocessed rows the partial index narrows the read to, as in
-    // the lanes' read.
+    // read doesn't meet them; the retry limit still skips one that gave up before they were marked. The limit is the
+    // higher of the two (OutboxRetryLimits.ReadLimit): a message retrying transiently past MaxRetryCount is still read.
+    // Event types that belong to an outbox lane are skipped too: the lane processes those itself. So is a message
+    // waiting for a later try (NextAttemptOnUtc ahead): a residual filter on the unprocessed rows the partial index
+    // narrows the read to, as in the lanes' read.
     private async Task<List<OutboxMessageToProcess>> ReadBatchAsync(
         int batchSize,
-        int maxRetryCount,
+        int retryLimit,
         List<Guid> passedOver,
         CancellationToken cancellationToken)
     {
@@ -192,7 +212,7 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
             .Set<OutboxMessage>()
             .Where(m =>
                 m.ProcessedOnUtc == null &&
-                m.RetryCount < maxRetryCount &&
+                m.RetryCount < retryLimit &&
                 (m.NextAttemptOnUtc == null || m.NextAttemptOnUtc <= nowUtc));
 
         var laneTypes = scope.ServiceProvider.GetService<OutboxLaneRegistry>()?.LaneEventTypes ?? [];

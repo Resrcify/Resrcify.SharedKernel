@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
@@ -108,7 +111,7 @@ public sealed class OutboxLanesHostTests
         logged[0].Message.ShouldContain("(TestDomainEvent, TestDbContext) failed try 1 of 2");
         logged[0].Exception.ShouldBeOfType<InvalidOperationException>();
         logged[1].Level.ShouldBe(LogLevel.Error);
-        logged[1].Message.ShouldContain("gave up after try 2 of 2");
+        logged[1].Message.ShouldContain("gave up after try 2 (non-transient failures get 2 tries)");
         logged[1].Message.ShouldEndWith("InvalidOperationException: The handler failed (the test's).");
     }
 
@@ -120,6 +123,97 @@ public sealed class OutboxLanesHostTests
                 options.MaxRetryDelay = TimeSpan.FromSeconds(30);
             }))
             .ParamName.ShouldBe(nameof(OutboxLaneOptions.MaxRetryDelay));
+
+    [Fact]
+    public async Task ALane_ShouldTryATransientlyFailingMessageTwelveTimes_WithBackoff_ThenGiveUp()
+    {
+        // A downstream outage: the default limits (3, and 12 for a transient failure) and backoff.
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 15, 12, 0, 0, TimeSpan.Zero));
+        await using var lanes = await LaneHost.StartAsync(
+            maxConcurrency: 8,
+            seed: 1,
+            time: time,
+            failWith: _ => new HttpRequestException("the downstream service is down", null, HttpStatusCode.ServiceUnavailable));
+
+        var waits = new List<int>();
+        for (var tries = 1; tries < 12; tries++)
+        {
+            await lanes.WaitForTriesAsync(tries);
+            var wait = (await lanes.NextAttemptAsync()).ShouldNotBeNull() - time.GetUtcNow().UtcDateTime;
+            waits.Add((int)wait.TotalSeconds);
+            time.Advance(wait);
+            await lanes.Services.GetRequiredService<OutboxWakeUp<TestDbContext>>().WakeAsync();
+        }
+        await lanes.WaitForTriesAsync(12);
+        await lanes.WaitForGivenUpAsync();
+        time.Advance(TimeSpan.FromHours(1));
+        await lanes.Services.GetRequiredService<OutboxWakeUp<TestDbContext>>().WakeAsync();
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+
+        waits.ShouldBe([5, 10, 20, 40, 80, 160, 300, 300, 300, 300, 300]);
+        lanes.Tries.ShouldBe(12);
+        (await lanes.RetryCountAsync()).ShouldBe(12);
+    }
+
+    [Fact]
+    public async Task ALane_ShouldGiveUpANonTransientlyFailingMessage_AfterThreeTries()
+    {
+        await using var lanes = await LaneHost.StartAsync(
+            maxConcurrency: 8,
+            seed: 1,
+            publishFails: true,
+            configure: options => options.RetryDelay = TimeSpan.Zero);
+
+        await lanes.WaitForTriesAsync(3);
+        await lanes.WaitForGivenUpAsync();
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+
+        lanes.Tries.ShouldBe(3);
+    }
+
+    [Fact]
+    public async Task ALane_ShouldGiveUpAtOnce_WhenANonTransientFailureFollowsTransientRetriesPastTheLimit()
+    {
+        // Five transient failures (past the 3 tries a non-transient one gets), then the handler's bug: no more tries.
+        await using var lanes = await LaneHost.StartAsync(
+            maxConcurrency: 8,
+            seed: 1,
+            configure: options => options.RetryDelay = TimeSpan.Zero,
+            failWith: attempt => attempt <= 5
+                ? new TimeoutException("the downstream service didn't answer")
+                : new InvalidOperationException("The handler failed (the test's)."));
+
+        await lanes.WaitForTriesAsync(6);
+        await lanes.WaitForGivenUpAsync();
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+
+        lanes.Tries.ShouldBe(6);
+    }
+
+    [Fact]
+    public async Task ALane_ShouldReadAMessageRetryingTransientlyPastMaxRetryCount()
+    {
+        await using var lanes = await LaneHost.StartAsync(maxConcurrency: 8);
+        await lanes.SeedAsync(1, retryCount: 7);
+
+        await lanes.Services.GetRequiredService<OutboxWakeUp<TestDbContext>>().WakeAsync();
+
+        await lanes.WaitForPublishedAsync(1);
+    }
+
+    [Theory]
+    [InlineData(5, 4, nameof(OutboxLaneOptions.MaxTransientRetryCount))]
+    [InlineData(0, 12, nameof(OutboxLaneOptions.MaxRetryCount))]
+    public void AddOutboxLanes_ShouldThrow_WhenTheRetryLimitsAreOutOfOrder(
+        int maxRetryCount,
+        int maxTransientRetryCount,
+        string parameter)
+        => Should.Throw<ArgumentOutOfRangeException>(() => new ServiceCollection().AddOutboxLanes<TestDbContext>(options =>
+            {
+                options.MaxRetryCount = maxRetryCount;
+                options.MaxTransientRetryCount = maxTransientRetryCount;
+            }))
+            .ParamName.ShouldBe(parameter);
 
     /// <summary>The clock never moves in these tests: a lane that waited for its poll would never get there.</summary>
     [Fact]
@@ -162,8 +256,14 @@ public sealed class OutboxLanesHostTests
         private readonly SqliteConnection _connection;
         private readonly ServiceProvider _provider;
         private int _published;
+        private int _tries;
 
-        private LaneHost(SqliteConnection connection, ServiceProvider provider, IPublisher publisher, bool publishFails)
+        private LaneHost(
+            SqliteConnection connection,
+            ServiceProvider provider,
+            IPublisher publisher,
+            bool publishFails,
+            Func<int, Exception>? failWith)
         {
             _connection = connection;
             _provider = provider;
@@ -171,6 +271,9 @@ public sealed class OutboxLanesHostTests
                 .Publish(Arg.Any<IDomainEvent>(), Arg.Any<CancellationToken>())
                 .Returns(_ =>
                 {
+                    var attempt = Interlocked.Increment(ref _tries);
+                    if (failWith is not null)
+                        throw failWith(attempt);
                     if (publishFails)
                         throw new InvalidOperationException("The handler failed (the test's).");
                     Interlocked.Increment(ref _published);
@@ -186,7 +289,11 @@ public sealed class OutboxLanesHostTests
 
         public int Published => Volatile.Read(ref _published);
 
+        /// <summary>How often a handler was called, failing or not.</summary>
+        public int Tries => Volatile.Read(ref _tries);
+
         /// <param name="connectionString">The database, shared by hosts standing for instances of one service.</param>
+        /// <param name="failWith">The exception each try (numbered from 1) fails with; none fails when not given.</param>
         public static async Task<LaneHost> StartAsync(
             int maxConcurrency,
             int seed = 0,
@@ -194,7 +301,8 @@ public sealed class OutboxLanesHostTests
             FakeTimeProvider? time = null,
             bool publishFails = false,
             Action<OutboxLaneOptions>? configure = null,
-            RecordingLoggerProvider? logs = null)
+            RecordingLoggerProvider? logs = null,
+            Func<int, Exception>? failWith = null)
         {
             // A named in-memory database: each context opens its own connection (the lanes and the test run at once),
             // and this one keeps the database alive.
@@ -228,7 +336,7 @@ public sealed class OutboxLanesHostTests
             await using (var scope = provider.CreateAsyncScope())
                 await scope.ServiceProvider.GetRequiredService<TestDbContext>().Database.EnsureCreatedAsync();
 
-            var host = new LaneHost(connection, provider, publisher, publishFails);
+            var host = new LaneHost(connection, provider, publisher, publishFails, failWith);
             await host.SeedAsync(seed);
             var readsBefore = queries.ReadsDone;
             await host.Lanes.StartAsync(CancellationToken.None);
@@ -237,7 +345,7 @@ public sealed class OutboxLanesHostTests
             return host;
         }
 
-        public async Task SeedAsync(int count)
+        public async Task SeedAsync(int count, int retryCount = 0)
         {
             await using var scope = _provider.CreateAsyncScope();
             var context = scope.ServiceProvider.GetRequiredService<TestDbContext>();
@@ -250,6 +358,7 @@ public sealed class OutboxLanesHostTests
                     Type = typeof(TestDomainEvent).FullName!,
                     Content = Serializer.Serialize(domainEvent),
                     OccurredOnUtc = new DateTime(2026, 10, 6, 12, 0, index, DateTimeKind.Utc),
+                    RetryCount = retryCount,
                 });
             }
             await context.SaveChangesAsync();
@@ -262,6 +371,15 @@ public sealed class OutboxLanesHostTests
             while (await RetryCountAsync() < count && TimeProvider.System.GetUtcNow() < deadline)
                 await Task.Delay(TimeSpan.FromMilliseconds(20));
             (await RetryCountAsync()).ShouldBe(count);
+        }
+
+        /// <summary>Waits until the (only) message is marked given up.</summary>
+        public async Task WaitForGivenUpAsync()
+        {
+            var deadline = TimeProvider.System.GetUtcNow().AddSeconds(10);
+            while ((await ReadMessageAsync()).ProcessedOnUtc is null && TimeProvider.System.GetUtcNow() < deadline)
+                await Task.Delay(TimeSpan.FromMilliseconds(20));
+            (await ReadMessageAsync()).ProcessedOnUtc.ShouldBe(OutboxMessage.GivenUpProcessedOnUtc);
         }
 
         public async Task<int> RetryCountAsync()

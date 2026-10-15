@@ -53,24 +53,48 @@ every package in the repository is released together under one version.
   and the job reads only the messages that are due, as the lanes always have; the wait is a minimum, the try comes
   with the first run or wake-up after it. The filter is a residual one on the unprocessed rows the partial index
   `IX_OutboxMessages_Unprocessed` already narrows the read to, on the `NextAttemptOnUtc` column 4.0 added: no
-  migration. ⚠️ Retries are spaced out. With the default 3 tries the waits (5 s, 10 s) are shorter than a 20 s run
-  interval, so a message still gives up about two runs after its first failure: the backoff covers an outage once
-  `MaxRetryCount` is raised (12 tries span about 30 minutes; each try still waits for a run). A test that let `OutboxWakeUp.DrainAsync()` retry a failing handler until the message gave up now sees
-  `DrainAsync` return after the first failure (the message waits for a later try): advance the `FakeTimeProvider`, or
-  set `RetryDelay = TimeSpan.Zero` in the test host, which tries again at the next run as before. A service that added
-  an outbox lane only for the backoff (Sentinel's `swgohapi` lane) can process those events with the regular job.
+  migration. ⚠️ Retries are spaced out. 3 tries wait 5 s and 10 s, shorter than a 20 s run interval, so a message
+  failing for a non-transient reason still gives up about two runs after its first failure; a transient failure now
+  gets 12 tries, about 30 minutes (see the next entry). A test that let `OutboxWakeUp.DrainAsync()` retry a failing
+  handler until the message gave up now sees `DrainAsync` return after the first failure (the message waits for a
+  later try): advance the `FakeTimeProvider`, or set `RetryDelay = TimeSpan.Zero` in the test host, which tries again
+  at the next run as before. A service that added an outbox lane only for the backoff (Sentinel's `swgohapi` lane) can
+  process those events with the regular job.
+
+- **A transient failure gets 12 tries in the outbox, any other still 3** (Resrcify.SharedKernel.UnitOfWork), in the
+  processing job and the lanes alike. With the backoff (above), the default 3 tries still gave up about a minute after a
+  message's first failure, so a downstream outage longer than that made poison of its messages. A failed try now gives
+  up by the limit of its failure's kind: a transient one (the rule the failed-try log uses, below: a cancellation or
+  timeout, a transient database failure, an HTTP request that got no answer or a 408, 429 or 5xx, Polly's timeout or
+  open circuit, anywhere among the exception's causes) at `MaxTransientRetryCount` (12, about 30 minutes with the
+  default backoff), any other at `MaxRetryCount` (3), and at once when transient retries took the message past that
+  (5 transient failures, then a handler's bug: it gives up on that 6th try). The update that marks the give-up uses
+  the limit of the failure it records. The job's and the lanes' reads and the backlog monitor (the `outbox.messages.*`
+  gauges and the outbox health check) take the higher limit, so a message retrying transiently past 3 is still read
+  and counted as waiting, not as given up (an unmarked one past 12 still is). The give-up's `Error` counts the tries
+  the message had (`Gave up at <time> after 6 tries. ...`). ⚠️ A message failing transiently is tried for about 30
+  minutes before it gives up, and counts as waiting meanwhile; a test that let a handler time out (or fail with an HTTP
+  5xx) until the message gave up sees 12 tries. **`MaxTransientRetryCount = MaxRetryCount` keeps the behaviour of
+  4.2** (on `OutboxOptions`, `OutboxLaneOptions`, or `AddProcessOutboxMessagesJob`'s `processMaxTransientRetryCount`).
+  ⚠️ `MaxTransientRetryCount` can't be under `MaxRetryCount`: a service that set `MaxRetryCount` above 12 must raise
+  `MaxTransientRetryCount` with it, or `AddOutboxProcessing`, `AddOutboxLanes` and `AddProcessOutboxMessagesJob` throw an
+  `ArgumentOutOfRangeException` at registration, as they now do for a `MaxRetryCount` under 1 (`AddOutboxLanes` and
+  `AddProcessOutboxMessagesJob` didn't check it). A job stored before 4.3.0 in a persistent Quartz store, without the
+  new job data, gives a transient failure 12 tries, or its `ProcessMaxRetryCount` when that is higher.
 
 - **The outbox logs a message's failed tries and its give-up** (Resrcify.SharedKernel.UnitOfWork), in the processing
   job and the lanes alike, under the category `Resrcify.SharedKernel.UnitOfWork.Outbox`. Nothing logged a domain event
   handler's exception (only the `Error` column and the `outbox.messages.handled` counter held it). Each failed try is
   logged once, at `Warning` when another try may pass (a cancellation or timeout, a transient database failure, an HTTP
   request that got no answer or a 408, 429 or 5xx, Polly's timeout or open circuit) and at `Error` otherwise, with the
-  event type, message id, try and tries it gets (`Outbox message {MessageId} ({EventType}, {DbContext}) failed try
-  {Attempt} of {MaxRetryCount}; the next try waits {RetryDelay}: {Error}`); the last one as the give-up, at `Error`
-  (`... gave up after try {Attempt} of {MaxRetryCount}; it is kept as poison: {Error}`). The exception goes with the
-  line, with its stack, unless something logged it already on its way out (`LoggedExceptions`, e.g. the mediator's
-  unit-of-work behavior around a command the handler sent): then the line names its type and message only. ⚠️ An alert
-  on `Error` logs fires for a handler's non-transient failure and every give-up.
+  event type, message id, try and the tries a failure of its kind gets (`Outbox message {MessageId} ({EventType},
+  {DbContext}) failed try {Attempt} of {MaxRetryCount}; the next try waits {RetryDelay}: {Error}`, 12 tries for a
+  transient failure and 3 for any other by default, see above); the last one as the give-up, at `Error` (`... gave up
+  after try {Attempt} ({FailureKind} failures get {MaxRetryCount} tries); it is kept as poison: {Error}`, the kind being
+  `transient` or `non-transient`). The exception goes with the line, with its stack, unless something logged it
+  already on its way out (`LoggedExceptions`, e.g. the mediator's unit-of-work behavior around a command the handler
+  sent): then the line names its type and message only. ⚠️ An alert on `Error` logs fires for a handler's non-transient
+  failure and every give-up.
 
 ### Added
 
@@ -88,6 +112,12 @@ every package in the repository is released together under one version.
   `TimeSpan.Zero` tries a failed message again at once (the next run, or the lane's next poll). `AddOutboxProcessing`
   and `AddOutboxLanes` throw `ArgumentOutOfRangeException` for a negative `RetryDelay` or a `MaxRetryDelay` shorter
   than it. `AddProcessOutboxMessagesJob` (unchanged) uses the defaults.
+
+- **UnitOfWork: `OutboxOptions.MaxTransientRetryCount` and `OutboxLaneOptions.MaxTransientRetryCount`** (12), and
+  `AddProcessOutboxMessagesJob`'s optional last parameter `processMaxTransientRetryCount` (12, the job data
+  `ProcessMaxTransientRetryCount`): the tries a message gets when it keeps failing for a transient reason (see above),
+  at least `MaxRetryCount`. The parameter is source compatible; code compiled against 4.2 that calls
+  `AddProcessOutboxMessagesJob` must be recompiled.
 
 - **Web: `ResultProblemDetailsOptions.ProblemDetailsForBindingFailures`** (`true` by default): whether
   `AddResultProblemDetails()` turns on `RouteHandlerOptions.ThrowOnBadRequest`, so a binding failure reaches

@@ -1,5 +1,6 @@
 using System;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
+using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Extensions;
 
@@ -22,10 +23,21 @@ public sealed class OutboxOptions
     public int DelayInSecondsBeforeStart { get; set; } = 60;
 
     /// <summary>
-    /// Attempts a message gets. When the last one fails, the message gives up: it is marked
-    /// (<c>OutboxMessage.GivenUpProcessedOnUtc</c>) and no longer polled.
+    /// Attempts a message gets when a try fails for a reason another try won't change (a handler's bug, a 400). When the
+    /// last one fails, the message gives up: it is marked (<c>OutboxMessage.GivenUpProcessedOnUtc</c>) and no longer
+    /// polled. A transient failure gets <see cref="MaxTransientRetryCount"/>.
     /// </summary>
-    public int MaxRetryCount { get; set; } = 3;
+    public int MaxRetryCount { get; set; } = OutboxRetryLimits.DefaultMaxRetryCount;
+
+    /// <summary>
+    /// Attempts a message gets when a try fails for a reason another try may get past (a cancellation or
+    /// timeout, a transient database failure, an HTTP request that got no answer or a 408, 429 or 5xx, Polly's timeout
+    /// or open circuit): 12 by default, about 30 minutes with the default <see cref="RetryDelay"/> and
+    /// <see cref="MaxRetryDelay"/>, so an outage of a downstream service doesn't spend them. At least
+    /// <see cref="MaxRetryCount"/>; set it to <see cref="MaxRetryCount"/> to give every failure the same tries (as before
+    /// 4.3.0). A non-transient failure after transient retries past <see cref="MaxRetryCount"/> gives up at once.
+    /// </summary>
+    public int MaxTransientRetryCount { get; set; } = OutboxRetryLimits.DefaultMaxTransientRetryCount;
 
     /// <summary>
     /// How long a message whose try failed waits before its next one; each further retry waits twice as long, up to
@@ -64,4 +76,7 @@ public sealed class OutboxOptions
     /// Quartz runs the schedule on the container's clock, so the two must be the same for a fake one to drive it.
     /// </summary>
     public TimeProvider? TimeProvider { get; set; }
+
+    /// <summary>The two retry limits, together.</summary>
+    internal OutboxRetryLimits RetryLimits => new(MaxRetryCount, MaxTransientRetryCount);
 }

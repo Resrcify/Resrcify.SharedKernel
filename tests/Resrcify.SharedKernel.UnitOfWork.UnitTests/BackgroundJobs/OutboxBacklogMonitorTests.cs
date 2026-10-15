@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
+using Resrcify.SharedKernel.UnitOfWork.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
 using Shouldly;
@@ -109,6 +110,30 @@ public sealed class OutboxBacklogMonitorTests
         var backlog = host.Monitor.Latest.ShouldNotBeNull();
         backlog.Waiting.ShouldBe(1);
         backlog.Poison.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task MeasureOnceAsync_ShouldCountAMessageRetryingTransientlyPastMaxRetryCount_AsWaiting()
+    {
+        // The default limits, regular and lane alike: 3 tries, 12 for a transient failure. A message with 7 failures may
+        // still be retrying an outage; an unmarked one with 12 is out of every try (it gave up before the marker).
+        await using var host = await CreateAsync(
+            laneEvent: typeof(LaneEvent),
+            laneMaxRetryCount: 3,
+            laneMaxTransientRetryCount: 12,
+            options: new OutboxOptions());
+        await host.SeedAsync(
+            Message(occurredAgo: TimeSpan.FromMinutes(20), retryCount: 7),
+            Message(occurredAgo: TimeSpan.FromMinutes(20), retryCount: 7, type: typeof(LaneEvent).FullName!),
+            Message(occurredAgo: TimeSpan.FromHours(1), retryCount: 12),
+            Message(occurredAgo: TimeSpan.FromHours(1), retryCount: 12, type: typeof(LaneEvent).FullName!));
+
+        await host.Monitor.MeasureOnceAsync(CancellationToken.None);
+
+        var backlog = host.Monitor.Latest.ShouldNotBeNull();
+        backlog.Waiting.ShouldBe(2);
+        backlog.Poison.ShouldBe(2);
+        backlog.OldestWaitingAge.ShouldBe(TimeSpan.FromMinutes(20));
     }
 
     [SuppressMessage(

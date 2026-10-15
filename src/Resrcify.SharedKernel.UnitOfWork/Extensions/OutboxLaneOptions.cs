@@ -1,6 +1,7 @@
 using System;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
+using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Extensions;
 
@@ -16,8 +17,22 @@ public sealed class OutboxLaneOptions
     /// <summary>How often each lane looks for new messages when it has free slots.</summary>
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(2);
 
-    /// <summary>Attempts a lane message gets; when the last one fails, it gives up and is no longer polled.</summary>
-    public int MaxRetryCount { get; set; } = 3;
+    /// <summary>
+    /// Attempts a lane message gets when a try fails for a reason another try won't change (a handler's bug, a 400):
+    /// when the last one fails, it gives up and is no longer polled. A transient failure gets
+    /// <see cref="MaxTransientRetryCount"/>.
+    /// </summary>
+    public int MaxRetryCount { get; set; } = OutboxRetryLimits.DefaultMaxRetryCount;
+
+    /// <summary>
+    /// Attempts a lane message gets when a try fails for a reason another try may get past (a cancellation
+    /// or timeout, a transient database failure, an HTTP request that got no answer or a 408, 429 or 5xx, Polly's
+    /// timeout or open circuit): 12 by default, about 30 minutes with the default <see cref="RetryDelay"/> and
+    /// <see cref="MaxRetryDelay"/>, so an outage of a downstream service doesn't spend them. At least
+    /// <see cref="MaxRetryCount"/>; set it to <see cref="MaxRetryCount"/> to give every failure the same tries (as before
+    /// 4.3.0). A non-transient failure after transient retries past <see cref="MaxRetryCount"/> gives up at once.
+    /// </summary>
+    public int MaxTransientRetryCount { get; set; } = OutboxRetryLimits.DefaultMaxTransientRetryCount;
 
     /// <summary>
     /// How long a message whose try failed waits before its next one; each further retry waits twice as long, up to
@@ -36,4 +51,7 @@ public sealed class OutboxLaneOptions
     /// <see cref="PostgresOutboxLaneClaim.Instance"/> on PostgreSQL.
     /// </summary>
     public IOutboxLaneClaim? Claim { get; set; }
+
+    /// <summary>The two retry limits, together.</summary>
+    internal OutboxRetryLimits RetryLimits => new(MaxRetryCount, MaxTransientRetryCount);
 }

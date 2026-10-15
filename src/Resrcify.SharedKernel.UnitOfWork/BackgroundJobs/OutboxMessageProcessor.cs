@@ -45,7 +45,10 @@ internal static class OutboxMessageProcessor<TDbContext>
     /// Optional row claim, run first inside the transaction. Returning <see langword="false"/> means
     /// another instance holds the message: it is left alone, neither processed nor failed.
     /// </param>
-    /// <param name="maxRetryCount">The tries a message gets: a failure on the last one is counted as giving up.</param>
+    /// <param name="limits">
+    /// The tries a message gets, for a transient failure and any other: a failure on the last try its kind gets is
+    /// counted as giving up.
+    /// </param>
     /// <param name="retryDelay">
     /// How long after a failure the message waits before its next try (<see cref="OutboxMessage.NextAttemptOnUtc"/>);
     /// <see langword="null"/> when it may be tried again at once.
@@ -54,7 +57,7 @@ internal static class OutboxMessageProcessor<TDbContext>
         IServiceScopeFactory scopeFactory,
         OutboxMessageToProcess message,
         IOutboxLaneClaim? claim,
-        int maxRetryCount,
+        OutboxRetryLimits limits,
         TimeSpan? retryDelay,
         CancellationToken cancellationToken)
     {
@@ -127,6 +130,11 @@ internal static class OutboxMessageProcessor<TDbContext>
 
         if (failure is not null)
         {
+            // The tries this failure gets: a transient one more than any other.
+            var transient = OutboxProcessLog.IsTransient(failure);
+            var maxRetryCount = transient
+                ? limits.ReadLimit
+                : limits.MaxRetryCount;
             var givesUp = message.RetryCount + 1 >= maxRetryCount;
             await RecordFailureAsync(scopeFactory, message, failure, maxRetryCount, retryDelay, time, cancellationToken);
             OutboxProcessLog.FailedTry(
@@ -136,6 +144,7 @@ internal static class OutboxMessageProcessor<TDbContext>
                 message.Id,
                 message.RetryCount + 1,
                 maxRetryCount,
+                transient,
                 retryDelay,
                 failure);
             Record(message, givesUp ? "gave_up" : "retrying", time.GetElapsedTime(started), wait: null);
@@ -178,6 +187,9 @@ internal static class OutboxMessageProcessor<TDbContext>
     //
     // The next try's time is written with it, for every instance to wait out. Two instances failing the same try at
     // once (no claim) both count it; the later one's wait applies.
+    //
+    // maxRetryCount is the limit of this failure's kind (OutboxRetryLimits): a non-transient failure after transient
+    // retries past it gives up at once.
     private static async Task RecordFailureAsync(
         IServiceScopeFactory scopeFactory,
         OutboxMessageToProcess message,
@@ -191,9 +203,11 @@ internal static class OutboxMessageProcessor<TDbContext>
         var context = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
         var error = exception.ToString();
+        // The tries it had when it gives up: more than the limit when transient retries went past it.
+        var tries = Math.Max(message.RetryCount + 1, maxRetryCount);
         var givenUpError = string.Create(
             CultureInfo.InvariantCulture,
-            $"Gave up at {time.GetUtcNow().UtcDateTime:O} after {maxRetryCount} tries. {error}");
+            $"Gave up at {time.GetUtcNow().UtcDateTime:O} after {tries} tries. {error}");
         var givenUpOn = OutboxMessage.GivenUpProcessedOnUtc;
 
         await context

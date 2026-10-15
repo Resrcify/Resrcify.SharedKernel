@@ -359,7 +359,8 @@ its handlers persisted commits as well. Because every message gets a fresh scope
 job never shares (or clears) a `DbContext` change tracker with other work. A handler
 that throws does not abort the batch — the failure is written to the `Error` column,
 `RetryCount` is incremented and `NextAttemptOnUtc` is set to when its next try is due, which every instance waits out.
-When its last try (`MaxRetryCount`, or its lane's) fails, the message **gives up**:
+When its last try fails (`MaxRetryCount`, or `MaxTransientRetryCount` for a transient failure, see below; or its
+lane's), the message **gives up**:
 its `ProcessedOnUtc` is set to `OutboxMessage.GivenUpProcessedOnUtc` (9999-12-31) and `Error` starts with
 `Gave up at <time> after <n> tries.`. That takes it out of the unprocessed rows (and their index), so the polls no
 longer read past it, and the cleanup keeps it for inspection. To see and try again the messages that gave up,
@@ -374,21 +375,38 @@ A quiet outbox costs one query per run, as before. A message that fails in a run
 
 **Retries back off**, in the job as in the lanes: a failed message waits `RetryDelay` (5 s) before its next try, then
 twice as long each time (10 s, 20 s, …), up to `MaxRetryDelay` (5 min), so a handler failing through an outage of a
-few minutes (a downstream service down) doesn't spend its `MaxRetryCount` tries in the first minute of it. The job
+few minutes (a downstream service down) doesn't spend its tries in the first minute of it. The job
 reads only the messages that are due (`NextAttemptOnUtc` passed or empty); the wait is a minimum, the try comes with
 the first run (or wake-up) after it. That filter is a residual one on the unprocessed rows the partial index
 (`IX_OutboxMessages_Unprocessed`, `ProcessedOnUtc IS NULL`) narrows the read to, as the lanes' read: no migration.
 Set them with `AddOutboxProcessing<AppDbContext>(outbox => { outbox.RetryDelay = ...; outbox.MaxRetryDelay = ...; })`
-(`AddProcessOutboxMessagesJob` uses the defaults); `TimeSpan.Zero` tries again at the next run, as before 4.3.0. Size
-`MaxRetryCount` with it: 3 tries wait 5 s and 10 s, less than a 20 s run interval, so a message still gives up about
-two runs after its first failure; 12 tries span about 30 minutes of an outage.
+(`AddProcessOutboxMessagesJob` uses the defaults); `TimeSpan.Zero` tries again at the next run, as before 4.3.0.
+
+**A transient failure gets more tries** than any other, in the job as in the lanes: `MaxTransientRetryCount` (12,
+about 30 minutes of an outage with the default backoff) against `MaxRetryCount` (3, which the backoff alone spends in
+about a minute: 5 s and 10 s are shorter than a 20 s run interval). A failure is transient when another try may pass:
+a cancellation or timeout, a transient database failure, an HTTP request that got no answer or a 408, 429 or 5xx,
+Polly's timeout or open circuit, anywhere among the exception's causes. Any other failure (a handler's bug, a 400)
+gives up at its `MaxRetryCount`th try, and at once when transient retries took the message past it (a message that
+failed 5 times through an outage, then once on a bug, gives up on that 6th try). The jobs read, and the backlog monitor
+counts as waiting, every message under the higher limit. `MaxTransientRetryCount` can't be under `MaxRetryCount`
+(registration throws); set them equal to give every failure the same tries, as before 4.3.0:
+
+```csharp
+services.AddOutboxProcessing<AppDbContext>(outbox => outbox.MaxTransientRetryCount = outbox.MaxRetryCount);
+services.AddOutboxLanes<AppDbContext>(lanes => lanes.MaxTransientRetryCount = lanes.MaxRetryCount);
+// Or, registering the job on the Quartz builder:
+quartz.AddProcessOutboxMessagesJob<AppDbContext>(processMaxRetryCount: 3, processMaxTransientRetryCount: 3);
+```
 
 **Failed tries are logged** (category `Resrcify.SharedKernel.UnitOfWork.Outbox`), by the job and the lanes alike: each
 failed try once, at `Warning` when another try may pass (a cancellation or timeout, a transient database failure, an
 HTTP request that got no answer or a 408, 429 or 5xx, Polly's timeout or open circuit) and at `Error` otherwise, as
 `Outbox message {MessageId} ({EventType}, {DbContext}) failed try {Attempt} of {MaxRetryCount}; the next try waits
-{RetryDelay}: {Error}`; the last one as the give-up, at `Error`: `... gave up after try {Attempt} of {MaxRetryCount};
-it is kept as poison: {Error}`. The exception goes with the line, with its stack, unless something logged it already on
+{RetryDelay}: {Error}`, where `{MaxRetryCount}` is the tries this failure gets (12 for a transient one, 3 for any other
+by default); the last one as the give-up, at `Error`: `... gave up after try {Attempt} ({FailureKind} failures get
+{MaxRetryCount} tries); it is kept as poison: {Error}`, `{FailureKind}` being `transient` or `non-transient`.
+The exception goes with the line, with its stack, unless something logged it already on
 its way out (Results' `LoggedExceptions`, e.g. the mediator's unit-of-work behavior around a command the handler sent):
 then the line names its type and message only.
 
@@ -430,9 +448,9 @@ every message behind it. An **outbox lane** moves those event types out of the r
   polls every `PollInterval`, and at once when one of its messages finishes (so the freed slot takes the next) or the
   outbox is woken (`OutboxWakeUp`). A message another instance holds is looked at again at the next poll.
 - **Processing is the same as the regular job:** own scope and transaction, publish, mark processed, and
-  record the failure (logged the same way) and retry up to `MaxRetryCount`, waiting `RetryDelay` doubled up to
-  `MaxRetryDelay` (the lane options of the same names, 5 s and 5 min by default) between tries. The options apply
-  to every lane of the context.
+  record the failure (logged the same way) and retry up to `MaxRetryCount`, or `MaxTransientRetryCount` for a
+  transient failure, waiting `RetryDelay` doubled up to `MaxRetryDelay` (the lane options of the same names: 3, 12,
+  5 s and 5 min by default) between tries. The options apply to every lane of the context.
 - **Tracing:** every processed message, by the regular job or a lane, gets a span on
   `OutboxDiagnostics.ActivitySourceName`; whatever its handlers do (database, HTTP, bus sends) runs inside it.
 

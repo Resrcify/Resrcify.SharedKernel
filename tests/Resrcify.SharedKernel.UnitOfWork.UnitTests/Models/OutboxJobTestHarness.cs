@@ -108,13 +108,16 @@ internal sealed class OutboxJobTestHarness : IAsyncDisposable
         int maxRetryCount = 3,
         int? intervalInSeconds = null,
         TimeSpan? retryDelay = null,
-        TimeSpan? maxRetryDelay = null)
+        TimeSpan? maxRetryDelay = null,
+        int? maxTransientRetryCount = null)
     {
         var data = new JobDataMap
         {
             { "ProcessBatchSize", batchSize },
             { "ProcessMaxRetryCount", maxRetryCount },
         };
+        if (maxTransientRetryCount is { } transient)
+            data.Add("ProcessMaxTransientRetryCount", transient);
         if (intervalInSeconds is { } interval)
             data.Add("ProcessIntervalInSeconds", interval);
         if (retryDelay is { } delay)

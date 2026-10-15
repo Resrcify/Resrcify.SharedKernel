@@ -28,6 +28,11 @@ public static class OutboxLaneServiceCollectionExtensions
     {
         var options = new OutboxLaneOptions();
         configure?.Invoke(options);
+        OutboxRetryLimits.Validate(
+            options.MaxRetryCount,
+            options.MaxTransientRetryCount,
+            nameof(OutboxLaneOptions.MaxRetryCount),
+            nameof(OutboxLaneOptions.MaxTransientRetryCount));
         OutboxRetryBackoff.Validate(
             options.RetryDelay,
             options.MaxRetryDelay,

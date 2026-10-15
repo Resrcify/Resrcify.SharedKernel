@@ -54,7 +54,8 @@ public class ProcessOutboxMessagesJobSetupTests
         await using var provider = BuildProvider(services => services.AddQuartz(quartz =>
             quartz.AddProcessOutboxMessagesJob<TestDbContext>(
                 processBatchSize: 7,
-                processMaxRetryCount: 5)));
+                processMaxRetryCount: 5,
+                processMaxTransientRetryCount: 9)));
         var scheduler = await GetSchedulerAsync(provider);
 
         var job = await scheduler.GetJobDetail(OutboxJobKey);
@@ -64,6 +65,8 @@ public class ProcessOutboxMessagesJobSetupTests
         batchSize.ShouldBe(7);
         job.JobDataMap.TryGetValue("ProcessMaxRetryCount", out var maxRetryCount).ShouldBeTrue();
         maxRetryCount.ShouldBe(5);
+        job.JobDataMap.TryGetValue("ProcessMaxTransientRetryCount", out var maxTransientRetryCount).ShouldBeTrue();
+        maxTransientRetryCount.ShouldBe(9);
     }
 
     [Fact]
@@ -116,6 +119,8 @@ public class ProcessOutboxMessagesJobSetupTests
         batchSize.ShouldBe(20);
         job.JobDataMap.TryGetValue("ProcessMaxRetryCount", out var maxRetryCount).ShouldBeTrue();
         maxRetryCount.ShouldBe(3);
+        job.JobDataMap.TryGetValue("ProcessMaxTransientRetryCount", out var maxTransientRetryCount).ShouldBeTrue();
+        maxTransientRetryCount.ShouldBe(12);
         job.JobDataMap.TryGetValue("ProcessRetryDelayInMilliseconds", out var retryDelay).ShouldBeTrue();
         retryDelay.ShouldBe(5_000L);
         job.JobDataMap.TryGetValue("ProcessMaxRetryDelayInMilliseconds", out var maxRetryDelay).ShouldBeTrue();
@@ -165,6 +170,7 @@ public class ProcessOutboxMessagesJobSetupTests
             {
                 options.BatchSize = 9;
                 options.MaxRetryCount = 4;
+                options.MaxTransientRetryCount = 20;
                 options.ProcessIntervalInSeconds = 30;
                 options.RetryDelay = TimeSpan.FromSeconds(30);
                 options.MaxRetryDelay = TimeSpan.FromHours(1);
@@ -179,6 +185,8 @@ public class ProcessOutboxMessagesJobSetupTests
         batchSize.ShouldBe(9);
         job.JobDataMap.TryGetValue("ProcessMaxRetryCount", out var maxRetryCount).ShouldBeTrue();
         maxRetryCount.ShouldBe(4);
+        job.JobDataMap.TryGetValue("ProcessMaxTransientRetryCount", out var maxTransientRetryCount).ShouldBeTrue();
+        maxTransientRetryCount.ShouldBe(20);
         job.JobDataMap.TryGetValue("ProcessRetryDelayInMilliseconds", out var retryDelay).ShouldBeTrue();
         retryDelay.ShouldBe(30_000L);
         job.JobDataMap.TryGetValue("ProcessMaxRetryDelayInMilliseconds", out var maxRetryDelay).ShouldBeTrue();
@@ -239,6 +247,44 @@ public class ProcessOutboxMessagesJobSetupTests
                 options.MaxRetryDelay = TimeSpan.FromSeconds(maxRetryDelaySeconds);
             }))
             .ParamName.ShouldBe(parameter);
+
+    [Theory]
+    [InlineData(5, 4, nameof(OutboxOptions.MaxTransientRetryCount))]
+    [InlineData(13, 12, nameof(OutboxOptions.MaxTransientRetryCount))]
+    [InlineData(0, 12, nameof(OutboxOptions.MaxRetryCount))]
+    public void AddOutboxProcessing_ShouldThrow_WhenTheRetryLimitsAreOutOfOrder(
+        int maxRetryCount,
+        int maxTransientRetryCount,
+        string parameter)
+        => Should.Throw<ArgumentOutOfRangeException>(() => new ServiceCollection().AddOutboxProcessing<TestDbContext>(
+            options =>
+            {
+                options.MaxRetryCount = maxRetryCount;
+                options.MaxTransientRetryCount = maxTransientRetryCount;
+            }))
+            .ParamName.ShouldBe(parameter);
+
+    [Fact]
+    public void AddProcessOutboxMessagesJob_ShouldThrow_WhenTheTransientRetryLimitIsBelowTheOther()
+        => Should.Throw<ArgumentOutOfRangeException>(() => new ServiceCollection().AddQuartz(quartz =>
+                quartz.AddProcessOutboxMessagesJob<TestDbContext>(
+                    processMaxRetryCount: 5,
+                    processMaxTransientRetryCount: 4)))
+            .ParamName.ShouldBe("processMaxTransientRetryCount");
+
+    [Fact]
+    public void AddOutboxProcessing_ShouldMeasureTheBacklogAgainstTheHigherRetryLimit()
+    {
+        var services = new ServiceCollection();
+
+        services.AddOutboxProcessing<TestDbContext>(new SystemTextJsonOutboxSerializer());
+
+        services
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<OutboxBacklogSettings<TestDbContext>>()
+            .ShouldHaveSingleItem()
+            .RetryLimit.ShouldBe(12);
+    }
 
     [Theory]
     [InlineData(0)]

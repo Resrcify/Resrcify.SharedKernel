@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -101,6 +103,36 @@ public sealed class OutboxMessageProcessorTests
         (await harness.GetMessagesAsync()).Single().NextAttemptOnUtc.ShouldBeNull();
     }
 
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task ProcessAsync_ShouldGiveUpByTheLimitOfThisFailuresKind_WhenTransientRetriesWentPastMaxRetryCount(
+        bool transient,
+        bool givesUp)
+    {
+        // 4 failures counted: past the 3 tries a non-transient failure gets, under the 12 a transient one gets.
+        await using var harness = await FailingHarnessAsync(
+            failure: transient
+                ? new HttpRequestException("the downstream service is down", null, HttpStatusCode.ServiceUnavailable)
+                : null);
+        var row = Message(retryCount: 4);
+        await harness.SeedAsync(row);
+
+        await OutboxMessageProcessor<TestDbContext>.ProcessAsync(
+            harness.Services.GetRequiredService<IServiceScopeFactory>(),
+            Snapshot(row, retryCount: 4),
+            claim: null,
+            new OutboxRetryLimits(MaxRetryCount: 3, MaxTransientRetryCount: 12),
+            retryDelay: null,
+            CancellationToken.None);
+
+        var stored = (await harness.GetMessagesAsync()).Single();
+        stored.RetryCount.ShouldBe(5);
+        (stored.ProcessedOnUtc == OutboxMessage.GivenUpProcessedOnUtc).ShouldBe(givesUp);
+        if (givesUp)
+            stored.Error.ShouldNotBeNull().ShouldStartWith("Gave up at ");
+    }
+
     private static Task<OutboxProcessOutcome> ProcessAsync(
         OutboxJobTestHarness harness,
         OutboxMessageToProcess snapshot,
@@ -110,11 +142,14 @@ public sealed class OutboxMessageProcessorTests
             harness.Services.GetRequiredService<IServiceScopeFactory>(),
             snapshot,
             claim: null,
-            maxRetryCount,
+            new OutboxRetryLimits(maxRetryCount, OutboxRetryLimits.DefaultMaxTransientRetryCount),
             retryDelay,
             CancellationToken.None);
 
-    private static async Task<OutboxJobTestHarness> FailingHarnessAsync(TimeProvider? clock = null)
+    /// <param name="failure">What every try fails with; a non-transient failure when not given.</param>
+    private static async Task<OutboxJobTestHarness> FailingHarnessAsync(
+        TimeProvider? clock = null,
+        Exception? failure = null)
     {
         // The processor reads its clock from the container.
         var harness = await OutboxJobTestHarness.CreateAsync(clock, services =>
@@ -124,7 +159,7 @@ public sealed class OutboxMessageProcessorTests
         });
         harness.Publisher
             .Publish(Arg.Any<IDomainEvent>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromException(new InvalidOperationException("the handler failed")));
+            .Returns(Task.FromException(failure ?? new InvalidOperationException("the handler failed")));
         return harness;
     }
 

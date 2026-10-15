@@ -13,7 +13,8 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 /// The log lines of an outbox message's failed tries, for the processing job and the lanes alike: one per failed try,
 /// at <see cref="LogLevel.Warning"/> when another try may pass (<see cref="IsTransient"/>) and at
 /// <see cref="LogLevel.Error"/> otherwise, and, for the last try, one line at <see cref="LogLevel.Error"/> saying the
-/// message gave up. Each carries the event type, the message id, the try and the tries it gets. The exception goes
+/// message gave up. Each carries the event type, the message id, the try and the tries a failure of its kind gets
+/// (<see cref="OutboxRetryLimits"/>: a transient one more than any other). The exception goes
 /// with its stack unless something logged it already on its way out (<see cref="LoggedExceptions"/>, e.g. the mediator's
 /// unit-of-work behavior around a command the handler sent): then the line names its type and message only.
 /// </summary>
@@ -26,7 +27,15 @@ internal static partial class OutboxProcessLog
     private const string PollyTimeout = "TimeoutRejectedException";
     private const string PollyOpenCircuit = "BrokenCircuitException";
 
+    /// <summary>The failure kind a give-up line names when the failure was transient.</summary>
+    public const string TransientFailure = "transient";
+
+    /// <summary>The failure kind a give-up line names when the failure was not transient.</summary>
+    public const string NonTransientFailure = "non-transient";
+
     /// <summary>Logs a failed try, or the give-up when it was the last one, and ends the exception's journey.</summary>
+    /// <param name="maxRetryCount">The tries a failure of this kind gets (<see cref="OutboxRetryLimits"/>).</param>
+    /// <param name="transient">Whether the failure is transient (<see cref="IsTransient"/>).</param>
     public static void FailedTry(
         ILogger logger,
         string dbContext,
@@ -34,11 +43,12 @@ internal static partial class OutboxProcessLog
         Guid messageId,
         int attempt,
         int maxRetryCount,
+        bool transient,
         TimeSpan? retryDelay,
         Exception exception)
     {
         var givesUp = attempt >= maxRetryCount;
-        var level = givesUp || !IsTransient(exception)
+        var level = givesUp || !transient
             ? LogLevel.Error
             : LogLevel.Warning;
         if (logger.IsEnabled(level))
@@ -46,8 +56,11 @@ internal static partial class OutboxProcessLog
             // With the stack only the first time it is logged.
             var withStack = LoggedExceptions.Claim(exception) ? exception : null;
             var error = $"{exception.GetType().Name}: {exception.Message}";
+            var failureKind = transient
+                ? TransientFailure
+                : NonTransientFailure;
             if (givesUp)
-                LogGaveUp(logger, withStack, eventType, messageId, dbContext, attempt, maxRetryCount, error);
+                LogGaveUp(logger, withStack, eventType, messageId, dbContext, attempt, failureKind, maxRetryCount, error);
             else
                 LogTryFailed(logger, level, withStack, eventType, messageId, dbContext, attempt, maxRetryCount, retryDelay ?? TimeSpan.Zero, error);
         }
@@ -103,8 +116,8 @@ internal static partial class OutboxProcessLog
 
     [LoggerMessage(
         Level = LogLevel.Error,
-        Message = "Outbox message {MessageId} ({EventType}, {DbContext}) gave up after try {Attempt} of {MaxRetryCount}; "
-            + "it is kept as poison: {Error}")]
+        Message = "Outbox message {MessageId} ({EventType}, {DbContext}) gave up after try {Attempt} ({FailureKind} "
+            + "failures get {MaxRetryCount} tries); it is kept as poison: {Error}")]
     private static partial void LogGaveUp(
         ILogger logger,
         Exception? exception,
@@ -112,6 +125,7 @@ internal static partial class OutboxProcessLog
         Guid messageId,
         string dbContext,
         int attempt,
+        string failureKind,
         int maxRetryCount,
         string error);
 }
