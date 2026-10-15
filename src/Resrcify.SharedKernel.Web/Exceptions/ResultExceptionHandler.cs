@@ -4,6 +4,8 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -22,6 +24,14 @@ namespace Resrcify.SharedKernel.Web.Exceptions;
 /// already (the mediator's behaviors do), the handler logs a <see cref="LogLevel.Debug"/> line without the stack. A
 /// request the client gave up on (an <see cref="OperationCanceledException"/> once the request is aborted) is a 499,
 /// logged at <see cref="LogLevel.Debug"/>: nobody is waiting for an answer.
+/// A request ASP.NET Core couldn't bind (a <see cref="BadHttpRequestException"/>: a required parameter left out, a
+/// value that doesn't parse, a body that isn't valid JSON) isn't a fault of the service: it is answered with the
+/// exception's status (400, or 413, 415 ...) and problem details holding one <see cref="ErrorType.Validation"/> error
+/// coded with the parameter's name (<see cref="BadRequestErrorCode"/> when the exception names none), logged at
+/// <see cref="LogLevel.Debug"/>. Its message names only the parameter, never its type or the value sent; in Development
+/// (<see cref="ResultProblemDetailsOptions.IncludeExceptionDetails"/>) the problem's <c>detail</c> holds ASP.NET Core's
+/// own message. <c>AddResultProblemDetails()</c> has minimal APIs throw it in every environment
+/// (<see cref="ResultProblemDetailsOptions.ProblemDetailsForBindingFailures"/>).
 /// Registered by <c>AddResultProblemDetails()</c>; runs in <c>app.UseExceptionHandler()</c>.
 /// </summary>
 public sealed partial class ResultExceptionHandler(
@@ -36,6 +46,13 @@ public sealed partial class ResultExceptionHandler(
     /// <summary>Its message when the exception isn't shown (outside Development).</summary>
     public const string ErrorMessage = "An unexpected error occurred.";
 
+    /// <summary>
+    /// The code of the error a request that couldn't be bound is answered with, when the
+    /// <see cref="BadHttpRequestException"/> names no parameter (a body too large, a content type nobody reads).
+    /// Otherwise the code is the parameter's name.
+    /// </summary>
+    public const string BadRequestErrorCode = "Request";
+
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
         Exception exception,
@@ -47,6 +64,12 @@ public sealed partial class ResultExceptionHandler(
         if (IsClientAbort(httpContext, exception))
         {
             AnswerClientAbort(httpContext);
+            return true;
+        }
+
+        if (exception is BadHttpRequestException badRequest)
+        {
+            await AnswerBindingFailureAsync(httpContext, badRequest);
             return true;
         }
 
@@ -94,6 +117,48 @@ public sealed partial class ResultExceptionHandler(
             httpContext.Response.StatusCode = StatusCodes.Status499ClientClosedRequest;
     }
 
+    // The problem details of a failed validation, with the exception's own status (a 413 or a 415 stays one).
+    private async Task AnswerBindingFailureAsync(
+        HttpContext httpContext,
+        BadHttpRequestException exception)
+    {
+        if (logger.IsEnabled(LogLevel.Debug))
+        {
+            LogBindingFailed(
+                logger,
+                httpContext.Request.Method,
+                httpContext.Request.Path,
+                exception.StatusCode,
+                exception.Message);
+        }
+
+        if (httpContext.Response.HasStarted)
+            return;
+
+        var (error, statusCode) = BindingFailure.Describe(exception);
+        var problem = Result.Failure(error).ToProblemDetails();
+        if (problem is ProblemHttpResult { ProblemDetails: { } details })
+            Adjust(details, statusCode, exception);
+
+        await problem.ExecuteAsync(httpContext);
+    }
+
+    private void Adjust(
+        ProblemDetails details,
+        int statusCode,
+        BadHttpRequestException exception)
+    {
+        if (statusCode != StatusCodes.Status400BadRequest)
+        {
+            details.Status = statusCode;
+            details.Title = ReasonPhrases.GetReasonPhrase(statusCode);
+            details.Type = $"https://www.rfc-editor.org/rfc/rfc9110#status.{statusCode}";
+        }
+
+        if (ShowsException())
+            details.Detail = exception.Message;
+    }
+
     // The same problem details as a failed result, from the same code.
     private IResult ProblemFor(
         Exception exception)
@@ -130,6 +195,16 @@ public sealed partial class ResultExceptionHandler(
         string exceptionType,
         string method,
         PathString path);
+
+    [LoggerMessage(
+        Level = LogLevel.Debug,
+        Message = "{Method} {Path} couldn't be bound ({StatusCode}): {Reason}")]
+    private static partial void LogBindingFailed(
+        ILogger logger,
+        string method,
+        PathString path,
+        int statusCode,
+        string reason);
 
     [LoggerMessage(
         Level = LogLevel.Debug,

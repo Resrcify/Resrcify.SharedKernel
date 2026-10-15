@@ -35,7 +35,8 @@
 - `IdempotencyHeaders`: the `Idempotency-Key` header for the mediator's idempotent requests, and the
   `Idempotency-Replayed` mark the request endpoints put on a replayed answer.
 - Consistent mapping from `ErrorType` to HTTP problem responses.
-- `AddResultProblemDetails()`: unhandled exceptions answered with the same problem details as a failed result.
+- `AddResultProblemDetails()`: unhandled exceptions answered with the same problem details as a failed result, and a
+  minimal-API parameter that fails to bind with a 400 naming it, in every environment.
 - `MapHealthEndpoints()`: `/health`, `/health/ready` and `/health/live`, anonymous, with a JSON response writer.
 - `MapErrorQueueAdministration()`: the message bus' error queue under `/admin/error-queue` (show, delete, move back).
 - `AddResultResilience()`: retries, timeouts and a circuit breaker for an `HttpClient`, retrying what the result
@@ -249,6 +250,25 @@ handler middleware logs nothing more for an exception a handler handled), follow
 convention: when the mediator's behaviors logged it already on its way out, the handler logs a `Debug` line without the
 stack instead, and answers the same 500. A request the client aborted (an
 `OperationCanceledException` once `RequestAborted` fired) is a 499, logged at `Debug`, not as an error.
+
+A request ASP.NET Core couldn't bind (its `BadHttpRequestException`: a required query, route, header or body value left
+out, a value that doesn't parse, such as `/shards/abc` for a `Guid id`, a body that isn't valid JSON) isn't a fault of
+the service: it is answered with the exception's status (400, or 413, 415 ...) and problem details whose `errors` hold
+one `Validation` error coded with the parameter's name (`ResultExceptionHandler.BadRequestErrorCode`, `Request`, when
+the exception names none), logged at `Debug`:
+
+```json
+{ "status": 400, "title": "Bad Request", "errors": [ { "code": "page",
+  "message": "The required parameter \"page\" was not provided from query string." } ] }
+```
+
+The message names the parameter only, never its type or the value sent; in Development (`IncludeExceptionDetails`)
+the problem's `detail` holds ASP.NET Core's own message. Minimal APIs throw the exception only when
+`RouteHandlerOptions.ThrowOnBadRequest` is on, which ASP.NET Core does in Development only (elsewhere an empty 400),
+so `AddResultProblemDetails()` turns it on in every environment. To keep ASP.NET Core's default, set
+`options.ProblemDetailsForBindingFailures = false` (a `BadHttpRequestException` that reaches the handler is still
+answered as above). A service's own handler for it (Oracle's `BadRequestExceptionHandler`) and its
+`ThrowOnBadRequest = true` can go.
 
 It replaces `builder.Services.AddProblemDetails()` (it registers it); keep `app.UseExceptionHandler()`.
 

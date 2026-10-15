@@ -33,6 +33,19 @@ every package in the repository is released together under one version.
   exception only when nothing logged it before, and marks it when it does, so `ResultExceptionHandler` then logs only
   its `Debug` line. A `Logger` set through `configure` is written through the same way.
 
+- **A request that can't be bound is a 400 problem details, not an unhandled 500** (Resrcify.SharedKernel.Web).
+  `ResultExceptionHandler` answered a `BadHttpRequestException` (a minimal-API parameter that fails to bind: a
+  required query or body value left out, an unparsable route segment, malformed JSON) as an unhandled exception: a 500,
+  logged at `Error`. It now answers the exception's own status (400, or 413, 415 ...) with problem details holding one
+  `Validation` error coded with the parameter's name (`BadRequestErrorCode`, `Request`, when it names none), e.g.
+  `page`: `The required parameter "page" was not provided from query string.`, logged at `Debug`. The message names
+  only the parameter, never its type or the value sent; in Development the problem's `detail` holds ASP.NET Core's
+  message. **And `AddResultProblemDetails()` turns on `RouteHandlerOptions.ThrowOnBadRequest`** (after every other
+  configuration of it), so Production answers these with problem details too, instead of ASP.NET Core's empty 400.
+  ⚠️ A test expecting an empty 400 in Production, or a 500 in Development, for a binding failure now gets the problem
+  details; `ProblemDetailsForBindingFailures = false` keeps ASP.NET Core's `ThrowOnBadRequest`. Oracle's
+  `BadRequestExceptionHandler` and its `ThrowOnBadRequest = true` do the same and can be deleted.
+
 ### Added
 
 - **UnitOfWork: `PersistenceErrors.NotNullViolation`, `CheckViolation`, `ValueTooLong` and `ForeignKeyViolation`**
@@ -43,6 +56,11 @@ every package in the repository is released together under one version.
   "Members", column "Nickname").`, read from `Exception.Data` (`ConstraintName`, `TableName`, `ColumnName`, where
   Npgsql's `PostgresException` puts them), so UnitOfWork still references no provider. Never a value: PostgreSQL's
   detail, which holds the row's data, isn't read. Its message differs from the field's, so match on `Code`.
+
+- **Web: `ResultProblemDetailsOptions.ProblemDetailsForBindingFailures`** (`true` by default): whether
+  `AddResultProblemDetails()` turns on `RouteHandlerOptions.ThrowOnBadRequest`, so a binding failure reaches
+  `ResultExceptionHandler` in every environment. **`ResultExceptionHandler.BadRequestErrorCode`** (`"Request"`), the
+  code of a binding failure's error when the exception names no parameter.
 
 ### Fixed
 
