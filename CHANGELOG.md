@@ -7,6 +7,47 @@ every package in the repository is released together under one version.
 
 ### Behaviour changes
 
+- **One transient contract, owned by SharedKernel, with a DI hook** (Resrcify.SharedKernel.Results, Abstractions,
+  UnitOfWork, Mediator, MessageBus, Web). Four rules told a transient exception from any other, and disagreed: the
+  outbox's matched Polly's exceptions by type name (and missed an isolated circuit) and walked only `InnerException`,
+  the Web resilience pipeline had its own, the message bus none, and the mediator's behaviors and the command jobs logged
+  every exception at `Error`. **A service's own transient exception wasn't recognised**: Sentinel's
+  `TransientFailureException` got the 3 tries of a handler's bug, not the 12 of an outage. Now one rule decides
+  everywhere, `TransientFailures.IsTransient` (Results): the exception or any of its causes (`InnerException`, and every
+  one of an `AggregateException`'s) is a `TransientFailureException` (Results), a `TimeoutException`, an
+  `OperationCanceledException` (a handler's own; a shutdown is still ruled out by the callers first), a `DbException`
+  with `IsTransient`, or an `HttpRequestException` without a status or with a transient one (408, 429, 5xx). A package
+  or a service adds to it with an `ITransientFailureRule` (Abstractions, `services.AddTransientFailureRule(...)`), which
+  can only add transience; the container's `ITransientFailureClassifier` ORs them all. UnitOfWork registers one for a
+  concurrency conflict, a serialization failure and a deadlock (with every outbox registration), the Web package one for
+  Polly's rejections (`ExecutionRejectedException`: a timeout, a broken or isolated circuit, the rate limiter; by type,
+  with `AddResultResilience`), so no package outside Web names Polly's types. What changes:
+  - **The outbox** gives a failure its transient tries by the classifier: a `TransientFailureException` (and a
+    service's own rule) gets 12 tries, an isolated circuit too.
+  - **The mediator's logging, unit-of-work and transaction behaviors and the command jobs** (`CommandJob`,
+    `AsyncCommandJob`, the `AddIntervalCommandJob` / `AddCronCommandJob` ones) log a transient exception at `Warning`,
+    any other at `Error` as before, once.
+  - **The message bus** (an integration event's handler): an exception holding a `TransientFailureException` is a
+    failure with that exception's errors, which the retry lines and the error queue's reason now show
+    (`SwgohApi.Unreachable (ExternalFailure): ...`, where it showed `TransientFailureException: <message>`). A try that threw is
+    logged at `Warning` when the exception is transient and **at `Error` otherwise** (it was `Warning` for every try).
+    Every exception is still tried again in place.
+  - **A rate-limited queue** answers a responder's `TransientFailureException`, after the last try, with its errors
+    instead of `<TRequest>.ResponderFailed`, and logs a transient exception at `Warning`.
+  - **`ResultExceptionHandler`** (Web) answers a `TransientFailureException` (itself or among the causes) holding
+    errors with the problem details of those errors (a 502 for an upstream's failure, a 504 for a timeout ...), logged at
+    `Warning` once, where it answered a 500 logged at `Error`.
+  - **`AddResultResilience`** retries (and counts against the circuit) the exceptions the rule calls transient, plus
+    Polly's attempt timeout, as before, but never an open circuit, a rate limiter's refusal or a cancellation: also a
+    `TimeoutException` now, and no longer an `HttpRequestException` carrying a status that isn't transient (a 4xx).
+  - **The Web package reads and answers HTTP statuses with Results' `ErrorTypes`** (`FromHttpStatus` /
+    `ToHttpStatus`), the same mapping as before.
+  ⚠️ An alert on `Error` logs no longer fires for a transient exception of a command or a job (now `Warning`), and
+  fires for a non-transient exception an integration event handler threw on a try that is retried. **Sentinel**: delete
+  `Application/Retrying/TransientFailureException.cs` and `TransientFailures.cs`, and use Results'
+  (`result.ThrowIfTransient()`, which logs nothing itself: the outbox logs the failed try at `Warning`); its events then
+  get 12 tries in the regular job as in its `swgohapi` lane.
+
 - **`TryCompleteAsync` returns the other constraint violations a caller can answer** (Resrcify.SharedKernel.UnitOfWork),
   and so does a command under `ReturnPersistenceFailures`: a not-null violation (`SQLSTATE 23502`), a check-constraint
   violation (`23514`) and a string longer than its column (`22001`) as a `Validation` error (400), a foreign-key
@@ -58,15 +99,16 @@ every package in the repository is released together under one version.
   gets 12 tries, about 30 minutes (see the next entry). A test that let `OutboxWakeUp.DrainAsync()` retry a failing
   handler until the message gave up now sees `DrainAsync` return after the first failure (the message waits for a
   later try): advance the `FakeTimeProvider`, or set `RetryDelay = TimeSpan.Zero` in the test host, which tries again
-  at the next run as before. A service that added an outbox lane only for the backoff (Sentinel's `swgohapi` lane) can
-  process those events with the regular job.
+  at the next run as before.
 
 - **A transient failure gets 12 tries in the outbox, any other still 3** (Resrcify.SharedKernel.UnitOfWork), in the
   processing job and the lanes alike. With the backoff (above), the default 3 tries still gave up about a minute after a
   message's first failure, so a downstream outage longer than that made poison of its messages. A failed try now gives
-  up by the limit of its failure's kind: a transient one (the rule the failed-try log uses, below: a cancellation or
-  timeout, a transient database failure, an HTTP request that got no answer or a 408, 429 or 5xx, Polly's timeout or
-  open circuit, anywhere among the exception's causes) at `MaxTransientRetryCount` (12, about 30 minutes with the
+  up by the limit of its failure's kind: a transient one (SharedKernel's one transient rule, see "One transient
+  contract" below: a `TransientFailureException`, a cancellation or timeout, a transient database failure or a
+  concurrency conflict, an HTTP request that got no answer or a 408, 429 or 5xx, anywhere among the exception's causes,
+  or what a registered `ITransientFailureRule` calls transient, e.g. the Web package's for its resilience pipeline's
+  timeouts and open circuits) at `MaxTransientRetryCount` (12, about 30 minutes with the
   default backoff, or `MaxRetryCount` when that is higher), any other at `MaxRetryCount` (3), and at once when
   transient retries took the message past that (5 transient failures, then a handler's bug: it gives up on that 6th
   try). The update that marks the give-up uses
@@ -88,8 +130,7 @@ every package in the repository is released together under one version.
 - **The outbox logs a message's failed tries and its give-up** (Resrcify.SharedKernel.UnitOfWork), in the processing
   job and the lanes alike, under the category `Resrcify.SharedKernel.UnitOfWork.Outbox`. Nothing logged a domain event
   handler's exception (only the `Error` column and the `outbox.messages.handled` counter held it). Each failed try is
-  logged once, at `Warning` when another try may pass (a cancellation or timeout, a transient database failure, an HTTP
-  request that got no answer or a 408, 429 or 5xx, Polly's timeout or open circuit) and at `Error` otherwise, with the
+  logged once, at `Warning` when another try may pass (the transient rule, see above) and at `Error` otherwise, with the
   event type, message id, try and the tries a failure of its kind gets (`Outbox message {MessageId} ({EventType},
   {DbContext}) failed try {Attempt} of {MaxRetryCount}; the next try waits {RetryDelay}: {Error}`, 12 tries for a
   transient failure and 3 for any other by default, see above); the last one as the give-up, at `Error` (`... gave up
@@ -100,6 +141,19 @@ every package in the repository is released together under one version.
   failure and every give-up.
 
 ### Added
+
+- **Results: `TransientFailureException`** (`Diagnostics`, carrying `ImmutableArray<Error> Errors`), **`TransientFailures`**
+  (`IsTransient(Exception)`, `IsTransient(Exception, Func<Exception, bool>?)`, `TryGetErrors(Exception, out
+  ImmutableArray<Error>)`, and `ThrowIfTransient()` on `Result`, `Result<T>`, `Task<Result>` and `Task<Result<T>>`,
+  returning the result for chaining) and **`ErrorTypes.FromHttpStatus(int)` / `ToHttpStatus(ErrorType)`** (`Primitives`),
+  the one status mapping (it was the Web package's, internal).
+
+- **Abstractions: `Resilience/`**: `ITransientFailureRule`, `ITransientFailureClassifier`, and
+  `services.AddTransientFailureRule<TRule>()`, `AddTransientFailureRule(Func<Exception, bool>)`,
+  `TryAddTransientFailureClassifier()` (the default classifier: the built-in rule OR every registered rule, for the
+  exception and each of its causes). The mediator's logging, unit-of-work and transaction behaviors take the classifier
+  as an optional constructor parameter, and so do `CommandJob`, `AsyncCommandJob` and their one-parameter variants
+  (`ITransientFailureClassifier? transientFailures = null`, last); without one, the built-in rule.
 
 - **UnitOfWork: `PersistenceErrors.NotNullViolation`, `CheckViolation`, `ValueTooLong` and `ForeignKeyViolation`**
   (codes `Persistence.NotNullViolation`, `Persistence.CheckViolation`, `Persistence.ValueTooLong`,

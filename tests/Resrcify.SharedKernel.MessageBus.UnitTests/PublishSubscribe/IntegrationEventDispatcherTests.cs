@@ -17,6 +17,8 @@ using Resrcify.SharedKernel.MessageBus.UnitTests.Support;
 using Resrcify.SharedKernel.Results.Primitives;
 using Shouldly;
 using Xunit;
+using Microsoft.Extensions.Logging;
+using Resrcify.SharedKernel.Results.Diagnostics;
 
 namespace Resrcify.SharedKernel.MessageBus.UnitTests.PublishSubscribe;
 
@@ -174,6 +176,31 @@ public sealed class IntegrationEventDispatcherTests
     }
 
     [Fact]
+    public async Task Handle_ShouldLogATriedAgainExceptionAtError_ButATransientOneAtWarning()
+    {
+        // Every exception is tried again; the classifier picks the line's level.
+        using var logs = new CapturingLoggerProvider();
+        var (log, _, subscriber, publisher, _) = await StartScriptedAsync(logs);
+        using (subscriber)
+        using (publisher)
+        {
+            log.Throws.Enqueue(new InvalidOperationException("the handler's bug"));
+            log.Throws.Enqueue(new TransientFailureException([Error.ExternalFailure("SwgohApi.Unreachable", "Down.")]));
+
+            await publisher.Services.GetRequiredService<IEventBus>().PublishAsync(new ScriptedEvent("e1"));
+            await InMemoryServices.WaitUntilAsync(() => !log.Handled.IsEmpty);
+
+            log.Attempts.ShouldBe(3);
+            var retries = logs.Entries
+                .Where(entry => entry.Message.Contains("trying it again in its place", StringComparison.Ordinal))
+                .ToList();
+            retries.Select(entry => entry.Level).ShouldBe([LogLevel.Error, LogLevel.Warning]);
+            retries[0].Exception.ShouldBeOfType<InvalidOperationException>();
+            retries[1].Message.ShouldContain("SwgohApi.Unreachable (ExternalFailure): Down.");
+        }
+    }
+
+    [Fact]
     public async Task Handle_ShouldNotRetry_WhenTheFailureIsTheEventsFault()
     {
         using var metrics = new MetricsCapture();
@@ -324,7 +351,8 @@ public sealed class IntegrationEventDispatcherTests
             => Task.FromResult(Enumerable.Empty<T?>());
     }
 
-    private static async Task<(ScriptLog Log, InMemNetwork Network, IHost Subscriber, IHost Publisher, string ErrorQueue)> StartScriptedAsync()
+    private static async Task<(ScriptLog Log, InMemNetwork Network, IHost Subscriber, IHost Publisher, string ErrorQueue)> StartScriptedAsync(
+        CapturingLoggerProvider? logs = null)
     {
         var network = new InMemNetwork();
         var log = new ScriptLog();
@@ -332,7 +360,12 @@ public sealed class IntegrationEventDispatcherTests
         var subscriber = await InMemoryServices.StartAsync(
             network,
             bus => bus.WithInputQueue(queue).AddEventHandlers(typeof(IntegrationEventDispatcherTests).Assembly),
-            services => services.AddSingleton(log));
+            services =>
+            {
+                services.AddSingleton(log);
+                if (logs is not null)
+                    services.AddSingleton<ILoggerProvider>(logs);
+            });
         var publisher = await InMemoryServices.StartAsync(network, _ => { });
         return (log, network, subscriber, publisher, $"{queue}.error");
     }

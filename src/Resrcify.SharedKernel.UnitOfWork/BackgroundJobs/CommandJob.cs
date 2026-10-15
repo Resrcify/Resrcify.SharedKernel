@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Quartz;
 using Resrcify.SharedKernel.Abstractions.Mediator;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.Results.Diagnostics;
 using Resrcify.SharedKernel.Results.Primitives;
 
@@ -17,8 +18,10 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 /// (<see cref="ErrorTypeExtensions.IsTransient"/>) and at <see cref="LogLevel.Information"/> when it is an expected
 /// answer (not found, invalid, ...); the trigger keeps its schedule either way;</item>
 /// <item>a cancellation (the scheduler shutting down, or the job interrupted) goes through as it is;</item>
-/// <item>any other exception is logged at <see cref="LogLevel.Error"/> (at <see cref="LogLevel.Debug"/>, without the
-/// stack, when the mediator's behaviors logged it already: <see cref="LoggedExceptions"/>) and thrown again as a
+/// <item>any other exception is logged at <see cref="LogLevel.Error"/>, or at <see cref="LogLevel.Warning"/> when it is
+/// transient (by the <see cref="ITransientFailureClassifier"/> given, else <see cref="TransientFailures"/>: e.g. a
+/// <see cref="TransientFailureException"/>, a timeout), at <see cref="LogLevel.Debug"/> without the stack when the
+/// mediator's behaviors logged it already (<see cref="LoggedExceptions"/>), and thrown again as a
 /// <see cref="JobExecutionException"/>, the exception Quartz expects from a job: listeners and Quartz's own telemetry
 /// see the run failed, and the trigger keeps its schedule (no refire, no unscheduling).</item>
 /// </list>
@@ -37,14 +40,21 @@ public abstract class CommandJob<TCommand, TResponse>
 {
     private readonly CommandJobRun<TCommand, TResponse> _run;
 
+    /// <param name="sender">The mediator.</param>
+    /// <param name="logger">The job's logger.</param>
+    /// <param name="transientFailures">
+    /// Tells a transient exception (logged at <see cref="LogLevel.Warning"/>) from any other; without one, the built-in
+    /// rule (<see cref="TransientFailures"/>).
+    /// </param>
     protected CommandJob(
         ISender sender,
-        ILogger logger)
+        ILogger logger,
+        ITransientFailureClassifier? transientFailures = null)
     {
         ArgumentNullException.ThrowIfNull(sender);
         ArgumentNullException.ThrowIfNull(logger);
         CommandJobs.EnsureReturns<TCommand, TResponse>();
-        _run = new CommandJobRun<TCommand, TResponse>(sender, logger);
+        _run = new CommandJobRun<TCommand, TResponse>(sender, logger, transientFailures);
     }
 
     public ValueTask Execute(
@@ -74,8 +84,9 @@ public abstract class CommandJob<TCommand, TResponse>
 /// <see cref="LogLevel.Information"/> when it is an expected answer; the trigger keeps its schedule;</item>
 /// <item>a cancellation (the scheduler shutting down, or the job interrupted), also while the command is made, goes
 /// through as it is;</item>
-/// <item>any other exception, from <see cref="CreateCommandAsync"/> too, is logged at <see cref="LogLevel.Error"/> and
-/// thrown again as a <see cref="JobExecutionException"/> (the trigger keeps its schedule).</item>
+/// <item>any other exception, from <see cref="CreateCommandAsync"/> too, is logged at <see cref="LogLevel.Error"/> (at
+/// <see cref="LogLevel.Warning"/> when it is transient) and thrown again as a <see cref="JobExecutionException"/> (the
+/// trigger keeps its schedule).</item>
 /// </list>
 /// Runs never overlap (<see cref="DisallowConcurrentExecutionAttribute"/>, which derived jobs inherit). Quartz builds
 /// the job in a DI scope of its own for every run, so a repository or a <c>DbContext</c> can be taken in the
@@ -109,14 +120,21 @@ public abstract class AsyncCommandJob<TCommand, TResponse>
 {
     private readonly CommandJobRun<TCommand, TResponse> _run;
 
+    /// <param name="sender">The mediator.</param>
+    /// <param name="logger">The job's logger.</param>
+    /// <param name="transientFailures">
+    /// Tells a transient exception (logged at <see cref="LogLevel.Warning"/>) from any other; without one, the built-in
+    /// rule (<see cref="TransientFailures"/>).
+    /// </param>
     protected AsyncCommandJob(
         ISender sender,
-        ILogger logger)
+        ILogger logger,
+        ITransientFailureClassifier? transientFailures = null)
     {
         ArgumentNullException.ThrowIfNull(sender);
         ArgumentNullException.ThrowIfNull(logger);
         CommandJobs.EnsureReturns<TCommand, TResponse>();
-        _run = new CommandJobRun<TCommand, TResponse>(sender, logger);
+        _run = new CommandJobRun<TCommand, TResponse>(sender, logger, transientFailures);
     }
 
     public ValueTask Execute(
@@ -153,8 +171,9 @@ public abstract class AsyncCommandJob<TCommand, TResponse>
 /// <typeparam name="TCommand">The command sent.</typeparam>
 public abstract class AsyncCommandJob<TCommand>(
     ISender sender,
-    ILogger logger)
-    : AsyncCommandJob<TCommand, Result>(sender, logger)
+    ILogger logger,
+    ITransientFailureClassifier? transientFailures = null)
+    : AsyncCommandJob<TCommand, Result>(sender, logger, transientFailures)
     where TCommand : class, IRequest<Result>;
 
 /// <summary>
@@ -167,13 +186,16 @@ internal sealed partial class CommandJobRun<TCommand, TResponse>
 {
     private readonly ISender _sender;
     private readonly ILogger _logger;
+    private readonly ITransientFailureClassifier? _transientFailures;
 
     public CommandJobRun(
         ISender sender,
-        ILogger logger)
+        ILogger logger,
+        ITransientFailureClassifier? transientFailures)
     {
         _sender = sender;
         _logger = logger;
+        _transientFailures = transientFailures;
     }
 
     /// <summary>No command this run.</summary>
@@ -222,15 +244,18 @@ internal sealed partial class CommandJobRun<TCommand, TResponse>
             LogSkipped(job, typeof(TCommand).Name);
     }
 
-    // At Error with the stack unless the mediator's behaviors did so already; the run is where the exception ends, so
-    // its mark is released: the same instance thrown in a later run is logged again.
+    // At Error (Warning when transient) with the stack unless the mediator's behaviors did so already; the run is where
+    // the exception ends, so its mark is released: the same instance thrown in a later run is logged again.
     private void LogThrewOnce(
         Exception exception,
         string job)
     {
         if (LoggedExceptions.Claim(exception))
         {
-            LogThrew(exception, job, typeof(TCommand).Name);
+            var level = IsTransient(exception)
+                ? LogLevel.Warning
+                : LogLevel.Error;
+            LogThrew(level, exception, job, typeof(TCommand).Name);
         }
         else if (_logger.IsEnabled(LogLevel.Debug))
         {
@@ -240,6 +265,9 @@ internal sealed partial class CommandJobRun<TCommand, TResponse>
 
         LoggedExceptions.Release(exception);
     }
+
+    private bool IsTransient(Exception exception)
+        => _transientFailures?.IsTransient(exception) ?? TransientFailures.IsTransient(exception);
 
     private void LogFailure(
         string job,
@@ -261,8 +289,8 @@ internal sealed partial class CommandJobRun<TCommand, TResponse>
     [LoggerMessage(Message = "Job {Job} sent {Command}, which failed: {Errors}")]
     private partial void LogFailed(LogLevel level, string job, string command, string errors);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Job {Job} sent {Command}, which threw")]
-    private partial void LogThrew(Exception exception, string job, string command);
+    [LoggerMessage(Message = "Job {Job} sent {Command}, which threw")]
+    private partial void LogThrew(LogLevel level, Exception exception, string job, string command);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Job {Job} sent {Command}, which threw {ExceptionType} (logged already)")]
     private partial void LogThrewLoggedAlready(string job, string command, string exceptionType);
@@ -315,8 +343,9 @@ internal static class CommandJobs
 /// <typeparam name="TCommand">The command sent.</typeparam>
 public abstract class CommandJob<TCommand>(
     ISender sender,
-    ILogger logger)
-    : CommandJob<TCommand, Result>(sender, logger)
+    ILogger logger,
+    ITransientFailureClassifier? transientFailures = null)
+    : CommandJob<TCommand, Result>(sender, logger, transientFailures)
     where TCommand : IRequest<Result>;
 
 /// <summary>
@@ -327,8 +356,9 @@ public abstract class CommandJob<TCommand>(
 /// <typeparam name="TResponse">The command's result type, e.g. <c>Result&lt;int&gt;</c>.</typeparam>
 public sealed class SendCommandJob<TCommand, TResponse>(
     ISender sender,
-    ILogger<SendCommandJob<TCommand, TResponse>> logger)
-    : CommandJob<TCommand, TResponse>(sender, logger)
+    ILogger<SendCommandJob<TCommand, TResponse>> logger,
+    ITransientFailureClassifier? transientFailures = null)
+    : CommandJob<TCommand, TResponse>(sender, logger, transientFailures)
     where TCommand : IRequest<TResponse>, new()
     where TResponse : Result
 {
@@ -343,8 +373,9 @@ public sealed class SendCommandJob<TCommand, TResponse>(
 /// <typeparam name="TCommand">The command sent; made with its parameterless constructor.</typeparam>
 public sealed class SendCommandJob<TCommand>(
     ISender sender,
-    ILogger<SendCommandJob<TCommand>> logger)
-    : CommandJob<TCommand>(sender, logger)
+    ILogger<SendCommandJob<TCommand>> logger,
+    ITransientFailureClassifier? transientFailures = null)
+    : CommandJob<TCommand>(sender, logger, transientFailures)
     where TCommand : IRequest<Result>, new()
 {
     protected override TCommand CreateCommand(IJobExecutionContext context)
@@ -362,8 +393,9 @@ internal sealed class FactoryCommandJob<TCommand, TResponse>(
     ISender sender,
     ILogger<FactoryCommandJob<TCommand, TResponse>> logger,
     CommandFactory<TCommand> factory,
-    IServiceProvider services)
-    : CommandJob<TCommand, TResponse>(sender, logger)
+    IServiceProvider services,
+    ITransientFailureClassifier? transientFailures = null)
+    : CommandJob<TCommand, TResponse>(sender, logger, transientFailures)
     where TCommand : IRequest<TResponse>
     where TResponse : Result
 {

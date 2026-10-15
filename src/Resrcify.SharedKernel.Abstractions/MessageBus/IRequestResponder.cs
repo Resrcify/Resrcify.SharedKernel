@@ -15,7 +15,7 @@ namespace Resrcify.SharedKernel.Abstractions.MessageBus;
 /// (<c>Error.IsTransient()</c>) is tried again first. An exception is logged and treated as a transient failure: the
 /// request goes back to its queue for another try (5 by default, each through the rate limiter), and after the last
 /// one the requester gets a <c>&lt;TRequest&gt;.ResponderFailed</c> failure (<c>ErrorType.Failure</c>), not an
-/// unanswered item. A request goes unanswered only when its requester stopped waiting (its timeout passed).
+/// unanswered item; for a <c>TransientFailureException</c> (e.g. from <c>ThrowIfTransient()</c>), its errors instead. A request goes unanswered only when its requester stopped waiting (its timeout passed).
 /// </remarks>
 public interface IRequestResponder<in TRequest, TResponse>
     where TRequest : class

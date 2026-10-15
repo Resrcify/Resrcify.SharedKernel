@@ -16,6 +16,7 @@ using Rebus.Pipeline.Receive;
 using Rebus.Retry;
 using Rebus.Retry.Simple;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.MessageBus.Abstractions;
 using Resrcify.SharedKernel.MessageBus.Broker;
 using Resrcify.SharedKernel.Results.Diagnostics;
@@ -38,7 +39,10 @@ namespace Resrcify.SharedKernel.MessageBus.RateLimitedQueues;
 /// Failures are answered or tried again without exceptions: a failure that is the request's fault
 /// (<see cref="RateLimitedQueueOptions.AnswerFailure"/>) is answered at once; any other (or a responder that threw) is
 /// sent back to the queue for another try, through the rate limiter, on whichever instance takes it, and answered with
-/// its errors after the last try. A message the bus itself can't handle (unreadable) is dropped
+/// its errors after the last try: a responder's exception holding a <see cref="TransientFailureException"/> with that
+/// exception's errors, any other with a <c>&lt;TRequest&gt;.ResponderFailed</c> failure. A responder's exception is logged
+/// at <c>Warning</c> when it is transient (the container's <see cref="ITransientFailureClassifier"/>, else
+/// <see cref="TransientFailures"/>), at <c>Error</c> otherwise. A message the bus itself can't handle (unreadable) is dropped
 /// (<see cref="DropFailedRequestErrorHandler"/>).
 /// <para>
 /// The handler's cancellation token fires when the queue stops consuming (the request goes back to the queue, for
@@ -385,19 +389,30 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
         catch (Exception exception)
         {
             LogResponderFailedOnce(exception);
-            return (Result.Failure<TResponse>(Error.Failure(
-                $"{typeof(TRequest).Name}.ResponderFailed",
-                $"The responder failed ({exception.GetType().Name}); see its logs.")), true);
+            return (Result.Failure<TResponse>(ErrorsOf(exception)), true);
         }
     }
 
-    // At Error with the stack unless a mediator behavior behind the responder did so already; turned into a failure here,
-    // the exception's journey ends, so its mark is released.
+    // A transient failure's own errors (what the responder's call failed with), else a failure naming the exception.
+    private static Error[] ErrorsOf(Exception exception)
+        => TransientFailures.TryGetErrors(exception, out var errors)
+            ? [.. errors]
+            : [Error.Failure(
+                $"{typeof(TRequest).Name}.ResponderFailed",
+                $"The responder failed ({exception.GetType().Name}); see its logs.")];
+
+    // At Error (Warning when transient) with the stack unless a mediator behavior behind the responder did so already;
+    // turned into a failure here, the exception's journey ends, so its mark is released.
     private void LogResponderFailedOnce(Exception exception)
     {
         if (LoggedExceptions.Claim(exception))
         {
-            LogResponderFailed(exception, queueName);
+            var transient = serviceProvider.GetService<ITransientFailureClassifier>()?.IsTransient(exception)
+                ?? TransientFailures.IsTransient(exception);
+            var level = transient
+                ? LogLevel.Warning
+                : LogLevel.Error;
+            LogResponderFailed(level, exception, queueName);
         }
         else if (logger.IsEnabled(LogLevel.Debug))
         {
@@ -411,8 +426,8 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
     [LoggerMessage(Level = LogLevel.Warning, Message = "A request on {Queue} failed (try {Attempt}: {Errors}); sending it back to the queue for another try")]
     private partial void LogTryingAgain(string queue, int attempt, string errors);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "The responder of {Queue} threw; the request is tried again, then answered with a failure")]
-    private partial void LogResponderFailed(Exception exception, string queue);
+    [LoggerMessage(Message = "The responder of {Queue} threw; the request is tried again, then answered with a failure")]
+    private partial void LogResponderFailed(LogLevel level, Exception exception, string queue);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "The responder of {Queue} threw {ExceptionType} (logged already); the request is tried again, then answered with a failure")]
     private partial void LogResponderFailedLoggedAlready(string queue, string exceptionType);

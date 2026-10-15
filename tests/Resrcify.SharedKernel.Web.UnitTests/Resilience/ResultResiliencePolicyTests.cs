@@ -7,6 +7,7 @@ using System.Net.Http.Headers;
 using Microsoft.Extensions.Time.Testing;
 using Polly;
 using Polly.CircuitBreaker;
+using Polly.RateLimiting;
 using Polly.Timeout;
 using Resrcify.SharedKernel.Web.Resilience;
 using Shouldly;
@@ -80,6 +81,22 @@ public sealed class ResultResiliencePolicyTests
     {
         Policy().ShouldRetry(Outcome.FromException<HttpResponseMessage>(new HttpRequestException("refused"))).ShouldBeTrue();
         Policy().ShouldRetry(Outcome.FromException<HttpResponseMessage>(new TimeoutRejectedException())).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void ShouldRetry_ShouldRetryWhatSharedKernelsRuleCallsTransient_ButNotARejection()
+    {
+        Policy().ShouldRetry(Outcome.FromException<HttpResponseMessage>(new TimeoutException("too slow"))).ShouldBeTrue();
+        Policy()
+            .ShouldRetry(Outcome.FromException<HttpResponseMessage>(new HttpRequestException("down", null, HttpStatusCode.ServiceUnavailable)))
+            .ShouldBeTrue();
+        Policy()
+            .ShouldRetry(Outcome.FromException<HttpResponseMessage>(new HttpRequestException("no such thing", null, HttpStatusCode.NotFound)))
+            .ShouldBeFalse();
+        Policy().ShouldRetry(Outcome.FromException<HttpResponseMessage>(new InvalidOperationException("a bug"))).ShouldBeFalse();
+        Policy().ShouldRetry(Outcome.FromException<HttpResponseMessage>(new BrokenCircuitException())).ShouldBeFalse();
+        Policy().ShouldRetry(Outcome.FromException<HttpResponseMessage>(new IsolatedCircuitException())).ShouldBeFalse();
+        Policy().ShouldRetry(Outcome.FromException<HttpResponseMessage>(new RateLimiterRejectedException())).ShouldBeFalse();
     }
 
     [Fact]

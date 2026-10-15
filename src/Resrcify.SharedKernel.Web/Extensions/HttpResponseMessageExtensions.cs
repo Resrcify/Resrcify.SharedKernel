@@ -116,7 +116,7 @@ public static class HttpResponseMessageExtensions
         return new Error(
             $"Http.{statusCode}",
             response.ReasonPhrase ?? response.StatusCode.ToString(),
-            HttpResultExtensions.GetErrorType(statusCode));
+            ErrorTypes.FromHttpStatus(statusCode));
     }
 
     private static Error EmptyContent<T>(HttpResponseMessage response)

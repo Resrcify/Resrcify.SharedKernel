@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Resrcify.SharedKernel.Abstractions.Mediator;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 using Resrcify.SharedKernel.Results.Diagnostics;
 using Resrcify.SharedKernel.Results.Primitives;
@@ -14,7 +15,9 @@ namespace Resrcify.SharedKernel.Mediator.Behaviors;
 /// <see cref="UnitOfWorkPipelineOptions.ReturnPersistenceFailures"/>, a save the database refuses in a way the caller can
 /// answer (a concurrency conflict, a duplicate, a broken constraint) is returned as the command's failure instead of thrown. When the command
 /// fails (a failure, a refused save or an exception), what it changed is undone in the change tracker
-/// (<c>IUnitOfWork.ExecuteAsync</c>), so a later save in the same scope doesn't save half its work.
+/// (<c>IUnitOfWork.ExecuteAsync</c>), so a later save in the same scope doesn't save half its work. An exception is
+/// logged at <see cref="LogLevel.Error"/>, or at <see cref="LogLevel.Warning"/> when it is transient (by the container's
+/// <see cref="ITransientFailureClassifier"/>, else <see cref="TransientFailures"/>).
 /// </summary>
 public class UnitOfWorkPipelineBehavior<TRequest, TResponse>
     : IPipelineBehavior<TRequest, TResponse>
@@ -24,15 +27,18 @@ public class UnitOfWorkPipelineBehavior<TRequest, TResponse>
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger _logger;
     private readonly UnitOfWorkPipelineOptions _options;
+    private readonly ITransientFailureClassifier? _transientFailures;
 
     public UnitOfWorkPipelineBehavior(
         IUnitOfWork unitOfWork,
         ILogger<UnitOfWorkPipelineBehavior<TRequest, TResponse>> logger,
-        UnitOfWorkPipelineOptions? options = null)
+        UnitOfWorkPipelineOptions? options = null,
+        ITransientFailureClassifier? transientFailures = null)
     {
         _unitOfWork = unitOfWork;
         _logger = logger;
         _options = options ?? new UnitOfWorkPipelineOptions();
+        _transientFailures = transientFailures;
     }
 
     public async Task<TResponse> Handle(
@@ -83,11 +89,13 @@ public class UnitOfWorkPipelineBehavior<TRequest, TResponse>
         if (cancellationToken.IsCancellationRequested)
             return false;
 
+        var level = TransientFailureLevels.Of(exception, _transientFailures);
         if (request is not ITransactionalCommand
-            && _logger.IsEnabled(LogLevel.Error)
+            && _logger.IsEnabled(level)
             && LoggedExceptions.Claim(exception))
         {
-            _logger.LogError(
+            _logger.Log(
+                level,
                 exception,
                 "Request {@RequestName} threw {@ExceptionType}; nothing it changed is saved",
                 typeof(TRequest).Name,

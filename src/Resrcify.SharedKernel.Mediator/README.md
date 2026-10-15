@@ -347,7 +347,9 @@ The package includes the following built-in behaviors in `src/Resrcify.SharedKer
     - Constraint: `TRequest : IBaseCommand`, `TResponse : Result`.
 
 The logging, transaction and unit-of-work behaviors log a handler's exception (not a cancellation the caller asked
-for) and let it through unchanged, so callers can catch it by type. It is logged at `Error`, with its stack, **once**:
+for) and let it through unchanged, so callers can catch it by type. It is logged at `Error` (at `Warning` when it is
+transient: the container's `ITransientFailureClassifier`, else Results' `TransientFailures`, e.g. a
+`TransientFailureException` or a timeout), with its stack, **once**:
 by the first of them it passes on its way out, which is the innermost (the unit-of-work behavior for a plain command:
 "Request X threw Y; nothing it changed is saved"; the transaction behavior for a transactional one, once whatever the
 retries of a retrying execution strategy: "...; its transaction is rolled back"; the logging behavior for a query). The behaviors it passes after that log a `Debug` line without the stack (the logging behavior's

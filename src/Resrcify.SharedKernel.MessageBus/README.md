@@ -253,7 +253,7 @@ gets each item as one:
 | Returns a value | The item is in `Results`; `replies[key]` is a success. |
 | Returns a failure that is the request's fault (`NotFound`, `Validation`, `Conflict`, `Unauthorized`, `Forbidden`) | Answered at once: the item is in `Failures` with the **same errors** (code, message and `ErrorType`), sent back over the bus. |
 | Returns any other failure (`Failure`, `ExternalFailure`, `Timeout`, `RateLimit`) | Another try may pass: the request goes back to its queue (any instance may take it, through the rate limiter again), up to 5 tries, 0.5, 1, 2 and 4 s apart. If it still fails, the item is in `Failures` with the last try's errors. |
-| Throws | Like any other failure, as `<TRequest>.ResponderFailed` (`ErrorType.Failure`). Exceptions are for bugs: return a failure instead. |
+| Throws | Like any other failure, as `<TRequest>.ResponderFailed` (`ErrorType.Failure`), or, for a `TransientFailureException` (`ThrowIfTransient()`), with its errors. Logged at `Error`, at `Warning` when transient. Exceptions are for bugs: return a failure instead. |
 | Never answers | The item is in `UnansweredKeys`; `replies[key]` is `ScatterGather.Unanswered` (`ErrorType.Timeout`). |
 
 A failure is an answer: it settles the item without waiting for the timeout. Type its errors for what they mean:

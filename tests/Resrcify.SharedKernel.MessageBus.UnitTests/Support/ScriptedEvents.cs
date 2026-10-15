@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
@@ -18,6 +19,9 @@ internal sealed class ScriptLog
     /// <summary>The second handler's answers, one per try; a success once they run out.</summary>
     public ConcurrentQueue<Result> Answers { get; } = new();
 
+    /// <summary>What the second handler throws, one per try, before it answers from <see cref="Answers"/>.</summary>
+    public ConcurrentQueue<Exception> Throws { get; } = new();
+
     public int FirstRuns => Volatile.Read(ref _firstRuns);
 
     public int Attempts => Volatile.Read(ref _attempts);
@@ -30,6 +34,8 @@ internal sealed class ScriptLog
     public Result NextAnswer(string id)
     {
         Interlocked.Increment(ref _attempts);
+        if (Throws.TryDequeue(out var exception))
+            throw exception;
         if (Answers.TryDequeue(out var answer))
             return answer;
         Handled.Enqueue(id);

@@ -14,6 +14,7 @@ using Resrcify.SharedKernel.MessageBus.UnitTests.Support;
 using Resrcify.SharedKernel.Results.Primitives;
 using Shouldly;
 using Xunit;
+using Resrcify.SharedKernel.Results.Diagnostics;
 
 namespace Resrcify.SharedKernel.MessageBus.UnitTests.RateLimitedQueues;
 
@@ -66,6 +67,17 @@ public sealed class MediatorRequestResponderTests
         var (reply, calls) = await AskAsync("throws", timeout: TimeSpan.FromSeconds(20));
 
         reply.Errors.ShouldHaveSingleItem().Code.ShouldBe("PlayerQuestion.ResponderFailed");
+        calls.Count.ShouldBe(5);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ShouldTryAgainThenAnswerTheTransientFailuresErrors_WhenTheHandlerThrowsOne()
+    {
+        // The handler turned the upstream's failure into an exception (ThrowIfTransient): after the last try, the
+        // requester gets the upstream's errors, not ResponderFailed.
+        var (reply, calls) = await AskAsync("throws-transient", timeout: TimeSpan.FromSeconds(20));
+
+        reply.Errors.ShouldHaveSingleItem().Code.ShouldBe("Upstream.Down");
         calls.Count.ShouldBe(5);
     }
 
@@ -146,6 +158,8 @@ public sealed class MediatorRequestResponderTests
             calls.Add();
             if (request.Name == "throws")
                 throw new InvalidOperationException("A bug in the handler.");
+            if (request.Name == "throws-transient")
+                Result.Failure(new Error("Upstream.Down", "The game is down", ErrorType.ExternalFailure)).ThrowIfTransient();
             Result<PlayerAnswer> result = request.Name switch
             {
                 "unknown" => new Error("Player.NotFound", "No such player", ErrorType.NotFound),

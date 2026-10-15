@@ -3,8 +3,9 @@ using System.Net.Http;
 using Polly;
 using Polly.CircuitBreaker;
 using Polly.Timeout;
+using Polly.RateLimiting;
+using Resrcify.SharedKernel.Results.Diagnostics;
 using Resrcify.SharedKernel.Results.Primitives;
-using Resrcify.SharedKernel.Web.Extensions;
 
 namespace Resrcify.SharedKernel.Web.Resilience;
 
@@ -33,7 +34,8 @@ internal sealed class ResultResiliencePolicy(
     }
 
     /// <summary>
-    /// A network error, a timed-out attempt, or a response whose status is retried: in <c>RetryOnly</c> when it is set;
+    /// A transient exception (a network error, a timed-out attempt: see <see cref="IsTransientException"/>), or a
+    /// response whose status is retried: in <c>RetryOnly</c> when it is set;
     /// otherwise not in <c>NeverRetry</c>, and in <c>AlsoRetry</c> or a failure of a transient error type. The caller's
     /// cancellation is never retried, nor a response whose <c>Retry-After</c> asks for at least what is left of the
     /// total timeout (known from <paramref name="context"/>): waiting for it would only end in a timeout, so the caller
@@ -109,7 +111,7 @@ internal sealed class ResultResiliencePolicy(
         if (response.IsSuccessStatusCode || status < 400 || IsLeftUnretried(status))
             return false;
 
-        return HttpResultExtensions.GetErrorType(status).IsTransient();
+        return ErrorTypes.FromHttpStatus(status).IsTransient();
     }
 
     // Left out of RetryOnly when it is set, otherwise listed in NeverRetry.
@@ -130,9 +132,22 @@ internal sealed class ResultResiliencePolicy(
         return options.TotalTimeout - timeProvider.GetElapsedTime(started);
     }
 
-    private static bool IsTransientException(
+    /// <summary>
+    /// An exception another attempt may get past: an attempt that timed out, or what SharedKernel's rule calls transient
+    /// (<see cref="TransientFailures.IsTransient(Exception)"/>: a network error, an <see cref="HttpRequestException"/>
+    /// with a transient status, a timeout). Not an open circuit or a rate limiter's refusal (an attempt now is refused
+    /// the same way), nor a cancellation (the caller's).
+    /// </summary>
+    internal static bool IsTransientException(
         Exception? exception)
-        => exception is HttpRequestException or TimeoutRejectedException;
+        => exception switch
+        {
+            null => false,
+            TimeoutRejectedException => true,
+            BrokenCircuitException or RateLimiterRejectedException => false,
+            OperationCanceledException => false,
+            _ => TransientFailures.IsTransient(exception),
+        };
 
     private static TimeSpan Clamp(
         TimeSpan delay)

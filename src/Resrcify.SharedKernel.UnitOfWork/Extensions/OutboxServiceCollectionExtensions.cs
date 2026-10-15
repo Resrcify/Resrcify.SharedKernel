@@ -10,6 +10,7 @@ using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.Primitives;
 
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Extensions;
 
@@ -106,6 +107,7 @@ public static class OutboxServiceCollectionExtensions
         services.TryAddSingleton(time);
         services.TryAddScoped<IUnitOfWork, UnitOfWork<TDbContext>>();
         services.AddOutboxMessageContext();
+        services.AddTransientFailureRule<PersistenceTransientFailureRule>();
 
         // AddQuartz composes: every call after the first adds to the same default scheduler
         // (its registrations are TryAdd), so this is safe alongside the application's own

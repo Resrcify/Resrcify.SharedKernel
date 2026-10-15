@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading;
@@ -13,7 +14,9 @@ using NSubstitute;
 using Quartz;
 using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using Resrcify.SharedKernel.Abstractions.Mediator;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.Results.Diagnostics;
+using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
 using Shouldly;
@@ -400,6 +403,55 @@ public class ProcessOutboxMessagesJobTests
     }
 
     [Fact]
+    public async Task Execute_ShouldLogASentinelStyleTransientFailureAtWarning_WithTheTransientTries()
+    {
+        // Sentinel's handlers throw it (ThrowIfTransient) when SwgohApi fails transiently: 12 tries, not 3.
+        using var logs = new RecordingLoggerProvider();
+        await using var harness = await ClockedHarnessAsync(new FakeTimeProvider(Now), logs);
+        var failure = Result.Failure(SwgohApiUnreachable);
+        harness.Publisher
+            .Publish(Arg.Any<IDomainEvent>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                failure.ThrowIfTransient();
+                return Task.CompletedTask;
+            });
+        await harness.SeedAsync(CreateMessage(new TestDomainEvent(Guid.NewGuid(), "outage")));
+
+        await RunAsync(harness);
+
+        var logged = logs.Outbox().ShouldHaveSingleItem();
+        logged.Level.ShouldBe(LogLevel.Warning);
+        logged.Message.ShouldContain("failed try 1 of 12");
+        logged.Message.ShouldContain("TransientFailureException: Failed transiently: SwgohApi.Unreachable");
+        logged.Exception.ShouldBeOfType<TransientFailureException>();
+    }
+
+    [Fact]
+    public async Task Execute_ShouldGiveTheTransientTries_ToAFailureAServicesRuleCallsTransient()
+    {
+        // The service's own rule (AddTransientFailureRule) reaches the outbox through the container's classifier.
+        var clock = new FakeTimeProvider(Now);
+        await using var harness = await OutboxJobTestHarness.CreateAsync(clock, services =>
+        {
+            services.AddSingleton<TimeProvider>(clock);
+            services.AddTransientFailureRule(exception => exception is IOException);
+        });
+        harness.Publisher
+            .Publish(Arg.Any<IDomainEvent>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new IOException("the connection broke")));
+        var retrying = CreateMessage(new TestDomainEvent(Guid.NewGuid(), "outage"));
+        retrying.RetryCount = 5;
+        await harness.SeedAsync(retrying);
+
+        await RunAsync(harness);
+
+        var row = (await harness.GetMessagesAsync()).Single();
+        row.RetryCount.ShouldBe(6);
+        row.ProcessedOnUtc.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Execute_ShouldNotLogTheStackAgain_WhenAHandlerLoggedTheExceptionAlready()
     {
         // As the mediator's unit-of-work behavior does around a command the handler sent.
@@ -422,14 +474,19 @@ public class ProcessOutboxMessagesJobTests
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task Execute_ShouldTryATransientlyFailingMessageTwelveTimes_WithBackoff_ThenGiveUp(bool http)
+    [InlineData("http")]
+    [InlineData("timeout")]
+    [InlineData("transient failure")]
+    public async Task Execute_ShouldTryATransientlyFailingMessageTwelveTimes_WithBackoff_ThenGiveUp(string kind)
     {
-        // A downstream outage longer than 3 tries: the default limits (3, and 12 for a transient failure).
-        Exception failure = http
-            ? new HttpRequestException("the downstream service is down", null, HttpStatusCode.ServiceUnavailable)
-            : new TimeoutException("the downstream service didn't answer");
+        // A downstream outage longer than 3 tries: the default limits (3, and 12 for a transient failure). A handler
+        // that turned a transient failed result into an exception (Sentinel's, ThrowIfTransient) gets them too.
+        Exception failure = kind switch
+        {
+            "http" => new HttpRequestException("the downstream service is down", null, HttpStatusCode.ServiceUnavailable),
+            "timeout" => new TimeoutException("the downstream service didn't answer"),
+            _ => new TransientFailureException([SwgohApiUnreachable]),
+        };
         var clock = new FakeTimeProvider(Now);
         using var logs = new RecordingLoggerProvider();
         await using var harness = await ClockedHarnessAsync(clock, logs);
@@ -569,6 +626,10 @@ public class ProcessOutboxMessagesJobTests
     }
 
     private static readonly DateTimeOffset Now = new(2026, 10, 15, 12, 0, 0, TimeSpan.Zero);
+
+    private static readonly Error SwgohApiUnreachable = Error.ExternalFailure(
+        "SwgohApi.Unreachable",
+        "SwgohApi could not be reached.");
 
     // The job reads the due messages on this clock, and the processor writes the next try's time on the container's.
     private static Task<OutboxJobTestHarness> ClockedHarnessAsync(

@@ -26,8 +26,13 @@ It exists to keep dependency direction explicit and prevent circular references 
     - `DomainDrivenDesign/`
     - `Repository/`
     - `Caching/`
-- Zero implementation logic, only interfaces/contracts. (One interface carries a default: `ISingleValueObject`'s
-  static `FromPersisted` is `Create(value).Value` unless the value object implements it.)
+    - `Resilience/`: `ITransientFailureRule` and `ITransientFailureClassifier`, the hook that adds a package's or a
+      service's own rules to Results' transient rule (`services.AddTransientFailureRule<TRule>()`,
+      `AddTransientFailureRule(Func<Exception, bool>)`, `TryAddTransientFailureClassifier()`, which registers the
+      default classifier: the built-in rule OR every registered rule, for the exception and each of its causes).
+- Interfaces/contracts only, but for the resilience registration and its default classifier. (One interface carries a
+  default: `ISingleValueObject`'s static `FromPersisted` is `Create(value).Value` unless the value object implements
+  it.)
 
 ## Prerequisites
 

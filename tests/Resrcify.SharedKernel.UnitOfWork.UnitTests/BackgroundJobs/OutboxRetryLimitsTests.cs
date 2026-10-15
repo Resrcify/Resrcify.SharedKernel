@@ -1,7 +1,10 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Net;
 using System.Net.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Shouldly;
 using Xunit;
@@ -91,7 +94,7 @@ public sealed class OutboxRetryLimitsTests
     {
         var limits = OutboxRetryLimits.Create(maxRetryCount: 3, maxTransientRetryCount: 12);
 
-        var limit = limits.For(new HttpRequestException("down", null, HttpStatusCode.ServiceUnavailable));
+        var limit = limits.For(new HttpRequestException("down", null, HttpStatusCode.ServiceUnavailable), classifier: null);
 
         limit.ShouldBe(new OutboxFailureLimit(MaxTries: 12, Transient: true));
     }
@@ -101,9 +104,25 @@ public sealed class OutboxRetryLimitsTests
     {
         var limits = OutboxRetryLimits.Create(maxRetryCount: 3, maxTransientRetryCount: 12);
 
-        var limit = limits.For(new InvalidOperationException("a handler's bug"));
+        var limit = limits.For(new InvalidOperationException("a handler's bug"), classifier: null);
 
         limit.ShouldBe(new OutboxFailureLimit(MaxTries: 3, Transient: false));
+    }
+
+    [Fact]
+    public void For_ShouldAskTheContainersClassifier_WhenThereIsOne()
+    {
+        // A service's own rule: its outage exception is transient.
+        using var provider = new ServiceCollection()
+            .AddTransientFailureRule(exception => exception is IOException)
+            .BuildServiceProvider();
+        var classifier = provider.GetRequiredService<ITransientFailureClassifier>();
+        var limits = OutboxRetryLimits.Create(maxRetryCount: 3, maxTransientRetryCount: 12);
+
+        limits.For(new IOException("the connection broke"), classifier)
+            .ShouldBe(new OutboxFailureLimit(MaxTries: 12, Transient: true));
+        limits.For(new IOException("the connection broke"), classifier: null)
+            .ShouldBe(new OutboxFailureLimit(MaxTries: 3, Transient: false));
     }
 
     [Theory]

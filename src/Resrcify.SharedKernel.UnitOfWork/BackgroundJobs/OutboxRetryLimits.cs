@@ -1,11 +1,13 @@
 using System;
+using Resrcify.SharedKernel.Abstractions.Resilience;
+using Resrcify.SharedKernel.UnitOfWork.Primitives;
 
 namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 
 /// <summary>
 /// The tries an outbox message gets, for the processing job and the lanes alike, and the one place that decides them:
 /// <see cref="MaxRetryCount"/> when a try fails for a reason another try won't change, <see cref="MaxTransientRetryCount"/>
-/// when another try may pass (<see cref="OutboxFailureClassifier.IsTransient"/>: a downstream outage, a timeout). A
+/// when another try may pass (<see cref="ITransientFailureClassifier"/>: a downstream outage, a timeout). A
 /// failure gives up when its try reaches the limit for that failure (<see cref="For"/>), so a message that retried
 /// transiently past <see cref="MaxRetryCount"/> gives up at its first non-transient failure.
 /// </summary>
@@ -82,10 +84,15 @@ internal sealed record OutboxRetryLimits
         return new OutboxRetryLimits(maxRetryCount, transient);
     }
 
-    /// <summary>The tries <paramref name="failure"/> gets, and whether it is transient.</summary>
-    public OutboxFailureLimit For(Exception failure)
+    /// <summary>
+    /// The tries <paramref name="failure"/> gets, and whether it is transient: by <paramref name="classifier"/> (the
+    /// container's), or, without one, by the built-in rule and UnitOfWork's (<see cref="PersistenceTransientFailureRule"/>).
+    /// </summary>
+    public OutboxFailureLimit For(
+        Exception failure,
+        ITransientFailureClassifier? classifier)
     {
-        var transient = OutboxFailureClassifier.IsTransient(failure);
+        var transient = PersistenceTransientFailureRule.Classify(failure, classifier);
         return new OutboxFailureLimit(
             transient
                 ? MaxTransientRetryCount
@@ -96,7 +103,7 @@ internal sealed record OutboxRetryLimits
 
 /// <summary>The tries a failed try's failure gets (<see cref="OutboxRetryLimits.For"/>).</summary>
 /// <param name="MaxTries">The tries a failure of this kind gets.</param>
-/// <param name="Transient">Whether another try may pass (<see cref="OutboxFailureClassifier.IsTransient"/>).</param>
+/// <param name="Transient">Whether another try may pass (<see cref="ITransientFailureClassifier"/>).</param>
 internal readonly record struct OutboxFailureLimit(int MaxTries, bool Transient)
 {
     /// <summary>Whether a failure on try <paramref name="attempt"/> (1 for the first) gives up.</summary>

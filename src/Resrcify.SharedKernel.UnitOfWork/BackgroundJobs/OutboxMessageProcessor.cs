@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Resrcify.SharedKernel.Abstractions.Mediator;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 
@@ -65,6 +66,7 @@ internal static class OutboxMessageProcessor<TDbContext>
         var claimed = true;
         TimeProvider time;
         ILogger logger;
+        ITransientFailureClassifier? classifier;
         long started;
         using var activity = OutboxDiagnostics.ActivitySource.StartActivity("outbox process", ActivityKind.Internal);
         activity?.SetTag("outbox.message.id", message.Id);
@@ -79,6 +81,7 @@ internal static class OutboxMessageProcessor<TDbContext>
             var provider = scope.ServiceProvider;
             time = provider.GetService<TimeProvider>() ?? TimeProvider.System;
             logger = provider.GetService<ILoggerFactory>()?.CreateLogger(OutboxProcessLog.Category) ?? NullLogger.Instance;
+            classifier = provider.GetService<ITransientFailureClassifier>();
             started = time.GetTimestamp();
             var context = provider.GetRequiredService<TDbContext>();
             // This context's own unit of work, not whichever IUnitOfWork DI resolves (with two DbContexts, that may be
@@ -131,7 +134,7 @@ internal static class OutboxMessageProcessor<TDbContext>
         if (failure is not null)
         {
             // The tries this failure gets: a transient one more than any other.
-            var limit = limits.For(failure);
+            var limit = limits.For(failure, classifier);
             var attempt = message.RetryCount + 1;
             var givesUp = limit.GivesUpAt(attempt);
             await RecordFailureAsync(scopeFactory, message, failure, limit.MaxTries, retryDelay, time, cancellationToken);

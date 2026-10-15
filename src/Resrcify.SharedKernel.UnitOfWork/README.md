@@ -385,9 +385,12 @@ Set them with `AddOutboxProcessing<AppDbContext>(outbox => { outbox.RetryDelay =
 **A transient failure gets more tries** than any other, in the job as in the lanes: `MaxTransientRetryCount` (12,
 about 30 minutes of an outage with the default backoff, or `MaxRetryCount` when that is higher) against
 `MaxRetryCount` (3, which the backoff alone spends in about a minute: 5 s and 10 s are shorter than a 20 s run
-interval). A failure is transient when another try may pass:
-a cancellation or timeout, a transient database failure, an HTTP request that got no answer or a 408, 429 or 5xx,
-Polly's timeout or open circuit, anywhere among the exception's causes. Any other failure (a handler's bug, a 400)
+interval). A failure is transient when another try may pass, as the container's `ITransientFailureClassifier`
+(Abstractions) tells: a `TransientFailureException` (Results; e.g. a handler's `result.ThrowIfTransient()`), a
+cancellation or timeout, a transient database failure or a concurrency conflict, an HTTP request that got no answer or a
+408, 429 or 5xx, anywhere among the exception's causes, or what a registered `ITransientFailureRule` calls transient
+(the Web package's `AddResultResilience` adds one for its timeouts and open circuits; a service adds its own with
+`services.AddTransientFailureRule(...)`). Any other failure (a handler's bug, a 400)
 gives up at its `MaxRetryCount`th try, and at once when transient retries took the message past it (a message that
 failed 5 times through an outage, then once on a bug, gives up on that 6th try). The jobs read, and the backlog monitor
 counts as waiting, every message under the higher limit. Left unset, `MaxTransientRetryCount` is the higher of 12 and
@@ -403,8 +406,7 @@ quartz.AddProcessOutboxMessagesJob<AppDbContext>(processMaxRetryCount: 3, proces
 ```
 
 **Failed tries are logged** (category `Resrcify.SharedKernel.UnitOfWork.Outbox`), by the job and the lanes alike: each
-failed try once, at `Warning` when another try may pass (a cancellation or timeout, a transient database failure, an
-HTTP request that got no answer or a 408, 429 or 5xx, Polly's timeout or open circuit) and at `Error` otherwise, as
+failed try once, at `Warning` when another try may pass (the transient rule above) and at `Error` otherwise, as
 `Outbox message {MessageId} ({EventType}, {DbContext}) failed try {Attempt} of {MaxRetryCount}; the next try waits
 {RetryDelay}: {Error}`, where `{MaxRetryCount}` is the tries this failure gets (12 for a transient one, 3 for any other
 by default); the last one as the give-up, at `Error`: `... gave up after try {Attempt} ({FailureKind} failures get

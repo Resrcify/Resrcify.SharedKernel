@@ -249,7 +249,10 @@ in Development the error's message is the exception's type and message and the p
 handler middleware logs nothing more for an exception a handler handled), following Results' `LoggedExceptions`
 convention: when the mediator's behaviors logged it already on its way out, the handler logs a `Debug` line without the
 stack instead, and answers the same 500. A request the client aborted (an
-`OperationCanceledException` once `RequestAborted` fired) is a 499, logged at `Debug`, not as an error.
+`OperationCanceledException` once `RequestAborted` fired) is a 499, logged at `Debug`, not as an error. A
+`TransientFailureException` (Results; itself or among the causes) holding errors is answered as the failed result it
+stands for, with problem details of its `Errors` (a 502 for an upstream's failure, a 504 for a timeout ...), logged at
+`Warning`, once.
 
 A request ASP.NET Core couldn't bind (its `BadHttpRequestException`: a required query, route, header or body value left
 out, a value that doesn't parse, such as `/shards/abc` for a `Guid id`, a body that isn't valid JSON) isn't a fault of
@@ -374,6 +377,10 @@ The made-up response carries the header `Resrcify-Resilience: timeout` / `circui
 called never does) and the request; `EnsureSuccessStatusCode` throws `HttpRequestException` for it, as for a real 504.
 The caller's own cancellation still throws `OperationCanceledException`. `ThrowTimeoutsAndOpenCircuits = true` throws
 `TimeoutRejectedException` / `BrokenCircuitException` instead, as `AddStandardResilienceHandler` (and 4.0.0) does.
+
+`AddResultResilience` also adds the Web package's `ITransientFailureRule` (Abstractions): Polly's rejections
+(`ExecutionRejectedException`: a timeout, a broken or isolated circuit, the rate limiter), when they are thrown, are
+transient to the outbox, the mediator's logging and the message bus. The other packages never name Polly's types.
 
 Before (Shard and Tournament):
 

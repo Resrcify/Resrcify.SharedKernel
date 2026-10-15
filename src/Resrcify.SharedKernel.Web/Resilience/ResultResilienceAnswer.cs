@@ -34,7 +34,7 @@ internal static class ResultResilienceAnswer
             ? (ResultResilienceErrors.CircuitOpen, ResultResilienceErrors.CircuitOpenMarker)
             : (ResultResilienceErrors.Timeout, ResultResilienceErrors.TimeoutMarker);
 
-        var status = HttpResultExtensions.GetStatusCode(error.Type);
+        var status = ErrorTypes.ToHttpStatus(error.Type);
         var response = new HttpResponseMessage((HttpStatusCode)status)
         {
             RequestMessage = request,

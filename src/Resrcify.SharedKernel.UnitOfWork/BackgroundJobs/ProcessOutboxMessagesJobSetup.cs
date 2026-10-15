@@ -5,6 +5,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Quartz;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
+using Resrcify.SharedKernel.Abstractions.Resilience;
+using Resrcify.SharedKernel.UnitOfWork.Primitives;
 
 namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 
@@ -52,9 +54,10 @@ public static class ProcessOutboxMessagesJobSetup
     /// one there to drive the schedule in tests.
     /// </param>
     /// <param name="processMaxTransientRetryCount">
-    /// Attempts a message gets before it is poison when its tries fail for a transient reason (a cancellation or timeout,
-    /// a transient database failure, an HTTP request that got no answer or a 408, 429 or 5xx, Polly's timeout or open
-    /// circuit). Unset (<see langword="null"/>), 12, about 30 minutes with the default backoff, or
+    /// Attempts a message gets before it is poison when its tries fail for a transient reason (the container's
+    /// <c>ITransientFailureClassifier</c>: a <c>TransientFailureException</c>, a cancellation or timeout, a transient
+    /// database failure, an HTTP request that got no answer or a 408, 429 or 5xx, or what a registered
+    /// <c>ITransientFailureRule</c> calls transient). Unset (<see langword="null"/>), 12, about 30 minutes with the default backoff, or
     /// <paramref name="processMaxRetryCount"/> when that is higher. Set, at least <paramref name="processMaxRetryCount"/>;
     /// equal to it gives every failure the same tries (as before 4.3.0).
     /// </param>
@@ -111,6 +114,8 @@ public static class ProcessOutboxMessagesJobSetup
         ArgumentNullException.ThrowIfNull(retryLimits);
         var time = timeProvider ?? TimeProvider.System;
         quartz.Services.AddOutboxMessageContext();
+        // A concurrency conflict, a serialization failure or a deadlock: transient, so a failed try gets the transient tries.
+        quartz.Services.AddTransientFailureRule<PersistenceTransientFailureRule>();
         quartz.Services.TryAddSingleton<OutboxWakeUp<TDbContext>>();
         quartz.Services.RemoveAll<OutboxJobClaim<TDbContext>>();
         quartz.Services.AddSingleton(new OutboxJobClaim<TDbContext>(claim));

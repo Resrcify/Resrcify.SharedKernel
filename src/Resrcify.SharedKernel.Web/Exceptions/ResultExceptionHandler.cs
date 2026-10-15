@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Immutable;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Diagnostics;
@@ -32,6 +34,9 @@ namespace Resrcify.SharedKernel.Web.Exceptions;
 /// (<see cref="ResultProblemDetailsOptions.IncludeExceptionDetails"/>) the problem's <c>detail</c> holds ASP.NET Core's
 /// own message. <c>AddResultProblemDetails()</c> has minimal APIs throw it in every environment
 /// (<see cref="ResultProblemDetailsOptions.ProblemDetailsForBindingFailures"/>).
+/// A <see cref="TransientFailureException"/> (itself or among the exception's causes) holding errors is answered as the
+/// failed result it stands for: problem details of its <see cref="TransientFailureException.Errors"/> (a 502 for an
+/// upstream's failure, a 504 for a timeout ...), logged at <see cref="LogLevel.Warning"/>, once.
 /// Registered by <c>AddResultProblemDetails()</c>; runs in <c>app.UseExceptionHandler()</c>.
 /// </summary>
 public sealed partial class ResultExceptionHandler(
@@ -73,6 +78,12 @@ public sealed partial class ResultExceptionHandler(
             return true;
         }
 
+        if (TransientFailures.TryGetErrors(exception, out var errors))
+        {
+            await AnswerTransientFailureAsync(httpContext, exception, errors);
+            return true;
+        }
+
         LogUnhandledOnce(httpContext, exception);
         // Answered: this journey of the exception ends here, so the same instance thrown in a later request (a cached
         // faulted task) is logged at Error again.
@@ -107,6 +118,45 @@ public sealed partial class ResultExceptionHandler(
         var exceptionType = exception.GetType().Name;
         LogUnhandledLoggedAlready(logger, exceptionType, method, path);
     }
+
+    // The failed result the exception stands for, as a handler returning it would have been answered.
+    private async Task AnswerTransientFailureAsync(
+        HttpContext httpContext,
+        Exception exception,
+        ImmutableArray<Error> errors)
+    {
+        LogTransientFailureOnce(httpContext, exception, errors);
+        LoggedExceptions.Release(exception);
+
+        if (httpContext.Response.HasStarted)
+            return;
+
+        await Result.Failure(errors).ToProblemDetails().ExecuteAsync(httpContext);
+    }
+
+    // At Warning with the stack, unless whoever saw the exception first (a mediator behavior) logged it so already.
+    private void LogTransientFailureOnce(
+        HttpContext httpContext,
+        Exception exception,
+        ImmutableArray<Error> errors)
+    {
+        var method = httpContext.Request.Method;
+        var path = httpContext.Request.Path;
+        if (logger.IsEnabled(LogLevel.Warning) && LoggedExceptions.Claim(exception))
+        {
+            LogTransientFailure(logger, exception, method, path, Describe(errors));
+            return;
+        }
+
+        if (!logger.IsEnabled(LogLevel.Debug))
+            return;
+
+        var described = Describe(errors);
+        LogTransientFailureLoggedAlready(logger, method, path, described);
+    }
+
+    private static string Describe(ImmutableArray<Error> errors)
+        => string.Join("; ", errors.Select(error => error.ToString()));
 
     private void AnswerClientAbort(
         HttpContext httpContext)
@@ -195,6 +245,25 @@ public sealed partial class ResultExceptionHandler(
         string exceptionType,
         string method,
         PathString path);
+
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "{Method} {Path} failed transiently, answered with its errors: {Errors}")]
+    private static partial void LogTransientFailure(
+        ILogger logger,
+        Exception exception,
+        string method,
+        PathString path,
+        string errors);
+
+    [LoggerMessage(
+        Level = LogLevel.Debug,
+        Message = "{Method} {Path} failed transiently, answered with its errors: {Errors} (logged where it was thrown)")]
+    private static partial void LogTransientFailureLoggedAlready(
+        ILogger logger,
+        string method,
+        PathString path,
+        string errors);
 
     [LoggerMessage(
         Level = LogLevel.Debug,

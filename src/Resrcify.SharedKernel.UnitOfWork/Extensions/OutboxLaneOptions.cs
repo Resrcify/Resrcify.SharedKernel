@@ -25,9 +25,10 @@ public sealed class OutboxLaneOptions
     public int MaxRetryCount { get; set; } = OutboxRetryLimits.DefaultMaxRetryCount;
 
     /// <summary>
-    /// Attempts a lane message gets when a try fails for a reason another try may get past (a cancellation
-    /// or timeout, a transient database failure, an HTTP request that got no answer or a 408, 429 or 5xx, Polly's
-    /// timeout or open circuit). Unset (<see langword="null"/>, the default): 12, about 30 minutes
+    /// Attempts a lane message gets when a try fails for a reason another try may get past (the container's
+    /// <c>ITransientFailureClassifier</c>: a <c>TransientFailureException</c>, a cancellation or timeout, a transient
+    /// database failure, an HTTP request that got no answer or a 408, 429 or 5xx, or what a registered
+    /// <c>ITransientFailureRule</c> calls transient). Unset (<see langword="null"/>, the default): 12, about 30 minutes
     /// with the default <see cref="RetryDelay"/> and <see cref="MaxRetryDelay"/>, so an outage of a downstream service
     /// doesn't spend them, or <see cref="MaxRetryCount"/> when that is higher. Set, at least <see cref="MaxRetryCount"/>,
     /// or registration throws; set it to <see cref="MaxRetryCount"/> to give every failure the same tries (as before

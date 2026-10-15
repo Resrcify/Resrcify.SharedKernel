@@ -36,7 +36,7 @@ public static class HttpResultExtensions
             { IsSuccess: true } => throw new InvalidOperationException(
                 "Successful result should not be converted to problem details."),
             _ => Microsoft.AspNetCore.Http.Results.Problem(
-                statusCode: GetStatusCode(dominantType),
+                statusCode: ErrorTypes.ToHttpStatus(dominantType),
                 title: GetTitle(dominantType),
                 type: GetType(dominantType),
                 extensions: new Dictionary<string, object?>
@@ -97,45 +97,6 @@ public static class HttpResultExtensions
             ErrorType.Failure => "Internal Server Error",
             _ => "Internal Server Error"
         };
-    internal static int GetStatusCode(ErrorType errorType)
-           => errorType switch
-           {
-               ErrorType.Validation => StatusCodes.Status400BadRequest,
-               ErrorType.Unauthorized => StatusCodes.Status401Unauthorized,
-               ErrorType.Forbidden => StatusCodes.Status403Forbidden,
-               ErrorType.NotFound => StatusCodes.Status404NotFound,
-               ErrorType.Conflict => StatusCodes.Status409Conflict,
-               ErrorType.Unprocessable => StatusCodes.Status422UnprocessableEntity,
-               ErrorType.Timeout => StatusCodes.Status504GatewayTimeout,
-               ErrorType.RateLimit => StatusCodes.Status429TooManyRequests,
-               ErrorType.ExternalFailure => StatusCodes.Status502BadGateway,
-               ErrorType.Failure => StatusCodes.Status500InternalServerError,
-               _ => StatusCodes.Status500InternalServerError
-           };
-
-    /// <summary>
-    /// The error type a status stands for. Any other 4xx is about the request itself (<see cref="ErrorType.Validation"/>,
-    /// not transient); any other status is a <see cref="ErrorType.Failure"/>.
-    /// </summary>
-    internal static ErrorType GetErrorType(int statusCode)
-        => statusCode switch
-        {
-            StatusCodes.Status400BadRequest => ErrorType.Validation,
-            StatusCodes.Status401Unauthorized => ErrorType.Unauthorized,
-            StatusCodes.Status403Forbidden => ErrorType.Forbidden,
-            StatusCodes.Status404NotFound => ErrorType.NotFound,
-            StatusCodes.Status410Gone => ErrorType.NotFound,
-            StatusCodes.Status409Conflict => ErrorType.Conflict,
-            StatusCodes.Status412PreconditionFailed => ErrorType.Conflict,
-            StatusCodes.Status422UnprocessableEntity => ErrorType.Unprocessable,
-            StatusCodes.Status408RequestTimeout => ErrorType.Timeout,
-            StatusCodes.Status504GatewayTimeout => ErrorType.Timeout,
-            StatusCodes.Status429TooManyRequests => ErrorType.RateLimit,
-            StatusCodes.Status502BadGateway => ErrorType.ExternalFailure,
-            >= 400 and < 500 => ErrorType.Validation,
-            _ => ErrorType.Failure
-        };
-
     public static async Task<IResult> Match(
         this Task<Result> resultTask,
         Func<IResult> onSuccess,

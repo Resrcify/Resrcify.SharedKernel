@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
 using Polly;
 using Polly.Fallback;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.Web.Resilience;
 
 namespace Resrcify.SharedKernel.Web.Extensions;
@@ -32,6 +33,9 @@ public static class ResultResilienceHttpClientBuilderExtensions
     /// <see cref="ResultResilienceOptions.ThrowTimeoutsAndOpenCircuits"/> they throw instead
     /// (<c>TimeoutRejectedException</c>, <c>BrokenCircuitException</c>), as <c>AddStandardResilienceHandler</c> does.
     /// The caller's own cancellation always throws <see cref="OperationCanceledException"/>.
+    /// It also adds the Web package's transient-failure rule (<c>AddTransientFailureRule</c>): Polly's rejections
+    /// (<c>ExecutionRejectedException</c>: a timeout, a broken or isolated circuit, the rate limiter) are transient to the
+    /// outbox, the mediator's logging and the message bus, when they are thrown.
     /// </remarks>
     /// <exception cref="InvalidOperationException">
     /// The options contradict each other: <see cref="ResultResilienceOptions.RetryOnly"/> with
@@ -47,6 +51,7 @@ public static class ResultResilienceHttpClientBuilderExtensions
         var options = new ResultResilienceOptions();
         configure?.Invoke(options);
         options.Validate();
+        builder.Services.AddTransientFailureRule<PollyTransientFailureRule>();
 
         return builder.AddResilienceHandler(
             PipelineName,

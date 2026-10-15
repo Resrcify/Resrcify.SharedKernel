@@ -14,6 +14,7 @@ using Rebus.Messages;
 using Rebus.Pipeline;
 using Rebus.Transport;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.MessageBus.Configuration;
 using Resrcify.SharedKernel.MessageBus.Diagnostics;
 using Resrcify.SharedKernel.Results.Diagnostics;
@@ -39,6 +40,12 @@ namespace Resrcify.SharedKernel.MessageBus.PublishSubscribe;
 /// try's messages are dropped rather than sent along with the next. Waits between tries double from 0.5 s up to 4 s.
 /// </para>
 /// <para>
+/// Every exception is tried again in place (a handler's bug too). One that holds a <see cref="TransientFailureException"/>
+/// is a failure with that exception's errors, which the logs and the error queue's reason show. A try that threw is
+/// logged at <c>Warning</c> when the exception is transient (the container's <see cref="ITransientFailureClassifier"/>,
+/// else <see cref="TransientFailures"/>) and at <c>Error</c> otherwise; a failed result's try at <c>Warning</c>.
+/// </para>
+/// <para>
 /// Skipping duplicates never costs an event: a claim store out of reach (the cache is down) means the event is handled
 /// anyway (a duplicate may get through), and a claim that can't be released is logged and left to expire.
 /// </para>
@@ -55,6 +62,8 @@ internal sealed partial class IntegrationEventDispatcher<TEvent>(
     : IHandleMessages<TEvent>
     where TEvent : class
 {
+    private readonly ITransientFailureClassifier? _transientFailures = serviceProvider.GetService<ITransientFailureClassifier>();
+
     public async Task Handle(TEvent message)
     {
         var wireName = settings.WireNameOf(typeof(TEvent));
@@ -229,7 +238,7 @@ internal sealed partial class IntegrationEventDispatcher<TEvent>(
                     return EventOutcome.Error;
                 }
 
-                LogRetryInPlace(NotLoggedYet(failure.Exception), wireName, name, attempt, failure.Describe());
+                LogFailedTry(failure, wireName, name, attempt);
                 await Task.Delay(RetryDelay(attempt), time, cancellationToken);
             }
 
@@ -261,7 +270,7 @@ internal sealed partial class IntegrationEventDispatcher<TEvent>(
         {
             var result = await handler.HandleAsync(message, cancellationToken);
             if (!result.IsSuccess)
-                return new HandlerFailure(result.Errors, Exception: null);
+                return new HandlerFailure(result.Errors, Exception: null, Transient: false);
 
             await sending.CompleteAsync();
             return null;
@@ -269,8 +278,32 @@ internal sealed partial class IntegrationEventDispatcher<TEvent>(
         // A shutdown isn't the handler's failure: the message goes back to its queue for the next instance.
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
-            return new HandlerFailure([], exception);
+            return HandlerFailure.From(exception, IsTransient(exception));
         }
+    }
+
+    private bool IsTransient(Exception exception)
+        => _transientFailures?.IsTransient(exception) ?? TransientFailures.IsTransient(exception);
+
+    // A failed result's try, or a transient exception's, at Warning (the exception attached unless it was logged); a
+    // non-transient exception's at Error, with its stack once.
+    private void LogFailedTry(
+        HandlerFailure failure,
+        string wireName,
+        string handler,
+        int attempt)
+    {
+        var level = failure.Exception is not null && !failure.Transient
+            ? LogLevel.Error
+            : LogLevel.Warning;
+        if (!logger.IsEnabled(level))
+            return;
+
+        var exception = level == LogLevel.Error
+            ? OnceLogged(failure.Exception)
+            : NotLoggedYet(failure.Exception);
+        var described = failure.Describe();
+        LogRetryInPlace(level, exception, wireName, handler, attempt, described);
     }
 
     // The mediator's behaviors may have logged it at Error already: then only the line, without the exception again.
@@ -303,16 +336,24 @@ internal sealed partial class IntegrationEventDispatcher<TEvent>(
     /// </summary>
     private static TimeSpan MaxRetryDelay => TimeSpan.FromSeconds(4);
 
-    /// <summary>How one try failed: the handler's errors, or the exception it threw.</summary>
-    private sealed record HandlerFailure(IReadOnlyList<Error> Errors, Exception? Exception)
+    /// <summary>
+    /// How one try failed: the handler's errors, or the exception it threw (with a
+    /// <see cref="TransientFailureException"/>'s errors), and whether that exception is transient.
+    /// </summary>
+    private sealed record HandlerFailure(IReadOnlyList<Error> Errors, Exception? Exception, bool Transient)
     {
         public bool IsTheEventsFault
             => Exception is null && MessageFailures.AreTheMessagesFault(Errors);
 
+        public static HandlerFailure From(Exception exception, bool transient)
+            => TransientFailures.TryGetErrors(exception, out var errors)
+                ? new HandlerFailure(errors, exception, transient)
+                : new HandlerFailure([], exception, transient);
+
         public string Describe()
-            => Exception is not null
-                ? $"{Exception.GetType().Name}: {Exception.Message}"
-                : string.Join(", ", Errors.Select(error => $"{error.Code} ({error.Type}): {error.Message}"));
+            => Errors.Count > 0
+                ? string.Join(", ", Errors.Select(error => $"{error.Code} ({error.Type}): {error.Message}"))
+                : $"{Exception?.GetType().Name}: {Exception?.Message}";
     }
 
     [LoggerMessage(
@@ -320,10 +361,8 @@ internal sealed partial class IntegrationEventDispatcher<TEvent>(
         Message = "{Event}: {Handler} rejected it ({Errors}); another try would fail the same way, so it isn't retried")]
     private partial void LogRejected(string @event, string handler, string errors);
 
-    [LoggerMessage(
-        Level = LogLevel.Warning,
-        Message = "{Event}: {Handler} failed (try {Attempt}: {Failure}); trying it again in its place")]
-    private partial void LogRetryInPlace(Exception? exception, string @event, string handler, int attempt, string failure);
+    [LoggerMessage(Message = "{Event}: {Handler} failed (try {Attempt}: {Failure}); trying it again in its place")]
+    private partial void LogRetryInPlace(LogLevel level, Exception? exception, string @event, string handler, int attempt, string failure);
 
     [LoggerMessage(
         Level = LogLevel.Error,

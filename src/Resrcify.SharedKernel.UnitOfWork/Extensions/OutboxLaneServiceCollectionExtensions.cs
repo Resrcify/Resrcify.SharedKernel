@@ -7,6 +7,8 @@ using Microsoft.Extensions.Hosting;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
+using Resrcify.SharedKernel.Abstractions.Resilience;
+using Resrcify.SharedKernel.UnitOfWork.Primitives;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Extensions;
 
@@ -46,6 +48,7 @@ public static class OutboxLaneServiceCollectionExtensions
         services.TryAddSingleton<OutboxWakeUp<TDbContext>>();
         services.TryAddScoped<OutboxAdministration<TDbContext>>();
         services.AddOutboxMessageContext();
+        services.AddTransientFailureRule<PersistenceTransientFailureRule>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OutboxLanesHost<TDbContext>>());
         return services;
     }

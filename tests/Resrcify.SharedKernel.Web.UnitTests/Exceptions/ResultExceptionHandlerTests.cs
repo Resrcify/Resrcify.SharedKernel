@@ -189,6 +189,60 @@ public sealed class ResultExceptionHandlerTests
     }
 
     [Fact]
+    public async Task TryHandleAsync_ShouldAnswerATransientFailureWithItsErrors_AtWarning()
+    {
+        using var logs = new CapturingLoggerProvider();
+        await using var app = await StartAsync(logs: logs);
+        using var client = app.GetTestClient();
+
+        using var response = await client.GetAsync(new Uri("/transient", UriKind.Relative));
+        var result = await response.ToResultAsync<string>();
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadGateway);
+        result.Errors.ShouldBe([Unreachable]);
+        var logged = logs.Entries.Where(entry => entry.Exception is not null).ShouldHaveSingleItem();
+        logged.Level.ShouldBe(LogLevel.Warning);
+        logged.Exception.ShouldBeOfType<TransientFailureException>();
+        logged.Message.ShouldContain("SwgohApi.Unreachable: SwgohApi could not be reached.");
+        logs.Entries.ShouldNotContain(entry => entry.Level >= LogLevel.Error);
+    }
+
+    [Fact]
+    public async Task TryHandleAsync_ShouldAnswerATransientFailureAmongTheCausesWithItsErrors()
+    {
+        using var logs = new CapturingLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(logging => logging.AddProvider(logs));
+        var context = Context();
+        var exception = new InvalidOperationException("wrapped", new TransientFailureException([Unreachable]));
+
+        var handled = await Handler(loggerFactory).TryHandleAsync(context, exception, CancellationToken.None);
+
+        handled.ShouldBeTrue();
+        context.Response.StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
+        logs.Entries.ShouldHaveSingleItem().Level.ShouldBe(LogLevel.Warning);
+        LoggedExceptions.IsLogged(exception).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task TryHandleAsync_ShouldLogADebugLineForATransientFailure_WhenTheMediatorLoggedItAlready()
+    {
+        using var logs = new CapturingLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(logging => logging
+            .SetMinimumLevel(LogLevel.Debug)
+            .AddProvider(logs));
+        var context = Context();
+        var exception = new TransientFailureException([Unreachable]);
+        LoggedExceptions.Claim(exception);
+
+        await Handler(loggerFactory).TryHandleAsync(context, exception, CancellationToken.None);
+
+        context.Response.StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
+        var entry = logs.Entries.ShouldHaveSingleItem();
+        entry.Level.ShouldBe(LogLevel.Debug);
+        entry.Exception.ShouldBeNull();
+    }
+
+    [Fact]
     public async Task TryHandleAsync_ShouldAnswer499WithoutAnError_WhenTheClientAborted()
     {
         using var logs = new CapturingLoggerProvider();
@@ -235,6 +289,7 @@ public sealed class ResultExceptionHandlerTests
                 app.UseExceptionHandler();
                 app.MapGet("/boom", ThrowingEndpoint);
                 app.MapGet("/cached", ThrowingTheCachedFailure);
+                app.MapGet("/transient", ThrowingATransientFailure);
                 app.MapGet("/failure", () => Result
                     .Failure(Error.Failure(ResultExceptionHandler.ErrorCode, ResultExceptionHandler.ErrorMessage))
                     .ToProblemDetails());
@@ -265,6 +320,11 @@ public sealed class ResultExceptionHandlerTests
         => throw new InvalidOperationException(Secret);
 
     private static readonly InvalidOperationException CachedFailure = new("The cached value failed to load.");
+
+    private static readonly Error Unreachable = Error.ExternalFailure("SwgohApi.Unreachable", "SwgohApi could not be reached.");
+
+    private static string ThrowingATransientFailure()
+        => throw new TransientFailureException([Unreachable]);
 
     private static string ThrowingTheCachedFailure()
         => throw CachedFailure;
