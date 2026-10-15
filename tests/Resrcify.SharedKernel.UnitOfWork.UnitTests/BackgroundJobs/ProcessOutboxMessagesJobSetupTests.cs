@@ -3,8 +3,10 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using Quartz;
 using Resrcify.SharedKernel.Abstractions.Resilience;
+using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
@@ -31,6 +33,9 @@ namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.BackgroundJobs;
 public class ProcessOutboxMessagesJobSetupTests
 {
     private static readonly JobKey OutboxJobKey = OutboxJobs.Process<TestDbContext>();
+
+    // A claim of the service's own (PostgreSQL's is in the Postgres package).
+    private static readonly IOutboxLaneClaim Claim = Substitute.For<IOutboxLaneClaim>();
 
     [Fact]
     public async Task AddProcessOutboxMessagesJob_Should_RegisterTheJobOnTheScheduler()
@@ -360,9 +365,9 @@ public class ProcessOutboxMessagesJobSetupTests
 
         services.AddOutboxProcessing<TestDbContext>(
             new SystemTextJsonOutboxSerializer(),
-            options => options.Claim = PostgresOutboxLaneClaim.Instance);
+            options => options.Claim = Claim);
 
-        LaneOptions(services).Claim.ShouldBeSameAs(PostgresOutboxLaneClaim.Instance);
+        LaneOptions(services).Claim.ShouldBeSameAs(Claim);
     }
 
     [Fact]
@@ -373,9 +378,9 @@ public class ProcessOutboxMessagesJobSetupTests
         services.AddOutboxLanes<TestDbContext>(lanes => lanes.MaxConcurrency = 2);
         services.AddOutboxProcessing<TestDbContext>(
             new SystemTextJsonOutboxSerializer(),
-            options => options.Claim = PostgresOutboxLaneClaim.Instance);
+            options => options.Claim = Claim);
 
-        LaneOptions(services).Claim.ShouldBeSameAs(PostgresOutboxLaneClaim.Instance);
+        LaneOptions(services).Claim.ShouldBeSameAs(Claim);
         LaneOptions(services).MaxConcurrency.ShouldBe(2);
     }
 
@@ -386,10 +391,10 @@ public class ProcessOutboxMessagesJobSetupTests
 
         services.AddOutboxProcessing<TestDbContext>(
             new SystemTextJsonOutboxSerializer(),
-            options => options.Claim = PostgresOutboxLaneClaim.Instance);
+            options => options.Claim = Claim);
         services.AddOutboxLanes<TestDbContext>(lanes => lanes.MaxConcurrency = 2);
 
-        LaneOptions(services).Claim.ShouldBeSameAs(PostgresOutboxLaneClaim.Instance);
+        LaneOptions(services).Claim.ShouldBeSameAs(Claim);
     }
 
     private static OutboxLaneOptions LaneOptions(IServiceCollection services)

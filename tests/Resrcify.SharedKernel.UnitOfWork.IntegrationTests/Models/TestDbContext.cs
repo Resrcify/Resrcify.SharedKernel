@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
+using Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox;
 
 namespace Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Models;
 

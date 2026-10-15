@@ -38,6 +38,10 @@ factory `dotnet ef` needs and an `xmin` concurrency token.
   `SELECT 1`, tagged `HealthTags.Ready` unless given tags), on the connection `AddPostgresDbContext` built, without
   `AspNetCore.HealthChecks.NpgSql`. Without `AddPostgresDbContext<TContext>` the host fails to start, with a message
   saying so. `AddPostgres<TContext>(name = "postgres", failureStatus = Unhealthy, tags = [ready], timeout)`.
+- The outbox's PostgreSQL pieces (`Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox`): `PostgresOutboxLaneClaim`
+  (`FOR UPDATE SKIP LOCKED`, the claim `.WithOutbox()` gives the job and the lanes), `PostgresOnConflictOutboxInsertStrategy`
+  (`ON CONFLICT ("DedupKey") ... DO NOTHING`) and `PostgresOutboxIndexes` (the partial indexes for
+  `ApplyOutboxMessageConfiguration`'s hooks).
 - `provider.GetPostgresConnectionString<TContext>()` for what else needs the connection string.
 - `PostgresDesignTimeFactory<TContext>`: the factory `dotnet ef` uses, reading the same settings, in one line.
 - `builder.HasPostgresRowVersion()`: optimistic concurrency on the `xmin` system column, without a new column.

@@ -2,8 +2,9 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
+using Resrcify.SharedKernel.UnitOfWork.Outbox;
 
-namespace Resrcify.SharedKernel.UnitOfWork.Outbox;
+namespace Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox;
 
 /// <summary>
 /// PostgreSQL <see cref="IOutboxIndexes"/> implementation. Pairs with

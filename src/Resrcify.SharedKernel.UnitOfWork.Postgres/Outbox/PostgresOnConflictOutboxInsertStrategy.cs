@@ -6,8 +6,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
+using Resrcify.SharedKernel.UnitOfWork.Outbox;
 
-namespace Resrcify.SharedKernel.UnitOfWork.Outbox;
+namespace Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox;
 
 /// <summary>
 /// PostgreSQL-specific insert strategy that uses

@@ -22,7 +22,9 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.UnitTests" />
-    <!-- WithOutbox() registers the outbox's default claim (OutboxDefaultClaim). -->
+    <!-- WithOutbox() registers its PostgresOutboxLaneClaim as the outbox's default claim through OutboxDefaultClaim,
+         the one internal type the Postgres package uses: kept internal so a service sets a claim only through the
+         options. -->
     <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.Postgres" />
     <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.Postgres.UnitTests" />
     <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.IntegrationTests" />

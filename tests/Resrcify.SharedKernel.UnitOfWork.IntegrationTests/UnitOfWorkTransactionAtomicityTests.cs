@@ -11,6 +11,7 @@ using Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Fixtures;
 using Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Models;
 using Resrcify.SharedKernel.UnitOfWork.Interceptors;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
+using Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox;
 using Resrcify.SharedKernel.UnitOfWork.Primitives;
 using Shouldly;
 using Xunit;

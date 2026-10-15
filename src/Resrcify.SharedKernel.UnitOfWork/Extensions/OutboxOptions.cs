@@ -64,7 +64,7 @@ public sealed class OutboxOptions
     /// <summary>
     /// Claims each message for its processing transaction, so several service instances don't each publish it: the
     /// outbox job's and the outbox lanes' (scatter-gather included), unless <c>AddOutboxLanes</c> sets a claim of its
-    /// own. <see langword="null"/> (the default): the PostgreSQL claim (<see cref="Outbox.PostgresOutboxLaneClaim"/>)
+    /// own. <see langword="null"/> (the default): the PostgreSQL claim (<c>PostgresOutboxLaneClaim</c>)
     /// when the context writes its outbox through the Postgres package (<c>AddPostgresDbContext(..., db =&gt;
     /// db.WithOutbox())</c>), no claim otherwise (fine for one instance).
     /// </summary>

@@ -4,6 +4,7 @@ using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
+using Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox;
 using Resrcify.SharedKernel.UnitOfWork.Postgres.Extensions;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Postgres.IntegrationTests.Models;

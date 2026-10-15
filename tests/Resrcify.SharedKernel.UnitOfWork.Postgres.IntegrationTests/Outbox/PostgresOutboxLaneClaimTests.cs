@@ -2,13 +2,14 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Fixtures;
-using Resrcify.SharedKernel.UnitOfWork.Outbox;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
+using Resrcify.SharedKernel.UnitOfWork.Outbox;
+using Resrcify.SharedKernel.UnitOfWork.Postgres.IntegrationTests.Fixtures;
+using Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox;
 using Shouldly;
 using Xunit;
 
-namespace Resrcify.SharedKernel.UnitOfWork.IntegrationTests;
+namespace Resrcify.SharedKernel.UnitOfWork.Postgres.IntegrationTests.Outbox;
 
 /// <summary>The PostgreSQL claim on an outbox mapped with other column names (a naming convention, HasColumnName).</summary>
 [SuppressMessage(

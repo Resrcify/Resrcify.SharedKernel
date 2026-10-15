@@ -16,6 +16,7 @@ using Resrcify.SharedKernel.Mediator.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.Interceptors;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
+using Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox;
 using Resrcify.SharedKernel.MessageBus.Configuration;
 using Resrcify.SharedKernel.MessageBus.Extensions;
 using Resrcify.SharedKernel.Results.Primitives;

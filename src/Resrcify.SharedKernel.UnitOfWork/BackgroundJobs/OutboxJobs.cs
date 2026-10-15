@@ -47,7 +47,7 @@ internal sealed record OutboxJobClaim<TDbContext>(IOutboxLaneClaim? Claim)
 /// <summary>
 /// The claim <typeparamref name="TDbContext"/>'s outbox job and lanes use when the service set none: registered by
 /// the package that writes the outbox (the Postgres package's <c>WithOutbox()</c> registers its
-/// <see cref="PostgresOutboxLaneClaim"/>), whatever the order of the registrations.
+/// <c>PostgresOutboxLaneClaim</c>), whatever the order of the registrations.
 /// </summary>
 internal sealed record OutboxDefaultClaim<TDbContext>(IOutboxLaneClaim Claim)
     where TDbContext : DbContext

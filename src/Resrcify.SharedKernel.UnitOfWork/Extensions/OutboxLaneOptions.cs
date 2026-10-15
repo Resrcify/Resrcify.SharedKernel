@@ -43,7 +43,7 @@ public sealed class OutboxLaneOptions
     /// <summary>
     /// Claims each message for its processing transaction, so several service instances can run the
     /// same lane safely. <see langword="null"/> (no claim) is fine for a single instance; use
-    /// <see cref="PostgresOutboxLaneClaim.Instance"/> on PostgreSQL.
+    /// <c>PostgresOutboxLaneClaim.Instance</c> on PostgreSQL.
     /// </summary>
     public IOutboxLaneClaim? Claim { get; set; }
 }

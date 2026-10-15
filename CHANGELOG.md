@@ -203,6 +203,26 @@ every package in the repository is released together under one version.
   `.Analyzers` (never dependencies), and `Microsoft.Extensions.Hosting` / `Microsoft.Extensions.Caching.Abstractions`
   in Application (no package it references there brings them).
 
+- **The outbox's PostgreSQL pieces moved to UnitOfWork.Postgres** (from Resrcify.SharedKernel.UnitOfWork), where
+  PostgreSQL-specific code belongs: `PostgresOutboxLaneClaim`, `PostgresOutboxIndexes` and
+  `PostgresOnConflictOutboxInsertStrategy`, unchanged, are now in Resrcify.SharedKernel.UnitOfWork.Postgres, namespace
+  `Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox` (was `Resrcify.SharedKernel.UnitOfWork.Outbox`). UnitOfWork
+  holds no PostgreSQL code (it never referenced Npgsql). A project naming one of them references
+  `Resrcify.SharedKernel.UnitOfWork.Postgres` and adds `using Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox;` (keep
+  `using Resrcify.SharedKernel.UnitOfWork.Outbox;` where it names `OutboxMessage` or the serializer):
+  - **Shard**: `Persistence/ShardDbContext.cs` (`PostgresOutboxIndexes`); `Infrastructure/InfrastructureServiceRegistration.cs`
+    line `outbox.Claim = PostgresOutboxLaneClaim.Instance;`: delete it (the default since 4.3.0, see Behaviour changes),
+    or add the `using`.
+  - **Sentinel**: `Persistence/SentinelDbContext.cs` (`PostgresOutboxIndexes`); `Infrastructure/InfrastructureServiceRegistration.cs`,
+    the same `outbox.Claim` line as Shard's.
+  - **Tournament**: `Persistence/TournamentDbContext.cs` (`PostgresOutboxIndexes`).
+  - **Sandbox** (`Persistence/PersistenceServiceRegistration.cs`, `Persistence/SandboxDbContextFactory.cs`) and
+    **Identity** (`Persistence/PersistenceServiceRegistration.cs`, `Persistence/IdentityAppContextFactory.cs`) build
+    `new PostgresOnConflictOutboxInsertStrategy()`: their Persistence projects reference only UnitOfWork, so they add
+    the `Resrcify.SharedKernel.UnitOfWork.Postgres` `PackageReference` (or move to `AddPostgresDbContext(..., db =>
+    db.WithOutbox(outbox => outbox.OnConflictDoNothing = true))`).
+  - Oracle, Discord and SwgohApi name none of them.
+
 ### Behaviour changes
 
 - **One transient contract, owned by SharedKernel, with a DI hook** (Resrcify.SharedKernel.Results, Abstractions,

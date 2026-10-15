@@ -6,8 +6,9 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
+using Resrcify.SharedKernel.UnitOfWork.Outbox;
 
-namespace Resrcify.SharedKernel.UnitOfWork.Outbox;
+namespace Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox;
 
 /// <summary>
 /// PostgreSQL claim: locks the message row with <c>FOR UPDATE SKIP LOCKED</c> for the rest of the

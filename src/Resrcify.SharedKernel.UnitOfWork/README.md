@@ -344,7 +344,7 @@ services.AddDbContext<AppDbContext>((provider, options) => options
 The constructors are unchanged, so `new` still works. On PostgreSQL `AddPostgresDbContext` does all of this.
 
 Under a retrying execution strategy (`EnableRetryOnFailure`), an insert strategy that writes the messages itself
-(`PostgresOnConflictOutboxInsertStrategy`) needs a transaction around the save, which the strategy allows only inside
+(`PostgresOnConflictOutboxInsertStrategy`, in the Postgres package) needs a transaction around the save, which the strategy allows only inside
 its own execution: save through `IUnitOfWork` (`CompleteAsync` and `ExecuteInTransactionAsync` run under it), or run
 the save with `context.Database.CreateExecutionStrategy().ExecuteAsync(...)`. A `DbContext.SaveChangesAsync()` of
 domain events called directly throws an `InvalidOperationException` that says so, before anything is written.
@@ -469,12 +469,12 @@ to a directly registered outbox job, with:
 services.AddOutboxLanes<AppDbContext>(lanes =>
 {
     lanes.MaxConcurrency = 8;
-    lanes.Claim = PostgresOutboxLaneClaim.Instance;   // safe with several service instances (the default with WithOutbox())
+    lanes.Claim = PostgresOutboxLaneClaim.Instance;   // UnitOfWork.Postgres; safe with several instances (the default with WithOutbox())
 });
 ```
 
 A lane message holds a database connection and an open transaction while it is handled, so
-`MaxConcurrency` also bounds the connections a lane uses. On PostgreSQL, `PostgresOutboxLaneClaim` locks
+`MaxConcurrency` also bounds the connections a lane uses. On PostgreSQL, `PostgresOutboxLaneClaim` (UnitOfWork.Postgres) locks
 the message row (`FOR UPDATE SKIP LOCKED`) for that transaction, so another instance skips it instead
 of processing it twice.
 
