@@ -1,9 +1,12 @@
 using System;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Http.Resilience;
+using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Fallback;
 using Resrcify.SharedKernel.Abstractions.Resilience;
@@ -41,30 +44,113 @@ public static class ResultResilienceHttpClientBuilderExtensions
     /// It also adds the Web package's transient-failure rule (<c>AddTransientFailureRule</c>): Polly's rejections
     /// (<c>ExecutionRejectedException</c>: a timeout, a broken or isolated circuit, the rate limiter) are transient to the
     /// outbox, the mediator's logging and the message bus, when they are thrown.
-    /// </remarks>
-    /// <exception cref="InvalidOperationException">
-    /// The options contradict each other: <see cref="ResultResilienceOptions.RetryOnly"/> with
+    /// <para>
+    /// The options are the client's named <see cref="ResultResilienceOptions"/> (named after the client), validated when
+    /// the host starts (<c>ValidateOnStart</c>), so a host with contradictory ones doesn't start
+    /// (<see cref="OptionsValidationException"/>): an attempt timeout longer than the total timeout, a negative time,
+    /// no <see cref="ResultResilienceOptions.Retries"/>, or <see cref="ResultResilienceOptions.RetryOnly"/> with
     /// <see cref="ResultResilienceOptions.AlsoRetry"/> or <see cref="ResultResilienceOptions.NeverRetry"/>, or a status
-    /// outside 400-599 in it.
-    /// </exception>
+    /// outside 400-599 in it. A container used without a host gets that exception when it first builds the pipeline.
+    /// </para>
+    /// <para>
+    /// The client's own <see cref="HttpClient.Timeout"/> (100 s by default) is raised to the total timeout plus
+    /// <see cref="HttpClientTimeoutMargin"/> when it is shorter, after every other configuration of the client, so the
+    /// pipeline's total timeout always ends a call first (as the <see cref="ResultResilienceErrors.Timeout"/> result,
+    /// not HttpClient's <see cref="TaskCanceledException"/>). One the service set longer, or infinite, is kept.
+    /// </para>
+    /// </remarks>
     public static IHttpResiliencePipelineBuilder AddResultResilience(
         this IHttpClientBuilder builder,
         Action<ResultResilienceOptions>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        var options = new ResultResilienceOptions();
-        configure?.Invoke(options);
-        options.Validate();
+        var options = builder.Services.AddOptions<ResultResilienceOptions>(builder.Name);
+        if (configure is not null)
+            options.Configure(configure);
+        return builder.AddResultResilience(options);
+    }
+
+    /// <summary>
+    /// <see cref="AddResultResilience(IHttpClientBuilder, Action{ResultResilienceOptions}?)"/>, with the options set by
+    /// <paramref name="configure"/> (the service's own defaults), then bound from the configuration section at
+    /// <paramref name="configSectionPath"/> (e.g. <c>"SwgohApiService:Resilience"</c>, with <c>AttemptTimeout</c>,
+    /// <c>TotalTimeout</c>, <c>Retries:MaxAttempts</c> / <c>FirstDelay</c> / <c>MaxDelay</c> / <c>Jitter</c>,
+    /// <c>CircuitBreaker</c> ...), which wins for every value it holds; a value it leaves out keeps the code's (or the
+    /// default). Read when the options are first read and validated when the host starts. The configuration is the
+    /// container's <c>IConfiguration</c>: the service passes no <c>IConfiguration</c> itself.
+    /// </summary>
+    /// <remarks>
+    /// <c>Retries</c>, a <see cref="RetrySchedule"/>, is bound value by value too: a section with only
+    /// <c>Retries:FirstDelay</c> keeps the schedule's attempts.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// services.AddHttpClient&lt;ISwgohApiClient, SwgohApiClient&gt;()
+    ///     .AddResultResilience("SwgohApiService:Resilience", resilience =&gt;
+    ///         resilience.RetryOnly = ResultResilienceOptions.SafeToRetryStatuses);
+    /// </code>
+    /// </example>
+    public static IHttpResiliencePipelineBuilder AddResultResilience(
+        this IHttpClientBuilder builder,
+        string configSectionPath,
+        Action<ResultResilienceOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(configSectionPath);
+
+        // The code's values first, so the section (e.g. a test's shorter timeouts) overrides them.
+        var options = builder.Services.AddOptions<ResultResilienceOptions>(builder.Name);
+        if (configure is not null)
+            options.Configure(configure);
+        options.BindConfiguration(configSectionPath);
+        return builder.AddResultResilience(options);
+    }
+
+    /// <summary>
+    /// How much longer than the pipeline's total timeout the client's own <see cref="HttpClient.Timeout"/> is made
+    /// when it is shorter (5 s), so the pipeline ends a call first.
+    /// </summary>
+    public static readonly TimeSpan HttpClientTimeoutMargin = TimeSpan.FromSeconds(5);
+
+    private static IHttpResiliencePipelineBuilder AddResultResilience(
+        this IHttpClientBuilder builder,
+        OptionsBuilder<ResultResilienceOptions> options)
+    {
+        var name = builder.Name;
+        options
+            .PostConfigure(resilience => resilience.FreezeRetryOnly())
+            .ValidateOnStart();
+        builder.Services.TryAddEnumerable(
+            ServiceDescriptor.Singleton<IValidateOptions<ResultResilienceOptions>, ResultResilienceOptionsValidator>());
         builder.Services.AddTransientFailureRule<PollyTransientFailureRule>();
         builder.Services.TryAddSingleton(TimeProvider.System);
+        // After every other configuration of the client (a PostConfigure runs after every Configure, which is how
+        // AddHttpClient and ConfigureHttpClient add theirs), so the timeout it ends with is never shorter than the call's.
+        builder.Services
+            .AddOptions<HttpClientFactoryOptions>(name)
+            .PostConfigure<IOptionsMonitor<ResultResilienceOptions>>((factory, resilience) =>
+                factory.HttpClientActions.Add(client => OutlastTheTotalTimeout(client, resilience.Get(name))));
 
         return builder.AddResilienceHandler(
             PipelineName,
             (pipeline, context) => Configure(
                 pipeline,
-                options,
+                context.ServiceProvider.GetRequiredService<IOptionsMonitor<ResultResilienceOptions>>().Get(name),
                 context.ServiceProvider.GetRequiredService<TimeProvider>()));
+    }
+
+    // Raises a client's timeout that would end a call before the pipeline's total timeout does; never lowers one.
+    private static void OutlastTheTotalTimeout(
+        HttpClient client,
+        ResultResilienceOptions options)
+    {
+        if (client.Timeout == Timeout.InfiniteTimeSpan)
+            return;
+
+        var needed = options.TotalTimeout + HttpClientTimeoutMargin;
+        if (client.Timeout < needed)
+            client.Timeout = needed;
     }
 
     private static void Configure(

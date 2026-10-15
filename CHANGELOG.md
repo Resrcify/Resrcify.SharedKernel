@@ -255,6 +255,31 @@ every package in the repository is released together under one version.
   `Application/ApplicationServiceRegistration.cs`; Sandbox and Identity there too), and, when nothing else uses it, the
   `using FluentValidation;` with it; keeping it changes nothing.
 
+- **`AddResultResilience` validates its options when the host starts, and owns HttpClient's timeout**
+  (Resrcify.SharedKernel.Web). Its options are now the client's named `ResultResilienceOptions` (named after the
+  client), validated with `ValidateOnStart`: a host whose options are unusable doesn't start, with an
+  `OptionsValidationException` naming the client and every problem. It checks more than before: an `AttemptTimeout`
+  longer than `TotalTimeout` or not positive, a negative circuit-breaker duration, a failure ratio outside 0-1, no
+  `Retries`, and (as before) a `RetryOnly` combined with `AlsoRetry` / `NeverRetry` or holding a status outside 400-599.
+  ⚠️ These threw an `InvalidOperationException` as the service registered the client; they now fail the host's start
+  (or, in a container without a host, the first use of the client). A test expecting the `InvalidOperationException`
+  expects an `OptionsValidationException` instead; a configuration with an attempt timeout longer than the total
+  timeout (it never fired) is now refused. `RetryOnly` is copied when the options are first read (the host's start),
+  not at registration. **And the client's `HttpClient.Timeout` is raised to `TotalTimeout` plus
+  `HttpClientTimeoutMargin` (5 s) when it is shorter**, after every other configuration of the client, so the pipeline
+  always ends a call first (as `Http.ResilienceTimeout`, never HttpClient's `TaskCanceledException`); a longer or
+  infinite one the service set is kept. A service no longer keeps `TotalTimeout` "inside HttpClient's 100 s".
+  `ResultResilienceOptions.DefaultRetries` is a new instance on each read (it was one shared instance, which binding
+  a section would have changed in place). **Sentinel** deletes `Infrastructure/SwgohApiResilienceOptions.cs` and, in
+  `AddSwgohApi`, the `AddOptions<SwgohApiResilienceOptions>()...ValidateOnStart()` block and the
+  `configuration.GetSection(...).Get<...>()` read (so `AddSwgohApi` no longer takes `IConfiguration`), and calls
+  `client.AddResultResilience("SwgohApiService:Resilience", resilience => { resilience.Retries = new RetrySchedule(4,
+  TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(4), Jitter: true); resilience.AttemptTimeout = TimeSpan.FromSeconds(60);
+  resilience.TotalTimeout = TimeSpan.FromSeconds(95); resilience.CircuitBreaker = false; resilience.RetryOnly =
+  ResultResilienceOptions.SafeToRetryStatuses; })`; its tests (`HangingSwgohApiHostFixture`, `SwgohApiClientRetryTests`)
+  write `Retries:FirstDelay` / `Retries:MaxDelay` for `RetryDelay` / `MaxRetryDelay`, under the same section. The
+  services' comments about HttpClient's 100 s (Sentinel's `AddSwgohApi` remarks) can go.
+
 ### Added
 
 - **Abstractions: `RetrySchedule`** (`Resilience`; see Breaking changes), and the options that take one:
@@ -311,6 +336,12 @@ every package in the repository is released together under one version.
 
 - **Mediator: `MediatorConfiguration.SkipValidatorScan()`**, to keep `RegisterServicesFromAssemblies` from registering
   the validators (see Behaviour changes).
+
+- **Web: `AddResultResilience(string configSectionPath, Action<ResultResilienceOptions>? configure = null)`**: the
+  options set by `configure` (the service's defaults), then bound from the configuration section (`BindConfiguration`,
+  the container's `IConfiguration`: the service passes none), which wins for every value it holds, `Retries`' values one
+  by one; validated when the host starts. And **`ResultResilienceHttpClientBuilderExtensions.HttpClientTimeoutMargin`**
+  (5 s), how far above `TotalTimeout` the client's own timeout is raised.
 
 ### Fixed
 

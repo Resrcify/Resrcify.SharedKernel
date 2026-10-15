@@ -26,8 +26,12 @@ public sealed class ResultResilienceOptions
     /// </summary>
     public RetrySchedule Retries { get; set; } = DefaultRetries;
 
-    /// <summary>The schedule by default: 4 attempts, 1 s doubling up to 30 s, with jitter.</summary>
-    public static RetrySchedule DefaultRetries { get; } = new(
+    /// <summary>
+    /// The schedule by default: 4 attempts, 1 s doubling up to 30 s, with jitter. A new instance on each read, so that
+    /// binding a configuration section into one options' schedule (which sets its values in place) never changes
+    /// another's.
+    /// </summary>
+    public static RetrySchedule DefaultRetries => new(
         4,
         TimeSpan.FromSeconds(1),
         TimeSpan.FromSeconds(30),
@@ -113,22 +117,50 @@ public sealed class ResultResilienceOptions
     }.ToFrozenSet();
 
     /// <summary>
-    /// Throws on a contradictory configuration, as the service registers the client; takes a copy of
-    /// <see cref="RetryOnly"/>, so that changing the set given afterwards changes nothing.
+    /// What makes these options unusable, each as a sentence (none when they are valid): checked when the host starts
+    /// (<c>ValidateOnStart</c>), so a contradictory configuration stops it rather than surprise a call.
     /// </summary>
-    internal void Validate()
+    internal IEnumerable<string> Problems()
     {
         if (Retries is null)
-            throw new InvalidOperationException("ResultResilienceOptions.Retries can't be null: a single attempt is "
-                + "new RetrySchedule(1, TimeSpan.Zero, TimeSpan.Zero).");
+            yield return "Retries can't be null: a single attempt is new RetrySchedule(1, TimeSpan.Zero, TimeSpan.Zero).";
+        else if (Retries.MaxAttempts < 1 || Retries.FirstDelay < TimeSpan.Zero || Retries.MaxDelay < TimeSpan.Zero)
+            yield return "Retries needs at least 1 attempt and delays that aren't negative.";
 
+        if (AttemptTimeout <= TimeSpan.Zero)
+            yield return $"AttemptTimeout must be positive, not {AttemptTimeout}.";
+        if (TotalTimeout <= TimeSpan.Zero)
+            yield return $"TotalTimeout must be positive, not {TotalTimeout}.";
+        if (AttemptTimeout > TotalTimeout)
+            yield return $"AttemptTimeout ({AttemptTimeout}) can't be longer than TotalTimeout ({TotalTimeout}): the "
+                + "call would end before its first attempt could.";
+
+        foreach (var problem in CircuitBreakerProblems())
+            yield return problem;
+        foreach (var problem in RetryOnlyProblems())
+            yield return problem;
+    }
+
+    private IEnumerable<string> CircuitBreakerProblems()
+    {
+        if (CircuitBreakerSamplingDuration < TimeSpan.Zero)
+            yield return "CircuitBreakerSamplingDuration can't be negative.";
+        if (CircuitBreakerBreakDuration < TimeSpan.Zero)
+            yield return "CircuitBreakerBreakDuration can't be negative.";
+        if (CircuitBreakerFailureRatio is < 0 or > 1)
+            yield return $"CircuitBreakerFailureRatio is a ratio between 0 and 1, not {CircuitBreakerFailureRatio}.";
+        if (CircuitBreakerMinimumThroughput < 0)
+            yield return "CircuitBreakerMinimumThroughput can't be negative.";
+    }
+
+    private IEnumerable<string> RetryOnlyProblems()
+    {
         if (RetryOnly is not { } retryOnly)
-            return;
+            yield break;
 
         if (AlsoRetry.Count > 0 || NeverRetry.Count > 0)
-            throw new InvalidOperationException(
-                "ResultResilienceOptions.RetryOnly lists every status retried, so it can't be combined with AlsoRetry "
-                + "or NeverRetry: add the statuses to RetryOnly, or leave them out of it.");
+            yield return "RetryOnly lists every status retried, so it can't be combined with AlsoRetry or NeverRetry: "
+                + "add the statuses to RetryOnly, or leave them out of it.";
 
         var notErrorStatuses = retryOnly
             .Where(status => status is < 400 or > 599)
@@ -136,11 +168,17 @@ public sealed class ResultResilienceOptions
             .Select(status => status.ToString(CultureInfo.InvariantCulture))
             .ToList();
         if (notErrorStatuses.Count > 0)
-            throw new InvalidOperationException(
-                "ResultResilienceOptions.RetryOnly holds error statuses (400-599) only, not "
-                + string.Join(", ", notErrorStatuses) + ".");
+            yield return "RetryOnly holds error statuses (400-599) only, not " + string.Join(", ", notErrorStatuses) + ".";
+    }
 
-        RetryOnly = retryOnly.ToFrozenSet();
+    /// <summary>
+    /// Takes a copy of <see cref="RetryOnly"/> once the options are configured, so that changing the set given
+    /// afterwards changes nothing.
+    /// </summary>
+    internal void FreezeRetryOnly()
+    {
+        if (RetryOnly is { } retryOnly and not FrozenSet<int>)
+            RetryOnly = retryOnly.ToFrozenSet();
     }
 
     private static class StatusCodes

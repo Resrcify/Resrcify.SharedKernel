@@ -348,8 +348,9 @@ the attempt timeout (10 s).
   them, and wins over `AlsoRetry`.
 - **`RetryOnly`** replaces the rule with a list: only those statuses are retried (network errors and timed-out
   attempts still are), any other is returned at once and doesn't count against the circuit. It can't be combined
-  with `AlsoRetry` or `NeverRetry` and holds 400–599 only: `AddResultResilience` throws `InvalidOperationException`
-  as the service registers the client otherwise. `ResultResilienceOptions.SafeToRetryStatuses` (408, 429, 503) is
+  with `AlsoRetry` or `NeverRetry` and holds 400–599 only: the host doesn't start otherwise (see
+  [Options, validated when the host starts](#options-validated-when-the-host-starts)).
+  `ResultResilienceOptions.SafeToRetryStatuses` (408, 429, 503) is
   the list for a service that retries its own failures, so that its other 5xx are final:
 
   ```csharp
@@ -364,6 +365,51 @@ the attempt timeout (10 s).
   count), for 5 s; `CircuitBreaker = false` turns it off.
 - **Time** is the `TimeProvider` in the container: every delay, timeout and `Retry-After` date runs on a
   `FakeTimeProvider` in tests.
+- **HttpClient's own timeout** (`HttpClient.Timeout`, 100 s by default) never ends a call before the pipeline does:
+  when it is shorter than `TotalTimeout` plus `ResultResilienceHttpClientBuilderExtensions.HttpClientTimeoutMargin`
+  (5 s), it is raised to that, after every other configuration of the client (a `ConfigureHttpClient` before or after
+  `AddResultResilience` alike). A longer one the service set, or `Timeout.InfiniteTimeSpan`, is kept. So a hung call
+  ends as `ResultResilienceErrors.Timeout`, never as HttpClient's `TaskCanceledException`, whatever `TotalTimeout` is:
+  a service no longer keeps its timeouts "inside HttpClient's 100 s", nor sets `HttpClient.Timeout` for them.
+
+#### Options, validated when the host starts
+
+The options are the client's named `ResultResilienceOptions` (named after the client), so a service configures them
+in code, from a configuration section, or both, and never reads `IConfiguration` itself:
+
+```csharp
+// appsettings.json: "SwgohApiService": { "Resilience": { "AttemptTimeout": "00:01:00", "TotalTimeout": "00:01:35",
+//   "CircuitBreaker": false, "Retries": { "MaxAttempts": 4, "FirstDelay": "00:00:01", "MaxDelay": "00:00:04", "Jitter": true } } }
+services.AddHttpClient<ISwgohApiClient, SwgohApiClient>()
+    .AddResultResilience("SwgohApiService:Resilience", resilience =>
+        resilience.RetryOnly = ResultResilienceOptions.SafeToRetryStatuses);
+```
+
+The `configure` action runs first (the service's own defaults, in code), then the section is bound
+(`BindConfiguration`) when the options are first read: a value the section holds wins (a test's shorter timeouts), one
+it leaves out keeps the code's or the default, `Retries`' values one by one too (`Retries:FirstDelay` alone keeps the
+attempts). Either way the options are validated when the host starts (`ValidateOnStart`): a
+host whose options are unusable doesn't start, with an `OptionsValidationException` naming the client and the problem:
+an `AttemptTimeout` longer than `TotalTimeout` (or one that isn't positive), a negative circuit-breaker duration, a
+failure ratio outside 0–1, no `Retries`, or a `RetryOnly` combined with `AlsoRetry` / `NeverRetry` or holding a status
+outside 400–599. A container used without a host gets that exception when it first builds the pipeline.
+
+Before (Sentinel's `SwgohApiResilienceOptions`): a class of its own with the same properties and production's values,
+a `Validate` method keeping `TotalTimeout` under HttpClient's 100 s, `AddOptions<...>().BindConfiguration(...).ValidateOnStart()`,
+and `configuration.GetSection(...).Get<...>()` to copy each value into `AddResultResilience`. After: production's
+values in the `configure` action, the tests' overrides under the same section (`Retries:FirstDelay` /
+`Retries:MaxDelay` for `RetryDelay` / `MaxRetryDelay`), and the one call:
+
+```csharp
+client.AddResultResilience("SwgohApiService:Resilience", resilience =>
+{
+    resilience.Retries = new RetrySchedule(4, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(4), Jitter: true);
+    resilience.AttemptTimeout = TimeSpan.FromSeconds(60);
+    resilience.TotalTimeout = TimeSpan.FromSeconds(95);
+    resilience.CircuitBreaker = false;
+    resilience.RetryOnly = ResultResilienceOptions.SafeToRetryStatuses;
+});
+```
 
 After the retries the caller gets the last response (`ToResultAsync` turns it into a failure). A timeout (the last
 attempt's, or the whole call's), an open circuit or a service that couldn't be reached after the retries is answered in
