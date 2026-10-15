@@ -116,6 +116,10 @@ public class ProcessOutboxMessagesJobSetupTests
         batchSize.ShouldBe(20);
         job.JobDataMap.TryGetValue("ProcessMaxRetryCount", out var maxRetryCount).ShouldBeTrue();
         maxRetryCount.ShouldBe(3);
+        job.JobDataMap.TryGetValue("ProcessRetryDelayInMilliseconds", out var retryDelay).ShouldBeTrue();
+        retryDelay.ShouldBe(5_000L);
+        job.JobDataMap.TryGetValue("ProcessMaxRetryDelayInMilliseconds", out var maxRetryDelay).ShouldBeTrue();
+        maxRetryDelay.ShouldBe(300_000L);
         trigger.ShouldBeAssignableTo<ISimpleTrigger>().RepeatInterval.ShouldBe(TimeSpan.FromSeconds(60));
     }
 
@@ -162,6 +166,8 @@ public class ProcessOutboxMessagesJobSetupTests
                 options.BatchSize = 9;
                 options.MaxRetryCount = 4;
                 options.ProcessIntervalInSeconds = 30;
+                options.RetryDelay = TimeSpan.FromSeconds(30);
+                options.MaxRetryDelay = TimeSpan.FromHours(1);
             }));
         var scheduler = await GetSchedulerAsync(provider);
 
@@ -173,6 +179,10 @@ public class ProcessOutboxMessagesJobSetupTests
         batchSize.ShouldBe(9);
         job.JobDataMap.TryGetValue("ProcessMaxRetryCount", out var maxRetryCount).ShouldBeTrue();
         maxRetryCount.ShouldBe(4);
+        job.JobDataMap.TryGetValue("ProcessRetryDelayInMilliseconds", out var retryDelay).ShouldBeTrue();
+        retryDelay.ShouldBe(30_000L);
+        job.JobDataMap.TryGetValue("ProcessMaxRetryDelayInMilliseconds", out var maxRetryDelay).ShouldBeTrue();
+        maxRetryDelay.ShouldBe(3_600_000L);
         trigger.ShouldBeAssignableTo<ISimpleTrigger>().RepeatInterval.ShouldBe(TimeSpan.FromSeconds(30));
     }
 
@@ -214,6 +224,21 @@ public class ProcessOutboxMessagesJobSetupTests
 
         (await scheduler.GetJobDetail(OutboxJobs.Cleanup<TestDbContext>())).ShouldBeNull();
     }
+
+    [Theory]
+    [InlineData(-1, 300, nameof(OutboxOptions.RetryDelay))]
+    [InlineData(60, 30, nameof(OutboxOptions.MaxRetryDelay))]
+    public void AddOutboxProcessing_ShouldThrow_WhenTheRetryDelaysDontMakeABackoff(
+        int retryDelaySeconds,
+        int maxRetryDelaySeconds,
+        string parameter)
+        => Should.Throw<ArgumentOutOfRangeException>(() => new ServiceCollection().AddOutboxProcessing<TestDbContext>(
+            options =>
+            {
+                options.RetryDelay = TimeSpan.FromSeconds(retryDelaySeconds);
+                options.MaxRetryDelay = TimeSpan.FromSeconds(maxRetryDelaySeconds);
+            }))
+            .ParamName.ShouldBe(parameter);
 
     [Theory]
     [InlineData(0)]

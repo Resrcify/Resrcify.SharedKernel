@@ -7,6 +7,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
 using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
@@ -63,6 +64,62 @@ public sealed class OutboxLanesHostTests
         await second.WaitForTriesAsync(2);
         (await second.NextAttemptAsync()).ShouldBe(time.GetUtcNow().UtcDateTime.AddSeconds(10));
     }
+
+    [Fact]
+    public async Task AFailedMessage_ShouldWaitTheLanesConfiguredRetryDelay()
+    {
+        var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 15, 12, 0, 0, TimeSpan.Zero));
+        await using var lanes = await LaneHost.StartAsync(
+            maxConcurrency: 8,
+            seed: 1,
+            time: time,
+            publishFails: true,
+            configure: options => options.RetryDelay = TimeSpan.FromSeconds(30));
+
+        await lanes.WaitForTriesAsync(1);
+
+        (await lanes.NextAttemptAsync()).ShouldBe(time.GetUtcNow().UtcDateTime.AddSeconds(30));
+    }
+
+    [Fact]
+    public async Task ALane_ShouldLogEachFailedTry_AndTheGiveUpAtError()
+    {
+        // No wait between tries: the freed slot takes the message again at once, until it gives up.
+        using var logs = new RecordingLoggerProvider();
+        await using var lanes = await LaneHost.StartAsync(
+            maxConcurrency: 8,
+            seed: 1,
+            publishFails: true,
+            configure: options =>
+            {
+                options.MaxRetryCount = 2;
+                options.RetryDelay = TimeSpan.Zero;
+            },
+            logs: logs);
+
+        await lanes.WaitForTriesAsync(2);
+        var deadline = TimeProvider.System.GetUtcNow().AddSeconds(10);
+        while (logs.Outbox().Count < 2 && TimeProvider.System.GetUtcNow() < deadline)
+            await Task.Delay(TimeSpan.FromMilliseconds(20));
+
+        var logged = logs.Outbox();
+        logged.Count.ShouldBe(2);
+        logged[0].Level.ShouldBe(LogLevel.Error);
+        logged[0].Message.ShouldContain("(TestDomainEvent, TestDbContext) failed try 1 of 2");
+        logged[0].Exception.ShouldBeOfType<InvalidOperationException>();
+        logged[1].Level.ShouldBe(LogLevel.Error);
+        logged[1].Message.ShouldContain("gave up after try 2 of 2");
+        logged[1].Message.ShouldEndWith("InvalidOperationException: The handler failed (the test's).");
+    }
+
+    [Fact]
+    public void AddOutboxLanes_ShouldThrow_WhenTheLongestRetryDelayIsShorterThanTheFirst()
+        => Should.Throw<ArgumentOutOfRangeException>(() => new ServiceCollection().AddOutboxLanes<TestDbContext>(options =>
+            {
+                options.RetryDelay = TimeSpan.FromMinutes(1);
+                options.MaxRetryDelay = TimeSpan.FromSeconds(30);
+            }))
+            .ParamName.ShouldBe(nameof(OutboxLaneOptions.MaxRetryDelay));
 
     /// <summary>The clock never moves in these tests: a lane that waited for its poll would never get there.</summary>
     [Fact]
@@ -135,7 +192,9 @@ public sealed class OutboxLanesHostTests
             int seed = 0,
             string? connectionString = null,
             FakeTimeProvider? time = null,
-            bool publishFails = false)
+            bool publishFails = false,
+            Action<OutboxLaneOptions>? configure = null,
+            RecordingLoggerProvider? logs = null)
         {
             // A named in-memory database: each context opens its own connection (the lanes and the test run at once),
             // and this one keeps the database alive.
@@ -145,7 +204,11 @@ public sealed class OutboxLanesHostTests
             var publisher = Substitute.For<IPublisher>();
             var queries = new QueryCounter();
             var services = new ServiceCollection();
-            services.AddLogging();
+            services.AddLogging(logging =>
+            {
+                if (logs is not null)
+                    logging.AddProvider(logs);
+            });
             services.AddSingleton<TimeProvider>(time ?? new FakeTimeProvider());
             services.AddScoped(_ => new TestDbContext(new DbContextOptionsBuilder<TestDbContext>()
                 .UseSqlite(connectionString)
@@ -159,6 +222,7 @@ public sealed class OutboxLanesHostTests
             {
                 lanes.MaxConcurrency = maxConcurrency;
                 lanes.PollInterval = TimeSpan.FromHours(1);
+                configure?.Invoke(lanes);
             });
             var provider = services.BuildServiceProvider();
             await using (var scope = provider.CreateAsyncScope())

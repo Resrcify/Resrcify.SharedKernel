@@ -3,11 +3,15 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Net.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
 using Quartz;
 using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using Resrcify.SharedKernel.Abstractions.Mediator;
+using Resrcify.SharedKernel.Results.Diagnostics;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
 using Shouldly;
@@ -73,17 +77,21 @@ public class ProcessOutboxMessagesJobTests
     public async Task Execute_ShouldStopRetrying_OnceMaxRetryCountReached()
     {
         // Arrange
-        await using var harness = await OutboxJobTestHarness.CreateAsync();
+        var clock = new FakeTimeProvider(Now);
+        await using var harness = await ClockedHarnessAsync(clock);
         harness.Publisher
             .Publish(Arg.Any<IDomainEvent>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromException(new InvalidOperationException("always fails")));
         await harness.SeedAsync(CreateMessage(new TestDomainEvent(Guid.NewGuid(), "poison")));
 
-        // Act — run more cycles than the retry budget allows.
+        // Act — run more cycles than the retry budget allows, each after the longest retry delay.
         const int maxRetryCount = 3;
         for (var cycle = 0; cycle < maxRetryCount + 2; cycle++)
+        {
             await harness.Job.Execute(
                 OutboxJobTestHarness.JobContext(batchSize: 10, maxRetryCount: maxRetryCount));
+            clock.Advance(TimeSpan.FromMinutes(5));
+        }
 
         // Assert — the message is attempted exactly maxRetryCount times, then marked given up and skipped.
         await harness.Publisher
@@ -231,6 +239,204 @@ public class ProcessOutboxMessagesJobTests
         rows.Count(m => m.ProcessedOnUtc != null).ShouldBe(24);
         rows.Single(m => m.Id == poison.Id).RetryCount.ShouldBe(1);
     }
+
+    [Fact]
+    public async Task Execute_ShouldSpaceAFailingMessagesTries_ByTheBackoff()
+    {
+        // A downstream outage: the handler fails every try. The tries wait 5 s, then 10 s, instead of one per run.
+        var clock = new FakeTimeProvider(Now);
+        await using var harness = await ClockedHarnessAsync(clock);
+        harness.Publisher
+            .Publish(Arg.Any<IDomainEvent>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new TimeoutException("the downstream service didn't answer")));
+        await harness.SeedAsync(CreateMessage(new TestDomainEvent(Guid.NewGuid(), "outage")));
+
+        var tries = new int[6];
+        await RunAsync(harness);                                    // 0 s: the first try fails
+        tries[0] = await TriesAsync(harness);
+        (await harness.GetMessagesAsync()).Single().NextAttemptOnUtc.ShouldBe(Now.UtcDateTime.AddSeconds(5));
+        clock.Advance(TimeSpan.FromSeconds(4));
+        await RunAsync(harness);                                    // 4 s: not due
+        tries[1] = await TriesAsync(harness);
+        clock.Advance(TimeSpan.FromSeconds(1));
+        await RunAsync(harness);                                    // 5 s: the second try fails
+        tries[2] = await TriesAsync(harness);
+        (await harness.GetMessagesAsync()).Single().NextAttemptOnUtc.ShouldBe(Now.UtcDateTime.AddSeconds(15));
+        clock.Advance(TimeSpan.FromSeconds(9));
+        await RunAsync(harness);                                    // 14 s: not due
+        tries[3] = await TriesAsync(harness);
+        clock.Advance(TimeSpan.FromSeconds(1));
+        await RunAsync(harness);                                    // 15 s: the third try fails, and it gives up
+        tries[4] = await TriesAsync(harness);
+        clock.Advance(TimeSpan.FromHours(1));
+        await RunAsync(harness);
+        tries[5] = await TriesAsync(harness);
+
+        tries.ShouldBe([1, 1, 2, 2, 3, 3]);
+        (await harness.GetMessagesAsync()).Single().ProcessedOnUtc.ShouldBe(OutboxMessage.GivenUpProcessedOnUtc);
+    }
+
+    [Fact]
+    public async Task Execute_ShouldProcessAMessage_OnceItsNextTryIsDue()
+    {
+        var clock = new FakeTimeProvider(Now);
+        await using var harness = await ClockedHarnessAsync(clock);
+        var waiting = CreateMessage(new TestDomainEvent(Guid.NewGuid(), "waiting"));
+        waiting.RetryCount = 1;
+        waiting.NextAttemptOnUtc = Now.UtcDateTime.AddSeconds(30);
+        var due = CreateMessage(new TestDomainEvent(Guid.NewGuid(), "due"));
+        due.RetryCount = 1;
+        due.NextAttemptOnUtc = Now.UtcDateTime.AddSeconds(-1);
+        await harness.SeedAsync(waiting, due);
+
+        await RunAsync(harness);
+        var afterFirstRun = await harness.GetMessagesAsync();
+        clock.Advance(TimeSpan.FromSeconds(30));
+        await RunAsync(harness);
+
+        afterFirstRun.Single(m => m.Id == due.Id).ProcessedOnUtc.ShouldNotBeNull();
+        afterFirstRun.Single(m => m.Id == waiting.Id).ProcessedOnUtc.ShouldBeNull();
+        (await harness.GetMessagesAsync()).ShouldAllBe(m => m.ProcessedOnUtc != null && m.ProcessedOnUtc != OutboxMessage.GivenUpProcessedOnUtc);
+    }
+
+    [Fact]
+    public async Task Execute_ShouldWaitTheConfiguredDelays_UpToTheLongest()
+    {
+        var clock = new FakeTimeProvider(Now);
+        await using var harness = await ClockedHarnessAsync(clock);
+        harness.Publisher
+            .Publish(Arg.Any<IDomainEvent>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("always fails")));
+        await harness.SeedAsync(CreateMessage(new TestDomainEvent(Guid.NewGuid(), "poison")));
+        var context = OutboxJobTestHarness.JobContext(
+            maxRetryCount: 10,
+            retryDelay: TimeSpan.FromSeconds(30),
+            maxRetryDelay: TimeSpan.FromSeconds(45));
+
+        var waits = new TimeSpan[3];
+        for (var attempt = 0; attempt < waits.Length; attempt++)
+        {
+            await harness.Job.Execute(context);
+            var next = (await harness.GetMessagesAsync()).Single().NextAttemptOnUtc.ShouldNotBeNull();
+            waits[attempt] = next - clock.GetUtcNow().UtcDateTime;
+            clock.Advance(waits[attempt]);
+        }
+
+        waits.ShouldBe([TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(45)]);
+    }
+
+    [Fact]
+    public async Task Execute_ShouldTryAgainInTheNextRun_WhenTheRetryDelayIsZero()
+    {
+        await using var harness = await ClockedHarnessAsync(new FakeTimeProvider(Now));
+        harness.Publisher
+            .Publish(Arg.Any<IDomainEvent>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new InvalidOperationException("always fails")));
+        await harness.SeedAsync(CreateMessage(new TestDomainEvent(Guid.NewGuid(), "poison")));
+        var context = OutboxJobTestHarness.JobContext(maxRetryCount: 3, retryDelay: TimeSpan.Zero);
+
+        await harness.Job.Execute(context);
+        await harness.Job.Execute(context);
+
+        var row = (await harness.GetMessagesAsync()).Single();
+        row.RetryCount.ShouldBe(2);
+        row.NextAttemptOnUtc.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Execute_ShouldLogEachFailedTryOnce_AndTheGiveUpAtError()
+    {
+        var clock = new FakeTimeProvider(Now);
+        using var logs = new RecordingLoggerProvider();
+        await using var harness = await ClockedHarnessAsync(clock, logs);
+        var failure = new InvalidOperationException("the handler's bug");
+        harness.Publisher
+            .Publish(Arg.Any<IDomainEvent>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(failure));
+        var message = CreateMessage(new TestDomainEvent(Guid.NewGuid(), "poison"));
+        await harness.SeedAsync(message);
+
+        for (var run = 0; run < 3; run++)
+        {
+            await RunAsync(harness, maxRetryCount: 2);
+            clock.Advance(TimeSpan.FromMinutes(5));
+        }
+
+        var logged = logs.Outbox();
+        logged.Count.ShouldBe(2);
+        logged[0].Level.ShouldBe(LogLevel.Error);
+        logged[0].Message.ShouldBe(
+            $"Outbox message {message.Id} (TestDomainEvent, TestDbContext) failed try 1 of 2; the next try waits "
+            + "00:00:05: InvalidOperationException: the handler's bug");
+        logged[0].Exception.ShouldBeSameAs(failure);
+        logged[1].Level.ShouldBe(LogLevel.Error);
+        logged[1].Message.ShouldBe(
+            $"Outbox message {message.Id} (TestDomainEvent, TestDbContext) gave up after try 2 of 2; it is kept as "
+            + "poison: InvalidOperationException: the handler's bug");
+        logged[1].Exception.ShouldBeSameAs(failure);
+        LoggedExceptions.IsLogged(failure).ShouldBeFalse();
+    }
+
+    [Fact]
+    public async Task Execute_ShouldLogATransientFailedTryAtWarning()
+    {
+        using var logs = new RecordingLoggerProvider();
+        await using var harness = await ClockedHarnessAsync(new FakeTimeProvider(Now), logs);
+        harness.Publisher
+            .Publish(Arg.Any<IDomainEvent>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new HttpRequestException("connection refused")));
+        await harness.SeedAsync(CreateMessage(new TestDomainEvent(Guid.NewGuid(), "outage")));
+
+        await RunAsync(harness);
+
+        var logged = logs.Outbox().ShouldHaveSingleItem();
+        logged.Level.ShouldBe(LogLevel.Warning);
+        logged.Message.ShouldContain("failed try 1 of 3");
+        logged.Exception.ShouldBeOfType<HttpRequestException>();
+    }
+
+    [Fact]
+    public async Task Execute_ShouldNotLogTheStackAgain_WhenAHandlerLoggedTheExceptionAlready()
+    {
+        // As the mediator's unit-of-work behavior does around a command the handler sent.
+        using var logs = new RecordingLoggerProvider();
+        await using var harness = await ClockedHarnessAsync(new FakeTimeProvider(Now), logs);
+        var failure = new InvalidOperationException("logged by the handler");
+        LoggedExceptions.Claim(failure).ShouldBeTrue();
+        harness.Publisher
+            .Publish(Arg.Any<IDomainEvent>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(failure));
+        await harness.SeedAsync(CreateMessage(new TestDomainEvent(Guid.NewGuid(), "logged")));
+
+        await RunAsync(harness);
+
+        var logged = logs.Outbox().ShouldHaveSingleItem();
+        logged.Level.ShouldBe(LogLevel.Error);
+        logged.Exception.ShouldBeNull();
+        logged.Message.ShouldEndWith("InvalidOperationException: logged by the handler");
+        LoggedExceptions.IsLogged(failure).ShouldBeFalse();
+    }
+
+    private static readonly DateTimeOffset Now = new(2026, 10, 15, 12, 0, 0, TimeSpan.Zero);
+
+    // The job reads the due messages on this clock, and the processor writes the next try's time on the container's.
+    private static Task<OutboxJobTestHarness> ClockedHarnessAsync(
+        FakeTimeProvider clock,
+        RecordingLoggerProvider? logs = null)
+        => OutboxJobTestHarness.CreateAsync(clock, services =>
+        {
+            services.AddSingleton<TimeProvider>(clock);
+            if (logs is not null)
+                services.AddLogging(logging => logging.AddProvider(logs));
+        });
+
+    private static Task RunAsync(
+        OutboxJobTestHarness harness,
+        int maxRetryCount = 3)
+        => harness.Job.Execute(OutboxJobTestHarness.JobContext(batchSize: 10, maxRetryCount: maxRetryCount)).AsTask();
+
+    private static async Task<int> TriesAsync(OutboxJobTestHarness harness)
+        => (await harness.GetMessagesAsync()).Single().RetryCount;
 
     private static OutboxMessage[] Messages(int count)
     {

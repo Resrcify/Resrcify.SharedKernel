@@ -28,6 +28,11 @@ public static class OutboxLaneServiceCollectionExtensions
     {
         var options = new OutboxLaneOptions();
         configure?.Invoke(options);
+        OutboxRetryBackoff.Validate(
+            options.RetryDelay,
+            options.MaxRetryDelay,
+            nameof(OutboxLaneOptions.RetryDelay),
+            nameof(OutboxLaneOptions.MaxRetryDelay));
         options.Claim ??= services.OutboxJobClaim<TDbContext>();
 
         services.RemoveAll<OutboxLaneSettings<TDbContext>>();

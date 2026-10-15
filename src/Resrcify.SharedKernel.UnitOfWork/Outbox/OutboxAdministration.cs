@@ -130,7 +130,7 @@ public sealed class OutboxAdministration<TDbContext>(TDbContext context, IServic
 
     private async Task<int> RetryAsync(IQueryable<OutboxMessage> messages, CancellationToken cancellationToken)
     {
-        // Due now: a lane's last failure wrote a later try.
+        // Due now: the last failure wrote a later try.
         var now = (services.GetService<TimeProvider>() ?? TimeProvider.System).GetUtcNow().UtcDateTime;
         var retried = await messages.ExecuteUpdateAsync(
             set => set

@@ -357,9 +357,9 @@ Each message is then handled in its **own DI scope and transaction** (via
 message processed commit together, so the message is only marked done if everything
 its handlers persisted commits as well. Because every message gets a fresh scope, the
 job never shares (or clears) a `DbContext` change tracker with other work. A handler
-that throws does not abort the batch — the failure is written to the `Error` column
-and `RetryCount` is incremented (in a lane, `NextAttemptOnUtc` is set to when its next try is due, which every instance
-waits out). When its last try (`MaxRetryCount`, or its lane's) fails, the message **gives up**:
+that throws does not abort the batch — the failure is written to the `Error` column,
+`RetryCount` is incremented and `NextAttemptOnUtc` is set to when its next try is due, which every instance waits out.
+When its last try (`MaxRetryCount`, or its lane's) fails, the message **gives up**:
 its `ProcessedOnUtc` is set to `OutboxMessage.GivenUpProcessedOnUtc` (9999-12-31) and `Error` starts with
 `Gave up at <time> after <n> tries.`. That takes it out of the unprocessed rows (and their index), so the polls no
 longer read past it, and the cleanup keeps it for inspection. To see and try again the messages that gave up,
@@ -370,8 +370,27 @@ By hand: `UPDATE "OutboxMessages" SET "ProcessedOnUtc" = NULL, "RetryCount" = 0 
 A run **drains a backlog**: while a batch comes back full it reads the next one, so 70 waiting messages with a batch
 of 20 are handled in one run (four reads) instead of four runs. It stops starting batches after 80% of the trigger's
 interval (`ProcessIntervalInSeconds`; a batch already started finishes), so a run ends before the next trigger is due.
-A quiet outbox costs one query per run, as before. A message that fails in a run is not read again in that run: it
-keeps its retry pace and waits for the next run.
+A quiet outbox costs one query per run, as before. A message that fails in a run is not read again in that run.
+
+**Retries back off**, in the job as in the lanes: a failed message waits `RetryDelay` (5 s) before its next try, then
+twice as long each time (10 s, 20 s, …), up to `MaxRetryDelay` (5 min), so a handler failing through an outage of a
+few minutes (a downstream service down) doesn't spend its `MaxRetryCount` tries in the first minute of it. The job
+reads only the messages that are due (`NextAttemptOnUtc` passed or empty); the wait is a minimum, the try comes with
+the first run (or wake-up) after it. That filter is a residual one on the unprocessed rows the partial index
+(`IX_OutboxMessages_Unprocessed`, `ProcessedOnUtc IS NULL`) narrows the read to, as the lanes' read: no migration.
+Set them with `AddOutboxProcessing<AppDbContext>(outbox => { outbox.RetryDelay = ...; outbox.MaxRetryDelay = ...; })`
+(`AddProcessOutboxMessagesJob` uses the defaults); `TimeSpan.Zero` tries again at the next run, as before 4.3.0. Size
+`MaxRetryCount` with it: 3 tries wait 5 s and 10 s, less than a 20 s run interval, so a message still gives up about
+two runs after its first failure; 12 tries span about 30 minutes of an outage.
+
+**Failed tries are logged** (category `Resrcify.SharedKernel.UnitOfWork.Outbox`), by the job and the lanes alike: each
+failed try once, at `Warning` when another try may pass (a cancellation or timeout, a transient database failure, an
+HTTP request that got no answer or a 408, 429 or 5xx, Polly's timeout or open circuit) and at `Error` otherwise, as
+`Outbox message {MessageId} ({EventType}, {DbContext}) failed try {Attempt} of {MaxRetryCount}; the next try waits
+{RetryDelay}: {Error}`; the last one as the give-up, at `Error`: `... gave up after try {Attempt} of {MaxRetryCount};
+it is kept as poison: {Error}`. The exception goes with the line, with its stack, unless something logged it already on
+its way out (Results' `LoggedExceptions`, e.g. the mediator's unit-of-work behavior around a command the handler sent):
+then the line names its type and message only.
 
 ### Waking the outbox
 
@@ -382,8 +401,8 @@ calls it when a save commits outbox messages, through a `NOTIFY`; anything else 
 `IOutboxSaveObserver` registered in the container is told whenever a save wrote outbox messages.
 
 In tests, `await wakeUp.DrainAsync()` wakes the outbox until no unprocessed message is due: every message saved so
-far, and every one its handlers saved in turn, was processed or gave up (a lane message waiting for a later try isn't
-waited for). It throws a `TimeoutException` when messages are still due after the timeout (30 s by default), e.g.
+far, and every one its handlers saved in turn, was processed or gave up (a message waiting for a later try, after a
+failed one, isn't waited for: advance the clock, or set `RetryDelay = TimeSpan.Zero` in the test host). It throws a `TimeoutException` when messages are still due after the timeout (30 s by default), e.g.
 when the host doesn't process the outbox.
 
 ### Cleaning up processed messages
@@ -411,7 +430,9 @@ every message behind it. An **outbox lane** moves those event types out of the r
   polls every `PollInterval`, and at once when one of its messages finishes (so the freed slot takes the next) or the
   outbox is woken (`OutboxWakeUp`). A message another instance holds is looked at again at the next poll.
 - **Processing is the same as the regular job:** own scope and transaction, publish, mark processed, and
-  record the failure and retry up to `MaxRetryCount`.
+  record the failure (logged the same way) and retry up to `MaxRetryCount`, waiting `RetryDelay` doubled up to
+  `MaxRetryDelay` (the lane options of the same names, 5 s and 5 min by default) between tries. The options apply
+  to every lane of the context.
 - **Tracing:** every processed message, by the regular job or a lane, gets a span on
   `OutboxDiagnostics.ActivitySourceName`; whatever its handlers do (database, HTTP, bus sends) runs inside it.
 

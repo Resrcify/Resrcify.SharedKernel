@@ -24,6 +24,10 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 /// run ends before the next trigger is due (one batch may run past it). A quiet outbox costs one query per run.</item>
 /// <item>Each message is processed in its own scope and transaction, as before. A message that fails (or that another
 /// instance holds) is left for the next run: a run never reads it twice, so its retries keep their pace.</item>
+/// <item>A message whose try failed waits before its next one, as in the outbox lanes: 5 s, then twice as long each
+/// time, up to 5 min (<c>OutboxOptions.RetryDelay</c> and <c>MaxRetryDelay</c>). The time is written to
+/// <see cref="OutboxMessage.NextAttemptOnUtc"/> with the failure, and a run reads only the messages that are due, so a
+/// handler failing through an outage of a few minutes doesn't spend its tries in the first minute of it.</item>
 /// </list>
 /// </remarks>
 [DisallowConcurrentExecution]
@@ -37,6 +41,8 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
     internal const string ProcessBatchSizeKey = "ProcessBatchSize";
     internal const string ProcessMaxRetryCountKey = "ProcessMaxRetryCount";
     internal const string ProcessIntervalInSecondsKey = "ProcessIntervalInSeconds";
+    internal const string ProcessRetryDelayInMillisecondsKey = "ProcessRetryDelayInMilliseconds";
+    internal const string ProcessMaxRetryDelayInMillisecondsKey = "ProcessMaxRetryDelayInMilliseconds";
     internal const int DefaultProcessBatchSize = 20;
     internal const int DefaultProcessMaxRetryCount = 3;
     internal const int DefaultProcessIntervalInSeconds = 60;
@@ -62,6 +68,14 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
             context.MergedJobDataMap,
             ProcessMaxRetryCountKey,
             DefaultProcessMaxRetryCount);
+        var retryDelay = ReadDelay(
+            context.MergedJobDataMap,
+            ProcessRetryDelayInMillisecondsKey,
+            OutboxRetryBackoff.DefaultRetryDelay);
+        var maxRetryDelay = ReadDelay(
+            context.MergedJobDataMap,
+            ProcessMaxRetryDelayInMillisecondsKey,
+            OutboxRetryBackoff.DefaultMaxRetryDelay);
         var budget = DrainBudget(context);
         var started = _time.GetTimestamp();
 
@@ -86,7 +100,7 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
                     message,
                     claim,
                     maxRetryCount,
-                    retryDelay: null,
+                    OutboxRetryBackoff.Delay(message.RetryCount + 1, retryDelay, maxRetryDelay),
                     cancellationToken);
                 if (outcome != OutboxProcessOutcome.Processed)
                     passedOver.Add(message.Id);
@@ -111,6 +125,29 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
             return repeat * DrainBudgetShare;
 
         return TimeSpan.FromSeconds(DefaultProcessIntervalInSeconds) * DrainBudgetShare;
+    }
+
+    // A delay stored in milliseconds (an int, a long or a string, or a TimeSpan); a negative or unusable one falls back.
+    private static TimeSpan ReadDelay(JobDataMap data, string key, TimeSpan fallback)
+    {
+        if (!data.TryGetValue(key, out var value))
+            return fallback;
+
+        long? milliseconds = value switch
+        {
+            int number => number,
+            long number => number,
+            TimeSpan delay => (long)delay.TotalMilliseconds,
+            string text when long.TryParse(
+                text,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var parsed) => parsed,
+            _ => null
+        };
+        return milliseconds is >= 0
+            ? TimeSpan.FromMilliseconds(milliseconds.Value)
+            : fallback;
     }
 
     // Quartz 4 dropped the typed JobDataMap accessors (TryGetInt and friends); the map
@@ -138,7 +175,9 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
     // No-tracking projection — only the columns the job needs, so the covering index
     // can serve the read. Messages that gave up have a ProcessedOnUtc (OutboxMessage.GivenUpProcessedOnUtc), so the
     // read doesn't meet them; the retry limit still skips one that gave up before they were marked. Event types that
-    // belong to an outbox lane are skipped too: the lane processes those itself.
+    // belong to an outbox lane are skipped too: the lane processes those itself. So is a message waiting for a later try
+    // (NextAttemptOnUtc ahead): a residual filter on the unprocessed rows the partial index narrows the read to, as in
+    // the lanes' read.
     private async Task<List<OutboxMessageToProcess>> ReadBatchAsync(
         int batchSize,
         int maxRetryCount,
@@ -148,9 +187,13 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
         await using var scope = scopeFactory.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
+        var nowUtc = _time.GetUtcNow().UtcDateTime;
         var query = context
             .Set<OutboxMessage>()
-            .Where(m => m.ProcessedOnUtc == null && m.RetryCount < maxRetryCount);
+            .Where(m =>
+                m.ProcessedOnUtc == null &&
+                m.RetryCount < maxRetryCount &&
+                (m.NextAttemptOnUtc == null || m.NextAttemptOnUtc <= nowUtc));
 
         var laneTypes = scope.ServiceProvider.GetService<OutboxLaneRegistry>()?.LaneEventTypes ?? [];
         if (laneTypes.Count > 0)

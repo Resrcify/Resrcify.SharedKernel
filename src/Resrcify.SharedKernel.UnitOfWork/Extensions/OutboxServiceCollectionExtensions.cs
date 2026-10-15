@@ -90,6 +90,11 @@ public static class OutboxServiceCollectionExtensions
         ArgumentOutOfRangeException.ThrowIfNegative(options.DelayInSecondsBeforeStart);
         ArgumentOutOfRangeException.ThrowIfNegative(options.ProcessedRetentionInDays);
         ArgumentOutOfRangeException.ThrowIfLessThan(options.BacklogCheckIntervalInSeconds, 1);
+        OutboxRetryBackoff.Validate(
+            options.RetryDelay,
+            options.MaxRetryDelay,
+            nameof(OutboxOptions.RetryDelay),
+            nameof(OutboxOptions.MaxRetryDelay));
         var time = options.TimeProvider ?? RegisteredTimeProvider(services) ?? TimeProvider.System;
 
         UseOneSerializer<TDbContext>(services, serializer);
@@ -101,14 +106,17 @@ public static class OutboxServiceCollectionExtensions
         // AddQuartz composes: every call after the first adds to the same default scheduler
         // (its registrations are TryAdd), so this is safe alongside the application's own
         // AddQuartz call, in either order.
-        services.AddQuartz(quartz => quartz.AddProcessOutboxMessagesJob<TDbContext>(
+        services.AddQuartz(quartz => ProcessOutboxMessagesJobSetup.AddProcessOutboxMessagesJob<TDbContext>(
+            quartz,
             options.BatchSize,
             options.ProcessIntervalInSeconds,
             options.DelayInSecondsBeforeStart,
             options.MaxRetryCount,
             options.ProcessedRetentionInDays,
             options.Claim,
-            time));
+            time,
+            options.RetryDelay,
+            options.MaxRetryDelay));
 
         // The backlog monitor behind the outbox.messages.* gauges and the outbox health check (AddOutbox<TDbContext>).
         // The job registration above registered it with the default interval; these options replace that.

@@ -35,7 +35,11 @@ public static class ProcessOutboxMessagesJobSetup
     /// 80% of this.
     /// </param>
     /// <param name="delayInSecondsBeforeStart">Seconds after start-up before the first run.</param>
-    /// <param name="processMaxRetryCount">Attempts a message gets before it is poison.</param>
+    /// <param name="processMaxRetryCount">
+    /// Attempts a message gets before it is poison. A failed try waits before the next one: 5 s, then twice as long each
+    /// time, up to 5 min (<c>OutboxOptions.RetryDelay</c> and <c>MaxRetryDelay</c> through <c>AddOutboxProcessing</c>
+    /// change them).
+    /// </param>
     /// <param name="processedRetentionInDays">Days processed messages are kept (an hourly cleanup); 0 turns it off.</param>
     /// <param name="claim">
     /// Claims each message for its processing transaction, so several service instances don't each publish it.
@@ -56,6 +60,31 @@ public static class ProcessOutboxMessagesJobSetup
         int processedRetentionInDays = CleanupOutboxMessagesJob<DbContext>.DefaultRetentionInDays,
         IOutboxLaneClaim? claim = null,
         TimeProvider? timeProvider = null)
+        where TDbContext : DbContext
+        => AddProcessOutboxMessagesJob<TDbContext>(
+            quartz,
+            processBatchSize,
+            processIntervalInSeconds,
+            delayInSecondsBeforeStart,
+            processMaxRetryCount,
+            processedRetentionInDays,
+            claim,
+            timeProvider,
+            OutboxRetryBackoff.DefaultRetryDelay,
+            OutboxRetryBackoff.DefaultMaxRetryDelay);
+
+    // The registration, with the retry delays AddOutboxProcessing's options set.
+    internal static IQuartzBuilder AddProcessOutboxMessagesJob<TDbContext>(
+        IQuartzBuilder quartz,
+        int processBatchSize,
+        int processIntervalInSeconds,
+        int delayInSecondsBeforeStart,
+        int processMaxRetryCount,
+        int processedRetentionInDays,
+        IOutboxLaneClaim? claim,
+        TimeProvider? timeProvider,
+        TimeSpan retryDelay,
+        TimeSpan maxRetryDelay)
         where TDbContext : DbContext
     {
         ArgumentNullException.ThrowIfNull(quartz);
@@ -85,7 +114,13 @@ public static class ProcessOutboxMessagesJobSetup
                     processMaxRetryCount)
                 .UsingJobData(
                     ProcessOutboxMessagesJob<TDbContext>.ProcessIntervalInSecondsKey,
-                    processIntervalInSeconds))
+                    processIntervalInSeconds)
+                .UsingJobData(
+                    ProcessOutboxMessagesJob<TDbContext>.ProcessRetryDelayInMillisecondsKey,
+                    (long)retryDelay.TotalMilliseconds)
+                .UsingJobData(
+                    ProcessOutboxMessagesJob<TDbContext>.ProcessMaxRetryDelayInMillisecondsKey,
+                    (long)maxRetryDelay.TotalMilliseconds))
             .AddTrigger<ProcessOutboxMessagesJob<TDbContext>>(trigger => trigger
                 .ForJob(jobKey)
                 .StartAt(time.GetUtcNow().AddSeconds(delayInSecondsBeforeStart))

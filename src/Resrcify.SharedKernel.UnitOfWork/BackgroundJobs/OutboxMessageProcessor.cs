@@ -6,6 +6,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
@@ -59,6 +61,7 @@ internal static class OutboxMessageProcessor<TDbContext>
         Exception? failure = null;
         var claimed = true;
         TimeProvider time;
+        ILogger logger;
         long started;
         using var activity = OutboxDiagnostics.ActivitySource.StartActivity("outbox process", ActivityKind.Internal);
         activity?.SetTag("outbox.message.id", message.Id);
@@ -72,6 +75,7 @@ internal static class OutboxMessageProcessor<TDbContext>
         {
             var provider = scope.ServiceProvider;
             time = provider.GetService<TimeProvider>() ?? TimeProvider.System;
+            logger = provider.GetService<ILoggerFactory>()?.CreateLogger(OutboxProcessLog.Category) ?? NullLogger.Instance;
             started = time.GetTimestamp();
             var context = provider.GetRequiredService<TDbContext>();
             // This context's own unit of work, not whichever IUnitOfWork DI resolves (with two DbContexts, that may be
@@ -125,6 +129,15 @@ internal static class OutboxMessageProcessor<TDbContext>
         {
             var givesUp = message.RetryCount + 1 >= maxRetryCount;
             await RecordFailureAsync(scopeFactory, message, failure, maxRetryCount, retryDelay, time, cancellationToken);
+            OutboxProcessLog.FailedTry(
+                logger,
+                typeof(TDbContext).Name,
+                OutboxDiagnostics.EventName(message.Type),
+                message.Id,
+                message.RetryCount + 1,
+                maxRetryCount,
+                retryDelay,
+                failure);
             Record(message, givesUp ? "gave_up" : "retrying", time.GetElapsedTime(started), wait: null);
             return OutboxProcessOutcome.Failed;
         }

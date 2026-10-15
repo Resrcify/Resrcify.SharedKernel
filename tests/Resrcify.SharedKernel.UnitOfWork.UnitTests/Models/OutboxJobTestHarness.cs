@@ -106,7 +106,9 @@ internal sealed class OutboxJobTestHarness : IAsyncDisposable
     internal static IJobExecutionContext JobContext(
         int batchSize = 10,
         int maxRetryCount = 3,
-        int? intervalInSeconds = null)
+        int? intervalInSeconds = null,
+        TimeSpan? retryDelay = null,
+        TimeSpan? maxRetryDelay = null)
     {
         var data = new JobDataMap
         {
@@ -115,6 +117,10 @@ internal sealed class OutboxJobTestHarness : IAsyncDisposable
         };
         if (intervalInSeconds is { } interval)
             data.Add("ProcessIntervalInSeconds", interval);
+        if (retryDelay is { } delay)
+            data.Add("ProcessRetryDelayInMilliseconds", (long)delay.TotalMilliseconds);
+        if (maxRetryDelay is { } maxDelay)
+            data.Add("ProcessMaxRetryDelayInMilliseconds", (long)maxDelay.TotalMilliseconds);
         var jobContext = Substitute.For<IJobExecutionContext>();
         jobContext.MergedJobDataMap.Returns(data);
         return jobContext;

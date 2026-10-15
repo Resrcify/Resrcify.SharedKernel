@@ -20,6 +20,17 @@ public sealed class OutboxLaneOptions
     public int MaxRetryCount { get; set; } = 3;
 
     /// <summary>
+    /// How long a message whose try failed waits before its next one; each further retry waits twice as long, up to
+    /// <see cref="MaxRetryDelay"/>. 5 s by default (5 s, 10 s, 20 s, ...). The time is written to
+    /// <c>OutboxMessage.NextAttemptOnUtc</c> with the failure, so every instance waits it out, and every lane skips the
+    /// message until then. <see cref="TimeSpan.Zero"/> tries it again at the lane's next poll, without a wait.
+    /// </summary>
+    public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>The longest a message waits between two tries (see <see cref="RetryDelay"/>): 5 min by default.</summary>
+    public TimeSpan MaxRetryDelay { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
     /// Claims each message for its processing transaction, so several service instances can run the
     /// same lane safely. <see langword="null"/> (no claim) is fine for a single instance; use
     /// <see cref="PostgresOutboxLaneClaim.Instance"/> on PostgreSQL.

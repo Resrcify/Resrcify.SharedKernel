@@ -35,8 +35,8 @@ public sealed class OutboxMessage
     public int RetryCount { get; set; }
 
     /// <summary>
-    /// When an outbox lane may try the message again after a failed try; <see langword="null"/> when it may be tried at
-    /// once (never tried, or not in a lane). Kept in the database, so every instance running the lanes waits it out.
+    /// When the outbox job or a lane may try the message again after a failed try; <see langword="null"/> when it may be
+    /// tried at once (never tried, or failed with no retry delay). Kept in the database, so every instance waits it out.
     /// </summary>
     public DateTime? NextAttemptOnUtc { get; set; }
 

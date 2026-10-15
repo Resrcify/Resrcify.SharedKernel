@@ -28,6 +28,17 @@ public sealed class OutboxOptions
     public int MaxRetryCount { get; set; } = 3;
 
     /// <summary>
+    /// How long a message whose try failed waits before its next one; each further retry waits twice as long, up to
+    /// <see cref="MaxRetryDelay"/>. 5 s by default (5 s, 10 s, 20 s, ...). The time is written to
+    /// <c>OutboxMessage.NextAttemptOnUtc</c> with the failure, so every instance waits it out, and the processing job skips the
+    /// message until then. <see cref="TimeSpan.Zero"/> tries it again at its next run (as before 4.3.0), without a wait.
+    /// </summary>
+    public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>The longest a message waits between two tries (see <see cref="RetryDelay"/>): 5 min by default.</summary>
+    public TimeSpan MaxRetryDelay { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
     /// Days a processed message is kept before the hourly cleanup deletes it (default 7). Unprocessed messages and
     /// messages that gave up are always kept. 0 turns the cleanup off.
     /// </summary>
