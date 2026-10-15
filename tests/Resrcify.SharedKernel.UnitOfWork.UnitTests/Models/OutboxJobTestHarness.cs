@@ -110,7 +110,8 @@ internal sealed class OutboxJobTestHarness : IAsyncDisposable
         int? intervalInSeconds = null,
         TimeSpan? retryDelay = null,
         TimeSpan? maxRetryDelay = null,
-        int? maxTransientRetryCount = null)
+        int? maxTransientRetryCount = null,
+        TimeSpan? interval = null)
     {
         var data = new JobDataMap
         {
@@ -119,8 +120,11 @@ internal sealed class OutboxJobTestHarness : IAsyncDisposable
         };
         if (maxTransientRetryCount is { } transient)
             data.Add("ProcessMaxTransientRetryCount", transient);
-        if (intervalInSeconds is { } interval)
-            data.Add("ProcessIntervalInSeconds", interval);
+        // As 4.2 and before stored it (whole seconds), and as 4.3 does (milliseconds).
+        if (intervalInSeconds is { } seconds)
+            data.Add("ProcessIntervalInSeconds", seconds);
+        if (interval is { } stored)
+            data.Add("ProcessIntervalInMilliseconds", (long)stored.TotalMilliseconds);
         if (retryDelay is { } delay)
             data.Add("ProcessRetryDelayInMilliseconds", (long)delay.TotalMilliseconds);
         if (maxRetryDelay is { } maxDelay)

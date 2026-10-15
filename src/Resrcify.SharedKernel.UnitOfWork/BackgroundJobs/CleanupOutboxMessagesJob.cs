@@ -24,8 +24,13 @@ public sealed partial class CleanupOutboxMessagesJob<TDbContext>(
     : IJob
     where TDbContext : DbContext
 {
-    internal const string RetentionInDaysKey = "ProcessedRetentionInDays";
-    internal const int DefaultRetentionInDays = 7;
+    internal const string RetentionKey = "ProcessedRetentionInMilliseconds";
+
+    /// <summary>The retention as 4.2 and before stored it, in whole days: still read from a persistent store.</summary>
+    internal const string LegacyRetentionInDaysKey = "ProcessedRetentionInDays";
+
+    /// <summary>How long processed messages are kept unless told otherwise: 7 days.</summary>
+    internal static TimeSpan DefaultRetention => TimeSpan.FromDays(7);
 
     /// <summary>Rows deleted per statement, so a large backlog is deleted in short transactions.</summary>
     public const int DeleteBatchSize = 5_000;
@@ -33,16 +38,19 @@ public sealed partial class CleanupOutboxMessagesJob<TDbContext>(
     public async ValueTask Execute(IJobExecutionContext context, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
-        var retentionInDays = context.MergedJobDataMap.TryGetValue(RetentionInDaysKey, out var value)
-            ? Convert.ToInt32(value, CultureInfo.InvariantCulture)
-            : DefaultRetentionInDays;
+        var retention = JobDataDurations.Read(
+            context.MergedJobDataMap,
+            RetentionKey,
+            LegacyRetentionInDaysKey,
+            TimeSpan.FromDays(1),
+            DefaultRetention);
         var deleted = await DeleteProcessedAsync(
             scopeFactory,
-            TimeSpan.FromDays(retentionInDays),
+            retention,
             timeProvider,
             cancellationToken);
         if (deleted > 0)
-            LogDeleted(deleted, retentionInDays);
+            LogDeleted(deleted, retention);
     }
 
     /// <summary>Deletes processed messages older than <paramref name="retention"/>, in batches; returns how many.</summary>
@@ -71,6 +79,6 @@ public sealed partial class CleanupOutboxMessagesJob<TDbContext>(
         return total;
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Deleted {Count} processed outbox messages older than {Days} days")]
-    private partial void LogDeleted(int count, int days);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Deleted {Count} processed outbox messages older than {Retention}")]
+    private partial void LogDeleted(int count, TimeSpan retention);
 }

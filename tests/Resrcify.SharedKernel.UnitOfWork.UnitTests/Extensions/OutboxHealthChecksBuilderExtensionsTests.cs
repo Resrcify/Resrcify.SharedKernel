@@ -117,7 +117,7 @@ public sealed class OutboxHealthChecksBuilderExtensionsTests
         services.AddQuartz(quartz => quartz.AddProcessOutboxMessagesJob<TestDbContext>());
         services.AddOutboxProcessing<TestDbContext>(
             new SystemTextJsonOutboxSerializer(),
-            outbox => outbox.BacklogCheckIntervalInSeconds = 90);
+            outbox => outbox.BacklogCheckInterval = TimeSpan.FromSeconds(90));
         using var provider = services.BuildServiceProvider();
 
         provider.GetServices<IHostedService>().OfType<OutboxBacklogMonitor<TestDbContext>>().ShouldHaveSingleItem();

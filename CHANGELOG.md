@@ -112,6 +112,26 @@ every package in the repository is released together under one version.
   Resrcify.SharedKernel.MessageBus.Testing (so MessageBus, Rebus and Rebus.RabbitMq come with it),
   Microsoft.Extensions.Diagnostics.Testing and Serilog.
 
+- **The outbox's intervals and retention are `TimeSpan`s** (Resrcify.SharedKernel.UnitOfWork), as
+  `OutboxLaneOptions.PollInterval` already was. The defaults are unchanged:
+
+  | Was | Now |
+  |---|---|
+  | `OutboxOptions.ProcessIntervalInSeconds` (60) | `OutboxOptions.ProcessInterval` (`TimeSpan.FromSeconds(60)`; at least 1 s) |
+  | `OutboxOptions.DelayInSecondsBeforeStart` (60) | `OutboxOptions.DelayBeforeStart` (`TimeSpan.FromSeconds(60)`) |
+  | `OutboxOptions.ProcessedRetentionInDays` (7; 0 turns the cleanup off) | `OutboxOptions.ProcessedRetention` (`TimeSpan.FromDays(7)`; `TimeSpan.Zero` turns it off) |
+  | `OutboxOptions.BacklogCheckIntervalInSeconds` (30) | `OutboxOptions.BacklogCheckInterval` (`TimeSpan.FromSeconds(30)`; at least 1 s) |
+  | `AddProcessOutboxMessagesJob(..., int processIntervalInSeconds = 60, int delayInSecondsBeforeStart = 60, ..., int processedRetentionInDays = 7, ...)` | `AddProcessOutboxMessagesJob(..., TimeSpan? processInterval = null, TimeSpan? delayBeforeStart = null, ..., TimeSpan? processedRetention = null, ...)` (same positions; `null`: the defaults) |
+  | `AddCleanupOutboxMessagesJob(int processedRetentionInDays = 7)` | `AddCleanupOutboxMessagesJob(TimeSpan? processedRetention = null)` (positive) |
+
+  `AddProcessOutboxMessagesJob` now refuses an interval under 1 s or a negative delay or retention
+  (`ArgumentOutOfRangeException`), as `AddOutboxProcessing` did. The jobs' data stores
+  `ProcessIntervalInMilliseconds` and `ProcessedRetentionInMilliseconds` (longs); a job stored before 4.3.0 in a
+  persistent Quartz store is still read from `ProcessIntervalInSeconds` / `ProcessedRetentionInDays`. The cleanup's
+  log line names the retention as a `TimeSpan` (`older than 7.00:00:00`). Sentinel, Shard and Tournament write
+  `outbox.ProcessInterval = TimeSpan.FromSeconds(20)` for `outbox.ProcessIntervalInSeconds = 20`
+  (`Infrastructure/InfrastructureServiceRegistration.cs`).
+
 ### Behaviour changes
 
 - **One transient contract, owned by SharedKernel, with a DI hook** (Resrcify.SharedKernel.Results, Abstractions,
@@ -323,6 +343,16 @@ every package in the repository is released together under one version.
   `IDestructuringPolicy` or `LoggingLevelSwitch` registered in the container joins the logger (it is how
   `ServiceHostFixture.Logs` hears a service on Serilog). ⚠️ A service registering one of those for another purpose has
   it applied to its logs.
+
+- **With the Postgres outbox, the outbox job and lanes claim with `PostgresOutboxLaneClaim` by default**
+  (Resrcify.SharedKernel.UnitOfWork.Postgres, UnitOfWork). A context registered with `AddPostgresDbContext(..., db =>
+  db.WithOutbox())` gives its outbox processing job and lanes `PostgresOutboxLaneClaim.Instance` (`FOR UPDATE SKIP
+  LOCKED`) when the service set no claim (`OutboxOptions.Claim`, `OutboxLaneOptions.Claim`,
+  `AddProcessOutboxMessagesJob`'s `claim`), resolved when they run, whatever the order of the registrations; a claim
+  the service set wins. Without it, a service running two instances that forgot the claim published a message twice.
+  ⚠️ A service on `WithOutbox()` that ran without a claim now claims (a row lock per message, in the processing
+  transaction). Sentinel and Shard can delete `outbox.Claim = PostgresOutboxLaneClaim.Instance;`
+  (`Infrastructure/InfrastructureServiceRegistration.cs`); ⚠️ Tournament (on `WithOutbox(...)`, no claim) now claims.
 
 ### Added
 

@@ -17,7 +17,7 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 internal static class OutboxBacklogMonitorRegistration
 {
     /// <summary>How often the backlog is measured unless <c>OutboxOptions.BacklogCheckIntervalInSeconds</c> says otherwise.</summary>
-    public static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(OutboxOptions.DefaultBacklogCheckIntervalInSeconds);
+    public static readonly TimeSpan DefaultInterval = OutboxOptions.DefaultBacklogCheckInterval;
 
     /// <summary>
     /// Registers the monitor (a hosted service) and the outbox administration, once. <paramref name="settings"/> replace

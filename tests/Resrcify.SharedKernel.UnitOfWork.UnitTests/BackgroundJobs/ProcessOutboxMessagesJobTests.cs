@@ -186,10 +186,13 @@ public class ProcessOutboxMessagesJobTests
         await harness.Publisher.Received(70).Publish(Arg.Any<IDomainEvent>(), Arg.Any<CancellationToken>());
     }
 
-    [Fact]
-    public async Task Execute_ShouldStopStartingBatches_AfterEightyPercentOfTheInterval()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Execute_ShouldStopStartingBatches_AfterEightyPercentOfTheInterval(bool storedBefore430)
     {
-        // Arrange — every message takes a second; the interval is 30 s, so batches start for 24 s.
+        // Arrange — every message takes a second; the interval is 30 s, so batches start for 24 s. A job stored by 4.2
+        // in a persistent store holds the interval in whole seconds under the old key.
         var clock = new FakeTimeProvider();
         await using var harness = await OutboxJobTestHarness.CreateAsync(clock);
         harness.Publisher
@@ -200,9 +203,12 @@ public class ProcessOutboxMessagesJobTests
                 return Task.CompletedTask;
             });
         await harness.SeedAsync(Messages(70));
+        var context = storedBefore430
+            ? OutboxJobTestHarness.JobContext(batchSize: 20, intervalInSeconds: 30)
+            : OutboxJobTestHarness.JobContext(batchSize: 20, interval: TimeSpan.FromSeconds(30));
 
         // Act
-        await harness.Job.Execute(OutboxJobTestHarness.JobContext(batchSize: 20, intervalInSeconds: 30));
+        await harness.Job.Execute(context);
 
         // Assert — the first batch ended at 20 s (within 24 s: another one starts); the second at 40 s (stop).
         var rows = await harness.GetMessagesAsync();

@@ -28,7 +28,7 @@ public static class OutboxServiceCollectionExtensions
     /// the serializer the interceptor writes with, so this reads with the same one:
     /// <code>
     /// services.AddPostgresDbContext&lt;AppDbContext&gt;(configuration, db =&gt; db.WithOutbox());
-    /// services.AddOutboxProcessing&lt;AppDbContext&gt;(outbox =&gt; outbox.ProcessIntervalInSeconds = 20);
+    /// services.AddOutboxProcessing&lt;AppDbContext&gt;(outbox =&gt; outbox.ProcessInterval = TimeSpan.FromSeconds(20));
     /// </code>
     /// </summary>
     public static IServiceCollection AddOutboxProcessing<TDbContext>(
@@ -86,15 +86,15 @@ public static class OutboxServiceCollectionExtensions
         configure?.Invoke(options);
         // A batch of 0 would never come back short, so a run would keep reading until its time is up.
         ArgumentOutOfRangeException.ThrowIfLessThan(options.BatchSize, 1);
-        ArgumentOutOfRangeException.ThrowIfLessThan(options.ProcessIntervalInSeconds, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(options.ProcessInterval, TimeSpan.FromSeconds(1));
         var retryLimits = OutboxRetryLimits.Create(
             options.Retries,
             options.TransientRetries,
             nameof(OutboxOptions.Retries),
             nameof(OutboxOptions.TransientRetries));
-        ArgumentOutOfRangeException.ThrowIfNegative(options.DelayInSecondsBeforeStart);
-        ArgumentOutOfRangeException.ThrowIfNegative(options.ProcessedRetentionInDays);
-        ArgumentOutOfRangeException.ThrowIfLessThan(options.BacklogCheckIntervalInSeconds, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(options.DelayBeforeStart, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThan(options.ProcessedRetention, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThan(options.BacklogCheckInterval, TimeSpan.FromSeconds(1));
 
         UseOneSerializer<TDbContext>(services, serializer);
         // The clock outbox processing, cleanup and the lanes read, and the jobs' first runs are computed from, resolved
@@ -110,10 +110,10 @@ public static class OutboxServiceCollectionExtensions
         services.AddQuartz(quartz => ProcessOutboxMessagesJobSetup.AddProcessOutboxMessagesJob<TDbContext>(
             quartz,
             options.BatchSize,
-            options.ProcessIntervalInSeconds,
-            options.DelayInSecondsBeforeStart,
+            options.ProcessInterval,
+            options.DelayBeforeStart,
             retryLimits,
-            options.ProcessedRetentionInDays,
+            options.ProcessedRetention,
             options.Claim));
 
         // The backlog monitor behind the outbox.messages.* gauges and the outbox health check (AddOutbox<TDbContext>).
@@ -121,7 +121,7 @@ public static class OutboxServiceCollectionExtensions
         services.AddOutboxBacklogMonitor(
             new OutboxBacklogSettings<TDbContext>(
                 retryLimits.ReadLimit,
-                TimeSpan.FromSeconds(options.BacklogCheckIntervalInSeconds)),
+                options.BacklogCheckInterval),
             replace: true);
 
         // Outbox lanes (e.g. scatter-gather) with defaults, unless AddOutboxLanes tuned them already; either way they

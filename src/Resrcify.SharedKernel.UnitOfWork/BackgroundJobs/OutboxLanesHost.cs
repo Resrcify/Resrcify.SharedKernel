@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
@@ -35,11 +36,15 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
     IServiceScopeFactory scopeFactory,
     ILogger<OutboxLanesHost<TDbContext>> logger,
     TimeProvider timeProvider,
+    IServiceProvider services,
     OutboxWakeUp<TDbContext>? wakeUp = null)
     : BackgroundService
     where TDbContext : DbContext
 {
     private readonly OutboxLaneOptions options = settings.Options;
+
+    // The lanes' own claim, else the outbox job's (AddOutboxLanes), else the one the package writing the outbox gives.
+    private readonly IOutboxLaneClaim? _claim = OutboxDefaultClaim<TDbContext>.Effective(settings.Options.Claim, services);
     private readonly TimeProvider _time = timeProvider;
 
     /// <summary>Messages another instance held, and when this one may look at them again.</summary>
@@ -137,7 +142,7 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
             var outcome = await OutboxMessageProcessor<TDbContext>.ProcessAsync(
                 scopeFactory,
                 message,
-                options.Claim,
+                _claim,
                 settings.RetryLimits,
                 stoppingToken);
             // Another instance holds it (a scatter-gather may hold it a while): look again at the next poll, not at

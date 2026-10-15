@@ -112,6 +112,8 @@ public static class PostgresServiceCollectionExtensions
     {
         EnsureOneSerializer<TContext>(services, outbox.Serializer);
         services.AddOutboxInterceptor(outbox.Serializer);
+        // The claim the outbox job and lanes use when the service set none: several instances share the database.
+        services.TryAddSingleton(new OutboxDefaultClaim<TContext>(PostgresOutboxLaneClaim.Instance));
         services.RemoveAll<PostgresOutboxInterceptor<TContext>>();
         services.AddSingleton(provider => new PostgresOutboxInterceptor<TContext>(new InsertOutboxMessagesInterceptor(
             provider.GetRequiredService<IOutboxSerializer>(),

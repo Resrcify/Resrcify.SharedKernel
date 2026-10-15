@@ -80,7 +80,7 @@ public class ProcessOutboxMessagesJobSetupTests
     public async Task AddProcessOutboxMessagesJob_Should_ScheduleARepeatingTriggerAtTheGivenInterval()
     {
         await using var provider = BuildProvider(services => services.AddQuartz(quartz =>
-            quartz.AddProcessOutboxMessagesJob<TestDbContext>(processIntervalInSeconds: 45)));
+            quartz.AddProcessOutboxMessagesJob<TestDbContext>(processInterval: TimeSpan.FromSeconds(45))));
         var scheduler = await GetSchedulerAsync(provider);
 
         var trigger = (await scheduler.GetTriggersOfJob(OutboxJobKey)).ShouldHaveSingleItem();
@@ -89,6 +89,9 @@ public class ProcessOutboxMessagesJobSetupTests
         simple.ShouldNotBeNull();
         simple.RepeatInterval.ShouldBe(TimeSpan.FromSeconds(45));
         simple.RepeatCount.ShouldBe(-1);
+        var job = (await scheduler.GetJobDetail(OutboxJobKey)).ShouldNotBeNull();
+        job.JobDataMap["ProcessIntervalInMilliseconds"].ShouldBe(45_000L);
+        job.JobDataMap.ContainsKey("ProcessIntervalInSeconds").ShouldBeFalse();
     }
 
     /// <summary>
@@ -100,7 +103,7 @@ public class ProcessOutboxMessagesJobSetupTests
     public async Task AddProcessOutboxMessagesJob_Should_DelayTheFirstFireByTheGivenSeconds()
     {
         await using var provider = BuildProvider(services => services.AddQuartz(quartz =>
-            quartz.AddProcessOutboxMessagesJob<TestDbContext>(delayInSecondsBeforeStart: 120)));
+            quartz.AddProcessOutboxMessagesJob<TestDbContext>(delayBeforeStart: TimeSpan.FromSeconds(120))));
         var before = DateTimeOffset.UtcNow;
         var scheduler = await GetSchedulerAsync(provider);
         var after = DateTimeOffset.UtcNow;
@@ -178,7 +181,7 @@ public class ProcessOutboxMessagesJobSetupTests
                 options.BatchSize = 9;
                 options.Retries = new RetrySchedule(4, TimeSpan.FromSeconds(30), TimeSpan.FromHours(1));
                 options.TransientRetries = options.Retries with { MaxAttempts = 20 };
-                options.ProcessIntervalInSeconds = 30;
+                options.ProcessInterval = TimeSpan.FromSeconds(30);
             }));
         var scheduler = await GetSchedulerAsync(provider);
 
@@ -232,7 +235,7 @@ public class ProcessOutboxMessagesJobSetupTests
     public async Task AddProcessOutboxMessagesJob_Should_NotScheduleTheCleanup_WhenRetentionIsOff()
     {
         await using var provider = BuildProvider(services => services.AddQuartz(quartz =>
-            quartz.AddProcessOutboxMessagesJob<TestDbContext>(processedRetentionInDays: 0)));
+            quartz.AddProcessOutboxMessagesJob<TestDbContext>(processedRetention: TimeSpan.Zero)));
         var scheduler = await GetSchedulerAsync(provider);
 
         (await scheduler.GetJobDetail(OutboxJobs.Cleanup<TestDbContext>())).ShouldBeNull();

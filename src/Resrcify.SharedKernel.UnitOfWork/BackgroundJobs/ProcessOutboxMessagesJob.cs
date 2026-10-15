@@ -45,7 +45,10 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
     internal const string ProcessBatchSizeKey = "ProcessBatchSize";
     internal const string ProcessMaxRetryCountKey = "ProcessMaxRetryCount";
     internal const string ProcessMaxTransientRetryCountKey = "ProcessMaxTransientRetryCount";
-    internal const string ProcessIntervalInSecondsKey = "ProcessIntervalInSeconds";
+    internal const string ProcessIntervalKey = "ProcessIntervalInMilliseconds";
+
+    /// <summary>The interval as 4.2 and before stored it, in whole seconds: still read from a persistent store.</summary>
+    internal const string LegacyProcessIntervalInSecondsKey = "ProcessIntervalInSeconds";
     internal const string ProcessRetryDelayInMillisecondsKey = "ProcessRetryDelayInMilliseconds";
     internal const string ProcessMaxRetryDelayInMillisecondsKey = "ProcessMaxRetryDelayInMilliseconds";
     internal const string ProcessRetryJitterKey = "ProcessRetryJitter";
@@ -53,7 +56,7 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
     internal const string ProcessMaxTransientRetryDelayInMillisecondsKey = "ProcessMaxTransientRetryDelayInMilliseconds";
     internal const string ProcessTransientRetryJitterKey = "ProcessTransientRetryJitter";
     internal const int DefaultProcessBatchSize = 20;
-    internal const int DefaultProcessIntervalInSeconds = 60;
+    internal static TimeSpan DefaultProcessInterval => TimeSpan.FromSeconds(60);
 
     /// <summary>The share of the trigger's interval a run spends starting batches: 80%.</summary>
     public const double DrainBudgetShare = 0.8;
@@ -78,7 +81,9 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
 
         IOutboxLaneClaim? claim;
         await using (var scope = scopeFactory.CreateAsyncScope())
-            claim = scope.ServiceProvider.GetService<OutboxJobClaim<TDbContext>>()?.Claim;
+            claim = OutboxDefaultClaim<TDbContext>.Effective(
+                scope.ServiceProvider.GetService<OutboxJobClaim<TDbContext>>()?.Claim,
+                scope.ServiceProvider);
 
         // Failed (or held by another instance) in this run: left for the next one.
         var passedOver = new List<Guid>();
@@ -113,14 +118,19 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
     /// </summary>
     private static TimeSpan DrainBudget(IJobExecutionContext context)
     {
-        var intervalInSeconds = ReadInt(context.MergedJobDataMap, ProcessIntervalInSecondsKey, 0);
-        if (intervalInSeconds > 0)
-            return TimeSpan.FromSeconds(intervalInSeconds) * DrainBudgetShare;
+        var interval = JobDataDurations.Read(
+            context.MergedJobDataMap,
+            ProcessIntervalKey,
+            LegacyProcessIntervalInSecondsKey,
+            TimeSpan.FromSeconds(1),
+            TimeSpan.Zero);
+        if (interval > TimeSpan.Zero)
+            return interval * DrainBudgetShare;
 
         if (context.Trigger is ISimpleTrigger { RepeatInterval: var repeat } && repeat > TimeSpan.Zero)
             return repeat * DrainBudgetShare;
 
-        return TimeSpan.FromSeconds(DefaultProcessIntervalInSeconds) * DrainBudgetShare;
+        return DefaultProcessInterval * DrainBudgetShare;
     }
 
     // The schedules a message gets, made as every registration makes them (OutboxRetryLimits.Create). A job stored

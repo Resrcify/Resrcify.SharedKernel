@@ -31,7 +31,7 @@ public sealed class ClockRegistrationTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddOutboxProcessing<TestDbContext>(outbox => outbox.DelayInSecondsBeforeStart = 60);
+        services.AddOutboxProcessing<TestDbContext>(outbox => outbox.DelayBeforeStart = TimeSpan.FromSeconds(60));
         services.AddQuartz(quartz => quartz
             .AddIntervalJob<NoopJob>(TimeSpan.FromMinutes(5), startAfter: TimeSpan.FromMinutes(1))
             .AddCronJob<GenericJob<string>>("0 0 16 * * ?"));

@@ -39,7 +39,7 @@ public sealed class OutboxServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
 
-        services.AddOutboxProcessing<TestDbContext>(outbox => outbox.ProcessIntervalInSeconds = 20);
+        services.AddOutboxProcessing<TestDbContext>(outbox => outbox.ProcessInterval = TimeSpan.FromSeconds(20));
 
         await using var provider = services.BuildServiceProvider();
         provider.GetRequiredService<IOutboxSerializer>().ShouldBeOfType<SystemTextJsonOutboxSerializer>();

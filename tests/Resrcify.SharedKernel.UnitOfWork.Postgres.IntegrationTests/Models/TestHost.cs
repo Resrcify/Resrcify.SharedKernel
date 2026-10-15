@@ -50,8 +50,8 @@ internal sealed class TestHost : IAsyncDisposable
             new SystemTextJsonOutboxSerializer(),
             outbox =>
             {
-                outbox.ProcessIntervalInSeconds = (int)PollInterval.TotalSeconds;
-                outbox.DelayInSecondsBeforeStart = (int)PollInterval.TotalSeconds;
+                outbox.ProcessInterval = PollInterval;
+                outbox.DelayBeforeStart = PollInterval;
             });
         builder.Services.AddQuartzHostedService();
 

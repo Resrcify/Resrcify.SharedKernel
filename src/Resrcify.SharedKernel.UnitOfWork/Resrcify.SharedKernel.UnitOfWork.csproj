@@ -27,6 +27,9 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.UnitTests" />
+    <!-- WithOutbox() registers the outbox's default claim (OutboxDefaultClaim). -->
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.Postgres" />
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.Postgres.UnitTests" />
     <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.IntegrationTests" />
   </ItemGroup>
 

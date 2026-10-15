@@ -370,7 +370,7 @@ By hand: `UPDATE "OutboxMessages" SET "ProcessedOnUtc" = NULL, "RetryCount" = 0 
 
 A run **drains a backlog**: while a batch comes back full it reads the next one, so 70 waiting messages with a batch
 of 20 are handled in one run (four reads) instead of four runs. It stops starting batches after 80% of the trigger's
-interval (`ProcessIntervalInSeconds`; a batch already started finishes), so a run ends before the next trigger is due.
+interval (`ProcessInterval`; a batch already started finishes), so a run ends before the next trigger is due.
 A quiet outbox costs one query per run, as before. A message that fails in a run is not read again in that run.
 
 **Retries back off**, in the job as in the lanes, by a `RetrySchedule` (Abstractions): a failed message waits
@@ -436,8 +436,8 @@ when the host doesn't process the outbox.
 
 Processed messages are deleted after **7 days** by an hourly job (`CleanupOutboxMessagesJob`), in batches of 5,000,
 so the outbox table and its indexes don't grow forever. Messages not processed yet, and messages that gave up (their
-`ProcessedOnUtc` is 9999-12-31, never before the cutoff), are kept. `AddOutboxProcessing` (`OutboxOptions.ProcessedRetentionInDays`) and
-`AddProcessOutboxMessagesJob` (`processedRetentionInDays`) add it; 0 turns it off.
+`ProcessedOnUtc` is 9999-12-31, never before the cutoff), are kept. `AddOutboxProcessing` (`OutboxOptions.ProcessedRetention`, a `TimeSpan`) and
+`AddProcessOutboxMessagesJob` (`processedRetention`) add it; `TimeSpan.Zero` turns it off.
 
 ### Outbox lanes
 
@@ -469,7 +469,7 @@ to a directly registered outbox job, with:
 services.AddOutboxLanes<AppDbContext>(lanes =>
 {
     lanes.MaxConcurrency = 8;
-    lanes.Claim = PostgresOutboxLaneClaim.Instance;   // safe with several service instances
+    lanes.Claim = PostgresOutboxLaneClaim.Instance;   // safe with several service instances (the default with WithOutbox())
 });
 ```
 
@@ -650,7 +650,7 @@ builder.Services.AddHealthChecks().AddOutbox<ShardDbContext>();   // tagged Heal
 | `outbox.messages.poison` | gauge | `context` | Messages that gave up. |
 | `outbox.oldest_waiting.age` | gauge (s) | `context` | How long the oldest waiting message has waited. |
 
-The gauges come from a backlog monitor that measures every 30 s (`BacklogCheckIntervalInSeconds`), so neither a
+The gauges come from a backlog monitor that measures every 30 s (`BacklogCheckInterval`), so neither a
 scrape nor a health check queries the database. Both outbox registrations run it: `AddOutboxProcessing<TDbContext>`
 and the bare `quartz.AddProcessOutboxMessagesJob<TDbContext>()` (every 30 s; `AddOutboxProcessing` sets its own
 interval). Registering `AddOutbox<TDbContext>` with neither fails the host's start, with a message naming the missing

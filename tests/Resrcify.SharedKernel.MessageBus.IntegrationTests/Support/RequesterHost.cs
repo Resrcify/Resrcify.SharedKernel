@@ -54,8 +54,8 @@ internal sealed class RequesterHost : IAsyncDisposable
         });
         builder.Services.AddOutboxProcessing<TestDbContext>(outboxSerializer, outbox =>
         {
-            outbox.ProcessIntervalInSeconds = 1;
-            outbox.DelayInSecondsBeforeStart = 0;
+            outbox.ProcessInterval = TimeSpan.FromSeconds(1);
+            outbox.DelayBeforeStart = TimeSpan.Zero;
         });
         builder.Services.AddQuartzHostedService();
         builder.Services.AddMessageBus(bus =>
