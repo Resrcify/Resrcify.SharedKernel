@@ -28,6 +28,7 @@ namespace Resrcify.SharedKernel.MessageBus.UnitTests.PublishSubscribe;
     "Performance",
     "CA1515:Consider making public types internal",
     Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
+[Collection(SharedMeterCollection.Name)]
 public sealed class IntegrationEventDispatcherTests
 {
     [Fact]

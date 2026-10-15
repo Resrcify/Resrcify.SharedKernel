@@ -64,6 +64,13 @@ every package in the repository is released together under one version.
 
 ### Fixed
 
+- **A flaky message bus test** (Resrcify.SharedKernel.MessageBus, tests only):
+  `IntegrationEventDispatcherTests.Handle_ShouldStillHandleTheEvent_WhenTheClaimStoreIsOutOfReach` counted
+  `messagebus.events.handled event=PayoutRotated outcome=success` on the process-wide meter, which classes running in
+  parallel add to (CI counted 3 for 1). The `events.*` counters carry no tag of the bus that recorded them, so
+  `IntegrationEventDispatcherTests` and `EventBusTests`, which count them, now run in the new non-parallel
+  `SharedMeterCollection`; the other `MetricsCapture` users count measurements tagged with their own queue or message.
+
 - **`UseServiceRequestLogging` is documented before `UseExceptionHandler()`** (its XML docs and the Observability
   README, Quick Start included), where its line logs the status the exception handler answered (a 500 whose stack the
   handler logs once, a 499 for a client abort) rather than the exception passing through. It said to put it after,
