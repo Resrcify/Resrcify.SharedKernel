@@ -89,8 +89,8 @@ every package in the repository is released together under one version.
   `Error`.
 
 - **`UseServiceRequestLogging` logs an exception's stack once** (Resrcify.SharedKernel.Observability), following
-  SharedKernel's `LoggedExceptions` convention (by its `Exception.Data` mark, so the package still references no other
-  SharedKernel package). Placed after `UseExceptionHandler()`, the request line attached every unhandled exception,
+  SharedKernel's `LoggedExceptions` convention (Results' `LoggedExceptions.Claim`, under its lock: the package now
+  references Resrcify.SharedKernel.Results, which has no dependencies). Placed after `UseExceptionHandler()`, the request line attached every unhandled exception,
   which the mediator's behaviors or `ResultExceptionHandler` logged with its stack as well. The line now carries the
   exception only when nothing logged it before, and marks it when it does, so `ResultExceptionHandler` then logs only
   its `Debug` line. A `Logger` set through `configure` is written through the same way.

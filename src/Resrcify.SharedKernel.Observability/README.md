@@ -133,7 +133,7 @@ exception passing through it as "responded 500", at `Error`, a client abort (an 
 misled: its own branch answers a client abort (an `OperationCanceledException` or `IOException` thrown once
 `RequestAborted` is cancelled, as `UseExceptionHandler()` tells one) with a 499, logged at `Information` with no
 exception, and the line of a real exception carries its stack only when nothing logged it before (the
-`LoggedExceptions` convention, followed by name), so the stack is logged once either way.
+`LoggedExceptions` convention, through Results' `LoggedExceptions.Claim`), so the stack is logged once either way.
 
 One line per request, Serilog's `HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms`:
 

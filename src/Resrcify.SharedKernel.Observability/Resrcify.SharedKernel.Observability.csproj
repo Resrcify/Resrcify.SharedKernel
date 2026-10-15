@@ -50,6 +50,11 @@
     </PackageReference>
   </ItemGroup>
 
+  <!-- The logged-once convention (LoggedExceptions). Results references nothing but the BCL. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Resrcify.SharedKernel.Results\Resrcify.SharedKernel.Results.csproj" />
+  </ItemGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="Resrcify.SharedKernel.Observability.UnitTests" />
   </ItemGroup>

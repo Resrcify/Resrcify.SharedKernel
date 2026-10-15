@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using Resrcify.SharedKernel.Results.Diagnostics;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
@@ -10,10 +11,9 @@ namespace Resrcify.SharedKernel.Observability.Logging;
 
 /// <summary>
 /// The logger <c>UseServiceRequestLogging</c> gives Serilog's request logging: the request line carries an exception's
-/// stack only when nothing logged it before, following SharedKernel's logged-once convention (<c>LoggedExceptions</c>
-/// in Resrcify.SharedKernel.Results: whoever logs an exception first marks it in <see cref="Exception.Data"/> under
-/// <see cref="LoggedDataKey"/>, and the others log it without the stack). Followed by name, like the telemetry's
-/// sources, so the package references no other SharedKernel package.
+/// stack only when nothing logged it before, following SharedKernel's logged-once convention
+/// (<see cref="LoggedExceptions"/>: whoever logs an exception first claims it, and the others log it without the
+/// stack).
 /// </summary>
 /// <remarks>
 /// When the request logging runs inside <c>UseExceptionHandler()</c>, it sees an unhandled exception on its way out: a
@@ -25,9 +25,6 @@ namespace Resrcify.SharedKernel.Observability.Logging;
 internal sealed class LoggedOnceRequestLogger
     : ILogger
 {
-    /// <summary>The mark of the logged-once convention: <c>LoggedExceptions.DataKey</c>.</summary>
-    public const string LoggedDataKey = "Resrcify.SharedKernel.Logged";
-
     private readonly Func<ILogger> _target;
     private readonly bool _resolvedOnEveryWrite;
 
@@ -87,27 +84,10 @@ internal sealed class LoggedOnceRequestLogger
     {
         ArgumentNullException.ThrowIfNull(logEvent);
 
-        var written = logEvent.Exception is { } exception && !Claim(exception)
+        var written = logEvent.Exception is { } exception && !LoggedExceptions.Claim(exception)
             ? WithoutException(logEvent)
             : logEvent;
         _target().Write(written);
-    }
-
-    /// <summary>
-    /// <see langword="true"/> when nothing logged <paramref name="exception"/> yet: the line logs it, and it is now marked.
-    /// An exception whose <see cref="Exception.Data"/> is read-only can't be marked, and is always logged.
-    /// </summary>
-    internal static bool Claim(Exception exception)
-    {
-        var data = exception.Data;
-        if (data.IsReadOnly)
-            return true;
-
-        if (data.Contains(LoggedDataKey))
-            return false;
-
-        data[LoggedDataKey] = true;
-        return true;
     }
 
     private static LogEvent WithoutException(LogEvent logEvent)

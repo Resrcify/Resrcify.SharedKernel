@@ -17,6 +17,8 @@ using Resrcify.SharedKernel.Observability.UnitTests.Support;
 using Resrcify.SharedKernel.Results.Diagnostics;
 using Resrcify.SharedKernel.Web.Exceptions;
 using Resrcify.SharedKernel.Web.Extensions;
+using Serilog;
+using Serilog.Core;
 using Serilog.Events;
 using Shouldly;
 using Xunit;
@@ -118,14 +120,56 @@ public sealed class ServiceTelemetryApplicationBuilderExtensionsPlacementTests
     }
 
     [Fact]
-    public void TheMarkFollowed_ShouldBeLoggedExceptions()
+    public void TheRequestLine_ShouldClaimTheException_AsLoggedExceptionsDoes()
     {
-        LoggedOnceRequestLogger.LoggedDataKey.ShouldBe(LoggedExceptions.DataKey);
-
+        var target = new CollectingSink();
+        using var logger = new LoggerConfiguration().WriteTo.Sink(target).CreateLogger();
+        var requestLogger = LoggedOnceRequestLogger.Over(logger);
         var exception = new InvalidOperationException("Boom");
-        LoggedOnceRequestLogger.Claim(exception).ShouldBeTrue();
+
+        requestLogger.Error(exception, "first");
+        requestLogger.Error(exception, "second");
+
         LoggedExceptions.IsLogged(exception).ShouldBeTrue();
-        LoggedOnceRequestLogger.Claim(exception).ShouldBeFalse();
+        target.Events.Select(logEvent => logEvent.Exception).ShouldBe([exception, null]);
+    }
+
+    [Fact]
+    public async Task TheRequestLine_ShouldCarryTheExceptionOnce_WhenManyThreadsLogItAtOnce()
+    {
+        // LoggedExceptions' lock: of the lines logging one exception at the same moment, exactly one carries it.
+        var target = new CollectingSink();
+        using var logger = new LoggerConfiguration().WriteTo.Sink(target).CreateLogger();
+        var requestLogger = LoggedOnceRequestLogger.Over(logger);
+
+        for (var round = 0; round < 50; round++)
+        {
+            var exception = new InvalidOperationException("Boom");
+            using var start = new ManualResetEventSlim();
+            var writers = Enumerable
+                .Range(0, 8)
+                .Select(_ => Task.Run(() =>
+                {
+                    start.Wait();
+                    requestLogger.Error(exception, "concurrent");
+                }))
+                .ToArray();
+            start.Set();
+            await Task.WhenAll(writers);
+
+            target.Events.Count(logEvent => ReferenceEquals(logEvent.Exception, exception)).ShouldBe(1);
+        }
+    }
+
+    private sealed class CollectingSink
+        : ILogEventSink
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<LogEvent> _events = new();
+
+        public IReadOnlyCollection<LogEvent> Events => _events;
+
+        public void Emit(LogEvent logEvent)
+            => _events.Enqueue(logEvent);
     }
 
     private static object? ScalarOf(
