@@ -46,7 +46,7 @@ internal sealed class RequesterHost : IAsyncDisposable
         builder.Services.AddDbContext<TestDbContext>(options => options
             .UseNpgsql(databaseConnectionString)
             .AddInterceptors(new InsertOutboxMessagesInterceptor(outboxSerializer, new PostgresOnConflictOutboxInsertStrategy())));
-        builder.Services.AddMediator(typeof(RequesterHost).Assembly);
+        builder.Services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(RequesterHost).Assembly));
         builder.Services.AddOutboxLanes<TestDbContext>(lanes =>
         {
             lanes.PollInterval = TimeSpan.FromMilliseconds(200);

@@ -25,8 +25,6 @@ public sealed class MediatorConfiguration
 
     internal NotificationPublishStrategy NotificationPublishStrategy { get; private set; } = NotificationPublishStrategy.Sequential;
 
-    internal bool UseDiTimePipelineComposition { get; private set; }
-
     internal ServiceLifetime MediatorLifetime { get; private set; } = ServiceLifetime.Transient;
 
     /// <summary>Whether <see cref="ConfigureLogging"/> was called (its options then replace another call's defaults).</summary>
@@ -189,12 +187,6 @@ public sealed class MediatorConfiguration
         NotificationPublishStrategy strategy)
     {
         NotificationPublishStrategy = strategy;
-        return this;
-    }
-
-    public MediatorConfiguration EnableDiTimePipelineComposition(bool enabled = true)
-    {
-        UseDiTimePipelineComposition = enabled;
         return this;
     }
 

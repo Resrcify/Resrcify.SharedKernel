@@ -139,7 +139,7 @@ public sealed class MediatorRequestResponderTests
                 }),
             services => services
                 .AddSingleton(calls)
-                .AddMediator(typeof(MediatorRequestResponderTests).Assembly));
+                .AddMediator(config => config.RegisterServicesFromAssemblies(typeof(MediatorRequestResponderTests).Assembly)));
         using var requester = await InMemoryServices.StartAsync(
             network,
             bus => bus.AddRequest<PlayerQuestion, PlayerAnswer>().AddScatterGather());

@@ -39,21 +39,10 @@ internal sealed partial class Mediator
         return runtime;
     }
 
+    // The pipeline the container composed.
     private IStreamRuntimeExecutor<TRequest, TResponse> CreateStreamRuntime<TRequest, TResponse>()
         where TRequest : IStreamRequest<TResponse>
-    {
-        var composedRuntime = serviceProvider.GetService<IDiComposedStreamRuntime<TRequest, TResponse>>();
-        if (composedRuntime is not null)
-            return composedRuntime;
-
-        var handler = serviceProvider.GetService<IStreamRequestHandler<TRequest, TResponse>>()
-            ?? throw new InvalidOperationException($"No stream request handler registered for '{typeof(TRequest).FullName}'.");
-
-        var behaviors = serviceProvider.GetServices<IStreamPipelineBehavior<TRequest, TResponse>>();
-        var behaviorArray = MaterializeServices(behaviors);
-
-        return new StreamRuntime<TRequest, TResponse>(handler, behaviorArray);
-    }
+        => serviceProvider.GetRequiredService<IDiComposedStreamRuntime<TRequest, TResponse>>();
 
     private static Func<Mediator, IStreamRequest<TResponse>, CancellationToken, IAsyncEnumerable<TResponse>> CreateTypedStreamDispatcher<TResponse>(Type requestType)
     {

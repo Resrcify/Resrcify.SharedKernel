@@ -27,7 +27,7 @@ public sealed class ServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
 
-        services.AddMediator(typeof(ServiceCollectionExtensionsTests).Assembly);
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(ServiceCollectionExtensionsTests).Assembly));
 
         using var serviceProvider = services.BuildServiceProvider();
 
@@ -42,11 +42,13 @@ public sealed class ServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void AddMediator_WithServiceLifetimeOverload_RegistersMediatorAsScoped()
+    public void AddMediator_WithAScopedLifetime_RegistersEveryInterfaceAsTheScopesOneMediator()
     {
         var services = new ServiceCollection();
 
-        services.AddMediator(ServiceLifetime.Scoped, typeof(ServiceCollectionExtensionsTests).Assembly);
+        services.AddMediator(config => config
+            .RegisterServicesFromAssemblies(typeof(ServiceCollectionExtensionsTests).Assembly)
+            .UseMediatorLifetime(ServiceLifetime.Scoped));
 
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
@@ -60,12 +62,27 @@ public sealed class ServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void AddMediator_ShouldRegisterATransientMediatorAndContainerComposedPipelines_ByDefault()
+    {
+        var services = new ServiceCollection();
+
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(ServiceCollectionExtensionsTests).Assembly));
+
+        services.Single(descriptor => descriptor.ServiceType == typeof(IMediator)).Lifetime.ShouldBe(ServiceLifetime.Transient);
+        services.Single(descriptor => descriptor.ServiceType == typeof(ISender)).Lifetime.ShouldBe(ServiceLifetime.Transient);
+        services
+            .Single(descriptor => descriptor.ServiceType == typeof(Abstractions.IDiComposedSendRuntime<,>))
+            .Lifetime.ShouldBe(ServiceLifetime.Transient);
+        services
+            .Single(descriptor => descriptor.ServiceType == typeof(Abstractions.IDiComposedStreamRuntime<,>))
+            .Lifetime.ShouldBe(ServiceLifetime.Transient);
+    }
+
+    [Fact]
     public void AddMediator_ShouldThrow_WhenTheMediatorLifetimeIsSingleton()
     {
         var services = new ServiceCollection();
 
-        Should.Throw<ArgumentOutOfRangeException>(
-            () => services.AddMediator(ServiceLifetime.Singleton, typeof(ServiceCollectionExtensionsTests).Assembly));
         Should.Throw<ArgumentOutOfRangeException>(
             () => services.AddMediator(config => config.UseMediatorLifetime(ServiceLifetime.Singleton)));
     }
@@ -135,7 +152,7 @@ public sealed class ServiceCollectionExtensionsTests
     public void AddMediator_ShouldRecordTheScannedAssemblies_WhenItScans()
     {
         var services = new ServiceCollection();
-        services.AddMediator(typeof(ServiceCollectionExtensionsTests).Assembly);
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(ServiceCollectionExtensionsTests).Assembly));
 
         services
             .Where(descriptor => descriptor.ServiceType == typeof(IMediatorAssemblyScan))

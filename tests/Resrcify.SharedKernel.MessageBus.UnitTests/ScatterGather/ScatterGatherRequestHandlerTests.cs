@@ -63,7 +63,7 @@ public sealed class ScatterGatherRequestHandlerTests
     private static ServiceProvider Build(FakeScatterGatherTransport transport)
     {
         var services = new ServiceCollection();
-        services.AddMediator(typeof(ScatterGatherRequestHandlerTests).Assembly);
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(ScatterGatherRequestHandlerTests).Assembly));
         services.AddMessageBus(bus => bus
             .UseRabbitMq(new RabbitMqConnection("localhost", 5672, "guest", "guest"))
             .AddScatterGather());

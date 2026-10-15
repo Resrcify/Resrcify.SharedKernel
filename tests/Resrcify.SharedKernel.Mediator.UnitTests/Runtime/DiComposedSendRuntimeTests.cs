@@ -11,7 +11,7 @@ using Xunit;
 
 namespace Resrcify.SharedKernel.Mediator.UnitTests.Runtime;
 
-/// <summary>Sending through the pipeline composed when the DI container builds it (<c>EnableDiTimePipelineComposition</c>).</summary>
+/// <summary>Sending through the pipeline composed when the DI container builds it (the mediator's one runtime).</summary>
 [SuppressMessage(
     "Performance",
     "CA1515:Consider making public types internal",
@@ -47,11 +47,7 @@ public sealed class DiComposedSendRuntimeTests
     {
         var services = new ServiceCollection();
         services.AddScoped<ComposedLog>();
-        services.AddMediator(config =>
-        {
-            config.RegisterServicesFromAssemblies(typeof(DiComposedSendRuntimeTests).Assembly);
-            config.EnableDiTimePipelineComposition();
-        });
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(DiComposedSendRuntimeTests).Assembly));
         services.AddTransient<IPipelineBehavior<ComposedRequest, Result>, ComposedBehavior>();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }

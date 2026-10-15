@@ -115,8 +115,6 @@ public static class DependencyInjection
             cfg.AddStandardBehaviors();
 
             cfg.UseNotificationPublishStrategy(NotificationPublishStrategy.Sequential);
-
-            cfg.EnableDiTimePipelineComposition(enabled: false);
         });
 
         return services;
@@ -416,8 +414,7 @@ says so. `AddMediator` therefore throws `InvalidOperationException` when a scann
 has no registered behavior that handles it: one whose request type parameter is constrained to that interface
 (`CachingPipelineBehavior` and `TransactionPipelineBehavior` are; so may a service's own). It sees the behaviors added
 to the configuration and those registered in the container before `AddMediator`; if yours is registered after,
-call `cfg.SkipBehaviorCheck()` (with `AddMediator(assemblies)`, which takes no configuration, register it before, or
-switch to `AddMediator(cfg => ...)`). The behavior must also run for the request's handler: a `Task` handler
+call `cfg.SkipBehaviorCheck()`. The behavior must also run for the request's handler: a `Task` handler
 (`IRequestHandler`) runs only Task behaviors, a ValueTask handler (`IValueTaskRequestHandler`) only ValueTask ones, so
 an `ICachingQuery` with a ValueTask handler and only the standard behaviors fails the check.
 
@@ -537,7 +534,11 @@ Behaviors and pre/post processors are registered only as added (`AddOpenBehavior
 transient: it keeps only the last runtime it built for each kind of call (send, publish, stream), reused when its next
 call has the same types (e.g. a job sending one command per item).
 
-- **Send path** (`Runtime/Mediator.Send.cs` + `Runtime/Mediator.SendRuntimes.cs`)
+There is one runtime: a request's pipeline is resolved from the container as one service
+(`DiComposedSendRuntime<,>` / `DiComposedStreamRuntime<,>`, transient), which the container builds with its handler,
+behaviors and processors at their own lifetimes (transient unless registered otherwise).
+
+- **Send path** (`Runtime/Mediator.Send.cs` + `Runtime/DiComposedRuntimes.cs`)
     - Resolves `ValueTask` handler first if available, otherwise task-based handler.
     - Executes pre-processors -> pipeline -> handler -> post-processors.
     - Keeps the last send runtime (one slot).
@@ -545,7 +546,7 @@ call has the same types (e.g. a job sending one command per item).
     - Resolves all handlers for a notification type.
     - Uses selected strategy (`Sequential` or `Parallel`).
     - Keeps the last publish runtime (one slot).
-- **Stream path** (`Runtime/Mediator.Stream.cs` + `Runtime/Mediator.StreamRuntime.cs`)
+- **Stream path** (`Runtime/Mediator.Stream.cs` + `Runtime/DiComposedRuntimes.cs`)
     - Resolves stream handler and stream pipeline behaviors.
     - Keeps the last stream runtime (one slot).
 
@@ -564,14 +565,6 @@ cfg.UseNotificationPublishStrategy(
 ```
 
 Use `Sequential` when handler order/serialization matters; use `Parallel` for throughput when handlers are independent and thread-safe.
-
-### DI-time pipeline composition
-
-```csharp
-cfg.EnableDiTimePipelineComposition(true);
-```
-
-When enabled, `DiComposedSendRuntime<,>` / `DiComposedStreamRuntime<,>` are built through DI and reused by mediator runtime lookup. This can reduce per-call composition overhead in some scenarios.
 
 ## Common issues
 

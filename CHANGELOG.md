@@ -43,6 +43,24 @@ every package in the repository is released together under one version.
   SharedKernel code with a string of its own (Discord's `ErrorMessageExtensions.ResilienceTimeoutCode` /
   `CircuitOpenCode`, Tournament's test stubs) can use the catalogue's constant instead.
 
+- **One mediator runtime: the pipeline the container composes** (Resrcify.SharedKernel.Mediator). The mediator had two
+  ways to build a request's pipeline, chosen by `cfg.EnableDiTimePipelineComposition()`: every Titan service turned on
+  the container-composed one, while `AddMediator(params Assembly[])` and `AddMediator(ServiceLifetime, params
+  Assembly[])` silently used the other. Now there is one: a request's pipeline (`DiComposedSendRuntime<,>` /
+  `DiComposedStreamRuntime<,>`, transient) is resolved from the container, which builds the handler, behaviors and
+  processors with their own lifetimes (transient unless registered otherwise), and behaviors run in the order added,
+  as before. The mediator stays transient by default (`cfg.UseMediatorLifetime(ServiceLifetime.Scoped)` as before).
+  Removed:
+
+  | Was | Now |
+  |---|---|
+  | `cfg.EnableDiTimePipelineComposition()` / `EnableDiTimePipelineComposition(bool)` | delete the call: it is the only runtime |
+  | `services.AddMediator(params Assembly[] assemblies)` | `services.AddMediator(cfg => cfg.RegisterServicesFromAssemblies(assemblies))` |
+  | `services.AddMediator(ServiceLifetime lifetime, params Assembly[] assemblies)` | `services.AddMediator(cfg => cfg.RegisterServicesFromAssemblies(assemblies).UseMediatorLifetime(lifetime))` |
+
+  Every Titan service (Sentinel, Tournament, Shard, Oracle, Discord, SwgohApi, Sandbox, Identity) deletes its
+  `config.EnableDiTimePipelineComposition();` line in `Application/ApplicationServiceRegistration.cs`; nothing else.
+
 ### Behaviour changes
 
 - **One transient contract, owned by SharedKernel, with a DI hook** (Resrcify.SharedKernel.Results, Abstractions,
