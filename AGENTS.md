@@ -69,7 +69,7 @@ dotnet test Resrcify.SharedKernel.slnx --no-build
 
 ### 3. Integration test — `Resrcify.SharedKernel.IntegrationTesting`
 
-Use the shipped fixtures (`PostgresContainerFixture`, `RabbitMqContainerFixture`, `IntegrationFactoryBase<TProgram>`) when the symptom requires real infra (transaction interleaving, exchange routing, migration application against a fresh DB, end-to-end outbox dispatch). Each fixture spins up its own real Postgres / RabbitMQ in docker and tears down on dispose — no manual orchestration. Reference cover for the outbox dispatch path lives at `tests/Resrcify.SharedKernel.UnitOfWork.IntegrationTests/OutboxDispatchTests.cs`. Pattern + per-service rollout in `INTEGRATION_TESTING.md`.
+Use the shipped fixtures (`PostgresContainerFixture`, `RabbitMqContainerFixture`, and `ServiceHostFixture<TProgram>` to host a service's `Program` on them) when the symptom requires real infra (transaction interleaving, exchange routing, migration application against a fresh DB, end-to-end outbox dispatch). Each fixture spins up its own real Postgres / RabbitMQ in docker and tears down on dispose — no manual orchestration. Reference cover for the outbox dispatch path lives at `tests/Resrcify.SharedKernel.UnitOfWork.IntegrationTests/OutboxDispatchTests.cs`. The pattern (settings, dependencies, `Logs`, the message bus test harness, a production-like broker) is in [`src/Resrcify.SharedKernel.IntegrationTesting/README.md`](src/Resrcify.SharedKernel.IntegrationTesting/README.md).
 
 ```sh
 dotnet test tests/Resrcify.SharedKernel.UnitOfWork.IntegrationTests
@@ -117,7 +117,7 @@ Things that have bitten past agents and don't surface in an error message until 
 - After touching the mediator pipeline, repository contracts, or EF configuration, build the full solution and run the domain tests.
 
 ### EF Core migrations (if this repo has a Persistence project)
-- Needs `Microsoft.EntityFrameworkCore.Tools` + an explicit `Microsoft.EntityFrameworkCore.Design 10.0.7` `PackageReference` in the Persistence csproj (**not** transitive — a transitive `Design 8.0.0` breaks the tool with `MissingMethodException: AbstractionsStrings.ArgumentIsEmpty`) + the global `dotnet-ef` at `10.0.7`.
+- Needs `Microsoft.EntityFrameworkCore.Tools` + an explicit `Microsoft.EntityFrameworkCore.Design` `PackageReference` in the Persistence csproj (**not** transitive — a transitive `Design 8.0.0` breaks the tool with `MissingMethodException: AbstractionsStrings.ArgumentIsEmpty`) + the global `dotnet-ef`, all at the EF version `Directory.Packages.props` pins (`10.0.13` as of 4.3.0: read the file, not this note, when they disagree).
 - Run from the Persistence project (it owns its `IDesignTimeDbContextFactory`); point both `--project` and `--startup-project` at it.
 - The tool re-runs `dotnet build` internally and ignores outer `-p:NoWarn`; pass MSBuild props after `--`: `dotnet ef migrations add <Name> --project ... --startup-project ... -- --property:NoWarn=<rule>`.
 - Scaffolded drop-table migrations **do not preserve data** — hand-edit to backfill before dropping. Don't touch `.Designer.cs` or the model snapshot.

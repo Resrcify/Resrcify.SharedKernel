@@ -1,16 +1,7 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Design;
+using Resrcify.SharedKernel.UnitOfWork.Postgres.Design;
 
 namespace Resrcify.SharedKernel.WebApiExample.Persistence;
 
-public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
-{
-    public AppDbContext CreateDbContext(string[] args)
-    {
-        var connectionString = "host=webapiexampledb;database=AppDb;username=ExampleUser;password=testingStuffOut;";
-        var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>()
-             .UseNpgsql(connectionString);
-
-        return new AppDbContext(optionsBuilder.Options);
-    }
-}
+/// <summary>For <c>dotnet ef</c>: the Database section of the Web project's appsettings, as the host reads it.</summary>
+public sealed class AppDbContextFactory
+    : PostgresDesignTimeFactory<AppDbContext>;

@@ -244,23 +244,6 @@ public sealed class ResultExceptionHandlerTests
     }
 
     [Fact]
-    public async Task TryHandleAsync_ShouldAnswer499WithoutAnError_WhenTheClientAborted()
-    {
-        using var logs = new FakeLoggerProvider();
-        using var loggerFactory = LoggerFactory.Create(logging => logging.AddProvider(logs));
-        using var aborted = new CancellationTokenSource();
-        await aborted.CancelAsync();
-        var context = Context();
-        context.RequestAborted = aborted.Token;
-
-        var handled = await Handler(loggerFactory).TryHandleAsync(context, new OperationCanceledException(aborted.Token), CancellationToken.None);
-
-        handled.ShouldBeTrue();
-        context.Response.StatusCode.ShouldBe(StatusCodes.Status499ClientClosedRequest);
-        logs.Collector.GetSnapshot().ShouldAllBe(entry => entry.Level < LogLevel.Warning);
-    }
-
-    [Fact]
     public async Task TryHandleAsync_ShouldAnswer500_WhenACancellationWasNotTheClients()
     {
         using var logs = new FakeLoggerProvider();

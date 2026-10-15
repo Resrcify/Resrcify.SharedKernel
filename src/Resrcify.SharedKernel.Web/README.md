@@ -248,8 +248,9 @@ in Development the error's message is the exception's type and message and the p
 (`options.IncludeExceptionDetails` decides either way). The exception is logged once, at `Error` (the exception
 handler middleware logs nothing more for an exception a handler handled), following Results' `LoggedExceptions`
 convention: when the mediator's behaviors logged it already on its way out, the handler logs a `Debug` line without the
-stack instead, and answers the same 500. A request the client aborted (an
-`OperationCanceledException` once `RequestAborted` fired) is a 499, logged at `Debug`, not as an error. A
+stack instead, and answers the same 500. A request the client aborted (an `OperationCanceledException` or `IOException`
+once `RequestAborted` fired) never reaches the handler: `UseExceptionHandler()` answers it with a 499 itself, logged at
+`Debug`, not as an error. A
 `TransientFailureException` (Results; itself or among the causes) holding errors is answered as the failed result it
 stands for, with problem details of its `Errors` (a 502 for an upstream's failure, a 504 for a timeout ...), logged at
 `Warning`, once.

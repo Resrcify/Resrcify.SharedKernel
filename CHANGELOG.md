@@ -510,6 +510,24 @@ every package in the repository is released together under one version.
   where `UseSerilogRequestLogging()` usually went. Both placements now log the same (see above); moving it is still the
   recommended order. Oracle's reorder (`8c41d27`) is that order.
 
+- **`ResultExceptionHandler`'s client-abort branch is gone** (Resrcify.SharedKernel.Web): it was dead.
+  `UseExceptionHandler()` answers an `OperationCanceledException` or `IOException` thrown after the request was
+  aborted with a 499 itself (logged at `Debug`), before it asks any `IExceptionHandler`, so the handler never saw one (a
+  test over the real middleware now shows it). The Observability package's own copy, which also knew `IOException`, is
+  the one left (`UseServiceRequestLogging`, which runs outside the exception handler). Nothing changes for a service.
+- **Documentation drift**: AGENTS.md pointed to a missing `INTEGRATION_TESTING.md` and recommended
+  `IntegrationFactoryBase` (it now points at `ServiceHostFixture` and the IntegrationTesting README), and gave EF Core
+  `10.0.7` (now: the version `Directory.Packages.props` pins, `10.0.13`); the READMEs' `d:\Google Drive\...` paths are
+  gone; the README's package list and layer table name UnitOfWork.Web and MessageBus.Testing.
+- **The sample is the canonical 4.3 service** (`samples/Resrcify.SharedKernel.WebApiExample`, not packed): a top-level
+  `Program.cs` (no `Startup.cs`), minimal-API `IEndpoint`s on `MapPostRequest` / `MapGetRequest` (no controllers, no
+  Swagger: OpenAPI in Development), `AddServiceTelemetry` / `UseServiceRequestLogging` (no `UseSerilogRequestLogging`),
+  `AddPostgresDbContext` with the outbox and its wake-up, `AddOutboxProcessing`, `AddResultResilience` from
+  configuration, the health checks, `AddDistributedCaching`, and the mediator registering the validators. Its
+  Application project no longer references UnitOfWork or Repository, which the layer table forbids there. Its Docker
+  image builds from the repository root on .NET 10, and its database is `postgres:18`.
+
+
 ## 4.2.0 (2026-10-14)
 
 ### Added

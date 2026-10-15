@@ -24,8 +24,9 @@ namespace Resrcify.SharedKernel.Web.Exceptions;
 /// <c>HttpResponseMessage.ToResultAsync</c> reads back as that error. The exception is logged once, at
 /// <see cref="LogLevel.Error"/> with its stack, following <see cref="LoggedExceptions"/>: when something else logged it
 /// already (the mediator's behaviors do), the handler logs a <see cref="LogLevel.Debug"/> line without the stack. A
-/// request the client gave up on (an <see cref="OperationCanceledException"/> once the request is aborted) is a 499,
-/// logged at <see cref="LogLevel.Debug"/>: nobody is waiting for an answer.
+/// request the client gave up on never gets here: <c>UseExceptionHandler()</c> answers an
+/// <see cref="OperationCanceledException"/> or <see cref="System.IO.IOException"/> after the request was aborted with a
+/// 499 itself (logged at <see cref="LogLevel.Debug"/>), before it asks any handler.
 /// A request ASP.NET Core couldn't bind (a <see cref="BadHttpRequestException"/>: a required parameter left out, a
 /// value that doesn't parse, a body that isn't valid JSON) isn't a fault of the service: it is answered with the
 /// exception's status (400, or 413, 415 ...) and problem details holding one <see cref="ErrorType.Validation"/> error
@@ -56,12 +57,6 @@ public sealed partial class ResultExceptionHandler(
         ArgumentNullException.ThrowIfNull(httpContext);
         ArgumentNullException.ThrowIfNull(exception);
 
-        if (IsClientAbort(httpContext, exception))
-        {
-            AnswerClientAbort(httpContext);
-            return true;
-        }
-
         if (exception is BadHttpRequestException badRequest)
         {
             await AnswerBindingFailureAsync(httpContext, badRequest);
@@ -82,12 +77,6 @@ public sealed partial class ResultExceptionHandler(
         await ProblemFor(exception).ExecuteAsync(httpContext);
         return true;
     }
-
-    private static bool IsClientAbort(
-        HttpContext httpContext,
-        Exception exception)
-        => exception is OperationCanceledException
-            && httpContext.RequestAborted.IsCancellationRequested;
 
     // At Error with the stack, unless whoever saw the exception first (a mediator behavior) logged it so already.
     private void LogUnhandledOnce(
@@ -147,15 +136,6 @@ public sealed partial class ResultExceptionHandler(
 
     private static string Describe(ImmutableArray<Error> errors)
         => string.Join("; ", errors.Select(error => error.ToString()));
-
-    private void AnswerClientAbort(
-        HttpContext httpContext)
-    {
-        LogClientAborted(logger, httpContext.Request.Method, httpContext.Request.Path);
-
-        if (!httpContext.Response.HasStarted)
-            httpContext.Response.StatusCode = StatusCodes.Status499ClientClosedRequest;
-    }
 
     // The problem details of a failed validation, with the exception's own status (a 413 or a 415 stays one).
     private async Task AnswerBindingFailureAsync(
@@ -264,12 +244,4 @@ public sealed partial class ResultExceptionHandler(
         PathString path,
         int statusCode,
         string reason);
-
-    [LoggerMessage(
-        Level = LogLevel.Debug,
-        Message = "The client aborted {Method} {Path}")]
-    private static partial void LogClientAborted(
-        ILogger logger,
-        string method,
-        PathString path);
 }

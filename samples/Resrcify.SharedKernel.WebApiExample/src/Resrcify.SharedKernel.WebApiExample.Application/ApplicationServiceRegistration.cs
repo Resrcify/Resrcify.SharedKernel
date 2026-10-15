@@ -1,5 +1,4 @@
 using System.Reflection;
-using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Resrcify.SharedKernel.Mediator.Extensions;
 
@@ -9,16 +8,11 @@ public static class ApplicationServiceRegistration
 {
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
-        services.AddMediator(config =>
-        {
-            config.RegisterServicesFromAssemblies(Assembly.GetExecutingAssembly());
-            // Logging -> Idempotency -> Validation -> Transaction -> UnitOfWork -> Caching (the first is the outermost).
-            config.AddStandardBehaviors();
-        });
-
-        services.AddValidatorsFromAssembly(
-            Assembly.GetExecutingAssembly(),
-            includeInternalTypes: true);
+        // The handlers and the FluentValidation validators of this assembly (internal ones included), and the
+        // behaviors: Logging -> Idempotency -> Validation -> Transaction -> UnitOfWork -> Caching (the first outermost).
+        services.AddMediator(config => config
+            .RegisterServicesFromAssemblies(Assembly.GetExecutingAssembly())
+            .AddStandardBehaviors());
 
         return services;
     }

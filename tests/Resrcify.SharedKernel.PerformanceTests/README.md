@@ -45,21 +45,21 @@
 ### Fast self-test
 
 ```powershell
-Set-Location "d:\Google Drive\Projects\Titan404\Resrcify.SharedKernel"
+# From the repository root (where Resrcify.SharedKernel.slnx is):
 dotnet run -c Release --project ".\tests\Resrcify.SharedKernel.PerformanceTests\Resrcify.SharedKernel.PerformanceTests.csproj" -- --self-test
 ```
 
 ### Mediator benchmarks
 
 ```powershell
-Set-Location "d:\Google Drive\Projects\Titan404\Resrcify.SharedKernel"
+# From the repository root (where Resrcify.SharedKernel.slnx is):
 dotnet run -c Release --project ".\tests\Resrcify.SharedKernel.PerformanceTests\Resrcify.SharedKernel.PerformanceTests.csproj" -- --filter "*Mediator*"
 ```
 
 Specific suites:
 
 ```powershell
-Set-Location "d:\Google Drive\Projects\Titan404\Resrcify.SharedKernel"
+# From the repository root (where Resrcify.SharedKernel.slnx is):
 dotnet run -c Release --project ".\tests\Resrcify.SharedKernel.PerformanceTests\Resrcify.SharedKernel.PerformanceTests.csproj" -- --filter "*MediatorStreamBenchmarks*"
 dotnet run -c Release --project ".\tests\Resrcify.SharedKernel.PerformanceTests\Resrcify.SharedKernel.PerformanceTests.csproj" -- --filter "*MediatorProcessorMatrixBenchmarks*"
 dotnet run -c Release --project ".\tests\Resrcify.SharedKernel.PerformanceTests\Resrcify.SharedKernel.PerformanceTests.csproj" -- --filter "*MediatorPolymorphicBenchmarks*"
@@ -68,7 +68,7 @@ dotnet run -c Release --project ".\tests\Resrcify.SharedKernel.PerformanceTests\
 ### Full benchmark run
 
 ```powershell
-Set-Location "d:\Google Drive\Projects\Titan404\Resrcify.SharedKernel"
+# From the repository root (where Resrcify.SharedKernel.slnx is):
 dotnet run -c Release --project ".\tests\Resrcify.SharedKernel.PerformanceTests\Resrcify.SharedKernel.PerformanceTests.csproj"
 ```
 
