@@ -97,6 +97,12 @@ every package in the repository is released together under one version.
   and `options.AddSaveChangesInterceptors(provider)`. No Titan service passed a `timeProvider` argument or set
   `OutboxOptions.TimeProvider`.
 
+- **`HealthTags` moved to Abstractions** (from Resrcify.SharedKernel.Web): `Resrcify.SharedKernel.Web.Health.HealthTags`
+  is now `Resrcify.SharedKernel.Abstractions.Health.HealthTags`, the same `Ready` / `Live` constants, so every package
+  registering a check shares it. A service using it changes `using Resrcify.SharedKernel.Web.Health;` to
+  `using Resrcify.SharedKernel.Abstractions.Health;` where it names `HealthTags` (Oracle, Sentinel, Shard and Tournament
+  in `Infrastructure/InfrastructureServiceRegistration.cs`; keep the Web one where `HealthEndpointOptions` is used).
+
 ### Behaviour changes
 
 - **One transient contract, owned by SharedKernel, with a DI hook** (Resrcify.SharedKernel.Results, Abstractions,
@@ -280,6 +286,13 @@ every package in the repository is released together under one version.
   write `Retries:FirstDelay` / `Retries:MaxDelay` for `RetryDelay` / `MaxRetryDelay`, under the same section. The
   services' comments about HttpClient's 100 s (Sentinel's `AddSwgohApi` remarks) can go.
 
+- **SharedKernel's health checks are tagged by default** (Resrcify.SharedKernel.MessageBus, UnitOfWork): given no
+  `tags` (`null`), `AddMessageBus()` and `AddOutbox<TDbContext>()` are tagged `HealthTags.Ready` and `AddQuartzJobs()`
+  `HealthTags.Live`, where they had no tag at all (so `MapHealthEndpoints()` ran them on `/health` only). Every Titan
+  service passed exactly these tags, so it can drop them (`.AddMessageBus()`, `.AddOutbox<ShardDbContext>()`,
+  `.AddQuartzJobs()`, `.AddQuartzJobs(jobs => ...)`); `tags: []` registers a check with none. ⚠️ A check registered
+  without tags now runs on the readiness (or liveness) probe.
+
 ### Added
 
 - **Abstractions: `RetrySchedule`** (`Resilience`; see Breaking changes), and the options that take one:
@@ -342,6 +355,21 @@ every package in the repository is released together under one version.
   the container's `IConfiguration`: the service passes none), which wins for every value it holds, `Retries`' values one
   by one; validated when the host starts. And **`ResultResilienceHttpClientBuilderExtensions.HttpClientTimeoutMargin`**
   (5 s), how far above `TotalTimeout` the client's own timeout is raised.
+
+- **UnitOfWork.Postgres: `IHealthChecksBuilder.AddPostgres<TContext>(name = "postgres", failureStatus = Unhealthy,
+  tags = [HealthTags.Ready], timeout = null)`**: the database's health check, on the connection
+  `AddPostgresDbContext<TContext>` built (a pooled connection and `SELECT 1`, without `AspNetCore.HealthChecks.NpgSql`);
+  without `AddPostgresDbContext<TContext>` the host fails to start, with a message saying so. It replaces
+  `.AddNpgSql(sp => sp.GetPostgresConnectionString<TContext>(), name: "postgres", tags: [HealthTags.Ready])` in
+  Oracle, Sentinel, Shard and Tournament (`Infrastructure/InfrastructureServiceRegistration.cs`): write
+  `.AddPostgres<OracleDbContext>()` (and the others' contexts), and drop the `AspNetCore.HealthChecks.NpgSql`
+  `PackageReference` (`Infrastructure/*.csproj`) and its `PackageVersion` (`Directory.Packages.props`).
+- **MessageBus' README: `AddMessageBus()`'s health check replaces a RabbitMQ check.** It watches the bus' own
+  connection: Sentinel and Shard delete `.AddRabbitMQ(name: "rabbitmq", tags: [HealthTags.Ready])`, the
+  `services.AddSingleton<IConnection>(...)` built for it (`Infrastructure/InfrastructureServiceRegistration.cs`) and
+  the `AspNetCore.HealthChecks.Rabbitmq` package (`Infrastructure/*.csproj`, `Directory.Packages.props`); SwgohApi
+  likewise (its `IConnection` and `healthChecks.AddRabbitMQ(...)`, in `Infrastructure/InfrastructureServiceRegistration.cs`),
+  adding `.AddMessageBus()` if it hasn't one.
 
 ### Fixed
 

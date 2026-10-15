@@ -22,8 +22,7 @@ namespace Resrcify.SharedKernel.UnitOfWork.Extensions;
 /// services.AddHealthChecks().AddQuartzJobs(
 ///     jobs => jobs
 ///         .Exclude&lt;ImportArchiveJob&gt;()   // runs for hours: its own alert, not a restart
-///         .Exclude(job => job.Group == "reports"),
-///     tags: [HealthTags.Live]);
+///         .Exclude(job => job.Group == "reports"));
 /// </code>
 /// </example>
 public sealed class QuartzJobsHealthCheckOptions

@@ -597,7 +597,7 @@ services.AddQuartz(quartz => quartz.AddIntervalJob<AddPlayersJob>(TimeSpan.FromM
 
 ```csharp
 services.AddQuartz(quartz => quartz.AddJobHeartbeats());
-services.AddHealthChecks().AddQuartzJobs(tags: ["live"]);   // HealthTags.Live in the Web package
+services.AddHealthChecks().AddQuartzJobs();   // tagged HealthTags.Live (Abstractions) unless given tags
 ```
 
 `AddJobHeartbeats()` stamps a heartbeat (`JobHeartbeatRegistry`) whenever any job fires or finishes: one listener, no
@@ -623,11 +623,10 @@ services.AddHealthChecks().AddQuartzJobs(
     jobs => jobs
         .Exclude<ImportArchiveJob>()                       // by type (the key AddIntervalJob / AddCronJob give it)
         .Exclude(new JobKey("nightly-report"))             // by key
-        .Exclude(job => job.Group == "reports"),           // by predicate
-    tags: [HealthTags.Live]);
+        .Exclude(job => job.Group == "reports"));          // by predicate
 
 // A service whose only jobs are the outbox's, and would rather restart than alert:
-services.AddHealthChecks().AddQuartzJobs(jobs => jobs.WatchOutboxJobs = true, tags: [HealthTags.Live]);
+services.AddHealthChecks().AddQuartzJobs(jobs => jobs.WatchOutboxJobs = true);
 ```
 
 `jobs.MaxSilence` sets the window, as `maxSilence` does. Exclude a job rather than give it an endless window
@@ -639,7 +638,7 @@ Add the meter and the health check; the dashboard and alerts are in `Resrcify.Ku
 
 ```csharp
 builder.Services.AddOpenTelemetry().WithMetrics(metrics => metrics.AddMeter(OutboxDiagnostics.MeterName));
-builder.Services.AddHealthChecks().AddOutbox<ShardDbContext>(tags: ["ready"]);
+builder.Services.AddHealthChecks().AddOutbox<ShardDbContext>();   // tagged HealthTags.Ready unless given tags
 ```
 
 | Metric | Type | Tags | What |

@@ -279,11 +279,18 @@ It replaces `builder.Services.AddProblemDetails()` (it registers it); keep `app.
 
 ```csharp
 builder.Services.AddHealthChecks()
-    .AddNpgSql(connectionString, name: "postgres", tags: [HealthTags.Ready])
-    .AddCheck<QuartzJobLivenessHealthCheck>("quartz-jobs", tags: [HealthTags.Live]);
+    .AddPostgres<ShardDbContext>()          // UnitOfWork.Postgres: ready by default
+    .AddMessageBus()                        // MessageBus: ready by default
+    .AddOutbox<ShardDbContext>()            // UnitOfWork: ready by default (Degraded on a backlog)
+    .AddQuartzJobs()                        // UnitOfWork: live by default
+    .AddCheck<UpstreamHealthCheck>("upstream", tags: [HealthTags.Ready]);
 // ...
 app.MapHealthEndpoints();
 ```
+
+`HealthTags` (`Ready`, `Live`) lives in Resrcify.SharedKernel.Abstractions (`Resrcify.SharedKernel.Abstractions.Health`),
+so every package's checks share it: given no tags, SharedKernel's checks take `HealthTags.Ready` (`AddPostgres`,
+`AddMessageBus`, `AddOutbox`) or `HealthTags.Live` (`AddQuartzJobs`); pass `tags: []` for none.
 
 | Path | Runs | |
 |---|---|---|

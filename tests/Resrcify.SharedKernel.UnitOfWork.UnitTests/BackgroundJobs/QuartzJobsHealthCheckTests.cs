@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Quartz;
+using Resrcify.SharedKernel.Abstractions.Health;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
@@ -230,6 +231,19 @@ public sealed class QuartzJobsHealthCheckTests
 
         result.Status.ShouldBe(HealthStatus.Unhealthy);
         result.Data.Keys.ShouldBe([IntervalJobSetup.JobKeyFor<GenericJob<PingCommand>>().ToString()]);
+    }
+
+    [Fact]
+    public async Task AddQuartzJobs_ShouldBeALivenessCheck_WhenGivenNoTags()
+    {
+        var services = new ServiceCollection();
+        services.AddHealthChecks().AddQuartzJobs();
+        services.AddHealthChecks().AddQuartzJobs(jobs => jobs.WatchOutboxJobs = true, name: "all-jobs");
+        await using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations
+            .Select(registration => registration.Tags)
+            .ShouldAllBe(tags => tags.SequenceEqual(new[] { HealthTags.Live }));
     }
 
     [Fact]

@@ -34,7 +34,11 @@ factory `dotnet ef` needs and an `xmin` concurrency token.
   - `IUnitOfWork` as `UnitOfWork<TContext>` (unless one is registered);
   - opt-ins: `.WithOutbox()`, `.WithOutboxWakeUp()`, `.RetryOnFailure()`, `.ConfigureNpgsql(...)`,
     `.ConfigureDbContext(...)`, `.ConfigureConnection(...)`, `.FromSection(...)`.
-- `provider.GetPostgresConnectionString<TContext>()` for what else needs the connection (a health check).
+- `AddHealthChecks().AddPostgres<TContext>()`: the database's health check (a connection from the pool and
+  `SELECT 1`, tagged `HealthTags.Ready` unless given tags), on the connection `AddPostgresDbContext` built, without
+  `AspNetCore.HealthChecks.NpgSql`. Without `AddPostgresDbContext<TContext>` the host fails to start, with a message
+  saying so. `AddPostgres<TContext>(name = "postgres", failureStatus = Unhealthy, tags = [ready], timeout)`.
+- `provider.GetPostgresConnectionString<TContext>()` for what else needs the connection string.
 - `PostgresDesignTimeFactory<TContext>`: the factory `dotnet ef` uses, reading the same settings, in one line.
 - `builder.HasPostgresRowVersion()`: optimistic concurrency on the `xmin` system column, without a new column.
 
@@ -240,8 +244,8 @@ services.AddMigrationsOnStartup<ShardDbContext>(configuration);
 // ShardDbContextFactory.cs
 internal sealed class ShardDbContextFactory : PostgresDesignTimeFactory<ShardDbContext>;
 
-// InfrastructureServiceRegistration: the health check reads the same connection
-.AddNpgSql(sp => sp.GetPostgresConnectionString<ShardDbContext>(), name: "postgres", tags: ["ready"])
+// InfrastructureServiceRegistration: the health check reads the same connection (no AspNetCore.HealthChecks.NpgSql)
+.AddPostgres<ShardDbContext>()
 ```
 
 Then delete `PersistenceOptions` and `MigrationsOptions`. The configuration doesn't change. Sentinel and Tournament

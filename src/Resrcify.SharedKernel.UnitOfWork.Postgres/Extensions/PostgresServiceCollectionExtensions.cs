@@ -75,8 +75,8 @@ public static class PostgresServiceCollectionExtensions
     }
 
     /// <summary>
-    /// The connection string <c>AddPostgresDbContext&lt;TContext&gt;</c> built, e.g. for a health check:
-    /// <c>AddNpgSql(provider =&gt; provider.GetPostgresConnectionString&lt;ShardDbContext&gt;())</c>.
+    /// The connection string <c>AddPostgresDbContext&lt;TContext&gt;</c> built. For the database's health check, use
+    /// <c>AddHealthChecks().AddPostgres&lt;TContext&gt;()</c>.
     /// </summary>
     public static string GetPostgresConnectionString<TContext>(this IServiceProvider provider)
         where TContext : DbContext

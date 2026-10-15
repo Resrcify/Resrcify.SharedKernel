@@ -527,8 +527,21 @@ disposed when it stops.
 ## Health check
 
 ```csharp
-services.AddHealthChecks().AddMessageBus(tags: ["ready"]);
+services.AddHealthChecks().AddMessageBus();   // tagged HealthTags.Ready (Abstractions) unless given tags
 ```
+
+It watches the bus' own connection to RabbitMQ, so it **replaces a RabbitMQ check of the service's**: delete
+`AddRabbitMQ(...)` (and the `AspNetCore.HealthChecks.Rabbitmq` package), and the `IConnection` built by hand for it
+(`services.AddSingleton<IConnection>(sp => factory.CreateConnectionAsync(...))`). Before (Sentinel, Shard, SwgohApi):
+
+```csharp
+services.AddSingleton<IConnection>(sp => new ConnectionFactory { ... }.CreateConnectionAsync("health").GetAwaiter().GetResult());
+services.AddHealthChecks()
+    .AddRabbitMQ(name: "rabbitmq", tags: ["ready"])
+    .AddMessageBus(tags: ["ready"]);
+```
+
+After: `services.AddHealthChecks().AddMessageBus();`
 
 (The queues' own gate is separate: every queue on a health-check tag shares one check of it, every
 `HealthCheckInterval` (the shortest any of them asks for) and early after a failed request, so an upstream's check

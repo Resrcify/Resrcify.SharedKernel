@@ -1,3 +1,5 @@
+using Resrcify.SharedKernel.Abstractions.Health;
+
 namespace Resrcify.SharedKernel.Web.Health;
 
 /// <summary>The paths <c>MapHealthEndpoints()</c> maps.</summary>

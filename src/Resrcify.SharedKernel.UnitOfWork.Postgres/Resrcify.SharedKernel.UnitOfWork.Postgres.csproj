@@ -28,6 +28,10 @@
     <!-- The wake-up listener is a hosted service that logs: needed at run time, so not private (as in UnitOfWork). -->
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
+    <!-- AddPostgres<TContext>: the service has the health checks (ASP.NET Core's shared framework). -->
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
