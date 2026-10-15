@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
+using Resrcify.SharedKernel.Abstractions.UnitOfWork;
+using Resrcify.SharedKernel.UnitOfWork.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Fixtures;
 using Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Models;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
@@ -32,7 +34,7 @@ public sealed class OutboxAdministrationTests(PostgresFixture pg)
         var services = new ServiceCollection();
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(new DateTimeOffset(Now)));
         services.AddDbContext<TestDbContext>(options => options.UseNpgsql(connectionString));
-        services.AddScoped<OutboxAdministration<TestDbContext>>();
+        services.TryAddOutboxAdministration<TestDbContext>();
         _services = services.BuildServiceProvider();
 
         await using var scope = _services.CreateAsyncScope();
@@ -120,10 +122,46 @@ public sealed class OutboxAdministrationTests(PostgresFixture pg)
     public async Task FindAsync_ShouldBeNull_ForAnUnknownMessage()
         => (await Administration(outbox => outbox.FindAsync(Guid.NewGuid()))).ShouldBeNull();
 
-    private async Task<T> Administration<T>(Func<OutboxAdministration<TestDbContext>, Task<T>> use)
+    [Fact]
+    public async Task DeleteAsync_ShouldDeleteAMessageThatGaveUp_AndNoOther()
+    {
+        var givenUp = Message("Shards.Created", minutesAgo: 5, givenUp: true);
+        var waiting = Message("Shards.Created", minutesAgo: 1);
+        var processed = Message("Shards.Created", minutesAgo: 2, processed: true);
+        await SeedAsync(givenUp, waiting, processed);
+
+        (await Administration(outbox => outbox.DeleteAsync(givenUp.Id))).ShouldBeTrue();
+        (await Administration(outbox => outbox.DeleteAsync(givenUp.Id))).ShouldBeFalse();     // gone
+        (await Administration(outbox => outbox.DeleteAsync(waiting.Id))).ShouldBeFalse();     // the outbox's own
+        (await Administration(outbox => outbox.DeleteAsync(processed.Id))).ShouldBeFalse();   // the cleanup's
+
+        (await Administration(outbox => outbox.FindAsync(givenUp.Id))).ShouldBeNull();
+        (await Administration(outbox => outbox.FindAsync(waiting.Id))).ShouldNotBeNull();
+        (await Administration(outbox => outbox.FindAsync(processed.Id))).ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task DeleteAllGivenUpAsync_ShouldDeleteEveryMessageThatGaveUp_OfTheTypeWhenGiven()
+    {
+        await SeedAsync(
+            Message("Shards.Created", minutesAgo: 5, givenUp: true),
+            Message("Shards.Created", minutesAgo: 4, givenUp: true),
+            Message("Payouts.Rotated", minutesAgo: 3, givenUp: true),
+            Message("Payouts.Rotated", minutesAgo: 1));
+
+        (await Administration(outbox => outbox.DeleteAllGivenUpAsync("Shards.Created"))).ShouldBe(2);
+        (await Administration(outbox => outbox.DeleteAllGivenUpAsync())).ShouldBe(1);
+
+        var summary = await Administration(outbox => outbox.GetSummaryAsync());
+        summary.GivenUp.ShouldBe(0);
+        summary.Waiting.ShouldBe(1);
+    }
+
+    // Through the interface, as the Web package's endpoints use it.
+    private async Task<T> Administration<T>(Func<IOutboxAdministration<TestDbContext>, Task<T>> use)
     {
         await using var scope = _services.CreateAsyncScope();
-        return await use(scope.ServiceProvider.GetRequiredService<OutboxAdministration<TestDbContext>>());
+        return await use(scope.ServiceProvider.GetRequiredService<IOutboxAdministration<TestDbContext>>());
     }
 
     private async Task SeedAsync(params OutboxMessage[] messages)

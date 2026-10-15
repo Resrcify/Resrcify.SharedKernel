@@ -35,8 +35,8 @@ Release notes, including what each major version breaks and how to upgrade: [CHA
     - `Resrcify.SharedKernel.UnitOfWork`
     - `Resrcify.SharedKernel.UnitOfWork.Postgres` (the PostgreSQL DbContext setup, design-time factory, `xmin` row
       versions, an outbox woken by `NOTIFY`, and the database's health check)
-    - `Resrcify.SharedKernel.UnitOfWork.Web` (the outbox administration endpoints, `MapOutboxAdministration`)
-    - `Resrcify.SharedKernel.Web`
+    - `Resrcify.SharedKernel.Web` (problem details, the health endpoints, HTTP resilience, JWT bearer, and the
+      admin endpoints of the message bus' error queue and of the outbox)
 - Unit-test projects under `tests/` for each source module.
 - Benchmark suite in `tests/Resrcify.SharedKernel.PerformanceTests`.
 - Runnable sample in `samples/Resrcify.SharedKernel.WebApiExample`.
@@ -56,7 +56,6 @@ SharedKernel package is used only where it belongs. Inner layers reach the imple
 | MessageBus | Domain, Application, Persistence, Presentation |
 | UnitOfWork | Domain, Application, Presentation |
 | UnitOfWork.Postgres | Domain, Application, Presentation, Web |
-| UnitOfWork.Web | Domain, Application, Presentation (as UnitOfWork, whose namespace it shares) |
 | Repository | every layer but Persistence |
 | Caching | Domain, Application, Persistence, Presentation |
 | Web | Domain, Application, Persistence |

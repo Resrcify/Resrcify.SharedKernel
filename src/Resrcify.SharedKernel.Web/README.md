@@ -21,6 +21,8 @@
     - [Read an HTTP response as a result](#read-an-http-response-as-a-result)
     - [Unhandled exceptions: the same problem details](#unhandled-exceptions-the-same-problem-details)
     - [Health endpoints](#health-endpoints)
+    - [The message bus' error queue](#the-message-bus-error-queue)
+    - [The outbox](#the-outbox)
     - [Calling another service: resilience keyed on ErrorType](#calling-another-service-resilience-keyed-on-errortype)
     - [Accepting Resrcify.Identity's tokens](#accepting-resrcifyidentitys-tokens)
   - [Common issues](#common-issues)
@@ -39,6 +41,8 @@
   minimal-API parameter that fails to bind with a 400 naming it, in every environment.
 - `MapHealthEndpoints()`: `/health`, `/health/ready` and `/health/live`, anonymous, with a JSON response writer.
 - `MapErrorQueueAdministration()`: the message bus' error queue under `/admin/error-queue` (show, delete, move back).
+- `MapOutboxAdministration<TContext>()`: a DbContext's outbox under `/admin/outbox` (what waits and what gave up,
+  try again, delete).
 - `AddResultResilience()`: retries, timeouts and a circuit breaker for an `HttpClient`, retrying what the result
   pattern calls transient.
 - `AddResrcifyJwtBearer(configuration)`: JWT bearer authentication against Resrcify.Identity.
@@ -333,6 +337,33 @@ app.MapErrorQueueAdministration()                       // under /admin/error-qu
 
 They answer through `IErrorQueue` (registered by the MessageBus package's `AddMessageBus`; see its README), and require
 an authenticated caller; add the admin policy on the group returned. Messages hold event content: never open these to
+everyone.
+
+### The outbox
+
+So an operator never needs hand-written SQL to see what is stuck in a DbContext's outbox or to try it again:
+
+```csharp
+app.MapOutboxAdministration<AppDbContext>()             // under /admin/outbox
+    .RequireAuthorization(policy => policy.RequireRole("Admin"));
+```
+
+| Endpoint | |
+|---|---|
+| `GET /` | messages waiting, retrying and given up, in all and per event type (with its lane) |
+| `GET /given-up?type=&take=` | the messages that gave up, most recent first (50 by default, 1 to 500) |
+| `GET /messages/{id}` | a message with its content, where it stands and its last error; 404 |
+| `POST /messages/{id}/retry` | tries a message that gave up again: 204, or 404 when it didn't give up |
+| `POST /given-up/retry?type=` | tries every message that gave up, or every one of the type, again: `{ "retried": n }` |
+| `DELETE /messages/{id}` | deletes a message that gave up, for good: 204, or 404 when it didn't give up |
+| `DELETE /given-up?type=` | deletes every message that gave up, or every one of the type: `{ "deleted": n }` |
+
+They answer through `IOutboxAdministration<AppDbContext>` (Abstractions), which the UnitOfWork package registers with
+the outbox (`AddOutboxProcessing`, `AddProcessOutboxMessagesJob`, `AddOutboxLanes`): this package doesn't reference
+UnitOfWork. A retried message starts from its first try, keeps its last error until the next one, and the outbox is
+woken so it is handled at once; a deleted one's event is never handled. Only messages that gave up are tried again or
+deleted. The endpoints are named `Outbox.<context>.<operation>` (`Outbox.AppDbContext.Summary`, ...), require an
+authenticated caller (add the admin policy on the group returned), and messages hold event content: never open these to
 everyone.
 
 ### Calling another service: resilience keyed on ErrorType

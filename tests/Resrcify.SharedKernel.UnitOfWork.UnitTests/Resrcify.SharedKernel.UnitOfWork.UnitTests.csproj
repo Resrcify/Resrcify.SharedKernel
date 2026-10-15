@@ -23,6 +23,8 @@
     <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.UnitTests.CompiledModels.Sqlite" />
     <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.UnitTests.CompiledModels.SqliteNativeAot" />
     <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.UnitTests.CompiledModels.Npgsql" />
+    <!-- NSubstitute's proxies of a public interface over an internal test type (IOutboxAdministration<TestDbContext>). -->
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.UnitOfWork\Resrcify.SharedKernel.UnitOfWork.csproj" />

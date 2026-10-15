@@ -28,6 +28,10 @@
     <PackageReference Include="FluentValidation" />
   </ItemGroup>
   <ItemGroup>
+    <!-- NSubstitute's proxies of a public interface over a test's internal type (IOutboxAdministration<AppDbContext>). -->
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Web\Resrcify.SharedKernel.Web.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Results\Resrcify.SharedKernel.Results.csproj" />
     <!-- A service using the mediator's behaviors with AddResultProblemDetails: the exception is logged once. -->

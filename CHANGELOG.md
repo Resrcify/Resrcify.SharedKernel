@@ -223,6 +223,26 @@ every package in the repository is released together under one version.
     db.WithOutbox(outbox => outbox.OnConflictDoNothing = true))`).
   - Oracle, Discord and SwgohApi name none of them.
 
+- **Resrcify.SharedKernel.UnitOfWork.Web is retired: the outbox admin endpoints are the Web package's**, next to the
+  error queue's, and reach the outbox through a new contract in Abstractions, so Web references neither UnitOfWork nor
+  EF Core:
+
+  | Was | Now |
+  |---|---|
+  | `app.MapOutboxAdministration<TDbContext>(prefix = "/admin/outbox")` (UnitOfWork.Web, `Resrcify.SharedKernel.UnitOfWork.Web.Extensions`; `where TDbContext : DbContext`) | `app.MapOutboxAdministration<TContext>(prefix = "/admin/outbox")` (Web, `Resrcify.SharedKernel.Web.Extensions`; `where TContext : class`): the same routes, names (`Outbox.<context>.Summary` ...), authorization (an authenticated caller; the group returned takes the rest), requests and answers |
+  | `OutboxRetried` (`Resrcify.SharedKernel.UnitOfWork.Web.Extensions`) | `Resrcify.SharedKernel.Web.Extensions.OutboxRetried` |
+  | `OutboxSummary`, `OutboxEventTypeSummary`, `OutboxMessageSummary`, `OutboxMessageDetails` (`Resrcify.SharedKernel.UnitOfWork.Outbox`) | the same records in `Resrcify.SharedKernel.Abstractions.UnitOfWork` |
+  | `OutboxAdministration<TDbContext>` (UnitOfWork), resolved by the endpoints | `IOutboxAdministration<TContext>` (Abstractions, `Resrcify.SharedKernel.Abstractions.UnitOfWork`), which `OutboxAdministration<TDbContext>` implements; the outbox registrations (`AddOutboxProcessing`, `AddProcessOutboxMessagesJob`, `AddOutboxLanes`) register both, scoped, the same instance in a scope (an `IOutboxAdministration<TContext>` the service registered first is kept) |
+
+  `IOutboxAdministration<TContext>`: `GetSummaryAsync`, `ListGivenUpAsync(take = 50, type)`, `FindAsync(id)`,
+  `RetryAsync(id)`, `RetryAllGivenUpAsync(type)`, the new `DeleteAsync(id)` and `DeleteAllGivenUpAsync(type)` (see
+  Added), `MaxTake` (500) and `ContextType`. A service calling `MapOutboxAdministration` drops its
+  `Resrcify.SharedKernel.UnitOfWork.Web` `PackageReference` and `PackageVersion`, and changes
+  `using Resrcify.SharedKernel.UnitOfWork.Web.Extensions;` to `using Resrcify.SharedKernel.Web.Extensions;`; the call
+  is unchanged. One naming the records adds `using Resrcify.SharedKernel.Abstractions.UnitOfWork;`. **No Titan service
+  used UnitOfWork.Web** (Shard, Sentinel, Oracle, Tournament, Discord, SwgohApi, Sandbox and Identity reference
+  neither the package nor `MapOutboxAdministration`), so none changes anything; it is no longer published.
+
 ### Behaviour changes
 
 - **One transient contract, owned by SharedKernel, with a DI hook** (Resrcify.SharedKernel.Results, Abstractions,
@@ -447,6 +467,13 @@ every package in the repository is released together under one version.
 
 ### Added
 
+- **Web: `MapOutboxAdministration<TContext>()`'s `DELETE /messages/{id}` and `DELETE /given-up?type=`**, and
+  **`IOutboxAdministration<TContext>.DeleteAsync(id)` / `DeleteAllGivenUpAsync(type)`** (Abstractions; UnitOfWork's
+  `OutboxAdministration` implements them): deletes a message that gave up (204, or 404 when no message with the id
+  gave up), or every one that gave up, of one type when given (`{ "deleted": n }`, `OutboxDeleted`), for good: its
+  event is never handled. Only messages that gave up: a waiting one is the outbox's, a processed one the cleanup's.
+  Discarding poison took hand-written SQL.
+
 - **Abstractions: `RetrySchedule`** (`Resilience`; see Breaking changes), and the options that take one:
   `OutboxOptions.Retries` / `TransientRetries`, `OutboxLaneOptions.Retries` / `TransientRetries`,
   `AddProcessOutboxMessagesJob`'s `retries` / `transientRetries`, `ResultResilienceOptions.Retries` (with
@@ -609,7 +636,7 @@ every package in the repository is released together under one version.
 - **Documentation drift**: AGENTS.md pointed to a missing `INTEGRATION_TESTING.md` and recommended
   `IntegrationFactoryBase` (it now points at `ServiceHostFixture` and the IntegrationTesting README), and gave EF Core
   `10.0.7` (now: the version `Directory.Packages.props` pins, `10.0.13`); the READMEs' `d:\Google Drive\...` paths are
-  gone; the README's package list and layer table name UnitOfWork.Web and MessageBus.Testing.
+  gone; the README's package list and layer table name MessageBus.Testing.
 - **The sample is the canonical 4.3 service** (`samples/Resrcify.SharedKernel.WebApiExample`, not packed): a top-level
   `Program.cs` (no `Startup.cs`), minimal-API `IEndpoint`s on `MapPostRequest` / `MapGetRequest` (no controllers, no
   Swagger: OpenAPI in Development), `AddServiceTelemetry` / `UseServiceRequestLogging` (no `UseSerilogRequestLogging`),

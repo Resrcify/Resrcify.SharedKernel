@@ -43,7 +43,7 @@ public static class OutboxLaneServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<OutboxLaneRegistry>();
         services.TryAddSingleton<OutboxWakeUp<TDbContext>>();
-        services.TryAddScoped<OutboxAdministration<TDbContext>>();
+        services.TryAddOutboxAdministration<TDbContext>();
         services.AddOutboxMessageContext();
         services.AddTransientFailureRule<PersistenceTransientFailureRule>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OutboxLanesHost<TDbContext>>());
