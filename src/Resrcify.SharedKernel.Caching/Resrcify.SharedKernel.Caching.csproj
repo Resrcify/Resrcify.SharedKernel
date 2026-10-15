@@ -16,5 +16,9 @@
     <PackageReference Include="Microsoft.Extensions.Caching.Abstractions">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+    <!-- AddDistributedCaching's in-memory cache (ASP.NET Core's shared framework has it). -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
   </ItemGroup>
 </Project>

@@ -371,6 +371,18 @@ every package in the repository is released together under one version.
   likewise (its `IConnection` and `healthChecks.AddRabbitMQ(...)`, in `Infrastructure/InfrastructureServiceRegistration.cs`),
   adding `.AddMessageBus()` if it hasn't one.
 
+- **Caching: `services.AddDistributedCaching(Action<MemoryDistributedCacheOptions>? configure = null)`**
+  (`Resrcify.SharedKernel.Caching.Extensions`): the in-memory `IDistributedCache` (unless one is registered already),
+  `DistributedCachingService` as the `ICachingService` and the `IClaimStore` (one singleton; one registered before is
+  kept) and the system `TimeProvider` (unless one is registered), in one call. The package references
+  `Microsoft.Extensions.Caching.Memory` (private, as its other dependencies; ASP.NET Core has it). It replaces the
+  two lines `services.AddDistributedMemoryCache(); services.AddSingleton<ICachingService, DistributedCachingService>();`
+  in Discord, Shard and Tournament (`Infrastructure/InfrastructureServiceRegistration.cs`; Sandbox and Identity there
+  too, and SwgohApi's in-memory branch), and Sentinel's with `AddDistributedMemoryCache(options => options.SizeLimit =
+  1024 * 1024 * 1024)`, which becomes `services.AddDistributedCaching(cache => cache.SizeLimit = 1024 * 1024 * 1024)`.
+  With it the `IClaimStore` is registered too (it was found through `ICachingService` before: same instance, same
+  behaviour).
+
 ### Fixed
 
 - **A flaky message bus test** (Resrcify.SharedKernel.MessageBus, tests only):
