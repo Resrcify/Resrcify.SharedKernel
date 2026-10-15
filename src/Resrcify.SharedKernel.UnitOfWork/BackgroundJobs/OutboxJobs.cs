@@ -45,7 +45,9 @@ internal sealed record OutboxJobClaim<TDbContext>(IOutboxLaneClaim? Claim)
 }
 
 /// <summary>The lane options of <typeparamref name="TDbContext"/>: each DbContext with an outbox has its own.</summary>
-internal sealed record OutboxLaneSettings<TDbContext>(OutboxLaneOptions Options)
+/// <param name="Options">The options, as configured.</param>
+/// <param name="RetryLimits">The retry limits the options make (<see cref="OutboxRetryLimits.Create"/>), made once.</param>
+internal sealed record OutboxLaneSettings<TDbContext>(OutboxLaneOptions Options, OutboxRetryLimits RetryLimits)
     where TDbContext : DbContext
 {
     /// <summary>The DbContext these settings belong to (the type parameter keys them in DI).</summary>

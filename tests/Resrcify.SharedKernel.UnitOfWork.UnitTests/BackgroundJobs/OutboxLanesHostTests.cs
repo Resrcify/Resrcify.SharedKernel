@@ -215,6 +215,32 @@ public sealed class OutboxLanesHostTests
             }))
             .ParamName.ShouldBe(parameter);
 
+    [Theory]
+    [InlineData(20, null, 20)]
+    [InlineData(5, null, 12)]
+    [InlineData(5, 8, 8)]
+    public void AddOutboxLanes_ShouldMakeTheRetryLimitsOnce_WithAnUnsetTransientCountTheHigherOfTwelveAndMaxRetryCount(
+        int maxRetryCount,
+        int? maxTransientRetryCount,
+        int expected)
+    {
+        var services = new ServiceCollection();
+
+        services.AddOutboxLanes<TestDbContext>(options =>
+        {
+            options.MaxRetryCount = maxRetryCount;
+            options.MaxTransientRetryCount = maxTransientRetryCount;
+        });
+
+        var limits = services
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<OutboxLaneSettings<TestDbContext>>()
+            .ShouldHaveSingleItem()
+            .RetryLimits;
+        limits.MaxRetryCount.ShouldBe(maxRetryCount);
+        limits.MaxTransientRetryCount.ShouldBe(expected);
+    }
+
     /// <summary>The clock never moves in these tests: a lane that waited for its poll would never get there.</summary>
     [Fact]
     public async Task ALane_ShouldPollAtOnce_WhenTheOutboxIsWoken()

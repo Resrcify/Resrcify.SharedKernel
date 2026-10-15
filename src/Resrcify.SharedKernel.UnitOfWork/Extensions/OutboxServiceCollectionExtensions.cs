@@ -86,7 +86,7 @@ public static class OutboxServiceCollectionExtensions
         // A batch of 0 would never come back short, so a run would keep reading until its time is up.
         ArgumentOutOfRangeException.ThrowIfLessThan(options.BatchSize, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(options.ProcessIntervalInSeconds, 1);
-        OutboxRetryLimits.Validate(
+        var retryLimits = OutboxRetryLimits.Create(
             options.MaxRetryCount,
             options.MaxTransientRetryCount,
             nameof(OutboxOptions.MaxRetryCount),
@@ -115,11 +115,10 @@ public static class OutboxServiceCollectionExtensions
             options.BatchSize,
             options.ProcessIntervalInSeconds,
             options.DelayInSecondsBeforeStart,
-            options.MaxRetryCount,
+            retryLimits,
             options.ProcessedRetentionInDays,
             options.Claim,
             time,
-            options.MaxTransientRetryCount,
             options.RetryDelay,
             options.MaxRetryDelay));
 
@@ -127,7 +126,7 @@ public static class OutboxServiceCollectionExtensions
         // The job registration above registered it with the default interval; these options replace that.
         services.AddOutboxBacklogMonitor(
             new OutboxBacklogSettings<TDbContext>(
-                options.RetryLimits.ReadLimit,
+                retryLimits.ReadLimit,
                 TimeSpan.FromSeconds(options.BacklogCheckIntervalInSeconds)),
             replace: true);
 

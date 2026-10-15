@@ -131,20 +131,17 @@ internal static class OutboxMessageProcessor<TDbContext>
         if (failure is not null)
         {
             // The tries this failure gets: a transient one more than any other.
-            var transient = OutboxProcessLog.IsTransient(failure);
-            var maxRetryCount = transient
-                ? limits.ReadLimit
-                : limits.MaxRetryCount;
-            var givesUp = message.RetryCount + 1 >= maxRetryCount;
-            await RecordFailureAsync(scopeFactory, message, failure, maxRetryCount, retryDelay, time, cancellationToken);
+            var limit = limits.For(failure);
+            var attempt = message.RetryCount + 1;
+            var givesUp = limit.GivesUpAt(attempt);
+            await RecordFailureAsync(scopeFactory, message, failure, limit.MaxTries, retryDelay, time, cancellationToken);
             OutboxProcessLog.FailedTry(
                 logger,
                 typeof(TDbContext).Name,
                 OutboxDiagnostics.EventName(message.Type),
                 message.Id,
-                message.RetryCount + 1,
-                maxRetryCount,
-                transient,
+                attempt,
+                limit,
                 retryDelay,
                 failure);
             Record(message, givesUp ? "gave_up" : "retrying", time.GetElapsedTime(started), wait: null);
@@ -188,13 +185,13 @@ internal static class OutboxMessageProcessor<TDbContext>
     // The next try's time is written with it, for every instance to wait out. Two instances failing the same try at
     // once (no claim) both count it; the later one's wait applies.
     //
-    // maxRetryCount is the limit of this failure's kind (OutboxRetryLimits): a non-transient failure after transient
-    // retries past it gives up at once.
+    // maxTries is the limit of this failure's kind (OutboxRetryLimits.For), counted here against the database's count
+    // (OutboxFailureLimit.GivesUpAt's rule): a non-transient failure after transient retries past it gives up at once.
     private static async Task RecordFailureAsync(
         IServiceScopeFactory scopeFactory,
         OutboxMessageToProcess message,
         Exception exception,
-        int maxRetryCount,
+        int maxTries,
         TimeSpan? retryDelay,
         TimeProvider time,
         CancellationToken cancellationToken)
@@ -204,7 +201,7 @@ internal static class OutboxMessageProcessor<TDbContext>
 
         var error = exception.ToString();
         // The tries it had when it gives up: more than the limit when transient retries went past it.
-        var tries = Math.Max(message.RetryCount + 1, maxRetryCount);
+        var tries = Math.Max(message.RetryCount + 1, maxTries);
         var givenUpError = string.Create(
             CultureInfo.InvariantCulture,
             $"Gave up at {time.GetUtcNow().UtcDateTime:O} after {tries} tries. {error}");
@@ -217,8 +214,8 @@ internal static class OutboxMessageProcessor<TDbContext>
                 set =>
                 {
                     set.SetProperty(row => row.RetryCount, row => row.RetryCount + 1)
-                        .SetProperty(row => row.ProcessedOnUtc, row => row.RetryCount + 1 >= maxRetryCount ? givenUpOn : null)
-                        .SetProperty(row => row.Error, row => row.RetryCount + 1 >= maxRetryCount ? givenUpError : error);
+                        .SetProperty(row => row.ProcessedOnUtc, row => row.RetryCount + 1 >= maxTries ? givenUpOn : null)
+                        .SetProperty(row => row.Error, row => row.RetryCount + 1 >= maxTries ? givenUpError : error);
                     // Only with a delay: a null parameter has no type PostgreSQL can infer. A message that gave up keeps
                     // it, unread (it is out of the unprocessed rows); tried again by hand, it is due at once.
                     if (retryDelay is { } delay)

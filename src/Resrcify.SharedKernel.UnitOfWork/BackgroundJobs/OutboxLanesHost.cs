@@ -96,7 +96,7 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
                 _backingOff.TryRemove(id, out _);
         var busy = inFlight.Keys.Concat(_backingOff.Keys).ToList();
         // The higher of the two limits: a message retrying transiently past MaxRetryCount is still read.
-        var retryLimit = options.RetryLimits.ReadLimit;
+        var retryLimit = settings.RetryLimits.ReadLimit;
         List<OutboxMessageToProcess> due;
         await using (var scope = scopeFactory.CreateAsyncScope())
         {
@@ -137,7 +137,7 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
                 scopeFactory,
                 message,
                 options.Claim,
-                options.RetryLimits,
+                settings.RetryLimits,
                 OutboxRetryBackoff.Delay(message.RetryCount + 1, options.RetryDelay, options.MaxRetryDelay),
                 stoppingToken);
             // Another instance holds it (a scatter-gather may hold it a while): look again at the next poll, not at

@@ -28,7 +28,7 @@ public static class OutboxLaneServiceCollectionExtensions
     {
         var options = new OutboxLaneOptions();
         configure?.Invoke(options);
-        OutboxRetryLimits.Validate(
+        var retryLimits = OutboxRetryLimits.Create(
             options.MaxRetryCount,
             options.MaxTransientRetryCount,
             nameof(OutboxLaneOptions.MaxRetryCount),
@@ -41,7 +41,7 @@ public static class OutboxLaneServiceCollectionExtensions
         options.Claim ??= services.OutboxJobClaim<TDbContext>();
 
         services.RemoveAll<OutboxLaneSettings<TDbContext>>();
-        services.AddSingleton(new OutboxLaneSettings<TDbContext>(options));
+        services.AddSingleton(new OutboxLaneSettings<TDbContext>(options, retryLimits));
         services.TryAddSingleton<OutboxLaneRegistry>();
         services.TryAddSingleton<OutboxWakeUp<TDbContext>>();
         services.TryAddScoped<OutboxAdministration<TDbContext>>();

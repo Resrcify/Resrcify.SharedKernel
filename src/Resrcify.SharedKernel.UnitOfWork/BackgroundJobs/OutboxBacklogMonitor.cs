@@ -15,8 +15,8 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 
 /// <summary>How the backlog of <typeparamref name="TDbContext"/>'s outbox is measured.</summary>
 /// <param name="RetryLimit">
-/// The most tries a regular message gets (the higher of <c>MaxRetryCount</c> and <c>MaxTransientRetryCount</c>): one
-/// under it still waits. A lane message gets its lane's.
+/// The most tries a regular message gets (<see cref="OutboxRetryLimits.ReadLimit"/>, the higher of
+/// <c>MaxRetryCount</c> and <c>MaxTransientRetryCount</c>): one under it still waits. A lane message gets its lane's.
 /// </param>
 /// <param name="Interval">How often the backlog is measured.</param>
 internal sealed record OutboxBacklogSettings<TDbContext>(int RetryLimit, TimeSpan Interval)
@@ -102,7 +102,7 @@ internal sealed partial class OutboxBacklogMonitor<TDbContext>(
         var provider = scope.ServiceProvider;
         var laneTypes = provider.GetService<OutboxLaneRegistry>()?.LaneEventTypes ?? [];
         // The higher of a lane's two limits: a message retrying transiently past MaxRetryCount still waits.
-        var laneRetryLimit = provider.GetService<OutboxLaneSettings<TDbContext>>()?.Options.RetryLimits.ReadLimit
+        var laneRetryLimit = provider.GetService<OutboxLaneSettings<TDbContext>>()?.RetryLimits.ReadLimit
             ?? settings.RetryLimit;
 
         var dbContext = provider.GetRequiredService<TDbContext>();

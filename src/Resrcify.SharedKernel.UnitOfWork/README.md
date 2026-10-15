@@ -383,14 +383,17 @@ Set them with `AddOutboxProcessing<AppDbContext>(outbox => { outbox.RetryDelay =
 (`AddProcessOutboxMessagesJob` uses the defaults); `TimeSpan.Zero` tries again at the next run, as before 4.3.0.
 
 **A transient failure gets more tries** than any other, in the job as in the lanes: `MaxTransientRetryCount` (12,
-about 30 minutes of an outage with the default backoff) against `MaxRetryCount` (3, which the backoff alone spends in
-about a minute: 5 s and 10 s are shorter than a 20 s run interval). A failure is transient when another try may pass:
+about 30 minutes of an outage with the default backoff, or `MaxRetryCount` when that is higher) against
+`MaxRetryCount` (3, which the backoff alone spends in about a minute: 5 s and 10 s are shorter than a 20 s run
+interval). A failure is transient when another try may pass:
 a cancellation or timeout, a transient database failure, an HTTP request that got no answer or a 408, 429 or 5xx,
 Polly's timeout or open circuit, anywhere among the exception's causes. Any other failure (a handler's bug, a 400)
 gives up at its `MaxRetryCount`th try, and at once when transient retries took the message past it (a message that
 failed 5 times through an outage, then once on a bug, gives up on that 6th try). The jobs read, and the backlog monitor
-counts as waiting, every message under the higher limit. `MaxTransientRetryCount` can't be under `MaxRetryCount`
-(registration throws); set them equal to give every failure the same tries, as before 4.3.0:
+counts as waiting, every message under the higher limit. Left unset, `MaxTransientRetryCount` is the higher of 12 and
+`MaxRetryCount`, so a service that raised `MaxRetryCount` above 12 gives a transient failure as many tries; set
+explicitly under `MaxRetryCount`, registration throws. Set them equal to give every failure the same tries, as before
+4.3.0:
 
 ```csharp
 services.AddOutboxProcessing<AppDbContext>(outbox => outbox.MaxTransientRetryCount = outbox.MaxRetryCount);

@@ -122,7 +122,7 @@ public sealed class OutboxMessageProcessorTests
             harness.Services.GetRequiredService<IServiceScopeFactory>(),
             Snapshot(row, retryCount: 4),
             claim: null,
-            new OutboxRetryLimits(MaxRetryCount: 3, MaxTransientRetryCount: 12),
+            OutboxRetryLimits.Create(maxRetryCount: 3, maxTransientRetryCount: 12),
             retryDelay: null,
             CancellationToken.None);
 
@@ -142,7 +142,7 @@ public sealed class OutboxMessageProcessorTests
             harness.Services.GetRequiredService<IServiceScopeFactory>(),
             snapshot,
             claim: null,
-            new OutboxRetryLimits(maxRetryCount, OutboxRetryLimits.DefaultMaxTransientRetryCount),
+            OutboxRetryLimits.Create(maxRetryCount, OutboxRetryLimits.DefaultMaxTransientRetryCount),
             retryDelay,
             CancellationToken.None);
 

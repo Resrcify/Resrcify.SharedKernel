@@ -32,12 +32,13 @@ public sealed class OutboxOptions
     /// <summary>
     /// Attempts a message gets when a try fails for a reason another try may get past (a cancellation or
     /// timeout, a transient database failure, an HTTP request that got no answer or a 408, 429 or 5xx, Polly's timeout
-    /// or open circuit): 12 by default, about 30 minutes with the default <see cref="RetryDelay"/> and
-    /// <see cref="MaxRetryDelay"/>, so an outage of a downstream service doesn't spend them. At least
-    /// <see cref="MaxRetryCount"/>; set it to <see cref="MaxRetryCount"/> to give every failure the same tries (as before
+    /// or open circuit). Unset (<see langword="null"/>, the default): 12, about 30 minutes
+    /// with the default <see cref="RetryDelay"/> and <see cref="MaxRetryDelay"/>, so an outage of a downstream service
+    /// doesn't spend them, or <see cref="MaxRetryCount"/> when that is higher. Set, at least <see cref="MaxRetryCount"/>,
+    /// or registration throws; set it to <see cref="MaxRetryCount"/> to give every failure the same tries (as before
     /// 4.3.0). A non-transient failure after transient retries past <see cref="MaxRetryCount"/> gives up at once.
     /// </summary>
-    public int MaxTransientRetryCount { get; set; } = OutboxRetryLimits.DefaultMaxTransientRetryCount;
+    public int? MaxTransientRetryCount { get; set; }
 
     /// <summary>
     /// How long a message whose try failed waits before its next one; each further retry waits twice as long, up to
@@ -76,7 +77,4 @@ public sealed class OutboxOptions
     /// Quartz runs the schedule on the container's clock, so the two must be the same for a fake one to drive it.
     /// </summary>
     public TimeProvider? TimeProvider { get; set; }
-
-    /// <summary>The two retry limits, together.</summary>
-    internal OutboxRetryLimits RetryLimits => new(MaxRetryCount, MaxTransientRetryCount);
 }

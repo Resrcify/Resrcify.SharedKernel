@@ -264,6 +264,49 @@ public class ProcessOutboxMessagesJobSetupTests
             }))
             .ParamName.ShouldBe(parameter);
 
+    [Theory]
+    [InlineData(20, 20)]
+    [InlineData(5, 12)]
+    public async Task AddOutboxProcessing_ShouldGiveATransientFailureTheHigherOfTwelveAndMaxRetryCount_WhenItIsUnset(
+        int maxRetryCount,
+        int expected)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOutboxProcessing<TestDbContext>(
+            new SystemTextJsonOutboxSerializer(),
+            options => options.MaxRetryCount = maxRetryCount);
+        await using var provider = services.BuildServiceProvider();
+        var scheduler = await GetSchedulerAsync(provider);
+
+        var job = await scheduler.GetJobDetail(OutboxJobKey);
+
+        job.ShouldNotBeNull();
+        job.JobDataMap.TryGetValue("ProcessMaxRetryCount", out var stored).ShouldBeTrue();
+        stored.ShouldBe(maxRetryCount);
+        job.JobDataMap.TryGetValue("ProcessMaxTransientRetryCount", out var storedTransient).ShouldBeTrue();
+        storedTransient.ShouldBe(expected);
+        services
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<OutboxBacklogSettings<TestDbContext>>()
+            .Last()
+            .RetryLimit.ShouldBe(expected);
+    }
+
+    [Fact]
+    public async Task AddProcessOutboxMessagesJob_ShouldGiveATransientFailureMaxRetryCount_WhenItIsUnsetAndAboveTwelve()
+    {
+        await using var provider = BuildProvider(services => services.AddQuartz(quartz =>
+            quartz.AddProcessOutboxMessagesJob<TestDbContext>(processMaxRetryCount: 20)));
+        var scheduler = await GetSchedulerAsync(provider);
+
+        var job = await scheduler.GetJobDetail(OutboxJobKey);
+
+        job.ShouldNotBeNull();
+        job.JobDataMap.TryGetValue("ProcessMaxTransientRetryCount", out var maxTransientRetryCount).ShouldBeTrue();
+        maxTransientRetryCount.ShouldBe(20);
+    }
+
     [Fact]
     public void AddProcessOutboxMessagesJob_ShouldThrow_WhenTheTransientRetryLimitIsBelowTheOther()
         => Should.Throw<ArgumentOutOfRangeException>(() => new ServiceCollection().AddQuartz(quartz =>

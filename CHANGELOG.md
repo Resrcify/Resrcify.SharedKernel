@@ -67,8 +67,9 @@ every package in the repository is released together under one version.
   up by the limit of its failure's kind: a transient one (the rule the failed-try log uses, below: a cancellation or
   timeout, a transient database failure, an HTTP request that got no answer or a 408, 429 or 5xx, Polly's timeout or
   open circuit, anywhere among the exception's causes) at `MaxTransientRetryCount` (12, about 30 minutes with the
-  default backoff), any other at `MaxRetryCount` (3), and at once when transient retries took the message past that
-  (5 transient failures, then a handler's bug: it gives up on that 6th try). The update that marks the give-up uses
+  default backoff, or `MaxRetryCount` when that is higher), any other at `MaxRetryCount` (3), and at once when
+  transient retries took the message past that (5 transient failures, then a handler's bug: it gives up on that 6th
+  try). The update that marks the give-up uses
   the limit of the failure it records. The job's and the lanes' reads and the backlog monitor (the `outbox.messages.*`
   gauges and the outbox health check) take the higher limit, so a message retrying transiently past 3 is still read
   and counted as waiting, not as given up (an unmarked one past 12 still is). The give-up's `Error` counts the tries
@@ -76,11 +77,13 @@ every package in the repository is released together under one version.
   minutes before it gives up, and counts as waiting meanwhile; a test that let a handler time out (or fail with an HTTP
   5xx) until the message gave up sees 12 tries. **`MaxTransientRetryCount = MaxRetryCount` keeps the behaviour of
   4.2** (on `OutboxOptions`, `OutboxLaneOptions`, or `AddProcessOutboxMessagesJob`'s `processMaxTransientRetryCount`).
-  ⚠️ `MaxTransientRetryCount` can't be under `MaxRetryCount`: a service that set `MaxRetryCount` above 12 must raise
-  `MaxTransientRetryCount` with it, or `AddOutboxProcessing`, `AddOutboxLanes` and `AddProcessOutboxMessagesJob` throw an
-  `ArgumentOutOfRangeException` at registration, as they now do for a `MaxRetryCount` under 1 (`AddOutboxLanes` and
+  Left unset, `MaxTransientRetryCount` defaults to the higher of 12 and `MaxRetryCount`, so a service that set
+  `MaxRetryCount` above 12 upgrades as it is (a transient failure gets as many tries as any other); an explicit value
+  under `MaxRetryCount` throws an `ArgumentOutOfRangeException` at registration (`AddOutboxProcessing`,
+  `AddOutboxLanes`, `AddProcessOutboxMessagesJob`), as a `MaxRetryCount` under 1 now does (`AddOutboxLanes` and
   `AddProcessOutboxMessagesJob` didn't check it). A job stored before 4.3.0 in a persistent Quartz store, without the
-  new job data, gives a transient failure 12 tries, or its `ProcessMaxRetryCount` when that is higher.
+  new job data, gets the same default: 12 tries for a transient failure, or its `ProcessMaxRetryCount` when that is
+  higher.
 
 - **The outbox logs a message's failed tries and its give-up** (Resrcify.SharedKernel.UnitOfWork), in the processing
   job and the lanes alike, under the category `Resrcify.SharedKernel.UnitOfWork.Outbox`. Nothing logged a domain event
@@ -113,11 +116,12 @@ every package in the repository is released together under one version.
   and `AddOutboxLanes` throw `ArgumentOutOfRangeException` for a negative `RetryDelay` or a `MaxRetryDelay` shorter
   than it. `AddProcessOutboxMessagesJob` (unchanged) uses the defaults.
 
-- **UnitOfWork: `OutboxOptions.MaxTransientRetryCount` and `OutboxLaneOptions.MaxTransientRetryCount`** (12), and
-  `AddProcessOutboxMessagesJob`'s optional last parameter `processMaxTransientRetryCount` (12, the job data
-  `ProcessMaxTransientRetryCount`): the tries a message gets when it keeps failing for a transient reason (see above),
-  at least `MaxRetryCount`. The parameter is source compatible; code compiled against 4.2 that calls
-  `AddProcessOutboxMessagesJob` must be recompiled.
+- **UnitOfWork: `OutboxOptions.MaxTransientRetryCount` and `OutboxLaneOptions.MaxTransientRetryCount`** (`int?`), and
+  `AddProcessOutboxMessagesJob`'s optional last parameter `processMaxTransientRetryCount` (`int?`, the job data
+  `ProcessMaxTransientRetryCount`): the tries a message gets when it keeps failing for a transient reason (see above).
+  Unset (`null`, the default), 12, or `MaxRetryCount` when that is higher; set, at least `MaxRetryCount`. The
+  parameter is source compatible; code compiled against 4.2 that calls `AddProcessOutboxMessagesJob` must be
+  recompiled.
 
 - **Web: `ResultProblemDetailsOptions.ProblemDetailsForBindingFailures`** (`true` by default): whether
   `AddResultProblemDetails()` turns on `RouteHandlerOptions.ThrowOnBadRequest`, so a binding failure reaches

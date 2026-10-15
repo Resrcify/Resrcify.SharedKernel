@@ -540,24 +540,32 @@ public class ProcessOutboxMessagesJobTests
         row.ProcessedOnUtc.ShouldNotBe(OutboxMessage.GivenUpProcessedOnUtc);
     }
 
-    [Fact]
-    public async Task Execute_ShouldGiveATransientFailureTheOtherLimit_WhenTheJobWasStoredWithAHigherOneOnly()
+    [Theory]
+    [InlineData(13, 11, false)]
+    [InlineData(13, 12, true)]
+    [InlineData(3, 10, false)]
+    [InlineData(3, 11, true)]
+    public async Task Execute_ShouldGiveATransientFailureTheHigherOfTwelveAndTheOtherLimit_WhenTheJobWasStoredWithoutIt(
+        int maxRetryCount,
+        int retryCount,
+        bool givesUp)
     {
-        // A job stored without the transient limit, and a MaxRetryCount above its default of 12: 13 tries for both.
+        // A job stored before 4.3.0 (no transient limit in its data) is normalised as a registration is
+        // (OutboxRetryLimits.Create): a ProcessMaxRetryCount of 13 gives a transient failure 13 tries, one of 3 gives 12.
         var clock = new FakeTimeProvider(Now);
         await using var harness = await ClockedHarnessAsync(clock);
         harness.Publisher
             .Publish(Arg.Any<IDomainEvent>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromException(new TimeoutException("the downstream service didn't answer")));
         var retrying = CreateMessage(new TestDomainEvent(Guid.NewGuid(), "outage"));
-        retrying.RetryCount = 11;
+        retrying.RetryCount = retryCount;
         await harness.SeedAsync(retrying);
 
-        await RunAsync(harness, maxRetryCount: 13);
+        await RunAsync(harness, maxRetryCount: maxRetryCount);
 
         var row = (await harness.GetMessagesAsync()).Single();
-        row.RetryCount.ShouldBe(12);
-        row.ProcessedOnUtc.ShouldBeNull();
+        row.RetryCount.ShouldBe(retryCount + 1);
+        (row.ProcessedOnUtc == OutboxMessage.GivenUpProcessedOnUtc).ShouldBe(givesUp);
     }
 
     private static readonly DateTimeOffset Now = new(2026, 10, 15, 12, 0, 0, TimeSpan.Zero);

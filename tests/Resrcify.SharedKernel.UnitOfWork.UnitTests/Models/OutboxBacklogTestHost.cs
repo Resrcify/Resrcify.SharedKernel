@@ -63,11 +63,14 @@ internal sealed class OutboxBacklogTestHost : IAsyncDisposable
         {
             services.AddSingleton<IOutboxLaneEvent>(new OutboxLaneEvent("slow", laneEvent));
             services.AddSingleton<OutboxLaneRegistry>();
-            services.AddSingleton(new OutboxLaneSettings<TestDbContext>(new OutboxLaneOptions
+            var laneOptions = new OutboxLaneOptions
             {
                 MaxRetryCount = laneMaxRetryCount,
                 MaxTransientRetryCount = laneMaxTransientRetryCount ?? laneMaxRetryCount,
-            }));
+            };
+            services.AddSingleton(new OutboxLaneSettings<TestDbContext>(
+                laneOptions,
+                OutboxRetryLimits.Create(laneOptions.MaxRetryCount, laneOptions.MaxTransientRetryCount)));
         }
         var provider = services.BuildServiceProvider();
         await using (var scope = provider.CreateAsyncScope())
@@ -77,7 +80,7 @@ internal sealed class OutboxBacklogTestHost : IAsyncDisposable
             connection,
             provider,
             new FakeTimeProvider(Start),
-            options.RetryLimits.ReadLimit);
+            OutboxRetryLimits.Create(options.MaxRetryCount, options.MaxTransientRetryCount).ReadLimit);
     }
 
     public static OutboxMessage Message(
