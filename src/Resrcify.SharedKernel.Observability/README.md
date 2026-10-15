@@ -83,8 +83,8 @@ services.AddServiceTelemetry("shardmanagement", configuration, telemetry =>
 });
 
 // Program.cs
+app.UseServiceRequestLogging();   // before UseExceptionHandler(): it logs the status the handler answers
 app.UseExceptionHandler();
-app.UseServiceRequestLogging();
 app.UseRouting();
 // ...
 app.MapServiceMetrics();
@@ -117,13 +117,31 @@ Logs carry `TraceId` and `SpanId` as properties: a JSON formatter writes them, a
 ## Request logging
 
 `app.UseServiceRequestLogging()` (`Resrcify.SharedKernel.Observability.Extensions`) replaces
-`app.UseSerilogRequestLogging()`, in the same place: after `UseExceptionHandler()`, before `UseRouting()`. One line per
-request, Serilog's `HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms`:
+`app.UseSerilogRequestLogging()`. Place it **before `UseExceptionHandler()`** (and before `UseRouting()`):
+
+```csharp
+app.UseServiceRequestLogging();
+app.UseExceptionHandler();
+```
+
+There it logs the status the exception handler answered: a 500 for an unhandled exception (whose stack the handler logs,
+once: Web's `ResultExceptionHandler` follows the logged-once convention, so after a mediator behavior has logged it,
+only a `Debug` line), and a 499 for a request the client gave up on. Placed after `UseExceptionHandler()`, where
+`UseSerilogRequestLogging()` usually went, Serilog's middleware sees the exception itself, and Serilog logs every
+exception passing through it as "responded 500", at `Error`, a client abort (an `OperationCanceledException` once
+`RequestAborted` is cancelled) included. It still logs correctly there, so a service that hasn't moved it isn't
+misled: its own branch answers a client abort (an `OperationCanceledException` or `IOException` thrown once
+`RequestAborted` is cancelled, as `UseExceptionHandler()` tells one) with a 499, logged at `Information` with no
+exception, and the line of a real exception carries its stack only when nothing logged it before (the
+`LoggedExceptions` convention, followed by name), so the stack is logged once either way.
+
+One line per request, Serilog's `HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms`:
 
 | Request | Line |
 |---|---|
 | `UntracedPaths` (`/health`, `/health/ready`, `/health/live`, `/metrics` by default) | none |
-| 5xx, or an exception (logged with the line; the exception handler then answers 500) | `Error` |
+| 5xx, or an exception (the exception handler then answers 500) | `Error` |
+| a request the client gave up on (499) | `Information` |
 | anything else, 4xx included | `Information` |
 
 - **The probes and the scrape aren't logged at all**, rather than at `Verbose`: they come every few seconds and say
@@ -137,7 +155,8 @@ request, Serilog's `HTTP {RequestMethod} {RequestPath} responded {StatusCode} in
   (the `ClaimTypes.NameIdentifier` claim, the one Web's `GetUserId()` reads, when the request is authenticated; read
   when the request ends, so wherever `UseAuthentication()` is). Every line also carries `TraceId` and `SpanId`, those of
   the request's span, from `AddServiceTelemetry`'s enricher.
-- It writes through the host's own Serilog logger, not the static `Log.Logger`.
+- It writes through the host's own Serilog logger, not the static `Log.Logger` (or the `Logger` `configure` sets),
+  following the logged-once convention for an exception's stack.
 
 It needs `AddServiceTelemetry` (for the paths) with Serilog as the logger (`Logging` on, or the service's own
 `AddSerilog`); without them it throws `InvalidOperationException` saying which. `configure` runs on Serilog's

@@ -16,6 +16,23 @@ every package in the repository is released together under one version.
   whether or not a transaction is open. ⚠️ A caller catching `DbUpdateException` around `TryCompleteAsync` for these
   gets a failed `Result` instead; `CompleteAsync` still throws.
 
+- **`UseServiceRequestLogging` logs a client abort as a 499 at `Information`, wherever it is placed**
+  (Resrcify.SharedKernel.Observability). Placed after `UseExceptionHandler()`, as its documentation said, Serilog's
+  middleware saw a request the client gave up on (an `OperationCanceledException` once `RequestAborted` is cancelled)
+  and logged it as "responded 500" at `Error` (the 500 is hardcoded in Serilog), though the exception handler answered
+  499 at `Debug`: Oracle's Discord requests, closed after 5 s, logged as server errors. Its own branch now answers such
+  an exception (or an `IOException`, as `UseExceptionHandler()` tells a client abort) with a 499 before Serilog sees
+  it, so the line is a 499 at `Information` with no exception attached, and the default level (`LevelOf`) is
+  `Information` for that case too, where it was `Error` for any exception. A real exception still logs as a 500 at
+  `Error`.
+
+- **`UseServiceRequestLogging` logs an exception's stack once** (Resrcify.SharedKernel.Observability), following
+  SharedKernel's `LoggedExceptions` convention (by its `Exception.Data` mark, so the package still references no other
+  SharedKernel package). Placed after `UseExceptionHandler()`, the request line attached every unhandled exception,
+  which the mediator's behaviors or `ResultExceptionHandler` logged with its stack as well. The line now carries the
+  exception only when nothing logged it before, and marks it when it does, so `ResultExceptionHandler` then logs only
+  its `Debug` line. A `Logger` set through `configure` is written through the same way.
+
 ### Added
 
 - **UnitOfWork: `PersistenceErrors.NotNullViolation`, `CheckViolation`, `ValueTooLong` and `ForeignKeyViolation`**
@@ -26,6 +43,14 @@ every package in the repository is released together under one version.
   "Members", column "Nickname").`, read from `Exception.Data` (`ConstraintName`, `TableName`, `ColumnName`, where
   Npgsql's `PostgresException` puts them), so UnitOfWork still references no provider. Never a value: PostgreSQL's
   detail, which holds the row's data, isn't read. Its message differs from the field's, so match on `Code`.
+
+### Fixed
+
+- **`UseServiceRequestLogging` is documented before `UseExceptionHandler()`** (its XML docs and the Observability
+  README, Quick Start included), where its line logs the status the exception handler answered (a 500 whose stack the
+  handler logs once, a 499 for a client abort) rather than the exception passing through. It said to put it after,
+  where `UseSerilogRequestLogging()` usually went. Both placements now log the same (see above); moving it is still the
+  recommended order. Oracle's reorder (`8c41d27`) is that order.
 
 ## 4.2.0 (2026-10-14)
 

@@ -31,6 +31,8 @@
     <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" />
     <!-- Only for QuartzInstrumentation's names, checked against TelemetrySources. -->
     <PackageReference Include="Quartz" />
+    <!-- What a service using the Web package references itself (its exception handler logs through it). -->
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
   </ItemGroup>
 
   <ItemGroup>
@@ -39,5 +41,7 @@
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Mediator\Resrcify.SharedKernel.Mediator.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.MessageBus\Resrcify.SharedKernel.MessageBus.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.UnitOfWork\Resrcify.SharedKernel.UnitOfWork.csproj" />
+    <!-- The exception handler the request logging is placed around (ResultExceptionHandler). -->
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Web\Resrcify.SharedKernel.Web.csproj" />
   </ItemGroup>
 </Project>
