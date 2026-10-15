@@ -76,13 +76,20 @@ public sealed class ResultResilienceOptions
     public IReadOnlySet<int>? RetryOnly { get; set; }
 
     /// <summary>
-    /// Throw a timeout (<c>TimeoutRejectedException</c>, an attempt's or the whole call's) and an open circuit
-    /// (<c>BrokenCircuitException</c>) to the caller, as 4.0.0 did. Off by default: the caller gets a response made up
-    /// in their place instead, which <c>ToResultAsync</c> reads as <see cref="ResultResilienceErrors.Timeout"/> (504) or
-    /// <see cref="ResultResilienceErrors.CircuitOpen"/> (502), like any other failed answer (see
-    /// <see cref="ResultResilienceErrors"/>). The caller's own cancellation throws <c>OperationCanceledException</c>
-    /// either way.
+    /// Throw a timeout (<c>TimeoutRejectedException</c>, an attempt's or the whole call's), an open circuit
+    /// (<c>BrokenCircuitException</c>) and a service that couldn't be reached (HttpClient's
+    /// <c>HttpRequestException</c>) to the caller, as 4.0.0 did. Off by default: the caller gets a response made up in
+    /// their place instead, which <c>ToResultAsync</c> reads as <see cref="ResultResilienceErrors.Timeout"/> (504),
+    /// <see cref="ResultResilienceErrors.CircuitOpen"/> (502) or <see cref="ResultResilienceErrors.Unreachable"/> (502),
+    /// like any other failed answer (see <see cref="ResultResilienceErrors"/>). The caller's own cancellation throws
+    /// <c>OperationCanceledException</c> either way.
     /// </summary>
+    /// <remarks>
+    /// A failure while HttpClient reads the body of an answer it got (the connection reset halfway through a
+    /// buffered response, after the pipeline returned it) still throws an <c>HttpRequestException</c>: it happens
+    /// outside the pipeline. So does one while the caller reads a response it asked for unbuffered
+    /// (<c>HttpCompletionOption.ResponseHeadersRead</c>).
+    /// </remarks>
     public bool ThrowTimeoutsAndOpenCircuits { get; set; }
 
     /// <summary>

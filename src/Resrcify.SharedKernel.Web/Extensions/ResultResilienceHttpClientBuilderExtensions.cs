@@ -27,11 +27,14 @@ public static class ResultResilienceHttpClientBuilderExtensions
     /// that response (e.g. a 429) at once, rather than a timeout once the wait has used up the call's time.
     /// The service references <c>Microsoft.Extensions.Http.Resilience</c> itself. After the retries the caller gets the
     /// last response, which <c>ToResultAsync</c> turns into a failure. A timeout (an attempt's, after the retries, or
-    /// the whole call's) or an open circuit is answered in the service's place, outermost, with a response that
-    /// <c>ToResultAsync</c> reads as <see cref="ResultResilienceErrors.Timeout"/> or
-    /// <see cref="ResultResilienceErrors.CircuitOpen"/>; with
+    /// the whole call's), an open circuit or a service that couldn't be reached after the retries (an
+    /// <see cref="HttpRequestException"/> without a status) is answered in the service's place, outermost, with a
+    /// response that <c>ToResultAsync</c> reads as <see cref="ResultResilienceErrors.Timeout"/>,
+    /// <see cref="ResultResilienceErrors.CircuitOpen"/> or <see cref="ResultResilienceErrors.Unreachable"/>; with
     /// <see cref="ResultResilienceOptions.ThrowTimeoutsAndOpenCircuits"/> they throw instead
-    /// (<c>TimeoutRejectedException</c>, <c>BrokenCircuitException</c>), as <c>AddStandardResilienceHandler</c> does.
+    /// (<c>TimeoutRejectedException</c>, <c>BrokenCircuitException</c>, <c>HttpRequestException</c>), as
+    /// <c>AddStandardResilienceHandler</c> does. A failure while HttpClient buffers the body of an answer still throws:
+    /// it happens after the pipeline returned.
     /// The caller's own cancellation always throws <see cref="OperationCanceledException"/>.
     /// It also adds the Web package's transient-failure rule (<c>AddTransientFailureRule</c>): Polly's rejections
     /// (<c>ExecutionRejectedException</c>: a timeout, a broken or isolated circuit, the rate limiter) are transient to the

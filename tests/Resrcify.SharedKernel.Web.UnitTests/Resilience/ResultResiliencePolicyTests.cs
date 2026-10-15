@@ -169,13 +169,14 @@ public sealed class ResultResiliencePolicyTests
     }
 
     [Fact]
-    public void AnswersInPlaceOf_ShouldBeATimeoutOrAnOpenCircuit_NeverACancellation()
+    public void AnswersInPlaceOf_ShouldBeATimeoutAnOpenCircuitOrNoAnswer_NeverACancellation()
     {
         Policy().AnswersInPlaceOf(new TimeoutRejectedException()).ShouldBeTrue();
         Policy().AnswersInPlaceOf(new BrokenCircuitException()).ShouldBeTrue();
         Policy().AnswersInPlaceOf(new IsolatedCircuitException()).ShouldBeTrue();
+        Policy().AnswersInPlaceOf(new HttpRequestException("refused")).ShouldBeTrue();
+        Policy().AnswersInPlaceOf(new HttpRequestException("answered", null, HttpStatusCode.ServiceUnavailable)).ShouldBeFalse();
         Policy().AnswersInPlaceOf(new OperationCanceledException()).ShouldBeFalse();
-        Policy().AnswersInPlaceOf(new HttpRequestException("refused")).ShouldBeFalse();
         Policy().AnswersInPlaceOf(null).ShouldBeFalse();
     }
 
@@ -186,6 +187,7 @@ public sealed class ResultResiliencePolicyTests
 
         policy.AnswersInPlaceOf(new TimeoutRejectedException()).ShouldBeFalse();
         policy.AnswersInPlaceOf(new BrokenCircuitException()).ShouldBeFalse();
+        policy.AnswersInPlaceOf(new HttpRequestException("refused")).ShouldBeFalse();
     }
 
     [Theory]

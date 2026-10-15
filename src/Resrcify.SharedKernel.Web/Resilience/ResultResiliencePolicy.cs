@@ -83,13 +83,14 @@ internal sealed class ResultResiliencePolicy(
 
     /// <summary>
     /// Whether the pipeline answers <paramref name="exception"/> in the service's place (see
-    /// <see cref="ResultResilienceErrors"/>): a timeout or an open circuit, unless they are thrown. Never the caller's
-    /// cancellation (an <see cref="OperationCanceledException"/>, which neither of them is).
+    /// <see cref="ResultResilienceErrors"/>): a timeout, an open circuit, or no answer at all after the retries (an
+    /// <see cref="HttpRequestException"/> without a status), unless they are thrown. Never the caller's cancellation (an
+    /// <see cref="OperationCanceledException"/>, which none of them is).
     /// </summary>
     public bool AnswersInPlaceOf(
         Exception? exception)
         => !options.ThrowTimeoutsAndOpenCircuits
-            && exception is TimeoutRejectedException or BrokenCircuitException;
+            && exception is TimeoutRejectedException or BrokenCircuitException or HttpRequestException { StatusCode: null };
 
     private bool IsRetriedStatus(
         HttpResponseMessage response)

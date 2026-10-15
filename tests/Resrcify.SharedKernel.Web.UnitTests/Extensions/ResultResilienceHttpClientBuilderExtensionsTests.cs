@@ -202,6 +202,44 @@ public sealed class ResultResilienceHttpClientBuilderExtensionsTests
     }
 
     [Fact]
+    public async Task AddResultResilience_ShouldAnswerUnreachable_WhenTheNetworkKeepsFailing()
+    {
+        using var upstream = new ScriptedHandler(_time, (_, _) =>
+            Task.FromException<HttpResponseMessage>(new HttpRequestException("Connection refused (upstream:80)")));
+        using var provider = Provider(upstream, options => options.MaxRetries = 2);
+
+        using var response = await SendAsync(provider);
+
+        upstream.Calls.ShouldBe(3);
+        response.StatusCode.ShouldBe(HttpStatusCode.BadGateway);
+        response.Headers.GetValues(ResultResilienceErrors.Header).ShouldBe([ResultResilienceErrors.UnreachableMarker]);
+        response.RequestMessage.ShouldNotBeNull().RequestUri.ShouldBe(new Uri("http://upstream/players"));
+        var expected = ResultResilienceErrors.Unreachable("upstream", "Connection refused (upstream:80)");
+        await ShouldReadAsAsync(response, expected);
+        expected.Code.ShouldBe("Http.Unreachable");
+        expected.Type.ShouldBe(ErrorType.ExternalFailure);
+        expected.IsTransient().ShouldBeTrue();
+        expected.Message.ShouldBe("The service at upstream could not be reached: Connection refused (upstream:80)");
+    }
+
+    [Fact]
+    public async Task AddResultResilience_ShouldThrowTheNetworkFailure_WhenAskedTo()
+    {
+        using var upstream = new ScriptedHandler(_time, (_, _) =>
+            Task.FromException<HttpResponseMessage>(new HttpRequestException("Connection refused")));
+        using var provider = Provider(upstream, options =>
+        {
+            options.MaxRetries = 1;
+            options.ThrowTimeoutsAndOpenCircuits = true;
+        });
+
+        var thrown = await Should.ThrowAsync<HttpRequestException>(() => SendAsync(provider));
+
+        thrown.Message.ShouldBe("Connection refused");
+        upstream.Calls.ShouldBe(2);
+    }
+
+    [Fact]
     public async Task AddResultResilience_ShouldRetry_WhenAnAttemptTimesOut()
     {
         using var upstream = new ScriptedHandler(_time, async (call, cancellationToken) =>

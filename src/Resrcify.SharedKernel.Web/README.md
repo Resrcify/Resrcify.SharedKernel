@@ -365,18 +365,22 @@ the attempt timeout (10 s).
   `FakeTimeProvider` in tests.
 
 After the retries the caller gets the last response (`ToResultAsync` turns it into a failure). A timeout (the last
-attempt's, or the whole call's) or an open circuit is answered in the service's place, so `ToResultAsync` reads it as
-a failure like any other, with no try/catch:
+attempt's, or the whole call's), an open circuit or a service that couldn't be reached after the retries is answered in
+the service's place, so `ToResultAsync` reads it as a failure like any other, with no try/catch:
 
 | Gave up on | Response | `ToResultAsync`'s error |
 |---|---|---|
 | a timeout (`TimeoutRejectedException`) | 504, problem details | `ResultResilienceErrors.Timeout` (`Http.ResilienceTimeout`, `Timeout`) |
 | an open circuit (`BrokenCircuitException`) | 502, problem details | `ResultResilienceErrors.CircuitOpen` (`Http.CircuitOpen`, `ExternalFailure`) |
+| no answer (`HttpRequestException` without a status: refused, reset, a name that doesn't resolve) | 502, problem details | `ResultResilienceErrors.Unreachable(authority, cause)` (`Http.Unreachable`, `ExternalFailure`), e.g. `The service at swgohapi:8080 could not be reached: Connection refused (swgohapi:8080)` |
 
-The made-up response carries the header `Resrcify-Resilience: timeout` / `circuit-open` (a response from the service
-called never does) and the request; `EnsureSuccessStatusCode` throws `HttpRequestException` for it, as for a real 504.
-The caller's own cancellation still throws `OperationCanceledException`. `ThrowTimeoutsAndOpenCircuits = true` throws
-`TimeoutRejectedException` / `BrokenCircuitException` instead, as `AddStandardResilienceHandler` (and 4.0.0) does.
+The made-up response carries the header `Resrcify-Resilience: timeout` / `circuit-open` / `unreachable` (a response
+from the service called never does) and the request; `EnsureSuccessStatusCode` throws `HttpRequestException` for it, as
+for a real 504. The caller's own cancellation still throws `OperationCanceledException`.
+`ThrowTimeoutsAndOpenCircuits = true` throws `TimeoutRejectedException` / `BrokenCircuitException` /
+`HttpRequestException` instead, as `AddStandardResilienceHandler` (and 4.0.0) does. A failure while HttpClient reads the
+body of an answer it got (a connection reset halfway through a buffered response) still throws an
+`HttpRequestException`: it happens after the pipeline returned the response, outside it.
 
 `AddResultResilience` also adds the Web package's `ITransientFailureRule` (Abstractions): Polly's rejections
 (`ExecutionRejectedException`: a timeout, a broken or isolated circuit, the rate limiter), when they are thrown, are

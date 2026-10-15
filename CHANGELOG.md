@@ -48,6 +48,18 @@ every package in the repository is released together under one version.
   (`result.ThrowIfTransient()`, which logs nothing itself: the outbox logs the failed try at `Warning`); its events then
   get 12 tries in the regular job as in its `swgohapi` lane.
 
+- **`AddResultResilience` answers a service it couldn't reach with a failed result** (Resrcify.SharedKernel.Web). A
+  call that got no answer after the retries (HttpClient's `HttpRequestException` without a status: a refused or reset
+  connection, a name that doesn't resolve) threw the exception to the caller, which ended a whole job or request; the
+  pipeline now answers it in the service's place, as it does a timeout or an open circuit: a 502 problem details holding
+  `ResultResilienceErrors.Unreachable` (`Http.Unreachable`, `ExternalFailure`, transient, its message naming the
+  authority called and the cause: `The service at swgohapi:8080 could not be reached: Connection refused
+  (swgohapi:8080)`), marked `Resrcify-Resilience: unreachable`, which `ToResultAsync` reads as that failure.
+  `ThrowTimeoutsAndOpenCircuits = true` throws it as before. A failure while HttpClient buffers the body of an answer
+  (after the pipeline returned it) still throws. ⚠️ A caller catching `HttpRequestException` around a call through
+  `AddResultResilience` gets a failed result instead. **Sentinel** can delete its `SwgohApiUnreachableHandler` (and the
+  `SwgohApi.Unreachable` code: match `Http.Unreachable`).
+
 - **`TryCompleteAsync` returns the other constraint violations a caller can answer** (Resrcify.SharedKernel.UnitOfWork),
   and so does a command under `ReturnPersistenceFailures`: a not-null violation (`SQLSTATE 23502`), a check-constraint
   violation (`23514`) and a string longer than its column (`22001`) as a `Validation` error (400), a foreign-key
@@ -141,6 +153,10 @@ every package in the repository is released together under one version.
   failure and every give-up.
 
 ### Added
+
+- **Web: `ResultResilienceErrors.Unreachable(string authority, string cause)`** (code `Http.Unreachable`) and
+  `UnreachableMarker` (`unreachable`), the answer for a service that couldn't be reached (see
+  above).
 
 - **Results: `TransientFailureException`** (`Diagnostics`, carrying `ImmutableArray<Error> Errors`), **`TransientFailures`**
   (`IsTransient(Exception)`, `IsTransient(Exception, Func<Exception, bool>?)`, `TryGetErrors(Exception, out
