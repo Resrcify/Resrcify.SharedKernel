@@ -32,7 +32,7 @@ public sealed class SubscriptionOptions<TEvent>
     /// <list type="bullet">
     /// <item>an event takes its place in its partition in the order the bus received it, which is the order it was
     /// published in;</item>
-    /// <item>a failing event is retried in its place (5 tries, waiting 0.5, 1, 2 and 4 s) and then moved to the error
+    /// <item>a failing event is retried in its place (5 tries, waiting 0.5, 1, 2 and 4 s, unless <c>WithEventRetries</c> says otherwise) and then moved to the error
     /// queue, so the events after it of the same partition wait meanwhile and run after it;</item>
     /// <item>on RabbitMQ, only one instance of the service consumes its input queue at a time ("single active
     /// consumer"); the others take over if it stops. Instances of the service otherwise share the work, and two of

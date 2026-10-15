@@ -98,8 +98,10 @@ public static class MessageBusServiceCollectionExtensions
                         options.Decorate(context =>
                         {
                             var retry = WithErrorQueue(context.Get<RetryStrategySettings>(), errorQueue);
-                            // Events are tried in place as often as the strategy would have delivered them.
-                            settings.EventTries = Math.Max(1, retry.MaxDeliveryAttempts);
+                            // Events are tried in place as often as the strategy would have delivered them, unless
+                            // WithEventRetries said how often.
+                            if (!settings.EventRetriesSet)
+                                settings.EventRetries = settings.EventRetries with { MaxAttempts = Math.Max(1, retry.MaxDeliveryAttempts) };
                             return retry;
                         });
                         options.Decorate<IErrorHandler>(context => new DeadLetterCountingErrorHandler(

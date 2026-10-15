@@ -65,22 +65,29 @@ internal sealed class OutboxBacklogTestHost : IAsyncDisposable
             services.AddSingleton<OutboxLaneRegistry>();
             var laneOptions = new OutboxLaneOptions
             {
-                MaxRetryCount = laneMaxRetryCount,
-                MaxTransientRetryCount = laneMaxTransientRetryCount ?? laneMaxRetryCount,
+                Retries = OutboxRetryLimits.DefaultRetries with { MaxAttempts = laneMaxRetryCount },
+                TransientRetries = OutboxRetryLimits.DefaultRetries with
+                {
+                    MaxAttempts = laneMaxTransientRetryCount ?? laneMaxRetryCount,
+                },
             };
             services.AddSingleton(new OutboxLaneSettings<TestDbContext>(
                 laneOptions,
-                OutboxRetryLimits.Create(laneOptions.MaxRetryCount, laneOptions.MaxTransientRetryCount)));
+                OutboxRetryLimits.Create(laneOptions.Retries, laneOptions.TransientRetries)));
         }
         var provider = services.BuildServiceProvider();
         await using (var scope = provider.CreateAsyncScope())
             await scope.ServiceProvider.GetRequiredService<TestDbContext>().Database.EnsureCreatedAsync();
-        options ??= new OutboxOptions { MaxRetryCount = 3, MaxTransientRetryCount = 3 };
+        options ??= new OutboxOptions
+        {
+            Retries = OutboxRetryLimits.DefaultRetries,
+            TransientRetries = OutboxRetryLimits.DefaultRetries,
+        };
         return new OutboxBacklogTestHost(
             connection,
             provider,
             new FakeTimeProvider(Start),
-            OutboxRetryLimits.Create(options.MaxRetryCount, options.MaxTransientRetryCount).ReadLimit);
+            OutboxRetryLimits.Create(options.Retries, options.TransientRetries).ReadLimit);
     }
 
     public static OutboxMessage Message(

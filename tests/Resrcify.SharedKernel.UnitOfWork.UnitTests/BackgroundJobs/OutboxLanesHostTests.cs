@@ -13,6 +13,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
@@ -43,8 +44,8 @@ public sealed class OutboxLanesHostTests
     [InlineData(39, 300)]
     [InlineData(100, 300)]
     [InlineData(int.MaxValue, 300)]
-    public void RetryDelay_ShouldDoubleFromFiveSecondsUpToFiveMinutes_WhenAMessageKeepsFailing(int failures, int seconds)
-        => OutboxLanesHost<TestDbContext>.RetryDelay(failures).ShouldBe(TimeSpan.FromSeconds(seconds));
+    public void DefaultRetries_ShouldDoubleFromFiveSecondsUpToFiveMinutes_WhenAMessageKeepsFailing(int failures, int seconds)
+        => OutboxRetryLimits.DefaultRetries.DelayAfter(failures).ShouldBe(TimeSpan.FromSeconds(seconds));
 
     [Fact]
     public async Task AFailedMessage_ShouldWaitItsBackoff_OnEveryInstance_WhenItWaitedLongBeforeItsFirstTry()
@@ -77,7 +78,7 @@ public sealed class OutboxLanesHostTests
             seed: 1,
             time: time,
             publishFails: true,
-            configure: options => options.RetryDelay = TimeSpan.FromSeconds(30));
+            configure: options => options.Retries = options.Retries with { FirstDelay = TimeSpan.FromSeconds(30) });
 
         await lanes.WaitForTriesAsync(1);
 
@@ -95,8 +96,8 @@ public sealed class OutboxLanesHostTests
             publishFails: true,
             configure: options =>
             {
-                options.MaxRetryCount = 2;
-                options.RetryDelay = TimeSpan.Zero;
+                options.Retries = options.Retries with { MaxAttempts = 2 };
+                options.Retries = options.Retries with { FirstDelay = TimeSpan.Zero };
             },
             logs: logs);
 
@@ -116,13 +117,10 @@ public sealed class OutboxLanesHostTests
     }
 
     [Fact]
-    public void AddOutboxLanes_ShouldThrow_WhenTheLongestRetryDelayIsShorterThanTheFirst()
-        => Should.Throw<ArgumentOutOfRangeException>(() => new ServiceCollection().AddOutboxLanes<TestDbContext>(options =>
-            {
-                options.RetryDelay = TimeSpan.FromMinutes(1);
-                options.MaxRetryDelay = TimeSpan.FromSeconds(30);
-            }))
-            .ParamName.ShouldBe(nameof(OutboxLaneOptions.MaxRetryDelay));
+    public void AddOutboxLanes_ShouldThrow_WithoutRetries()
+        => Should.Throw<ArgumentNullException>(() => new ServiceCollection().AddOutboxLanes<TestDbContext>(
+                options => options.Retries = null!))
+            .ParamName.ShouldBe(nameof(OutboxLaneOptions.Retries));
 
     [Fact]
     public async Task ALane_ShouldTryATransientlyFailingMessageTwelveTimes_WithBackoff_ThenGiveUp()
@@ -162,7 +160,7 @@ public sealed class OutboxLanesHostTests
             maxConcurrency: 8,
             seed: 1,
             publishFails: true,
-            configure: options => options.RetryDelay = TimeSpan.Zero);
+            configure: options => options.Retries = options.Retries with { FirstDelay = TimeSpan.Zero });
 
         await lanes.WaitForTriesAsync(3);
         await lanes.WaitForGivenUpAsync();
@@ -178,7 +176,7 @@ public sealed class OutboxLanesHostTests
         await using var lanes = await LaneHost.StartAsync(
             maxConcurrency: 8,
             seed: 1,
-            configure: options => options.RetryDelay = TimeSpan.Zero,
+            configure: options => options.Retries = options.Retries with { FirstDelay = TimeSpan.Zero },
             failWith: attempt => attempt <= 5
                 ? new TimeoutException("the downstream service didn't answer")
                 : new InvalidOperationException("The handler failed (the test's)."));
@@ -201,19 +199,14 @@ public sealed class OutboxLanesHostTests
         await lanes.WaitForPublishedAsync(1);
     }
 
-    [Theory]
-    [InlineData(5, 4, nameof(OutboxLaneOptions.MaxTransientRetryCount))]
-    [InlineData(0, 12, nameof(OutboxLaneOptions.MaxRetryCount))]
-    public void AddOutboxLanes_ShouldThrow_WhenTheRetryLimitsAreOutOfOrder(
-        int maxRetryCount,
-        int maxTransientRetryCount,
-        string parameter)
+    [Fact]
+    public void AddOutboxLanes_ShouldThrow_WhenTheTransientScheduleHasFewerAttempts()
         => Should.Throw<ArgumentOutOfRangeException>(() => new ServiceCollection().AddOutboxLanes<TestDbContext>(options =>
             {
-                options.MaxRetryCount = maxRetryCount;
-                options.MaxTransientRetryCount = maxTransientRetryCount;
+                options.Retries = options.Retries with { MaxAttempts = 5 };
+                options.TransientRetries = options.Retries with { MaxAttempts = 4 };
             }))
-            .ParamName.ShouldBe(parameter);
+            .ParamName.ShouldBe(nameof(OutboxLaneOptions.TransientRetries));
 
     [Theory]
     [InlineData(20, null, 20)]
@@ -228,8 +221,10 @@ public sealed class OutboxLanesHostTests
 
         services.AddOutboxLanes<TestDbContext>(options =>
         {
-            options.MaxRetryCount = maxRetryCount;
-            options.MaxTransientRetryCount = maxTransientRetryCount;
+            options.Retries = options.Retries with { MaxAttempts = maxRetryCount };
+            options.TransientRetries = maxTransientRetryCount is { } transient
+                ? options.Retries with { MaxAttempts = transient }
+                : null;
         });
 
         var limits = services

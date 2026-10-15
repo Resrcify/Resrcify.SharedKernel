@@ -37,7 +37,8 @@ namespace Resrcify.SharedKernel.MessageBus.PublishSubscribe;
 /// <para>
 /// Each try runs in a DI scope of its own (a failed try's tracked changes and domain events don't reach the next one's
 /// save) and a Rebus transaction of its own: what a try sends or publishes goes out only when it succeeds, so a failed
-/// try's messages are dropped rather than sent along with the next. Waits between tries double from 0.5 s up to 4 s.
+/// try's messages are dropped rather than sent along with the next. Tries and waits follow the bus' event schedule
+/// (<c>WithEventRetries</c>; by default 5 tries, waits doubling from 0.5 s up to 4 s).
 /// </para>
 /// <para>
 /// Every exception is tried again in place (a handler's bug too). One that holds a <see cref="TransientFailureException"/>
@@ -216,7 +217,8 @@ internal sealed partial class IntegrationEventDispatcher<TEvent>(
                 continue;
 
             var name = types[index].Name;
-            for (var attempt = 1; attempt <= settings.EventTries; attempt++)
+            var retries = settings.EventRetries;
+            for (var attempt = 1; attempt <= retries.MaxAttempts; attempt++)
             {
                 var failure = await TryHandleAsync(index, message, cancellationToken);
                 if (failure is null)
@@ -229,7 +231,7 @@ internal sealed partial class IntegrationEventDispatcher<TEvent>(
                     break;
                 }
 
-                if (attempt == settings.EventTries)
+                if (!retries.HasAttemptAfter(attempt))
                 {
                     LogDeadLettered(OnceLogged(failure.Exception), wireName, name, attempt, failure.Describe());
                     // Moved back from the error queue, it resumes at this handler.
@@ -239,7 +241,7 @@ internal sealed partial class IntegrationEventDispatcher<TEvent>(
                 }
 
                 LogFailedTry(failure, wireName, name, attempt);
-                await Task.Delay(RetryDelay(attempt), time, cancellationToken);
+                await Task.Delay(retries.DelayAfter(attempt), time, cancellationToken);
             }
 
             // Handled, or rejected as the event's fault: done with it either way.
@@ -319,22 +321,6 @@ internal sealed partial class IntegrationEventDispatcher<TEvent>(
 
     private static Exception? NotLoggedYet(Exception? exception)
         => exception is null || LoggedExceptions.IsLogged(exception) ? null : exception;
-
-    /// <summary>0.5 s before the second try, doubling up to 4 s: 0.5, 1, 2, 4, 4, ... s.</summary>
-    internal static TimeSpan RetryDelay(int failedAttempt)
-    {
-        var delay = TimeSpan.FromMilliseconds(500);
-        for (var doubled = 1; doubled < failedAttempt && delay < MaxRetryDelay; doubled++)
-            delay *= 2;
-        return delay < MaxRetryDelay ? delay : MaxRetryDelay;
-    }
-
-    /// <summary>
-    /// The longest wait between two tries, whatever the retry strategy's number of tries: the event is held unacknowledged
-    /// meanwhile (a worker, a prefetch slot, its partition), and RabbitMQ closes a channel holding one past its
-    /// consumer timeout.
-    /// </summary>
-    private static TimeSpan MaxRetryDelay => TimeSpan.FromSeconds(4);
 
     /// <summary>
     /// How one try failed: the handler's errors, or the exception it threw (with a

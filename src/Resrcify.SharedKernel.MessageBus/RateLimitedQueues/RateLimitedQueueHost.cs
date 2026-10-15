@@ -51,7 +51,7 @@ namespace Resrcify.SharedKernel.MessageBus.RateLimitedQueues;
 /// </para>
 /// <para>
 /// A bus that fails to start (RabbitMQ unreachable while the health gate says healthy) is logged and tried again,
-/// 5 s doubling to 1 min; the queue isn't consuming meanwhile, and its host keeps running. A responder (or a handler
+/// 5 s doubling to 1 min (<see cref="StartRetries"/>); the queue isn't consuming meanwhile, and its host keeps running. A responder (or a handler
 /// behind it) may take anything that needs <c>IBus</c>, e.g. <c>IEventBus</c>: it gets this queue's bus.
 /// </para>
 /// </remarks>
@@ -66,9 +66,12 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
     where TRequest : class
     where TResponse : class
 {
-    private static TimeSpan FirstStartRetryDelay => TimeSpan.FromSeconds(5);
-
-    private static TimeSpan MaxStartRetryDelay => TimeSpan.FromMinutes(1);
+    /// <summary>A bus that fails to start is tried again for as long as the host runs: 5 s, doubling up to 1 min.</summary>
+    internal static RetrySchedule StartRetries
+        => new(
+            int.MaxValue,
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromMinutes(1));
 
     private BuiltinHandlerActivator? _activator;
     private RateLimiter? _limiter;
@@ -76,8 +79,8 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
     private HealthGate? _healthGate;
     private TaskCompletionSource _wake = NewSignal();
     private int _restartRequested;
-    private int _tries = 5;
-    private TimeSpan _startRetryDelay = FirstStartRetryDelay;
+    private RetrySchedule _retries = options.Retries ?? MessageBusSettings.DefaultInPlaceRetries;
+    private int _failedStarts;
     private DateTimeOffset? _startRetryAt;
 
     /// <summary>Whether this instance is currently consuming. For tests and diagnostics.</summary>
@@ -156,21 +159,19 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
         {
             StartBus();
             _startRetryAt = null;
-            _startRetryDelay = FirstStartRetryDelay;
+            _failedStarts = 0;
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            LogStartFailed(exception, queueName, _startRetryDelay.TotalSeconds);
-            _startRetryAt = time.GetUtcNow() + _startRetryDelay;
-            _startRetryDelay = Max(Min(_startRetryDelay * 2, MaxStartRetryDelay), FirstStartRetryDelay);
+            _failedStarts = Math.Min(_failedStarts + 1, int.MaxValue - 1);
+            var delay = StartRetries.DelayAfter(_failedStarts);
+            LogStartFailed(exception, queueName, delay.TotalSeconds);
+            _startRetryAt = time.GetUtcNow() + delay;
         }
     }
 
     private static TimeSpan Max(TimeSpan first, TimeSpan second)
         => first > second ? first : second;
-
-    private static TimeSpan Min(TimeSpan first, TimeSpan second)
-        => first < second ? first : second;
 
     private void OnBrokerRecovered()
     {
@@ -243,11 +244,13 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
             {
                 configure.SetNumberOfWorkers(1);
                 configure.SetMaxParallelism(prefetch);
-                // A failed request is tried again (sent back to the queue) as often as the strategy would deliver it.
+                // A failed request is tried again (sent back to the queue) as often as the strategy would deliver it,
+                // unless the queue's options say how often.
                 configure.Decorate(context =>
                 {
                     var retry = context.Get<RetryStrategySettings>();
-                    Volatile.Write(ref _tries, Math.Max(1, retry.MaxDeliveryAttempts));
+                    if (options.Retries is null)
+                        Volatile.Write(ref _retries, _retries with { MaxAttempts = Math.Max(1, retry.MaxDeliveryAttempts) });
                     return retry;
                 });
                 configure.Decorate<IPipeline>(context => new PipelineStepInjector(context.Get<IPipeline>())
@@ -302,9 +305,10 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
         var (response, failedUnexpectedly) = handled;
         var attempt = RequestTries.Read(context.Headers);
         var mayPassNextTime = response.IsFailure && (failedUnexpectedly || !options.AnswerFailure(response.Errors));
-        if (mayPassNextTime && attempt < Volatile.Read(ref _tries))
+        var retries = Volatile.Read(ref _retries);
+        if (mayPassNextTime && retries.HasAttemptAfter(attempt))
         {
-            await TryAgainAsync(bus, attempt, response.Errors, time, started, consuming, expiry.Token);
+            await TryAgainAsync(bus, attempt, retries.DelayAfter(attempt), response.Errors, time, started, consuming, expiry.Token);
             return;
         }
 
@@ -331,6 +335,7 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
     private async Task TryAgainAsync(
         IBus bus,
         int attempt,
+        TimeSpan delay,
         IReadOnlyList<Error> errors,
         TimeProvider time,
         long started,
@@ -341,7 +346,7 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
         LogTryingAgain(queueName, attempt, string.Join(", ", errors.Select(error => $"{error.Code} ({error.Type})")));
         try
         {
-            await Task.Delay(RetryDelay(attempt), time, expiry);
+            await Task.Delay(delay, time, expiry);
         }
         catch (OperationCanceledException) when (!consuming.IsCancellationRequested)
         {
@@ -352,10 +357,6 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
         await bus.Advanced.TransportMessage.Forward(queueName, RequestTries.Next(attempt));
         MessageBusDiagnostics.RecordRequest(queueName, RequestOutcome.Retried, time.GetElapsedTime(started));
     }
-
-    /// <summary>0.5 s before the second try, doubling: 0.5, 1, 2, 4 s.</summary>
-    internal static TimeSpan RetryDelay(int failedAttempt)
-        => TimeSpan.FromMilliseconds(500 * Math.Pow(2, failedAttempt - 1));
 
     /// <summary>
     /// The handler's result, and whether it threw (an exception becomes a failure, answered or tried again like any);

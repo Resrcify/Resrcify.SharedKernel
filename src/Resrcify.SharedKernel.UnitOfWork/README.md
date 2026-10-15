@@ -320,7 +320,7 @@ services.AddDbContext<AppDbContext>(options => options
 
 services.AddOutboxProcessing<AppDbContext>(
     outboxSerializer,
-    options => options.MaxRetryCount = 3);
+    options => options.Retries = options.Retries with { MaxAttempts = 3 });
 
 // Quartz hosts the registered job.
 services.AddQuartz();
@@ -359,7 +359,7 @@ its handlers persisted commits as well. Because every message gets a fresh scope
 job never shares (or clears) a `DbContext` change tracker with other work. A handler
 that throws does not abort the batch — the failure is written to the `Error` column,
 `RetryCount` is incremented and `NextAttemptOnUtc` is set to when its next try is due, which every instance waits out.
-When its last try fails (`MaxRetryCount`, or `MaxTransientRetryCount` for a transient failure, see below; or its
+When its last try fails (`Retries`' attempts, or `TransientRetries`' for a transient failure, see below; or its
 lane's), the message **gives up**:
 its `ProcessedOnUtc` is set to `OutboxMessage.GivenUpProcessedOnUtc` (9999-12-31) and `Error` starts with
 `Gave up at <time> after <n> tries.`. That takes it out of the unprocessed rows (and their index), so the polls no
@@ -373,36 +373,39 @@ of 20 are handled in one run (four reads) instead of four runs. It stops startin
 interval (`ProcessIntervalInSeconds`; a batch already started finishes), so a run ends before the next trigger is due.
 A quiet outbox costs one query per run, as before. A message that fails in a run is not read again in that run.
 
-**Retries back off**, in the job as in the lanes: a failed message waits `RetryDelay` (5 s) before its next try, then
-twice as long each time (10 s, 20 s, …), up to `MaxRetryDelay` (5 min), so a handler failing through an outage of a
+**Retries back off**, in the job as in the lanes, by a `RetrySchedule` (Abstractions): a failed message waits
+`Retries.FirstDelay` (5 s) before its next try, then twice as long each time (10 s, 20 s, …), up to `Retries.MaxDelay`
+(5 min), so a handler failing through an outage of a
 few minutes (a downstream service down) doesn't spend its tries in the first minute of it. The job
 reads only the messages that are due (`NextAttemptOnUtc` passed or empty); the wait is a minimum, the try comes with
 the first run (or wake-up) after it. That filter is a residual one on the unprocessed rows the partial index
 (`IX_OutboxMessages_Unprocessed`, `ProcessedOnUtc IS NULL`) narrows the read to, as the lanes' read: no migration.
-Set them with `AddOutboxProcessing<AppDbContext>(outbox => { outbox.RetryDelay = ...; outbox.MaxRetryDelay = ...; })`
-(`AddProcessOutboxMessagesJob` uses the defaults); `TimeSpan.Zero` tries again at the next run, as before 4.3.0.
+Set them with `AddOutboxProcessing<AppDbContext>(outbox => outbox.Retries = new RetrySchedule(3,
+TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(5)))` (or `AddProcessOutboxMessagesJob`'s `retries`); a `FirstDelay` of
+`TimeSpan.Zero` tries again at the next run, as before 4.3.0. Every count is attempts, the first one included.
 
-**A transient failure gets more tries** than any other, in the job as in the lanes: `MaxTransientRetryCount` (12,
-about 30 minutes of an outage with the default backoff, or `MaxRetryCount` when that is higher) against
-`MaxRetryCount` (3, which the backoff alone spends in about a minute: 5 s and 10 s are shorter than a 20 s run
+**A transient failure gets more tries** than any other, in the job as in the lanes: `TransientRetries` (12 attempts,
+about 30 minutes of an outage with the default delays, or `Retries`' attempts when that is higher) against
+`Retries` (3 attempts, which the backoff alone spends in about a minute: 5 s and 10 s are shorter than a 20 s run
 interval). A failure is transient when another try may pass, as the container's `ITransientFailureClassifier`
 (Abstractions) tells: a `TransientFailureException` (Results; e.g. a handler's `result.ThrowIfTransient()`), a
 cancellation or timeout, a transient database failure or a concurrency conflict, an HTTP request that got no answer or a
 408, 429 or 5xx, anywhere among the exception's causes, or what a registered `ITransientFailureRule` calls transient
 (the Web package's `AddResultResilience` adds one for its timeouts and open circuits; a service adds its own with
 `services.AddTransientFailureRule(...)`). Any other failure (a handler's bug, a 400)
-gives up at its `MaxRetryCount`th try, and at once when transient retries took the message past it (a message that
+gives up at its `Retries.MaxAttempts`th try, and at once when transient retries took the message past it (a message that
 failed 5 times through an outage, then once on a bug, gives up on that 6th try). The jobs read, and the backlog monitor
-counts as waiting, every message under the higher limit. Left unset, `MaxTransientRetryCount` is the higher of 12 and
-`MaxRetryCount`, so a service that raised `MaxRetryCount` above 12 gives a transient failure as many tries; set
-explicitly under `MaxRetryCount`, registration throws. Set them equal to give every failure the same tries, as before
-4.3.0:
+counts as waiting, every message under the higher limit. Left unset, `TransientRetries` is `Retries` with the higher of
+12 and its attempts, so a service that gave `Retries` more than 12 attempts gives a transient failure as many tries;
+set with fewer attempts than `Retries`, registration throws. Set them equal to give every failure the same tries, as
+before 4.3.0:
 
 ```csharp
-services.AddOutboxProcessing<AppDbContext>(outbox => outbox.MaxTransientRetryCount = outbox.MaxRetryCount);
-services.AddOutboxLanes<AppDbContext>(lanes => lanes.MaxTransientRetryCount = lanes.MaxRetryCount);
+services.AddOutboxProcessing<AppDbContext>(outbox => outbox.TransientRetries = outbox.Retries);
+services.AddOutboxLanes<AppDbContext>(lanes => lanes.TransientRetries = lanes.Retries);
 // Or, registering the job on the Quartz builder:
-quartz.AddProcessOutboxMessagesJob<AppDbContext>(processMaxRetryCount: 3, processMaxTransientRetryCount: 3);
+var retries = new RetrySchedule(3, TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(5));
+quartz.AddProcessOutboxMessagesJob<AppDbContext>(retries: retries, transientRetries: retries);
 ```
 
 **Failed tries are logged** (category `Resrcify.SharedKernel.UnitOfWork.Outbox`), by the job and the lanes alike: each
@@ -425,7 +428,8 @@ calls it when a save commits outbox messages, through a `NOTIFY`; anything else 
 
 In tests, `await wakeUp.DrainAsync()` wakes the outbox until no unprocessed message is due: every message saved so
 far, and every one its handlers saved in turn, was processed or gave up (a message waiting for a later try, after a
-failed one, isn't waited for: advance the clock, or set `RetryDelay = TimeSpan.Zero` in the test host). It throws a `TimeoutException` when messages are still due after the timeout (30 s by default), e.g.
+failed one, isn't waited for: advance the clock, or set `Retries = new RetrySchedule(3, TimeSpan.Zero, TimeSpan.Zero)`
+in the test host). It throws a `TimeoutException` when messages are still due after the timeout (30 s by default), e.g.
 when the host doesn't process the outbox.
 
 ### Cleaning up processed messages
@@ -453,9 +457,8 @@ every message behind it. An **outbox lane** moves those event types out of the r
   polls every `PollInterval`, and at once when one of its messages finishes (so the freed slot takes the next) or the
   outbox is woken (`OutboxWakeUp`). A message another instance holds is looked at again at the next poll.
 - **Processing is the same as the regular job:** own scope and transaction, publish, mark processed, and
-  record the failure (logged the same way) and retry up to `MaxRetryCount`, or `MaxTransientRetryCount` for a
-  transient failure, waiting `RetryDelay` doubled up to `MaxRetryDelay` (the lane options of the same names: 3, 12,
-  5 s and 5 min by default) between tries. The options apply to every lane of the context.
+  record the failure (logged the same way) and retry by `Retries`, or `TransientRetries` for a transient failure (the
+  lane options of the same names: 3 and 12 attempts, 5 s doubling up to 5 min, by default). The options apply to every lane of the context.
 - **Tracing:** every processed message, by the regular job or a lane, gets a span on
   `OutboxDiagnostics.ActivitySourceName`; whatever its handlers do (database, HTTP, bus sends) runs inside it.
 

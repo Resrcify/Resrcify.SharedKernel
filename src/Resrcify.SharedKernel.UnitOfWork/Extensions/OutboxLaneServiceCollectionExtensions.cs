@@ -31,15 +31,10 @@ public static class OutboxLaneServiceCollectionExtensions
         var options = new OutboxLaneOptions();
         configure?.Invoke(options);
         var retryLimits = OutboxRetryLimits.Create(
-            options.MaxRetryCount,
-            options.MaxTransientRetryCount,
-            nameof(OutboxLaneOptions.MaxRetryCount),
-            nameof(OutboxLaneOptions.MaxTransientRetryCount));
-        OutboxRetryBackoff.Validate(
-            options.RetryDelay,
-            options.MaxRetryDelay,
-            nameof(OutboxLaneOptions.RetryDelay),
-            nameof(OutboxLaneOptions.MaxRetryDelay));
+            options.Retries,
+            options.TransientRetries,
+            nameof(OutboxLaneOptions.Retries),
+            nameof(OutboxLaneOptions.TransientRetries));
         options.Claim ??= services.OutboxJobClaim<TDbContext>();
 
         services.RemoveAll<OutboxLaneSettings<TDbContext>>();

@@ -47,19 +47,15 @@ internal static class OutboxMessageProcessor<TDbContext>
     /// another instance holds the message: it is left alone, neither processed nor failed.
     /// </param>
     /// <param name="limits">
-    /// The tries a message gets, for a transient failure and any other: a failure on the last try its kind gets is
-    /// counted as giving up.
-    /// </param>
-    /// <param name="retryDelay">
-    /// How long after a failure the message waits before its next try (<see cref="OutboxMessage.NextAttemptOnUtc"/>);
-    /// <see langword="null"/> when it may be tried again at once.
+    /// The tries a message gets, and the waits between them, for a transient failure and any other: a failure on the
+    /// last try its kind gets is counted as giving up; any other waits its schedule's delay
+    /// (<see cref="OutboxMessage.NextAttemptOnUtc"/>).
     /// </param>
     public static async Task<OutboxProcessOutcome> ProcessAsync(
         IServiceScopeFactory scopeFactory,
         OutboxMessageToProcess message,
         IOutboxLaneClaim? claim,
         OutboxRetryLimits limits,
-        TimeSpan? retryDelay,
         CancellationToken cancellationToken)
     {
         Exception? failure = null;
@@ -137,6 +133,7 @@ internal static class OutboxMessageProcessor<TDbContext>
             var limit = limits.For(failure, classifier);
             var attempt = message.RetryCount + 1;
             var givesUp = limit.GivesUpAt(attempt);
+            var retryDelay = limit.DelayAfter(attempt);
             await RecordFailureAsync(scopeFactory, message, failure, limit.MaxTries, retryDelay, time, cancellationToken);
             OutboxProcessLog.FailedTry(
                 logger,

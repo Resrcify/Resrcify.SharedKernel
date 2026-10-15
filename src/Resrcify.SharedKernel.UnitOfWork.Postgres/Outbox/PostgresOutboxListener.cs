@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.Postgres.Configuration;
 
@@ -50,7 +51,14 @@ internal sealed partial class PostgresOutboxListener<TContext>(
     /// <summary>The most notifications one drain reads, so a flood can't keep the outbox from being woken.</summary>
     private const int MaxDrained = 10_000;
 
-    private TimeSpan _reconnectDelay = settings.Options.ReconnectDelay;
+    // Reconnects for as long as it runs: ReconnectDelay doubling up to MaxReconnectDelay.
+    private readonly RetrySchedule _reconnects = new(
+        int.MaxValue,
+        settings.Options.ReconnectDelay,
+        settings.Options.MaxReconnectDelay);
+
+    // Connections lost since the last one that listened.
+    private int _failures;
     private int _notified;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -67,7 +75,8 @@ internal sealed partial class PostgresOutboxListener<TContext>(
             }
             catch (Exception exception)
             {
-                LogConnectionLost(exception, _context, _reconnectDelay.TotalSeconds);
+                _failures = Math.Min(_failures + 1, int.MaxValue - 1);
+                LogConnectionLost(exception, _context, ReconnectDelay.TotalSeconds);
             }
 
             if (!await WaitToReconnectAsync(stoppingToken))
@@ -84,7 +93,7 @@ internal sealed partial class PostgresOutboxListener<TContext>(
         await using (var listen = new NpgsqlCommand($"LISTEN {OutboxWakeUpOptions.Channel}", listener))
             await listen.ExecuteNonQueryAsync(stoppingToken);
 
-        _reconnectDelay = _options.ReconnectDelay;
+        _failures = 0;
         LogListening(_context, OutboxWakeUpOptions.Channel);
         // Messages saved while nobody listened (before start, or while reconnecting) don't wait for the next poll.
         await WakeAsync(stoppingToken);
@@ -133,17 +142,19 @@ internal sealed partial class PostgresOutboxListener<TContext>(
     {
         try
         {
-            await Task.Delay(_reconnectDelay, _time, stoppingToken);
+            await Task.Delay(ReconnectDelay, _time, stoppingToken);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             return false;
         }
 
-        var doubled = _reconnectDelay * 2;
-        _reconnectDelay = doubled < _options.MaxReconnectDelay ? doubled : _options.MaxReconnectDelay;
         return true;
     }
+
+    // The wait before the next connect: after the first loss ReconnectDelay, doubling with each further one.
+    private TimeSpan ReconnectDelay
+        => _reconnects.DelayAfter(Math.Max(_failures, 1));
 
     /// <summary>The context's connection string, unpooled (the connection lives as long as the listener), with a keepalive.</summary>
     private string ListenerConnectionString()

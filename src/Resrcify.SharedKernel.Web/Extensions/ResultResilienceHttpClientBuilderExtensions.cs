@@ -81,7 +81,7 @@ public static class ResultResilienceHttpClientBuilderExtensions
             TimeoutGenerator = arguments => ValueTask.FromResult(policy.StartCall(arguments.Context)),
         });
 
-        if (options.MaxRetries > 0)
+        if (options.Retries.MaxAttempts > 1)
             pipeline.AddRetry(Retry(options, policy));
 
         if (options.CircuitBreaker)
@@ -95,11 +95,12 @@ public static class ResultResilienceHttpClientBuilderExtensions
         ResultResiliencePolicy policy)
         => new()
         {
-            MaxRetryAttempts = options.MaxRetries,
-            Delay = options.RetryDelay,
-            MaxDelay = options.MaxRetryDelay,
+            // Attempts in all, the first included; Polly counts the retries after it.
+            MaxRetryAttempts = options.Retries.MaxAttempts - 1,
+            Delay = options.Retries.FirstDelay,
+            MaxDelay = options.Retries.MaxDelay,
             BackoffType = DelayBackoffType.Exponential,
-            UseJitter = options.UseJitter,
+            UseJitter = options.Retries.Jitter,
             ShouldHandle = arguments => ValueTask.FromResult(policy.ShouldRetry(arguments.Outcome, arguments.Context)),
             // Its own reading of Retry-After, so a date is measured on the TimeProvider's clock.
             ShouldRetryAfterHeader = false,

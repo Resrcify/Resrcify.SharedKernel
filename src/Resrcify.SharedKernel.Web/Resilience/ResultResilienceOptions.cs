@@ -3,6 +3,7 @@ using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 
 namespace Resrcify.SharedKernel.Web.Resilience;
 
@@ -15,20 +16,22 @@ namespace Resrcify.SharedKernel.Web.Resilience;
 /// </summary>
 public sealed class ResultResilienceOptions
 {
-    /// <summary>Retries after the first attempt (default 3); 0 turns retrying off.</summary>
-    public int MaxRetries { get; set; } = 3;
-
-    /// <summary>The first retry's delay (default 1 s); each next one doubles it, up to <see cref="MaxRetryDelay"/>.</summary>
-    public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(1);
-
     /// <summary>
-    /// The longest computed delay between two attempts (default 30 s). A <c>Retry-After</c> isn't capped by it; one at
-    /// least as long as what is left of <see cref="TotalTimeout"/> isn't waited for, the response is returned instead.
+    /// The attempts in all, the first one included, and the waits between them: by default 4 attempts (3 retries), 1 s
+    /// before the second, doubling up to 30 s, with jitter (so the clients of a failing service don't retry in step).
+    /// <see cref="RetrySchedule.MaxAttempts"/> of 1 turns retrying off. Mapped to Polly's retry
+    /// (<c>MaxRetryAttempts</c> = attempts - 1, <c>Delay</c>, <c>MaxDelay</c>, <c>UseJitter</c>, exponential), whose own
+    /// jitter spreads the delays. A <c>Retry-After</c> isn't capped by <see cref="RetrySchedule.MaxDelay"/>; one at least
+    /// as long as what is left of <see cref="TotalTimeout"/> isn't waited for, the response is returned instead.
     /// </summary>
-    public TimeSpan MaxRetryDelay { get; set; } = TimeSpan.FromSeconds(30);
+    public RetrySchedule Retries { get; set; } = DefaultRetries;
 
-    /// <summary>Spread the delays randomly (default on), so the clients of a failing service don't retry in step.</summary>
-    public bool UseJitter { get; set; } = true;
+    /// <summary>The schedule by default: 4 attempts, 1 s doubling up to 30 s, with jitter.</summary>
+    public static RetrySchedule DefaultRetries { get; } = new(
+        4,
+        TimeSpan.FromSeconds(1),
+        TimeSpan.FromSeconds(30),
+        Jitter: true);
 
     /// <summary>One attempt's longest time (default 10 s); an attempt that takes longer is cancelled and retried.</summary>
     public TimeSpan AttemptTimeout { get; set; } = TimeSpan.FromSeconds(10);
@@ -115,6 +118,10 @@ public sealed class ResultResilienceOptions
     /// </summary>
     internal void Validate()
     {
+        if (Retries is null)
+            throw new InvalidOperationException("ResultResilienceOptions.Retries can't be null: a single attempt is "
+                + "new RetrySchedule(1, TimeSpan.Zero, TimeSpan.Zero).");
+
         if (RetryOnly is not { } retryOnly)
             return;
 

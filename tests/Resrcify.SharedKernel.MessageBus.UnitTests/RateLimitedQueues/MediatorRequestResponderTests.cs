@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Rebus.Transport.InMem;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
 using Resrcify.SharedKernel.Mediator.Extensions;
@@ -62,6 +63,17 @@ public sealed class MediatorRequestResponderTests
     }
 
     [Fact]
+    public async Task HandleAsync_ShouldTryAsTheQueuesRetriesSay()
+    {
+        var (reply, calls) = await AskAsync(
+            "upstream-down",
+            retries: new RetrySchedule(2, TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(10)));
+
+        reply.Errors.ShouldHaveSingleItem().Code.ShouldBe("Upstream.Down");
+        calls.Count.ShouldBe(2);
+    }
+
+    [Fact]
     public async Task HandleAsync_ShouldTryAgainThenAnswerAFailure_WhenTheHandlerThrows()
     {
         var (reply, calls) = await AskAsync("throws", timeout: TimeSpan.FromSeconds(20));
@@ -109,7 +121,8 @@ public sealed class MediatorRequestResponderTests
     private static async Task<(Result<PlayerAnswer> Reply, LookupCalls Calls)> AskAsync(
         string name,
         bool answerEveryFailure = false,
-        TimeSpan? timeout = null)
+        TimeSpan? timeout = null,
+        RetrySchedule? retries = null)
     {
         var network = new InMemNetwork();
         var calls = new LookupCalls();
@@ -120,6 +133,7 @@ public sealed class MediatorRequestResponderTests
                 options =>
                 {
                     options.PerSecond = 100;
+                    options.Retries = retries;
                     if (answerEveryFailure)
                         options.AnswerFailure = _ => true;
                 }),

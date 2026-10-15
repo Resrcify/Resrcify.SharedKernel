@@ -7,6 +7,35 @@ every package in the repository is released together under one version.
 
 ### Breaking changes
 
+- **One `RetrySchedule` value type and one backoff function** (Resrcify.SharedKernel.Abstractions, `Resilience`):
+  `public sealed record RetrySchedule(int MaxAttempts, TimeSpan FirstDelay, TimeSpan MaxDelay, bool Jitter = false)`
+  with `DelayAfter(int failedAttempt)` (the first delay doubled per try before it, capped at `MaxDelay`,
+  overflow-safe; with `Jitter`, spread between half of it and all of it) and `HasAttemptAfter(int)`. **Every count is
+  attempts, the first one included.** It replaces the options of every retrying package; the defaults are unchanged:
+
+  | Was | Now |
+  |---|---|
+  | `OutboxOptions.MaxRetryCount` (3), `RetryDelay` (5 s), `MaxRetryDelay` (5 min) | `OutboxOptions.Retries = new RetrySchedule(3, 5 s, 5 min)` |
+  | `OutboxOptions.MaxTransientRetryCount` (`int?`) | `OutboxOptions.TransientRetries` (`RetrySchedule?`; unset: `Retries` with the higher of 12 and its attempts) |
+  | `OutboxLaneOptions.MaxRetryCount`, `MaxTransientRetryCount`, `RetryDelay`, `MaxRetryDelay` | `OutboxLaneOptions.Retries`, `TransientRetries` (as above) |
+  | `AddProcessOutboxMessagesJob(..., int processMaxRetryCount = 3, ..., int? processMaxTransientRetryCount = null)` | `AddProcessOutboxMessagesJob(..., RetrySchedule? retries = null, ..., RetrySchedule? transientRetries = null)` (same positions) |
+  | `ResultResilienceOptions.MaxRetries` (3 **retries**), `RetryDelay` (1 s), `MaxRetryDelay` (30 s), `UseJitter` (on) | `ResultResilienceOptions.Retries = new RetrySchedule(4 attempts, 1 s, 30 s, Jitter: true)`: `MaxRetries = n` is `MaxAttempts = n + 1`; `MaxAttempts = 1` turns retrying off |
+  | the bus' event tries (Rebus' `MaxDeliveryAttempts`, 5), 0.5 s doubling to 4 s, fixed | `MessageBusBuilder.WithEventRetries(RetrySchedule)` (unset: 5 attempts, or the retry strategy's delivery attempts, 0.5 s doubling to 4 s) |
+  | a rate-limited queue's tries (Rebus' `MaxDeliveryAttempts`, 5), 0.5 s × 2ⁿ, **uncapped** | `RateLimitedQueueOptions.Retries` (`RetrySchedule?`; unset: as the events, capped at 4 s) |
+
+  A `MaxRetryDelay` shorter than `RetryDelay` threw at registration; a `MaxDelay` shorter than `FirstDelay` now caps
+  every delay at it. A `RetrySchedule` with fewer than 1 attempt or a negative delay throws as it is made (also with
+  `with`). The hand-written calculators are gone (`OutboxRetryBackoff`, the dispatcher's and the queue host's
+  `RetryDelay`, the queue host's start retry, scatter-gather's restart, `ConcurrentCreationRetry`'s, the PostgreSQL
+  outbox listener's reconnect): they all wait by `RetrySchedule.DelayAfter`, with the same delays.
+  **Fixed with it: a rate-limited queue's wait between tries was uncapped** (500 ms × 2ⁿ⁻¹), so a configuration
+  strategy raising the delivery attempts to about 24 made `Task.Delay` throw (and the waits held the request
+  unacknowledged for minutes before that): it is capped at 4 s, as the events'. Tournament, Shard, Oracle, Discord and
+  Sentinel set `MaxRetries` / `RetryDelay` / `MaxRetryDelay` on `AddResultResilience`: `resilience.Retries = new
+  RetrySchedule(MaxAttempts: 4, FirstDelay: TimeSpan.FromSeconds(1), MaxDelay: TimeSpan.FromSeconds(4), Jitter: true)`
+  for `MaxRetries = 3, RetryDelay = 1 s, MaxRetryDelay = 4 s`; Sentinel's lane sets `lanes.Retries` /
+  `TransientRetries` instead of `MaxRetryCount`.
+
 - **One error-code catalogue: `ErrorCodes`** (Resrcify.SharedKernel.Results, `Primitives`; see Added). The constants
   it replaces are gone: **`ErrorTypeExtensions.ConcurrencyConflictCode`** (use `ErrorCodes.Persistence.Concurrency`,
   the same `"Persistence.Concurrency"`) and **`ResultExceptionHandler.ErrorCode`** (Web; use
@@ -110,8 +139,8 @@ every package in the repository is released together under one version.
 
 - **The outbox processing job backs off between a message's tries, as the lanes do** (Resrcify.SharedKernel.UnitOfWork).
   It tried a failed message again at every run (about every 20 s in the services), so a handler failing through a
-  downstream outage spent its `MaxRetryCount` tries (3) in about a minute and gave up. A failed try now writes
-  `NextAttemptOnUtc` (5 s, then twice as long each time, up to 5 min: `OutboxOptions.RetryDelay` and `MaxRetryDelay`),
+  downstream outage spent its 3 tries in about a minute and gave up. A failed try now writes
+  `NextAttemptOnUtc` (5 s, then twice as long each time, up to 5 min: `OutboxOptions.Retries`, a `RetrySchedule`),
   and the job reads only the messages that are due, as the lanes always have; the wait is a minimum, the try comes
   with the first run or wake-up after it. The filter is a residual one on the unprocessed rows the partial index
   `IX_OutboxMessages_Unprocessed` already narrows the read to, on the `NextAttemptOnUtc` column 4.0 added: no
@@ -119,8 +148,8 @@ every package in the repository is released together under one version.
   failing for a non-transient reason still gives up about two runs after its first failure; a transient failure now
   gets 12 tries, about 30 minutes (see the next entry). A test that let `OutboxWakeUp.DrainAsync()` retry a failing
   handler until the message gave up now sees `DrainAsync` return after the first failure (the message waits for a
-  later try): advance the `FakeTimeProvider`, or set `RetryDelay = TimeSpan.Zero` in the test host, which tries again
-  at the next run as before.
+  later try): advance the `FakeTimeProvider`, or set `Retries = new RetrySchedule(3, TimeSpan.Zero, TimeSpan.Zero)`
+  in the test host, which tries again at the next run as before.
 
 - **A transient failure gets 12 tries in the outbox, any other still 3** (Resrcify.SharedKernel.UnitOfWork), in the
   processing job and the lanes alike. With the backoff (above), the default 3 tries still gave up about a minute after a
@@ -129,8 +158,8 @@ every package in the repository is released together under one version.
   contract" below: a `TransientFailureException`, a cancellation or timeout, a transient database failure or a
   concurrency conflict, an HTTP request that got no answer or a 408, 429 or 5xx, anywhere among the exception's causes,
   or what a registered `ITransientFailureRule` calls transient, e.g. the Web package's for its resilience pipeline's
-  timeouts and open circuits) at `MaxTransientRetryCount` (12, about 30 minutes with the
-  default backoff, or `MaxRetryCount` when that is higher), any other at `MaxRetryCount` (3), and at once when
+  timeouts and open circuits) at `TransientRetries`' attempts (12, about 30 minutes with the default delays, or
+  `Retries`' attempts when that is higher), any other at `Retries`' (3), and at once when
   transient retries took the message past that (5 transient failures, then a handler's bug: it gives up on that 6th
   try). The update that marks the give-up uses
   the limit of the failure it records. The job's and the lanes' reads and the backlog monitor (the `outbox.messages.*`
@@ -138,15 +167,13 @@ every package in the repository is released together under one version.
   and counted as waiting, not as given up (an unmarked one past 12 still is). The give-up's `Error` counts the tries
   the message had (`Gave up at <time> after 6 tries. ...`). ⚠️ A message failing transiently is tried for about 30
   minutes before it gives up, and counts as waiting meanwhile; a test that let a handler time out (or fail with an HTTP
-  5xx) until the message gave up sees 12 tries. **`MaxTransientRetryCount = MaxRetryCount` keeps the behaviour of
-  4.2** (on `OutboxOptions`, `OutboxLaneOptions`, or `AddProcessOutboxMessagesJob`'s `processMaxTransientRetryCount`).
-  Left unset, `MaxTransientRetryCount` defaults to the higher of 12 and `MaxRetryCount`, so a service that set
-  `MaxRetryCount` above 12 upgrades as it is (a transient failure gets as many tries as any other); an explicit value
-  under `MaxRetryCount` throws an `ArgumentOutOfRangeException` at registration (`AddOutboxProcessing`,
-  `AddOutboxLanes`, `AddProcessOutboxMessagesJob`), as a `MaxRetryCount` under 1 now does (`AddOutboxLanes` and
-  `AddProcessOutboxMessagesJob` didn't check it). A job stored before 4.3.0 in a persistent Quartz store, without the
-  new job data, gets the same default: 12 tries for a transient failure, or its `ProcessMaxRetryCount` when that is
-  higher.
+  5xx) until the message gave up sees 12 tries. **`TransientRetries = Retries` keeps the behaviour of 4.2** (on
+  `OutboxOptions`, `OutboxLaneOptions`, or `AddProcessOutboxMessagesJob`'s `transientRetries`). Left unset,
+  `TransientRetries` is `Retries` with the higher of 12 and its attempts, so a service that gave `Retries` more than 12
+  attempts upgrades as it is (a transient failure gets as many tries as any other); one set with fewer attempts than
+  `Retries` throws an `ArgumentOutOfRangeException` at registration (`AddOutboxProcessing`, `AddOutboxLanes`,
+  `AddProcessOutboxMessagesJob`). A job stored before 4.3.0 in a persistent Quartz store, without the new job data,
+  gets the same default: 12 tries for a transient failure, or its `ProcessMaxRetryCount` when that is higher.
 
 - **The outbox logs a message's failed tries and its give-up** (Resrcify.SharedKernel.UnitOfWork), in the processing
   job and the lanes alike, under the category `Resrcify.SharedKernel.UnitOfWork.Outbox`. Nothing logged a domain event
@@ -162,6 +189,13 @@ every package in the repository is released together under one version.
   failure and every give-up.
 
 ### Added
+
+- **Abstractions: `RetrySchedule`** (`Resilience`; see Breaking changes), and the options that take one:
+  `OutboxOptions.Retries` / `TransientRetries`, `OutboxLaneOptions.Retries` / `TransientRetries`,
+  `AddProcessOutboxMessagesJob`'s `retries` / `transientRetries`, `ResultResilienceOptions.Retries` (with
+  `DefaultRetries`), **`MessageBusBuilder.WithEventRetries(RetrySchedule)`** (new: an integration event's in-place
+  tries could only be changed through Rebus' retry strategy, and their waits not at all) and
+  **`RateLimitedQueueOptions.Retries`** (new, per queue).
 
 - **Results: `ErrorCodes`**, the code of every error SharedKernel returns or answers with, nested by the package that
   emits it: `General` (`NullValue`, `EmptyInput`), `Http` (`ResilienceTimeout`, `CircuitOpen`, `Unreachable`,
@@ -197,18 +231,11 @@ every package in the repository is released together under one version.
   Npgsql's `PostgresException` puts them), so UnitOfWork still references no provider. Never a value: PostgreSQL's
   detail, which holds the row's data, isn't read. Its message differs from the field's, so match on `Code`.
 
-- **UnitOfWork: `OutboxOptions.RetryDelay` and `MaxRetryDelay`** (5 s and 5 min), the processing job's backoff (see
-  above), and the same two on `OutboxLaneOptions`, where the lanes' delays were fixed at those values.
-  `TimeSpan.Zero` tries a failed message again at once (the next run, or the lane's next poll). `AddOutboxProcessing`
-  and `AddOutboxLanes` throw `ArgumentOutOfRangeException` for a negative `RetryDelay` or a `MaxRetryDelay` shorter
-  than it. `AddProcessOutboxMessagesJob` (unchanged) uses the defaults.
-
-- **UnitOfWork: `OutboxOptions.MaxTransientRetryCount` and `OutboxLaneOptions.MaxTransientRetryCount`** (`int?`), and
-  `AddProcessOutboxMessagesJob`'s optional last parameter `processMaxTransientRetryCount` (`int?`, the job data
-  `ProcessMaxTransientRetryCount`): the tries a message gets when it keeps failing for a transient reason (see above).
-  Unset (`null`, the default), 12, or `MaxRetryCount` when that is higher; set, at least `MaxRetryCount`. The
-  parameter is source compatible; code compiled against 4.2 that calls `AddProcessOutboxMessagesJob` must be
-  recompiled.
+- **UnitOfWork: `OutboxOptions.Retries` / `TransientRetries` and `OutboxLaneOptions.Retries` / `TransientRetries`**
+  (`RetrySchedule` / `RetrySchedule?`), and `AddProcessOutboxMessagesJob`'s `retries` / `transientRetries`: the
+  attempts and the waits a message gets (see above and "One `RetrySchedule`" under Breaking changes). The lanes'
+  delays were fixed at 5 s doubling to 5 min; a `FirstDelay` of `TimeSpan.Zero` tries a failed message again at once
+  (the next run, or the lane's next poll). A transient failure waits by `TransientRetries`' delays.
 
 - **Web: `ResultProblemDetailsOptions.ProblemDetailsForBindingFailures`** (`true` by default): whether
   `AddResultProblemDetails()` turns on `RouteHandlerOptions.ThrowOnBadRequest`, so a binding failure reaches

@@ -1,4 +1,5 @@
 using System;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 
@@ -23,34 +24,27 @@ public sealed class OutboxOptions
     public int DelayInSecondsBeforeStart { get; set; } = 60;
 
     /// <summary>
-    /// Attempts a message gets when a try fails for a reason another try won't change (a handler's bug, a 400). When the
-    /// last one fails, the message gives up: it is marked (<c>OutboxMessage.GivenUpProcessedOnUtc</c>) and no longer
-    /// polled. A transient failure gets <see cref="MaxTransientRetryCount"/>.
+    /// The attempts a message gets when a try fails for a reason another try won't change (a handler's bug, a 400), and
+    /// the waits between them: 3 attempts, 5 s after the first failure, then twice as long each time, up to 5 min, by
+    /// default. When the last attempt fails, the message gives up: it is marked
+    /// (<c>OutboxMessage.GivenUpProcessedOnUtc</c>) and no longer polled. The wait is written to
+    /// <c>OutboxMessage.NextAttemptOnUtc</c> with the failure, so every instance waits it out, and the processing job
+    /// skips the message until then; a <see cref="RetrySchedule.FirstDelay"/> of <see cref="TimeSpan.Zero"/> tries it
+    /// again at the next run, without a wait. A transient failure gets <see cref="TransientRetries"/>.
     /// </summary>
-    public int MaxRetryCount { get; set; } = OutboxRetryLimits.DefaultMaxRetryCount;
+    public RetrySchedule Retries { get; set; } = OutboxRetryLimits.DefaultRetries;
 
     /// <summary>
-    /// Attempts a message gets when a try fails for a reason another try may get past (the container's
+    /// The attempts and waits a message gets when a try fails for a reason another try may get past (the container's
     /// <c>ITransientFailureClassifier</c>: a <c>TransientFailureException</c>, a cancellation or timeout, a transient
     /// database failure, an HTTP request that got no answer or a 408, 429 or 5xx, or what a registered
-    /// <c>ITransientFailureRule</c> calls transient). Unset (<see langword="null"/>, the default): 12, about 30 minutes
-    /// with the default <see cref="RetryDelay"/> and <see cref="MaxRetryDelay"/>, so an outage of a downstream service
-    /// doesn't spend them, or <see cref="MaxRetryCount"/> when that is higher. Set, at least <see cref="MaxRetryCount"/>,
-    /// or registration throws; set it to <see cref="MaxRetryCount"/> to give every failure the same tries (as before
-    /// 4.3.0). A non-transient failure after transient retries past <see cref="MaxRetryCount"/> gives up at once.
+    /// <c>ITransientFailureRule</c> calls transient). Unset (<see langword="null"/>, the default): <see cref="Retries"/>
+    /// with 12 attempts, about 30 minutes with the default delays, so an outage of a downstream service doesn't spend
+    /// them, or <see cref="Retries"/>' attempts when that is higher. Set, at least <see cref="Retries"/>' attempts, or
+    /// registration throws; as many gives every failure the same attempts (as before 4.3.0). A non-transient failure
+    /// after transient retries past <see cref="Retries"/>' attempts gives up at once.
     /// </summary>
-    public int? MaxTransientRetryCount { get; set; }
-
-    /// <summary>
-    /// How long a message whose try failed waits before its next one; each further retry waits twice as long, up to
-    /// <see cref="MaxRetryDelay"/>. 5 s by default (5 s, 10 s, 20 s, ...). The time is written to
-    /// <c>OutboxMessage.NextAttemptOnUtc</c> with the failure, so every instance waits it out, and the processing job skips the
-    /// message until then. <see cref="TimeSpan.Zero"/> tries it again at its next run (as before 4.3.0), without a wait.
-    /// </summary>
-    public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(5);
-
-    /// <summary>The longest a message waits between two tries (see <see cref="RetryDelay"/>): 5 min by default.</summary>
-    public TimeSpan MaxRetryDelay { get; set; } = TimeSpan.FromMinutes(5);
+    public RetrySchedule? TransientRetries { get; set; }
 
     /// <summary>
     /// Days a processed message is kept before the hourly cleanup deletes it (default 7). Unprocessed messages and

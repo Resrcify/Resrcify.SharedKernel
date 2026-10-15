@@ -151,8 +151,7 @@ public sealed class OutboxMessageProcessorTests(PostgresFixture pg)
             _services.GetRequiredService<IServiceScopeFactory>(),
             new OutboxMessageToProcess(message.Id, message.Type, message.Content, message.RetryCount, message.OccurredOnUtc),
             PostgresOutboxLaneClaim.Instance,
-            OutboxRetryLimits.Create(maxRetryCount: 3, maxTransientRetryCount: 12),
-            retryDelay: TimeSpan.FromSeconds(5),
+            OutboxRetryLimits.Default,
             CancellationToken.None);
 
         outcome.ShouldBe(OutboxProcessOutcome.Failed);

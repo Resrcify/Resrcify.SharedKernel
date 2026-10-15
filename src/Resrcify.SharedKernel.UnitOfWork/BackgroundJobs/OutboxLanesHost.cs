@@ -22,8 +22,9 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 /// The regular outbox job skips these event types.
 /// </summary>
 /// <remarks>
-/// A failed message is tried again after <see cref="OutboxLaneOptions.RetryDelay"/> (5 s), then twice as long each time
-/// (10 s, 20 s, …) up to <see cref="OutboxLaneOptions.MaxRetryDelay"/> (5 min). That schedule is kept in the database
+/// A failed message is tried again by its failure's schedule (<see cref="OutboxLaneOptions.Retries"/>, or
+/// <see cref="OutboxLaneOptions.TransientRetries"/> for a transient failure): after 5 s, then twice as long each time
+/// (10 s, 20 s, …) up to 5 min by default. That schedule is kept in the database
 /// (<see cref="OutboxMessage.NextAttemptOnUtc"/>, written with the failure), not in this instance, so several
 /// instances running the lanes don't spend a message's tries in a few seconds of an outage, however long it waited
 /// before its first try.
@@ -138,7 +139,6 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
                 message,
                 options.Claim,
                 settings.RetryLimits,
-                OutboxRetryBackoff.Delay(message.RetryCount + 1, options.RetryDelay, options.MaxRetryDelay),
                 stoppingToken);
             // Another instance holds it (a scatter-gather may hold it a while): look again at the next poll, not at
             // once, or the freed slot would claim it again and again. A failed one waits in the database.
@@ -160,14 +160,6 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
             signal.Set();
         }
     }
-
-    /// <summary>With the default delays: 5 s after the first failure, then 10 s, 20 s, … up to 5 min.</summary>
-    internal static TimeSpan RetryDelay(int failures)
-        => OutboxRetryBackoff.Delay(
-            failures,
-            OutboxRetryBackoff.DefaultRetryDelay,
-            OutboxRetryBackoff.DefaultMaxRetryDelay)!.Value;
-
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Outbox lane {Lane} started for {EventTypes} event type(s), {MaxConcurrency} at a time")]
     private partial void LogLaneStarted(string lane, int eventTypes, int maxConcurrency);

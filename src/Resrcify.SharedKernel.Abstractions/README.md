@@ -29,7 +29,10 @@ It exists to keep dependency direction explicit and prevent circular references 
     - `Resilience/`: `ITransientFailureRule` and `ITransientFailureClassifier`, the hook that adds a package's or a
       service's own rules to Results' transient rule (`services.AddTransientFailureRule<TRule>()`,
       `AddTransientFailureRule(Func<Exception, bool>)`, `TryAddTransientFailureClassifier()`, which registers the
-      default classifier: the built-in rule OR every registered rule, for the exception and each of its causes).
+      default classifier: the built-in rule OR every registered rule, for the exception and each of its causes), and
+      `RetrySchedule(MaxAttempts, FirstDelay, MaxDelay, Jitter)`, SharedKernel's one backoff: attempts in all, the
+      first delay doubling up to the longest (`DelayAfter(failedAttempt)`), which the outbox, the message bus and the
+      HTTP resilience pipeline take as their retry options.
 - Interfaces/contracts only, but for the resilience registration and its default classifier. (One interface carries a
   default: `ISingleValueObject`'s static `FromPersisted` is `Create(value).Value` unless the value object implements
   it.)

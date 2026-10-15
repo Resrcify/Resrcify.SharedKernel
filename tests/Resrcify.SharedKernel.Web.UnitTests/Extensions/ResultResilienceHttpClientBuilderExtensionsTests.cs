@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using Polly.CircuitBreaker;
 using Polly.Timeout;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.Web.Extensions;
 using Resrcify.SharedKernel.Web.Resilience;
@@ -177,7 +178,7 @@ public sealed class ResultResilienceHttpClientBuilderExtensionsTests
         }));
         using var provider = Provider(upstream, options =>
         {
-            options.RetryDelay = TimeSpan.FromMinutes(45);
+            options.Retries = options.Retries with { FirstDelay = TimeSpan.FromMinutes(45) };
             options.TotalTimeout = TimeSpan.FromHours(2);
         });
 
@@ -206,7 +207,7 @@ public sealed class ResultResilienceHttpClientBuilderExtensionsTests
     {
         using var upstream = new ScriptedHandler(_time, (_, _) =>
             Task.FromException<HttpResponseMessage>(new HttpRequestException("Connection refused (upstream:80)")));
-        using var provider = Provider(upstream, options => options.MaxRetries = 2);
+        using var provider = Provider(upstream, options => options.Retries = options.Retries with { MaxAttempts = 3 });
 
         using var response = await SendAsync(provider);
 
@@ -229,7 +230,7 @@ public sealed class ResultResilienceHttpClientBuilderExtensionsTests
             Task.FromException<HttpResponseMessage>(new HttpRequestException("Connection refused")));
         using var provider = Provider(upstream, options =>
         {
-            options.MaxRetries = 1;
+            options.Retries = options.Retries with { MaxAttempts = 2 };
             options.ThrowTimeoutsAndOpenCircuits = true;
         });
 
@@ -238,6 +239,27 @@ public sealed class ResultResilienceHttpClientBuilderExtensionsTests
         thrown.Message.ShouldBe("Connection refused");
         upstream.Calls.ShouldBe(2);
     }
+
+    [Fact]
+    public void ResultResilienceOptions_ShouldDefaultToFourAttempts_OneSecondDoublingToThirty_WithJitter()
+        => new ResultResilienceOptions().Retries
+            .ShouldBe(new RetrySchedule(4, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30), Jitter: true));
+
+    [Fact]
+    public async Task AddResultResilience_ShouldTryOnce_WhenTheRetriesAllowOneAttempt()
+    {
+        using var upstream = Upstream(_ => HttpStatusCode.ServiceUnavailable);
+        using var provider = Provider(upstream, options => options.Retries = options.Retries with { MaxAttempts = 1 });
+
+        using var response = await SendAsync(provider);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
+        upstream.Calls.ShouldBe(1);
+    }
+
+    [Fact]
+    public void AddResultResilience_ShouldThrow_WithoutRetries()
+        => Should.Throw<InvalidOperationException>(() => Register(options => options.Retries = null!));
 
     [Fact]
     public async Task AddResultResilience_ShouldRetry_WhenAnAttemptTimesOut()
@@ -276,7 +298,7 @@ public sealed class ResultResilienceHttpClientBuilderExtensionsTests
         using var upstream = Hanging();
         using var provider = Provider(upstream, options =>
         {
-            options.MaxRetries = 2;
+            options.Retries = options.Retries with { MaxAttempts = 3 };
             options.AttemptTimeout = TimeSpan.FromMinutes(30);
         });
 
@@ -376,7 +398,7 @@ public sealed class ResultResilienceHttpClientBuilderExtensionsTests
         using var upstream = Upstream(_ => (HttpStatusCode)status);
         using var provider = Provider(upstream, options =>
         {
-            options.MaxRetries = 2;
+            options.Retries = options.Retries with { MaxAttempts = 3 };
             options.RetryOnly = ResultResilienceOptions.SafeToRetryStatuses;
         });
 
@@ -399,7 +421,7 @@ public sealed class ResultResilienceHttpClientBuilderExtensionsTests
         });
         using var provider = Provider(upstream, options =>
         {
-            options.MaxRetries = 5;
+            options.Retries = options.Retries with { MaxAttempts = 6 };
             options.AttemptTimeout = TimeSpan.FromMinutes(30);
             options.RetryOnly = new HashSet<int>();
         });
@@ -486,7 +508,7 @@ public sealed class ResultResilienceHttpClientBuilderExtensionsTests
     private static void BreakingQuickly(
         ResultResilienceOptions options)
     {
-        options.MaxRetries = 0;
+        options.Retries = options.Retries with { MaxAttempts = 1 };
         options.CircuitBreaker = true;
         options.CircuitBreakerMinimumThroughput = 2;
         options.CircuitBreakerFailureRatio = 0.5;
@@ -534,9 +556,7 @@ public sealed class ResultResilienceHttpClientBuilderExtensionsTests
             .ConfigurePrimaryHttpMessageHandler(() => upstream)
             .AddResultResilience(options =>
             {
-                options.UseJitter = false;
-                options.RetryDelay = TimeSpan.FromMinutes(1);
-                options.MaxRetryDelay = TimeSpan.FromHours(4);
+                options.Retries = new RetrySchedule(4, TimeSpan.FromMinutes(1), TimeSpan.FromHours(4));
                 options.AttemptTimeout = TimeSpan.FromHours(6);
                 options.TotalTimeout = TimeSpan.FromDays(1);
                 options.CircuitBreaker = false;

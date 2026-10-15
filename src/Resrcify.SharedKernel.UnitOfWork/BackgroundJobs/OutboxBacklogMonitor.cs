@@ -16,7 +16,7 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 /// <summary>How the backlog of <typeparamref name="TDbContext"/>'s outbox is measured.</summary>
 /// <param name="RetryLimit">
 /// The most tries a regular message gets (<see cref="OutboxRetryLimits.ReadLimit"/>, the higher of
-/// <c>MaxRetryCount</c> and <c>MaxTransientRetryCount</c>): one under it still waits. A lane message gets its lane's.
+/// <c>Retries</c>' and <c>TransientRetries</c>' attempts): one under it still waits. A lane message gets its lane's.
 /// </param>
 /// <param name="Interval">How often the backlog is measured.</param>
 internal sealed record OutboxBacklogSettings<TDbContext>(int RetryLimit, TimeSpan Interval)

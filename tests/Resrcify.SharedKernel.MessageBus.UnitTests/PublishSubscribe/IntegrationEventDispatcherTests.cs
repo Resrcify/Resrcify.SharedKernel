@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Rebus.Transport.InMem;
+using Resrcify.SharedKernel.MessageBus.Configuration;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.Abstractions.Caching;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
 using Resrcify.SharedKernel.Caching.Primitives;
@@ -300,9 +302,32 @@ public sealed class IntegrationEventDispatcherTests
     [InlineData(4, 4000)]
     [InlineData(5, 4000)]
     [InlineData(13, 4000)]
-    public void RetryDelay_ShouldDoubleUpToFourSeconds_WhateverTheNumberOfTries(int failedAttempt, int milliseconds)
-        => Resrcify.SharedKernel.MessageBus.PublishSubscribe.IntegrationEventDispatcher<PayoutRotated>.RetryDelay(failedAttempt)
-            .ShouldBe(TimeSpan.FromMilliseconds(milliseconds));
+    [InlineData(int.MaxValue, 4000)]
+    public void InPlaceRetries_ShouldDoubleUpToFourSeconds_WhateverTheNumberOfTries(int failedAttempt, int milliseconds)
+        => MessageBusSettings.DefaultInPlaceRetries.DelayAfter(failedAttempt).ShouldBe(TimeSpan.FromMilliseconds(milliseconds));
+
+    [Fact]
+    public async Task Handle_ShouldTryAsWithEventRetriesSays_ThenMoveTheEventToTheErrorQueue()
+    {
+        var network = new InMemNetwork();
+        var log = new ScriptLog();
+        var queue = $"subscriber-{Guid.NewGuid():N}";
+        using var subscriber = await InMemoryServices.StartAsync(
+            network,
+            bus => bus
+                .WithInputQueue(queue)
+                .AddEventHandlers(typeof(IntegrationEventDispatcherTests).Assembly)
+                .WithEventRetries(new RetrySchedule(2, TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(10))),
+            services => services.AddSingleton(log));
+        using var publisher = await InMemoryServices.StartAsync(network, _ => { });
+        for (var i = 0; i < 5; i++)
+            log.Answers.Enqueue(Result.Failure(Error.Failure("Discord.Down", "Down.")));
+
+        await publisher.Services.GetRequiredService<IEventBus>().PublishAsync(new ScriptedEvent("e1"));
+        await InMemoryServices.WaitUntilAsync(() => network.GetCount($"{queue}.error") == 1);
+
+        log.Attempts.ShouldBe(2);
+    }
 
     private static async Task<(RetryLog Log, IHost Subscriber, IHost Publisher)> StartRetriedAsync()
     {

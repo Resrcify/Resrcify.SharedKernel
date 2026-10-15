@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
@@ -122,8 +123,7 @@ public sealed class OutboxMessageProcessorTests
             harness.Services.GetRequiredService<IServiceScopeFactory>(),
             Snapshot(row, retryCount: 4),
             claim: null,
-            OutboxRetryLimits.Create(maxRetryCount: 3, maxTransientRetryCount: 12),
-            retryDelay: null,
+            OutboxRetryLimits.Create(Immediate(3), Immediate(12)),
             CancellationToken.None);
 
         var stored = (await harness.GetMessagesAsync()).Single();
@@ -142,9 +142,18 @@ public sealed class OutboxMessageProcessorTests
             harness.Services.GetRequiredService<IServiceScopeFactory>(),
             snapshot,
             claim: null,
-            OutboxRetryLimits.Create(maxRetryCount, OutboxRetryLimits.DefaultMaxTransientRetryCount),
-            retryDelay,
+            OutboxRetryLimits.Create(
+                Immediate(maxRetryCount) with
+                {
+                    FirstDelay = retryDelay ?? TimeSpan.Zero,
+                    MaxDelay = retryDelay ?? TimeSpan.Zero,
+                },
+                transientRetries: null),
             CancellationToken.None);
+
+    // Tries a failed message again at once.
+    private static RetrySchedule Immediate(int maxAttempts)
+        => new(maxAttempts, TimeSpan.Zero, TimeSpan.Zero);
 
     /// <param name="failure">What every try fails with; a non-transient failure when not given.</param>
     private static async Task<OutboxJobTestHarness> FailingHarnessAsync(

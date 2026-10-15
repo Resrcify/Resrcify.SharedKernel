@@ -37,10 +37,10 @@ public static class ProcessOutboxMessagesJobSetup
     /// 80% of this.
     /// </param>
     /// <param name="delayInSecondsBeforeStart">Seconds after start-up before the first run.</param>
-    /// <param name="processMaxRetryCount">
-    /// Attempts a message gets before it is poison, when a try fails for a reason another try won't change. A failed try
-    /// waits before the next one: 5 s, then twice as long each time, up to 5 min (<c>OutboxOptions.RetryDelay</c> and
-    /// <c>MaxRetryDelay</c> through <c>AddOutboxProcessing</c> change them).
+    /// <param name="retries">
+    /// The attempts a message gets before it is poison, when a try fails for a reason another try won't change, and the
+    /// waits between them; <see langword="null"/>: 3 attempts, 5 s after the first failure, then twice as long each time,
+    /// up to 5 min.
     /// </param>
     /// <param name="processedRetentionInDays">Days processed messages are kept (an hourly cleanup); 0 turns it off.</param>
     /// <param name="claim">
@@ -53,35 +53,34 @@ public static class ProcessOutboxMessagesJobSetup
     /// <see cref="TimeProvider"/> registered in DI (or one given with <c>UseTimeProvider</c>), so register a fake
     /// one there to drive the schedule in tests.
     /// </param>
-    /// <param name="processMaxTransientRetryCount">
-    /// Attempts a message gets before it is poison when its tries fail for a transient reason (the container's
+    /// <param name="transientRetries">
+    /// The attempts and waits a message gets when its tries fail for a transient reason (the container's
     /// <c>ITransientFailureClassifier</c>: a <c>TransientFailureException</c>, a cancellation or timeout, a transient
     /// database failure, an HTTP request that got no answer or a 408, 429 or 5xx, or what a registered
-    /// <c>ITransientFailureRule</c> calls transient). Unset (<see langword="null"/>), 12, about 30 minutes with the default backoff, or
-    /// <paramref name="processMaxRetryCount"/> when that is higher. Set, at least <paramref name="processMaxRetryCount"/>;
-    /// equal to it gives every failure the same tries (as before 4.3.0).
+    /// <c>ITransientFailureRule</c> calls transient). Unset (<see langword="null"/>): <paramref name="retries"/> with 12
+    /// attempts (about 30 minutes with the default delays), or its own when that is higher. Set, at least as many
+    /// attempts as <paramref name="retries"/>; as many gives every failure the same tries (as before 4.3.0).
     /// </param>
     /// <exception cref="ArgumentOutOfRangeException">
-    /// <paramref name="processMaxRetryCount"/> is below 1, or <paramref name="processMaxTransientRetryCount"/> is set
-    /// below <paramref name="processMaxRetryCount"/>.
+    /// <paramref name="transientRetries"/> is set with fewer attempts than <paramref name="retries"/>.
     /// </exception>
     public static IQuartzBuilder AddProcessOutboxMessagesJob<TDbContext>(
         this IQuartzBuilder quartz,
         int processBatchSize = ProcessOutboxMessagesJob<DbContext>.DefaultProcessBatchSize,
         int processIntervalInSeconds = 60,
         int delayInSecondsBeforeStart = 60,
-        int processMaxRetryCount = ProcessOutboxMessagesJob<DbContext>.DefaultProcessMaxRetryCount,
+        RetrySchedule? retries = null,
         int processedRetentionInDays = CleanupOutboxMessagesJob<DbContext>.DefaultRetentionInDays,
         IOutboxLaneClaim? claim = null,
         TimeProvider? timeProvider = null,
-        int? processMaxTransientRetryCount = null)
+        RetrySchedule? transientRetries = null)
         where TDbContext : DbContext
     {
         var limits = OutboxRetryLimits.Create(
-            processMaxRetryCount,
-            processMaxTransientRetryCount,
-            nameof(processMaxRetryCount),
-            nameof(processMaxTransientRetryCount));
+            retries ?? OutboxRetryLimits.DefaultRetries,
+            transientRetries,
+            nameof(retries),
+            nameof(transientRetries));
         return AddProcessOutboxMessagesJob<TDbContext>(
             quartz,
             processBatchSize,
@@ -90,13 +89,11 @@ public static class ProcessOutboxMessagesJobSetup
             limits,
             processedRetentionInDays,
             claim,
-            timeProvider,
-            OutboxRetryBackoff.DefaultRetryDelay,
-            OutboxRetryBackoff.DefaultMaxRetryDelay);
+            timeProvider);
     }
 
-    // The registration, with the retry limits its callers made (OutboxRetryLimits.Create) and the retry delays
-    // AddOutboxProcessing's options set.
+    // The registration, with the retry limits its callers made (OutboxRetryLimits.Create): the attempts, delays and
+    // jitter of both schedules go in the job data.
     internal static IQuartzBuilder AddProcessOutboxMessagesJob<TDbContext>(
         IQuartzBuilder quartz,
         int processBatchSize,
@@ -105,9 +102,7 @@ public static class ProcessOutboxMessagesJobSetup
         OutboxRetryLimits retryLimits,
         int processedRetentionInDays,
         IOutboxLaneClaim? claim,
-        TimeProvider? timeProvider,
-        TimeSpan retryDelay,
-        TimeSpan maxRetryDelay)
+        TimeProvider? timeProvider)
         where TDbContext : DbContext
     {
         ArgumentNullException.ThrowIfNull(quartz);
@@ -148,10 +143,22 @@ public static class ProcessOutboxMessagesJobSetup
                     processIntervalInSeconds)
                 .UsingJobData(
                     ProcessOutboxMessagesJob<TDbContext>.ProcessRetryDelayInMillisecondsKey,
-                    (long)retryDelay.TotalMilliseconds)
+                    (long)retryLimits.Retries.FirstDelay.TotalMilliseconds)
                 .UsingJobData(
                     ProcessOutboxMessagesJob<TDbContext>.ProcessMaxRetryDelayInMillisecondsKey,
-                    (long)maxRetryDelay.TotalMilliseconds))
+                    (long)retryLimits.Retries.MaxDelay.TotalMilliseconds)
+                .UsingJobData(
+                    ProcessOutboxMessagesJob<TDbContext>.ProcessRetryJitterKey,
+                    retryLimits.Retries.Jitter)
+                .UsingJobData(
+                    ProcessOutboxMessagesJob<TDbContext>.ProcessTransientRetryDelayInMillisecondsKey,
+                    (long)retryLimits.TransientRetries.FirstDelay.TotalMilliseconds)
+                .UsingJobData(
+                    ProcessOutboxMessagesJob<TDbContext>.ProcessMaxTransientRetryDelayInMillisecondsKey,
+                    (long)retryLimits.TransientRetries.MaxDelay.TotalMilliseconds)
+                .UsingJobData(
+                    ProcessOutboxMessagesJob<TDbContext>.ProcessTransientRetryJitterKey,
+                    retryLimits.TransientRetries.Jitter))
             .AddTrigger<ProcessOutboxMessagesJob<TDbContext>>(trigger => trigger
                 .ForJob(jobKey)
                 .StartAt(time.GetUtcNow().AddSeconds(delayInSecondsBeforeStart))

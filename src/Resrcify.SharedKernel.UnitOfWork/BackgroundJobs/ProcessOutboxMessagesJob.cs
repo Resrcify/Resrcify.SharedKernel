@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Quartz;
 using Resrcify.SharedKernel.Abstractions.Mediator;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
@@ -25,12 +26,12 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 /// <item>Each message is processed in its own scope and transaction, as before. A message that fails (or that another
 /// instance holds) is left for the next run: a run never reads it twice, so its retries keep their pace.</item>
 /// <item>A message whose try failed waits before its next one, as in the outbox lanes: 5 s, then twice as long each
-/// time, up to 5 min (<c>OutboxOptions.RetryDelay</c> and <c>MaxRetryDelay</c>). The time is written to
+/// time, up to 5 min (<c>OutboxOptions.Retries</c>, or <c>TransientRetries</c>). The time is written to
 /// <see cref="OutboxMessage.NextAttemptOnUtc"/> with the failure, and a run reads only the messages that are due, so a
 /// handler failing through an outage of a few minutes doesn't spend its tries in the first minute of it.</item>
 /// <item>A transient failure (a timeout, an HTTP 5xx, a transient database failure) gets more tries than any other:
-/// <c>OutboxOptions.MaxTransientRetryCount</c> (12, about 30 minutes with the default backoff, or <c>MaxRetryCount</c>
-/// when that is higher) against <c>MaxRetryCount</c> (3).</item>
+/// <c>OutboxOptions.TransientRetries</c> (12 attempts, about 30 minutes with the default delays, or <c>Retries</c>'
+/// when that is higher) against <c>Retries</c> (3).</item>
 /// </list>
 /// </remarks>
 [DisallowConcurrentExecution]
@@ -47,8 +48,11 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
     internal const string ProcessIntervalInSecondsKey = "ProcessIntervalInSeconds";
     internal const string ProcessRetryDelayInMillisecondsKey = "ProcessRetryDelayInMilliseconds";
     internal const string ProcessMaxRetryDelayInMillisecondsKey = "ProcessMaxRetryDelayInMilliseconds";
+    internal const string ProcessRetryJitterKey = "ProcessRetryJitter";
+    internal const string ProcessTransientRetryDelayInMillisecondsKey = "ProcessTransientRetryDelayInMilliseconds";
+    internal const string ProcessMaxTransientRetryDelayInMillisecondsKey = "ProcessMaxTransientRetryDelayInMilliseconds";
+    internal const string ProcessTransientRetryJitterKey = "ProcessTransientRetryJitter";
     internal const int DefaultProcessBatchSize = 20;
-    internal const int DefaultProcessMaxRetryCount = OutboxRetryLimits.DefaultMaxRetryCount;
     internal const int DefaultProcessIntervalInSeconds = 60;
 
     /// <summary>The share of the trigger's interval a run spends starting batches: 80%.</summary>
@@ -69,14 +73,6 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
             ProcessBatchSizeKey,
             DefaultProcessBatchSize);
         var limits = ReadRetryLimits(context.MergedJobDataMap);
-        var retryDelay = ReadDelay(
-            context.MergedJobDataMap,
-            ProcessRetryDelayInMillisecondsKey,
-            OutboxRetryBackoff.DefaultRetryDelay);
-        var maxRetryDelay = ReadDelay(
-            context.MergedJobDataMap,
-            ProcessMaxRetryDelayInMillisecondsKey,
-            OutboxRetryBackoff.DefaultMaxRetryDelay);
         var budget = DrainBudget(context);
         var started = _time.GetTimestamp();
 
@@ -101,7 +97,6 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
                     message,
                     claim,
                     limits,
-                    OutboxRetryBackoff.Delay(message.RetryCount + 1, retryDelay, maxRetryDelay),
                     cancellationToken);
                 if (outcome != OutboxProcessOutcome.Processed)
                     passedOver.Add(message.Id);
@@ -128,14 +123,41 @@ public sealed class ProcessOutboxMessagesJob<TDbContext>(
         return TimeSpan.FromSeconds(DefaultProcessIntervalInSeconds) * DrainBudgetShare;
     }
 
-    // The tries a message gets, made as every registration makes them (OutboxRetryLimits.Create). A job stored without
-    // the transient limit (before 4.3.0, in a persistent store) leaves it unset: 12, or ProcessMaxRetryCount when higher.
+    // The schedules a message gets, made as every registration makes them (OutboxRetryLimits.Create). A job stored
+    // without the transient attempts (before 4.3.0, in a persistent store) leaves them unset: 12, or ProcessMaxRetryCount
+    // when higher; one stored without the transient delays takes the regular ones.
     private static OutboxRetryLimits ReadRetryLimits(JobDataMap data)
-        => OutboxRetryLimits.Create(
-            ReadInt(data, ProcessMaxRetryCountKey, DefaultProcessMaxRetryCount),
-            ReadOptionalInt(data, ProcessMaxTransientRetryCountKey),
+    {
+        var defaults = OutboxRetryLimits.DefaultRetries;
+        var retries = new RetrySchedule(
+            ReadInt(data, ProcessMaxRetryCountKey, defaults.MaxAttempts),
+            ReadDelay(data, ProcessRetryDelayInMillisecondsKey, defaults.FirstDelay),
+            ReadDelay(data, ProcessMaxRetryDelayInMillisecondsKey, defaults.MaxDelay),
+            ReadBool(data, ProcessRetryJitterKey, defaults.Jitter));
+        var transientRetries = ReadOptionalInt(data, ProcessMaxTransientRetryCountKey) is { } transientAttempts
+            ? new RetrySchedule(
+                transientAttempts,
+                ReadDelay(data, ProcessTransientRetryDelayInMillisecondsKey, retries.FirstDelay),
+                ReadDelay(data, ProcessMaxTransientRetryDelayInMillisecondsKey, retries.MaxDelay),
+                ReadBool(data, ProcessTransientRetryJitterKey, retries.Jitter))
+            : null;
+        return OutboxRetryLimits.Create(
+            retries,
+            transientRetries,
             ProcessMaxRetryCountKey,
             ProcessMaxTransientRetryCountKey);
+    }
+
+    // A flag stored as a bool or a string; anything else falls back.
+    private static bool ReadBool(JobDataMap data, string key, bool fallback)
+        => data.TryGetValue(key, out var value)
+            ? value switch
+            {
+                bool flag => flag,
+                string text when bool.TryParse(text, out var parsed) => parsed,
+                _ => fallback,
+            }
+            : fallback;
 
     // A delay stored in milliseconds (an int, a long or a string, or a TimeSpan); a negative or unusable one falls back.
     private static TimeSpan ReadDelay(JobDataMap data, string key, TimeSpan fallback)

@@ -88,18 +88,13 @@ public static class OutboxServiceCollectionExtensions
         ArgumentOutOfRangeException.ThrowIfLessThan(options.BatchSize, 1);
         ArgumentOutOfRangeException.ThrowIfLessThan(options.ProcessIntervalInSeconds, 1);
         var retryLimits = OutboxRetryLimits.Create(
-            options.MaxRetryCount,
-            options.MaxTransientRetryCount,
-            nameof(OutboxOptions.MaxRetryCount),
-            nameof(OutboxOptions.MaxTransientRetryCount));
+            options.Retries,
+            options.TransientRetries,
+            nameof(OutboxOptions.Retries),
+            nameof(OutboxOptions.TransientRetries));
         ArgumentOutOfRangeException.ThrowIfNegative(options.DelayInSecondsBeforeStart);
         ArgumentOutOfRangeException.ThrowIfNegative(options.ProcessedRetentionInDays);
         ArgumentOutOfRangeException.ThrowIfLessThan(options.BacklogCheckIntervalInSeconds, 1);
-        OutboxRetryBackoff.Validate(
-            options.RetryDelay,
-            options.MaxRetryDelay,
-            nameof(OutboxOptions.RetryDelay),
-            nameof(OutboxOptions.MaxRetryDelay));
         var time = options.TimeProvider ?? RegisteredTimeProvider(services) ?? TimeProvider.System;
 
         UseOneSerializer<TDbContext>(services, serializer);
@@ -120,9 +115,7 @@ public static class OutboxServiceCollectionExtensions
             retryLimits,
             options.ProcessedRetentionInDays,
             options.Claim,
-            time,
-            options.RetryDelay,
-            options.MaxRetryDelay));
+            time));
 
         // The backlog monitor behind the outbox.messages.* gauges and the outbox health check (AddOutbox<TDbContext>).
         // The job registration above registered it with the default interval; these options replace that.
