@@ -621,6 +621,9 @@ every package in the repository is released together under one version.
   parallel add to (CI counted 3 for 1). The `events.*` counters carry no tag of the bus that recorded them, so
   `IntegrationEventDispatcherTests` and `EventBusTests`, which count them, now run in the new non-parallel
   `SharedMeterCollection`; the other `MetricsCapture` users count measurements tagged with their own queue or message.
+  `ScatterGatherTests.Tracing_WhenItemsAreAnswered_PutsTheWholeBatchInTheOutboxMessagesTrace` counted the trace's
+  handling spans as soon as the run was gathered, which the last reply's handler does before the replies' spans stop
+  (seen once: 5 of 10): it now waits for them.
 
 - **`UseServiceRequestLogging` is documented before `UseExceptionHandler()`** (its XML docs and the Observability
   README, Quick Start included), where its line logs the status the exception handler answered (a 500 whose stack the
