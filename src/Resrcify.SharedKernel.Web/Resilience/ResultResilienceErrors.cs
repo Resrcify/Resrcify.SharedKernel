@@ -32,7 +32,7 @@ public static class ResultResilienceErrors
     /// (<see cref="ErrorType.Timeout"/>).
     /// </summary>
     public static readonly Error Timeout = Error.Timeout(
-        "Http.ResilienceTimeout",
+        ErrorCodes.Http.ResilienceTimeout,
         "The call timed out: an attempt or the whole call took longer than the resilience pipeline allows.");
 
     /// <summary>
@@ -40,13 +40,13 @@ public static class ResultResilienceErrors
     /// (<see cref="ErrorType.ExternalFailure"/>, transient).
     /// </summary>
     public static readonly Error CircuitOpen = Error.ExternalFailure(
-        "Http.CircuitOpen",
+        ErrorCodes.Http.CircuitOpen,
         "The call wasn't made: the circuit is open after too many transient failures of the service called.");
 
     /// <summary>
     /// The service at <paramref name="authority"/> couldn't be reached, after the retries: HttpClient got no answer (a
     /// refused or reset connection, a name that doesn't resolve, a TLS failure: an <c>HttpRequestException</c> without a
-    /// status). Answered as a 502 (<see cref="ErrorType.ExternalFailure"/>, transient), coded <c>Http.Unreachable</c>.
+    /// status). Answered as a 502 (<see cref="ErrorType.ExternalFailure"/>, transient), coded <see cref="ErrorCodes.Http.Unreachable"/>.
     /// </summary>
     /// <param name="authority">The host (and port) called, e.g. <c>swgohapi:8080</c>.</param>
     /// <param name="cause">Why: the exception's message, e.g. <c>Connection refused (swgohapi:8080)</c>.</param>
@@ -54,6 +54,6 @@ public static class ResultResilienceErrors
         string authority,
         string cause)
         => Error.ExternalFailure(
-            "Http.Unreachable",
+            ErrorCodes.Http.Unreachable,
             $"The service at {authority} could not be reached: {cause}");
 }

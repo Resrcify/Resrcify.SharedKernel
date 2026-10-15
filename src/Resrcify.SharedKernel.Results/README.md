@@ -37,6 +37,9 @@
     - `Combine(...)`
     - `Map(...)`, `Bind(...)`, `Tap(...)`, `Ensure(...)`, `Match(...)`
 - Sync and async extension methods for fluent pipelines.
+- `ErrorCodes`: the code of every error SharedKernel returns or answers with (`ErrorCodes.Http.Unreachable`,
+  `ErrorCodes.Persistence.Concurrency`, `ErrorCodes.Request.Unhandled`, ...), so a service matches `Error.Code` without
+  a string of its own.
 - `ErrorTypes.FromHttpStatus(int)` / `ToHttpStatus(ErrorType)`: the one mapping between an error type and an HTTP
   status (the Web package answers and reads responses by it).
 - `Diagnostics/LoggedExceptions`: the convention that logs an exception at `Error` once across the packages that see

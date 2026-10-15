@@ -104,7 +104,7 @@ public sealed class ResultExceptionHandlerBindingFailureTests
         using var response = await client.GetAsync(new Uri("/too-large", UriKind.Relative));
 
         var error = await SingleValidationErrorAsync(response, HttpStatusCode.RequestEntityTooLarge);
-        error.Code.ShouldBe(ResultExceptionHandler.BadRequestErrorCode);
+        error.Code.ShouldBe(ErrorCodes.Request.Binding);
         error.Message.ShouldBe("The request is too large.");
         ShouldLogNoError(logs);
     }

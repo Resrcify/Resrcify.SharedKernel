@@ -48,7 +48,7 @@ public sealed class ResultExceptionHandlerTests
 
         response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
         result.IsFailure.ShouldBeTrue();
-        result.Errors.ShouldBe([Error.Failure(ResultExceptionHandler.ErrorCode, ResultExceptionHandler.ErrorMessage)]);
+        result.Errors.ShouldBe([Error.Failure(ErrorCodes.Request.Unhandled, ResultExceptionHandler.ErrorMessage)]);
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public sealed class ResultExceptionHandlerTests
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         var error = result.Errors.ShouldHaveSingleItem();
-        error.Code.ShouldBe(ResultExceptionHandler.ErrorCode);
+        error.Code.ShouldBe(ErrorCodes.Request.Unhandled);
         error.Message.ShouldBe($"InvalidOperationException: {Secret}");
         body.RootElement.GetProperty("detail").GetString().ShouldNotBeNull().ShouldContain(nameof(ThrowingEndpoint));
     }
@@ -291,7 +291,7 @@ public sealed class ResultExceptionHandlerTests
                 app.MapGet("/cached", ThrowingTheCachedFailure);
                 app.MapGet("/transient", ThrowingATransientFailure);
                 app.MapGet("/failure", () => Result
-                    .Failure(Error.Failure(ResultExceptionHandler.ErrorCode, ResultExceptionHandler.ErrorMessage))
+                    .Failure(Error.Failure(ErrorCodes.Request.Unhandled, ResultExceptionHandler.ErrorMessage))
                     .ToProblemDetails());
             },
             environment);

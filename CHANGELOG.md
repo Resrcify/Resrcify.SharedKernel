@@ -5,6 +5,15 @@ every package in the repository is released together under one version.
 
 ## 4.3.0 (unreleased)
 
+### Breaking changes
+
+- **One error-code catalogue: `ErrorCodes`** (Resrcify.SharedKernel.Results, `Primitives`; see Added). The constants
+  it replaces are gone: **`ErrorTypeExtensions.ConcurrencyConflictCode`** (use `ErrorCodes.Persistence.Concurrency`,
+  the same `"Persistence.Concurrency"`) and **`ResultExceptionHandler.ErrorCode`** (Web; use
+  `ErrorCodes.Request.Unhandled`, the same `"Unhandled"`). The codes themselves are unchanged. A service matching a
+  SharedKernel code with a string of its own (Discord's `ErrorMessageExtensions.ResilienceTimeoutCode` /
+  `CircuitOpenCode`, Tournament's test stubs) can use the catalogue's constant instead.
+
 ### Behaviour changes
 
 - **One transient contract, owned by SharedKernel, with a DI hook** (Resrcify.SharedKernel.Results, Abstractions,
@@ -90,7 +99,7 @@ every package in the repository is released together under one version.
   `ResultExceptionHandler` answered a `BadHttpRequestException` (a minimal-API parameter that fails to bind: a
   required query or body value left out, an unparsable route segment, malformed JSON) as an unhandled exception: a 500,
   logged at `Error`. It now answers the exception's own status (400, or 413, 415 ...) with problem details holding one
-  `Validation` error coded with the parameter's name (`BadRequestErrorCode`, `Request`, when it names none), e.g.
+  `Validation` error coded with the parameter's name (`ErrorCodes.Request.Binding`, `Request`, when it names none), e.g.
   `page`: `The required parameter "page" was not provided from query string.`, logged at `Debug`. The message names
   only the parameter, never its type or the value sent; in Development the problem's `detail` holds ASP.NET Core's
   message. **And `AddResultProblemDetails()` turns on `RouteHandlerOptions.ThrowOnBadRequest`** (after every other
@@ -154,6 +163,14 @@ every package in the repository is released together under one version.
 
 ### Added
 
+- **Results: `ErrorCodes`**, the code of every error SharedKernel returns or answers with, nested by the package that
+  emits it: `General` (`NullValue`, `EmptyInput`), `Http` (`ResilienceTimeout`, `CircuitOpen`, `Unreachable`,
+  `EmptyContent`, `UnreadableContent`, `ForStatus(int)` for `Http.<status>`), `Persistence` (every `PersistenceErrors`
+  code), `Request` (`Unhandled`, `Binding` = `"Request"`), `Idempotency` (`InvalidKey`, `KeyReused`, `InProgress`),
+  `ScatterGather` (`Unanswered`, `UnexpectedReply`, `ResponderFailed(string requestType)`), `ErrorQueue` (`None`,
+  `MessageNotFound`, `NotMoved`, `Unavailable`) and `User` (`MissingUserIdClaim`). Every SharedKernel `Error` is coded
+  from it.
+
 - **Web: `ResultResilienceErrors.Unreachable(string authority, string cause)`** (code `Http.Unreachable`) and
   `UnreachableMarker` (`unreachable`), the answer for a service that couldn't be reached (see
   above).
@@ -195,8 +212,8 @@ every package in the repository is released together under one version.
 
 - **Web: `ResultProblemDetailsOptions.ProblemDetailsForBindingFailures`** (`true` by default): whether
   `AddResultProblemDetails()` turns on `RouteHandlerOptions.ThrowOnBadRequest`, so a binding failure reaches
-  `ResultExceptionHandler` in every environment. **`ResultExceptionHandler.BadRequestErrorCode`** (`"Request"`), the
-  code of a binding failure's error when the exception names no parameter.
+  `ResultExceptionHandler` in every environment. The code of a binding failure's error when the exception names no
+  parameter is `ErrorCodes.Request.Binding` (`"Request"`).
 
 ### Fixed
 

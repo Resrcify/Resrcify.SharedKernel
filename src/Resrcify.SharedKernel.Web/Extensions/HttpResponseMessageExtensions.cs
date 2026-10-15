@@ -56,7 +56,7 @@ public static class HttpResponseMessageExtensions
         catch (JsonException exception)
         {
             return Result.Failure<T>(new Error(
-                "Http.UnreadableContent",
+                ErrorCodes.Http.UnreadableContent,
                 $"The response ({(int)response.StatusCode}) could not be read as a {typeof(T).Name}: {exception.Message}",
                 ErrorType.ExternalFailure));
         }
@@ -114,14 +114,14 @@ public static class HttpResponseMessageExtensions
     {
         var statusCode = (int)response.StatusCode;
         return new Error(
-            $"Http.{statusCode}",
+            ErrorCodes.Http.ForStatus(statusCode),
             response.ReasonPhrase ?? response.StatusCode.ToString(),
             ErrorTypes.FromHttpStatus(statusCode));
     }
 
     private static Error EmptyContent<T>(HttpResponseMessage response)
         => new(
-            "Http.EmptyContent",
+            ErrorCodes.Http.EmptyContent,
             $"The response ({(int)response.StatusCode}) had no {typeof(T).Name} in it.",
             ErrorType.ExternalFailure);
 

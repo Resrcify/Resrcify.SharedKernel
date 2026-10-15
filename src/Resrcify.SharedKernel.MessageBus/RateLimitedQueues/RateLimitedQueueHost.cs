@@ -398,7 +398,7 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
         => TransientFailures.TryGetErrors(exception, out var errors)
             ? [.. errors]
             : [Error.Failure(
-                $"{typeof(TRequest).Name}.ResponderFailed",
+                ErrorCodes.ScatterGather.ResponderFailed(typeof(TRequest).Name),
                 $"The responder failed ({exception.GetType().Name}); see its logs.")];
 
     // At Error (Warning when transient) with the stack unless a mediator behavior behind the responder did so already;

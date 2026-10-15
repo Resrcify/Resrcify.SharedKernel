@@ -20,7 +20,7 @@ namespace Resrcify.SharedKernel.Web.Exceptions;
 /// <summary>
 /// Answers an unhandled exception with the problem details every failed <see cref="Result"/> gets
 /// (<see cref="HttpResultExtensions.ToProblemDetails"/>): a 500 whose <c>errors</c> hold one
-/// <see cref="ErrorType.Failure"/> error coded <see cref="ErrorCode"/>, which a caller's
+/// <see cref="ErrorType.Failure"/> error coded <see cref="ErrorCodes.Request.Unhandled"/>, which a caller's
 /// <c>HttpResponseMessage.ToResultAsync</c> reads back as that error. The exception is logged once, at
 /// <see cref="LogLevel.Error"/> with its stack, following <see cref="LoggedExceptions"/>: when something else logged it
 /// already (the mediator's behaviors do), the handler logs a <see cref="LogLevel.Debug"/> line without the stack. A
@@ -29,7 +29,7 @@ namespace Resrcify.SharedKernel.Web.Exceptions;
 /// A request ASP.NET Core couldn't bind (a <see cref="BadHttpRequestException"/>: a required parameter left out, a
 /// value that doesn't parse, a body that isn't valid JSON) isn't a fault of the service: it is answered with the
 /// exception's status (400, or 413, 415 ...) and problem details holding one <see cref="ErrorType.Validation"/> error
-/// coded with the parameter's name (<see cref="BadRequestErrorCode"/> when the exception names none), logged at
+/// coded with the parameter's name (<see cref="ErrorCodes.Request.Binding"/> when the exception names none), logged at
 /// <see cref="LogLevel.Debug"/>. Its message names only the parameter, never its type or the value sent; in Development
 /// (<see cref="ResultProblemDetailsOptions.IncludeExceptionDetails"/>) the problem's <c>detail</c> holds ASP.NET Core's
 /// own message. <c>AddResultProblemDetails()</c> has minimal APIs throw it in every environment
@@ -45,18 +45,8 @@ public sealed partial class ResultExceptionHandler(
     ILogger<ResultExceptionHandler> logger)
     : IExceptionHandler
 {
-    /// <summary>The code of the error an unhandled exception is answered with.</summary>
-    public const string ErrorCode = "Unhandled";
-
     /// <summary>Its message when the exception isn't shown (outside Development).</summary>
     public const string ErrorMessage = "An unexpected error occurred.";
-
-    /// <summary>
-    /// The code of the error a request that couldn't be bound is answered with, when the
-    /// <see cref="BadHttpRequestException"/> names no parameter (a body too large, a content type nobody reads).
-    /// Otherwise the code is the parameter's name.
-    /// </summary>
-    public const string BadRequestErrorCode = "Request";
 
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
@@ -215,7 +205,7 @@ public sealed partial class ResultExceptionHandler(
     {
         var showException = ShowsException();
         var error = Error.Failure(
-            ErrorCode,
+            ErrorCodes.Request.Unhandled,
             showException ? $"{exception.GetType().Name}: {exception.Message}" : ErrorMessage);
 
         var problem = Result.Failure(error).ToProblemDetails();

@@ -87,6 +87,19 @@ public sealed class PersistenceErrorsTests
     }
 
     [Fact]
+    public void Errors_ShouldBeCodedFromResultsCatalogue()
+    {
+        PersistenceErrors.Concurrency.Code.ShouldBe(ErrorCodes.Persistence.Concurrency);
+        PersistenceErrors.UniqueViolation.Code.ShouldBe(ErrorCodes.Persistence.UniqueViolation);
+        PersistenceErrors.NotNullViolation.Code.ShouldBe(ErrorCodes.Persistence.NotNullViolation);
+        PersistenceErrors.CheckViolation.Code.ShouldBe(ErrorCodes.Persistence.CheckViolation);
+        PersistenceErrors.ValueTooLong.Code.ShouldBe(ErrorCodes.Persistence.ValueTooLong);
+        PersistenceErrors.ForeignKeyViolation.Code.ShouldBe(ErrorCodes.Persistence.ForeignKeyViolation);
+        PersistenceErrors.SerializationFailure.Code.ShouldBe(ErrorCodes.Persistence.SerializationFailure);
+        PersistenceErrors.Deadlock.Code.ShouldBe(ErrorCodes.Persistence.Deadlock);
+    }
+
+    [Fact]
     public void TryGetError_ShouldNameTheConstraintTheTableAndTheColumn_WhenTheDriverReportsThem()
     {
         var database = Database("23503");

@@ -53,7 +53,7 @@ public sealed class BindingFailureTests
         },
         {
             "Unexpected end of request content.",
-            ResultExceptionHandler.BadRequestErrorCode,
+            ErrorCodes.Request.Binding,
             "The request couldn't be read."
         },
     };
@@ -85,6 +85,6 @@ public sealed class BindingFailureTests
         var (error, statusCode) = BindingFailure.Describe(new BadHttpRequestException("Something about the request.", thrown));
 
         statusCode.ShouldBe(answered);
-        error.ShouldBe(Error.Validation(ResultExceptionHandler.BadRequestErrorCode, message));
+        error.ShouldBe(Error.Validation(ErrorCodes.Request.Binding, message));
     }
 }

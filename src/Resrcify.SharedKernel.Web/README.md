@@ -242,7 +242,7 @@ app.UseExceptionHandler();
 ```
 
 An exception no handler caught is answered like a failed result (`ToProblemDetails`): a 500 problem details whose
-`errors` hold one `Failure` error coded `Unhandled` (`ResultExceptionHandler.ErrorCode`), so a caller's
+`errors` hold one `Failure` error coded `Unhandled` (`ErrorCodes.Request.Unhandled`), so a caller's
 `ToResultAsync` reads it back as that error. Outside Development the message is only "An unexpected error occurred.";
 in Development the error's message is the exception's type and message and the problem's `detail` the whole exception
 (`options.IncludeExceptionDetails` decides either way). The exception is logged once, at `Error` (the exception
@@ -257,7 +257,7 @@ stands for, with problem details of its `Errors` (a 502 for an upstream's failur
 A request ASP.NET Core couldn't bind (its `BadHttpRequestException`: a required query, route, header or body value left
 out, a value that doesn't parse, such as `/shards/abc` for a `Guid id`, a body that isn't valid JSON) isn't a fault of
 the service: it is answered with the exception's status (400, or 413, 415 ...) and problem details whose `errors` hold
-one `Validation` error coded with the parameter's name (`ResultExceptionHandler.BadRequestErrorCode`, `Request`, when
+one `Validation` error coded with the parameter's name (`ErrorCodes.Request.Binding`, `Request`, when
 the exception names none), logged at `Debug`:
 
 ```json

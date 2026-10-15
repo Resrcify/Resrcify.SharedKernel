@@ -26,7 +26,7 @@ internal static partial class BindingFailure
 
         var parameter = ParameterNamedIn(exception.Message);
         var error = Error.Validation(
-            parameter ?? ResultExceptionHandler.BadRequestErrorCode,
+            parameter ?? ErrorCodes.Request.Binding,
             MessageFor(exception.Message, parameter, statusCode));
         return (error, statusCode);
     }

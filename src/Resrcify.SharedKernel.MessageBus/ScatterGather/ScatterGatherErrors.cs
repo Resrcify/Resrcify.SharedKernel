@@ -7,9 +7,9 @@ public static class ScatterGatherErrors
 {
     /// <summary>The item didn't answer before the timeout.</summary>
     public static Error Unanswered(string key)
-        => new("ScatterGather.Unanswered", $"Item {key} didn't answer before the timeout.", ErrorType.Timeout);
+        => new(ErrorCodes.ScatterGather.Unanswered, $"Item {key} didn't answer before the timeout.", ErrorType.Timeout);
 
     /// <summary>The item answered with a message of a type nobody expected.</summary>
     public static Error UnexpectedReply(string type)
-        => new("ScatterGather.UnexpectedReply", $"Unexpected reply {type}.", ErrorType.Failure);
+        => new(ErrorCodes.ScatterGather.UnexpectedReply, $"Unexpected reply {type}.", ErrorType.Failure);
 }

@@ -9,6 +9,7 @@ using Polly;
 using Polly.CircuitBreaker;
 using Polly.RateLimiting;
 using Polly.Timeout;
+using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.Web.Resilience;
 using Shouldly;
 using Xunit;
@@ -269,4 +270,12 @@ public sealed class ResultResiliencePolicyTests
     private static HttpResponseMessage RateLimited(
         RetryConditionHeaderValue retryAfter)
         => new(HttpStatusCode.TooManyRequests) { Headers = { RetryAfter = retryAfter } };
+
+    [Fact]
+    public void ResultResilienceErrors_ShouldBeCodedFromResultsCatalogue()
+    {
+        ResultResilienceErrors.Timeout.Code.ShouldBe(ErrorCodes.Http.ResilienceTimeout);
+        ResultResilienceErrors.CircuitOpen.Code.ShouldBe(ErrorCodes.Http.CircuitOpen);
+        ResultResilienceErrors.Unreachable("upstream", "refused").Code.ShouldBe(ErrorCodes.Http.Unreachable);
+    }
 }

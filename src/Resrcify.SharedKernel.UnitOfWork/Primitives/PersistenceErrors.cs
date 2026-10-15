@@ -55,12 +55,12 @@ public static class PersistenceErrors
     /// caller (409), but transient (<c>Error.IsTransient()</c>) to the message bus, which retries it in a new scope.
     /// </summary>
     public static readonly Error Concurrency = Error.Conflict(
-        ErrorTypeExtensions.ConcurrencyConflictCode,
+        ErrorCodes.Persistence.Concurrency,
         "The data was changed by someone else since it was read. Read it again and retry.");
 
     /// <summary>The save would duplicate a value that must be unique.</summary>
     public static readonly Error UniqueViolation = Error.Conflict(
-        "Persistence.UniqueViolation",
+        ErrorCodes.Persistence.UniqueViolation,
         "The data conflicts with existing data that must be unique.");
 
     /// <summary>
@@ -68,7 +68,7 @@ public static class PersistenceErrors
     /// returned names the table and the column, when the driver reports them.
     /// </summary>
     public static readonly Error NotNullViolation = Error.Validation(
-        "Persistence.NotNullViolation",
+        ErrorCodes.Persistence.NotNullViolation,
         "A value the database requires is missing.");
 
     /// <summary>
@@ -76,7 +76,7 @@ public static class PersistenceErrors
     /// names the constraint and the table, when the driver reports them.
     /// </summary>
     public static readonly Error CheckViolation = Error.Validation(
-        "Persistence.CheckViolation",
+        ErrorCodes.Persistence.CheckViolation,
         "A value breaks a rule the database enforces.");
 
     /// <summary>
@@ -84,7 +84,7 @@ public static class PersistenceErrors
     /// doesn't report the column, so the error returned is this one.
     /// </summary>
     public static readonly Error ValueTooLong = Error.Validation(
-        "Persistence.ValueTooLong",
+        ErrorCodes.Persistence.ValueTooLong,
         "A value is longer than the database allows.");
 
     /// <summary>
@@ -93,17 +93,17 @@ public static class PersistenceErrors
     /// else is in the database. The error returned names the constraint and the table, when the driver reports them.
     /// </summary>
     public static readonly Error ForeignKeyViolation = Error.Conflict(
-        "Persistence.ForeignKeyViolation",
+        ErrorCodes.Persistence.ForeignKeyViolation,
         "The data refers to data that doesn't exist, or other data still refers to it.");
 
     /// <summary>The database couldn't order this save with a concurrent one; another try may pass.</summary>
     public static readonly Error SerializationFailure = Error.Failure(
-        "Persistence.SerializationFailure",
+        ErrorCodes.Persistence.SerializationFailure,
         "The save collided with a concurrent one. Try again.");
 
     /// <summary>The save deadlocked with a concurrent one and was cancelled; another try may pass.</summary>
     public static readonly Error Deadlock = Error.Failure(
-        "Persistence.Deadlock",
+        ErrorCodes.Persistence.Deadlock,
         "The save deadlocked with a concurrent one. Try again.");
 
     /// <summary>
