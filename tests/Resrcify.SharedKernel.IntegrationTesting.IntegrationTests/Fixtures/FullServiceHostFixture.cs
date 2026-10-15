@@ -5,8 +5,6 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Resrcify.SharedKernel.IntegrationTesting.Factories;
 using Resrcify.SharedKernel.IntegrationTesting.Fixtures;
 using Resrcify.SharedKernel.IntegrationTesting.TestService;
-using Testcontainers.PostgreSql;
-using Testcontainers.RabbitMq;
 
 namespace Resrcify.SharedKernel.IntegrationTesting.IntegrationTests.Fixtures;
 
@@ -31,39 +29,33 @@ public sealed class FullServiceHostFixture
     protected override bool UsesNetwork
         => true;
 
+    // The service's database and credentials, without a fixture class of its own.
     protected override PostgresContainerFixture CreatePostgres()
-        => new ServicePostgres();
+        => new()
+        {
+            Database = Database,
+            Username = DatabaseUser,
+            Password = DatabasePassword,
+        };
 
+    // Production's queues: quorum unless declared otherwise.
     protected override RabbitMqContainerFixture? CreateRabbitMq()
-        => new ServiceRabbitMq();
+        => new()
+        {
+            Username = BusUser,
+            Password = BusPassword,
+            ProductionQueueDefaults = true,
+        };
 
     protected override void ConfigureSettings(IDictionary<string, string?> settings)
     {
         settings["Patreon:Token"] = "test";
         settings["Migrations:Run"] = "false";
+        settings["TestService:UseMessageBus"] = "true";
     }
 
     protected override void ConfigureTestServices(IServiceCollection services)
         => services.Replace(ServiceDescriptor.Singleton<IGreeter>(new FixedGreeter()));
-
-    private sealed class ServicePostgres
-        : PostgresContainerFixture
-    {
-        protected override PostgreSqlBuilder Configure(PostgreSqlBuilder builder)
-            => builder
-                .WithDatabase(Database)
-                .WithUsername(DatabaseUser)
-                .WithPassword(DatabasePassword);
-    }
-
-    private sealed class ServiceRabbitMq
-        : RabbitMqContainerFixture
-    {
-        protected override RabbitMqBuilder Configure(RabbitMqBuilder builder)
-            => builder
-                .WithUsername(BusUser)
-                .WithPassword(BusPassword);
-    }
 
     private sealed class FixedGreeter
         : IGreeter

@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using Resrcify.SharedKernel.Abstractions.Mediator;
@@ -108,17 +109,17 @@ public sealed class ResultExceptionHandlerTests
     [Fact]
     public async Task TryHandleAsync_ShouldLogTheExceptionOnce()
     {
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new FakeLoggerProvider();
         await using var app = await StartAsync(logs: logs);
         using var client = app.GetTestClient();
 
         using var response = await client.GetAsync(new Uri("/boom", UriKind.Relative));
 
-        var logged = logs.Entries.Where(entry => entry.Exception is not null).ShouldHaveSingleItem();
+        var logged = logs.Collector.GetSnapshot().Where(entry => entry.Exception is not null).ShouldHaveSingleItem();
         logged.Level.ShouldBe(LogLevel.Error);
         logged.Category.ShouldBe(typeof(ResultExceptionHandler).FullName);
         logged.Exception.ShouldBeOfType<InvalidOperationException>();
-        logs.Entries.Count(entry => entry.Level == LogLevel.Error).ShouldBe(1);
+        logs.Collector.GetSnapshot().Count(entry => entry.Level == LogLevel.Error).ShouldBe(1);
         // Answered: the exception's journey ends here, so the mark is released.
         LoggedExceptions.IsLogged(logged.Exception).ShouldBeFalse();
     }
@@ -127,14 +128,14 @@ public sealed class ResultExceptionHandlerTests
     public async Task TryHandleAsync_ShouldLogTheSameExceptionAgain_WhenALaterRequestThrowsItAgain()
     {
         // A cached faulted task or Lazy rethrows one instance in every request: each is logged at Error, not only the first.
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new FakeLoggerProvider();
         await using var app = await StartAsync(logs: logs);
         using var client = app.GetTestClient();
 
         using (await client.GetAsync(new Uri("/cached", UriKind.Relative)))
         using (await client.GetAsync(new Uri("/cached", UriKind.Relative)))
         {
-            logs.Entries
+            logs.Collector.GetSnapshot()
                 .Where(entry => entry.Level == LogLevel.Error)
                 .Select(entry => entry.Exception)
                 .ShouldBe([CachedFailure, CachedFailure]);
@@ -149,17 +150,17 @@ public sealed class ResultExceptionHandlerTests
     [Fact]
     public async Task TryHandleAsync_ShouldNotLogTheExceptionAgain_WhenTheMediatorsBehaviorsLoggedIt()
     {
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new FakeLoggerProvider();
         await using var app = await StartWithMediatorAsync(logs);
         using var client = app.GetTestClient();
 
         var answered = await ProblemAsync(client, "/command");
 
-        var error = logs.Entries.Where(entry => entry.Level >= LogLevel.Error).ShouldHaveSingleItem();
+        var error = logs.Collector.GetSnapshot().Where(entry => entry.Level >= LogLevel.Error).ShouldHaveSingleItem();
         error.Category.ShouldStartWith(typeof(UnitOfWorkPipelineBehavior<,>).FullName![..^2]);
         error.Exception.ShouldBeOfType<InvalidOperationException>().Message.ShouldBe(CommandFailure);
-        logs.Entries.Where(entry => entry.Exception is not null).ShouldHaveSingleItem();
-        logs.Entries.ShouldContain(entry => entry.Level == LogLevel.Debug
+        logs.Collector.GetSnapshot().Where(entry => entry.Exception is not null).ShouldHaveSingleItem();
+        logs.Collector.GetSnapshot().ShouldContain(entry => entry.Level == LogLevel.Debug
             && entry.Category == typeof(ResultExceptionHandler).FullName
             && entry.Exception == null
             && entry.Message.Contains(nameof(InvalidOperationException), StringComparison.Ordinal));
@@ -170,7 +171,7 @@ public sealed class ResultExceptionHandlerTests
     [Fact]
     public async Task TryHandleAsync_ShouldLogADebugLineAndStillAnswer500_WhenTheExceptionWasLoggedAlready()
     {
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new FakeLoggerProvider();
         using var loggerFactory = LoggerFactory.Create(logging => logging
             .SetMinimumLevel(LogLevel.Debug)
             .AddProvider(logs));
@@ -182,7 +183,7 @@ public sealed class ResultExceptionHandlerTests
 
         handled.ShouldBeTrue();
         context.Response.StatusCode.ShouldBe(StatusCodes.Status500InternalServerError);
-        var entry = logs.Entries.ShouldHaveSingleItem();
+        var entry = logs.Collector.GetSnapshot().ShouldHaveSingleItem();
         entry.Level.ShouldBe(LogLevel.Debug);
         entry.Exception.ShouldBeNull();
         entry.Message.ShouldContain(nameof(InvalidOperationException));
@@ -191,7 +192,7 @@ public sealed class ResultExceptionHandlerTests
     [Fact]
     public async Task TryHandleAsync_ShouldAnswerATransientFailureWithItsErrors_AtWarning()
     {
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new FakeLoggerProvider();
         await using var app = await StartAsync(logs: logs);
         using var client = app.GetTestClient();
 
@@ -200,17 +201,17 @@ public sealed class ResultExceptionHandlerTests
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadGateway);
         result.Errors.ShouldBe([Unreachable]);
-        var logged = logs.Entries.Where(entry => entry.Exception is not null).ShouldHaveSingleItem();
+        var logged = logs.Collector.GetSnapshot().Where(entry => entry.Exception is not null).ShouldHaveSingleItem();
         logged.Level.ShouldBe(LogLevel.Warning);
         logged.Exception.ShouldBeOfType<TransientFailureException>();
         logged.Message.ShouldContain("SwgohApi.Unreachable: SwgohApi could not be reached.");
-        logs.Entries.ShouldNotContain(entry => entry.Level >= LogLevel.Error);
+        logs.Collector.GetSnapshot().ShouldNotContain(entry => entry.Level >= LogLevel.Error);
     }
 
     [Fact]
     public async Task TryHandleAsync_ShouldAnswerATransientFailureAmongTheCausesWithItsErrors()
     {
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new FakeLoggerProvider();
         using var loggerFactory = LoggerFactory.Create(logging => logging.AddProvider(logs));
         var context = Context();
         var exception = new InvalidOperationException("wrapped", new TransientFailureException([Unreachable]));
@@ -219,14 +220,14 @@ public sealed class ResultExceptionHandlerTests
 
         handled.ShouldBeTrue();
         context.Response.StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
-        logs.Entries.ShouldHaveSingleItem().Level.ShouldBe(LogLevel.Warning);
+        logs.Collector.GetSnapshot().ShouldHaveSingleItem().Level.ShouldBe(LogLevel.Warning);
         LoggedExceptions.IsLogged(exception).ShouldBeFalse();
     }
 
     [Fact]
     public async Task TryHandleAsync_ShouldLogADebugLineForATransientFailure_WhenTheMediatorLoggedItAlready()
     {
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new FakeLoggerProvider();
         using var loggerFactory = LoggerFactory.Create(logging => logging
             .SetMinimumLevel(LogLevel.Debug)
             .AddProvider(logs));
@@ -237,7 +238,7 @@ public sealed class ResultExceptionHandlerTests
         await Handler(loggerFactory).TryHandleAsync(context, exception, CancellationToken.None);
 
         context.Response.StatusCode.ShouldBe(StatusCodes.Status502BadGateway);
-        var entry = logs.Entries.ShouldHaveSingleItem();
+        var entry = logs.Collector.GetSnapshot().ShouldHaveSingleItem();
         entry.Level.ShouldBe(LogLevel.Debug);
         entry.Exception.ShouldBeNull();
     }
@@ -245,7 +246,7 @@ public sealed class ResultExceptionHandlerTests
     [Fact]
     public async Task TryHandleAsync_ShouldAnswer499WithoutAnError_WhenTheClientAborted()
     {
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new FakeLoggerProvider();
         using var loggerFactory = LoggerFactory.Create(logging => logging.AddProvider(logs));
         using var aborted = new CancellationTokenSource();
         await aborted.CancelAsync();
@@ -256,13 +257,13 @@ public sealed class ResultExceptionHandlerTests
 
         handled.ShouldBeTrue();
         context.Response.StatusCode.ShouldBe(StatusCodes.Status499ClientClosedRequest);
-        logs.Entries.ShouldAllBe(entry => entry.Level < LogLevel.Warning);
+        logs.Collector.GetSnapshot().ShouldAllBe(entry => entry.Level < LogLevel.Warning);
     }
 
     [Fact]
     public async Task TryHandleAsync_ShouldAnswer500_WhenACancellationWasNotTheClients()
     {
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new FakeLoggerProvider();
         using var loggerFactory = LoggerFactory.Create(logging => logging.AddProvider(logs));
         var context = Context();
 
@@ -270,13 +271,13 @@ public sealed class ResultExceptionHandlerTests
 
         handled.ShouldBeTrue();
         context.Response.StatusCode.ShouldBe(StatusCodes.Status500InternalServerError);
-        logs.Entries.ShouldContain(entry => entry.Level == LogLevel.Error);
+        logs.Collector.GetSnapshot().ShouldContain(entry => entry.Level == LogLevel.Error);
     }
 
     private static Task<WebApplication> StartAsync(
         string environment = "Production",
         Action<ResultProblemDetailsOptions>? configure = null,
-        CapturingLoggerProvider? logs = null)
+        FakeLoggerProvider? logs = null)
         => TestHosts.StartAsync(
             services =>
             {
@@ -297,7 +298,7 @@ public sealed class ResultExceptionHandlerTests
             environment);
 
     private static Task<WebApplication> StartWithMediatorAsync(
-        CapturingLoggerProvider logs)
+        FakeLoggerProvider logs)
         => TestHosts.StartAsync(
             services =>
             {

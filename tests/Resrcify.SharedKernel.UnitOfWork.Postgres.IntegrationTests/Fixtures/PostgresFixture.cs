@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using Npgsql;
 using Resrcify.SharedKernel.IntegrationTesting.Fixtures;
-using Testcontainers.PostgreSql;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Postgres.IntegrationTests.Fixtures;
 
@@ -17,14 +16,12 @@ namespace Resrcify.SharedKernel.UnitOfWork.Postgres.IntegrationTests.Fixtures;
 public sealed class PostgresFixture
     : PostgresContainerFixture
 {
-    internal const string Username = "integration";
-    internal const string Password = "integration";
-
-    protected override PostgreSqlBuilder Configure(PostgreSqlBuilder builder)
-        => builder
-            .WithDatabase("integration")
-            .WithUsername(Username)
-            .WithPassword(Password);
+    public PostgresFixture()
+    {
+        Database = "integration";
+        Username = "integration";
+        Password = "integration";
+    }
 
     /// <summary>The <c>Database</c> section for a fresh, uniquely named database in the container.</summary>
     internal Dictionary<string, string?> IsolatedDatabaseSettings()

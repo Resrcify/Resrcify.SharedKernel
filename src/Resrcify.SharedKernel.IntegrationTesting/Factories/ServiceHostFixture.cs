@@ -8,8 +8,13 @@ using DotNet.Testcontainers.Networks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Npgsql;
 using Resrcify.SharedKernel.IntegrationTesting.Fixtures;
+using Resrcify.SharedKernel.IntegrationTesting.Logging;
+using Resrcify.SharedKernel.MessageBus.Testing;
+using Serilog.Core;
 using Xunit;
 
 namespace Resrcify.SharedKernel.IntegrationTesting.Factories;
@@ -32,6 +37,12 @@ namespace Resrcify.SharedKernel.IntegrationTesting.Factories;
 /// gets the started host ready for its tests (pauses its scheduled jobs, seeds data). A service replaces services in
 /// <see cref="ConfigureTestServices"/>. Two fixtures (two collections) each see their own containers: nothing is shared
 /// through the process' environment.
+/// </para>
+/// <para>
+/// What the host logs is in <see cref="Logs"/> (a <see cref="FakeLogCollector"/>), through the logging abstraction's
+/// providers and through Serilog when <c>AddServiceTelemetry</c> set it up (it writes to the sinks registered in the
+/// container). With <see cref="UsesMessageBusTestHarness"/> the service's buses run on <see cref="BusNetwork"/>, in
+/// memory, recorded by <see cref="Harness"/>: no RabbitMQ.
 /// </para>
 /// <para>
 /// The settings reach the host through <c>UseSetting</c>, so a <c>Program</c> sees them in <c>builder.Configuration</c>
@@ -57,8 +68,10 @@ namespace Resrcify.SharedKernel.IntegrationTesting.Factories;
 /// {
 ///     private SwgohApiContainer _swgohApi = default!;
 ///
-///     protected override PostgresContainerFixture? CreatePostgres() => new PostgresFixture();   // null: no database
-///     protected override RabbitMqContainerFixture? CreateRabbitMq() => new RabbitMqFixture();
+///     protected override PostgresContainerFixture? CreatePostgres()   // null: no database
+///         => new() { Database = "ShardDb", Username = "ShardUser", Password = "K33pTr4ck" };
+///     protected override RabbitMqContainerFixture? CreateRabbitMq()
+///         => new() { ProductionQueueDefaults = true };
 ///     protected override bool UsesNetwork => true;   // SwgohApi's container reaches rabbitmq:5672
 ///
 ///     protected override async Task StartDependenciesAsync(CancellationToken cancellationToken)
@@ -123,21 +136,58 @@ public abstract class ServiceHostFixture<TProgram>
     public IReadOnlyDictionary<string, string?> Settings
         => _settings;
 
+    /// <summary>
+    /// What the host logged, every category and level the host's own filters let through: through the logging
+    /// abstraction's providers, and through Serilog when the service's Serilog reads the sinks registered in the
+    /// container (<c>AddServiceTelemetry</c> does). Read it with <c>GetSnapshot()</c>, or wait with <c>WaitForLogAsync</c>.
+    /// </summary>
+    public FakeLogCollector Logs { get; } = new();
+
+    /// <summary>
+    /// The in-memory network the service's buses run on with <see cref="UsesMessageBusTestHarness"/>; stand-ins for
+    /// other services (<c>BusNetwork.StartResponderAsync(...)</c>) join it.
+    /// </summary>
+    public MessageBusTestNetwork BusNetwork
+        => field ??= new MessageBusTestNetwork();
+
+    /// <summary>
+    /// What the service's buses published, sent, consumed and failed, with <see cref="UsesMessageBusTestHarness"/>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The fixture doesn't use the test harness.</exception>
+    public MessageBusTestHarness Harness
+        => UsesMessageBusTestHarness
+            ? Services.GetRequiredService<MessageBusTestHarness>()
+            : throw new InvalidOperationException(
+                "This fixture's buses run on their broker: override UsesMessageBusTestHarness to run them on the test harness.");
+
+    /// <summary>
+    /// Runs the service's buses on the message bus test harness (<c>AddMessageBusTestHarness(BusNetwork)</c>, after the
+    /// service's own registrations): in memory on <see cref="BusNetwork"/>, recorded by <see cref="Harness"/>, whatever
+    /// transport the service configured. Off by default. A service with a broker of its own as well returns
+    /// <see langword="null"/> from <see cref="CreateRabbitMq"/> (the default) here.
+    /// </summary>
+    protected virtual bool UsesMessageBusTestHarness
+        => false;
+
     /// <summary>Puts the containers on a network of their own (<see cref="Network"/>). Off by default.</summary>
     protected virtual bool UsesNetwork
         => false;
 
     /// <summary>
-    /// The PostgreSQL fixture: override to return the service's own (image, database, credentials), or
-    /// <see langword="null"/> for a service without a database (no container, no <c>Database:*</c> or
-    /// <c>Migrations:Run</c> settings).
+    /// The PostgreSQL fixture: by default one on production's image with Testcontainers' credentials. Override to set
+    /// the service's database and credentials (<c>new() { Database = "ShardDb", Username = "ShardUser", Password = "..." }</c>),
+    /// or to return <see langword="null"/> for a service without a database (no container, no <c>Database:*</c> or
+    /// <c>Migrations:Run</c> settings). Leave the image alone: it is production's, and
+    /// <c>RESRCIFY_TEST_POSTGRES_IMAGE</c> tries another without a code change.
     /// </summary>
     protected virtual PostgresContainerFixture? CreatePostgres()
         => new();
 
     /// <summary>
-    /// The RabbitMQ fixture, or <see langword="null"/> (the default) for a service without a message bus. Override to
-    /// return one (<c>new RabbitMqContainerFixture()</c>, or the service's own).
+    /// The RabbitMQ fixture, or <see langword="null"/> (the default) for a service without a message bus, or whose
+    /// buses run on the test harness (<see cref="UsesMessageBusTestHarness"/>). Override to return one
+    /// (<c>new() { ProductionQueueDefaults = true }</c> for production's quorum queues, with credentials if the service
+    /// needs its own), on production's image.
     /// </summary>
     protected virtual RabbitMqContainerFixture? CreateRabbitMq()
         => null;
@@ -259,7 +309,22 @@ public abstract class ServiceHostFixture<TProgram>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         base.ConfigureWebHost(builder);
-        builder.ConfigureTestServices(ConfigureTestServices);
+        builder.ConfigureTestServices(services =>
+        {
+            CaptureLogs(services);
+            if (UsesMessageBusTestHarness)
+                services.AddMessageBusTestHarness(BusNetwork);
+            ConfigureTestServices(services);
+        });
+    }
+
+    // Both ways a service logs: a provider for the logging abstraction, and a sink for a Serilog that reads the
+    // container's (AddServiceTelemetry's). A service logging through Serilog has the abstraction's providers bypassed,
+    // so a line arrives once.
+    private void CaptureLogs(IServiceCollection services)
+    {
+        services.AddLogging(logging => logging.AddProvider(new FakeLoggerProvider(Logs)));
+        services.AddSingleton<ILogEventSink>(new FakeLogCollectorSink(Logs));
     }
 
     private async Task StartAsync()
@@ -377,12 +442,9 @@ public abstract class ServiceHostFixture<TProgram>
         if (RabbitMq is null)
             return;
 
-        var userInfo = new Uri(RabbitMq.Container.GetConnectionString()).UserInfo.Split(':', 2);
         _settings["MessageBus:Host"] = RabbitMq.Host;
         _settings["MessageBus:Port"] = RabbitMq.AmqpPort;
-        _settings["MessageBus:Username"] = Uri.UnescapeDataString(userInfo[0]);
-        _settings["MessageBus:Password"] = userInfo.Length > 1
-            ? Uri.UnescapeDataString(userInfo[1])
-            : string.Empty;
+        _settings["MessageBus:Username"] = RabbitMq.BrokerUsername;
+        _settings["MessageBus:Password"] = RabbitMq.BrokerPassword;
     }
 }

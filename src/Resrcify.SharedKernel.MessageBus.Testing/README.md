@@ -43,6 +43,14 @@ await using var players = await network.StartResponderAsync<GetPlayer, PlayerPro
 Pass `configure` to give the messages the wire names the real service uses (`bus => bus.AddMessage<GetPlayer>(...)`).
 `players.Harness` shows what the stand-in consumed.
 
+## On a real broker
+
+`PublishedEventListener.StartAsync(connection, listen => listen.Listen<ShardCreated>())` subscribes to a service's
+integration events on RabbitMQ as another service would (an input queue of its own, bound to each event's topic) and
+records them in `Received`, a `MessageRecording` like the harness'. Start it before the publish; dispose it to
+unsubscribe. See the IntegrationTesting README, whose `ServiceHostFixture` also runs a service on this harness
+(`UsesMessageBusTestHarness`) and whose RabbitMQ fixture gives the `Connection`.
+
 ## End to end with the outbox
 
 The buses and the outbox are drained separately: an outbox handler may publish, and a bus handler may save to the

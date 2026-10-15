@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.Web.Exceptions;
 using Resrcify.SharedKernel.Web.Extensions;
@@ -41,7 +42,7 @@ public sealed class ResultExceptionHandlerBindingFailureTests
     public async Task AMissingRequiredQueryParameter_ShouldBeA400NamingIt(
         string environment)
     {
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new FakeLoggerProvider();
         await using var app = await StartAsync(logs, environment);
         using var client = app.GetTestClient();
 
@@ -58,7 +59,7 @@ public sealed class ResultExceptionHandlerBindingFailureTests
     public async Task AnInvalidRouteGuid_ShouldBeA400NamingIt_WithoutTheValueSent(
         string environment)
     {
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new FakeLoggerProvider();
         await using var app = await StartAsync(logs, environment);
         using var client = app.GetTestClient();
 
@@ -77,7 +78,7 @@ public sealed class ResultExceptionHandlerBindingFailureTests
     public async Task MalformedJson_ShouldBeA400NamingTheBodyParameter(
         string environment)
     {
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new FakeLoggerProvider();
         await using var app = await StartAsync(logs, environment);
         using var client = app.GetTestClient();
         using var body = new StringContent("{ \"name\": ", Encoding.UTF8, "application/json");
@@ -97,7 +98,7 @@ public sealed class ResultExceptionHandlerBindingFailureTests
         string environment)
     {
         // As Kestrel throws it while the body is read for a parameter.
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new FakeLoggerProvider();
         await using var app = await StartAsync(logs, environment);
         using var client = app.GetTestClient();
 
@@ -112,7 +113,7 @@ public sealed class ResultExceptionHandlerBindingFailureTests
     [Fact]
     public async Task TheDetail_ShouldHoldAspNetCoresMessage_InDevelopmentOnly()
     {
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new FakeLoggerProvider();
         await using var production = await StartAsync(logs, Microsoft.Extensions.Hosting.Environments.Production);
         await using var development = await StartAsync(logs, Microsoft.Extensions.Hosting.Environments.Development);
 
@@ -126,7 +127,7 @@ public sealed class ResultExceptionHandlerBindingFailureTests
     [Fact]
     public async Task ABindingFailure_ShouldBeAnEmpty400InProduction_WhenTurnedOff()
     {
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new FakeLoggerProvider();
         await using var app = await StartAsync(
             logs,
             Microsoft.Extensions.Hosting.Environments.Production,
@@ -142,7 +143,7 @@ public sealed class ResultExceptionHandlerBindingFailureTests
     [Fact]
     public async Task AValidRequest_ShouldStillBeAnswered()
     {
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new FakeLoggerProvider();
         await using var app = await StartAsync(logs, Microsoft.Extensions.Hosting.Environments.Production);
         using var client = app.GetTestClient();
 
@@ -165,8 +166,8 @@ public sealed class ResultExceptionHandlerBindingFailureTests
     }
 
     private static void ShouldLogNoError(
-        CapturingLoggerProvider logs)
-        => logs.Entries.Where(entry => entry.Level >= LogLevel.Warning).ShouldBeEmpty();
+        FakeLoggerProvider logs)
+        => logs.Collector.GetSnapshot().Where(entry => entry.Level >= LogLevel.Warning).ShouldBeEmpty();
 
     private static async Task<string?> DetailAsync(
         WebApplication app)
@@ -180,7 +181,7 @@ public sealed class ResultExceptionHandlerBindingFailureTests
     }
 
     private static Task<WebApplication> StartAsync(
-        CapturingLoggerProvider logs,
+        FakeLoggerProvider logs,
         string environment,
         Action<ResultProblemDetailsOptions>? configure = null)
         => TestHosts.StartAsync(

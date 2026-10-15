@@ -19,5 +19,13 @@
     <PackageReference Include="Npgsql" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="xunit" />
+    <!-- ServiceHostFixture.Logs: Microsoft's FakeLogCollector, fed by the logging abstraction and by Serilog. -->
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
+    <PackageReference Include="Serilog" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ServiceHostFixture's message bus test harness switch, and RabbitMqContainerFixture.Connection. -->
+    <ProjectReference Include="..\Resrcify.SharedKernel.MessageBus.Testing\Resrcify.SharedKernel.MessageBus.Testing.csproj" />
   </ItemGroup>
 </Project>

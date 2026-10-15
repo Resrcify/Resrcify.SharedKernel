@@ -20,6 +20,7 @@ using Resrcify.SharedKernel.Results.Primitives;
 using Shouldly;
 using Xunit;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Resrcify.SharedKernel.Results.Diagnostics;
 
 namespace Resrcify.SharedKernel.MessageBus.UnitTests.PublishSubscribe;
@@ -181,7 +182,7 @@ public sealed class IntegrationEventDispatcherTests
     public async Task Handle_ShouldLogATriedAgainExceptionAtError_ButATransientOneAtWarning()
     {
         // Every exception is tried again; the classifier picks the line's level.
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new FakeLoggerProvider();
         var (log, _, subscriber, publisher, _) = await StartScriptedAsync(logs);
         using (subscriber)
         using (publisher)
@@ -193,7 +194,7 @@ public sealed class IntegrationEventDispatcherTests
             await InMemoryServices.WaitUntilAsync(() => !log.Handled.IsEmpty);
 
             log.Attempts.ShouldBe(3);
-            var retries = logs.Entries
+            var retries = logs.Collector.GetSnapshot()
                 .Where(entry => entry.Message.Contains("trying it again in its place", StringComparison.Ordinal))
                 .ToList();
             retries.Select(entry => entry.Level).ShouldBe([LogLevel.Error, LogLevel.Warning]);
@@ -377,7 +378,7 @@ public sealed class IntegrationEventDispatcherTests
     }
 
     private static async Task<(ScriptLog Log, InMemNetwork Network, IHost Subscriber, IHost Publisher, string ErrorQueue)> StartScriptedAsync(
-        CapturingLoggerProvider? logs = null)
+        FakeLoggerProvider? logs = null)
     {
         var network = new InMemNetwork();
         var log = new ScriptLog();

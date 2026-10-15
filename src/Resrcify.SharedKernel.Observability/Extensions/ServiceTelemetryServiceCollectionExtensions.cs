@@ -82,12 +82,14 @@ public static class ServiceTelemetryServiceCollectionExtensions
         // Serilog's own problems (a sink that can't be loaded, a bad configuration) would otherwise go nowhere.
         SelfLog.Enable(Console.Error);
 
-        services.AddSerilog(logger =>
+        services.AddSerilog((provider, logger) =>
         {
             // First, so the Serilog section's Destructure entries and ConfigureLogging override them.
             LimitDestructuring(logger, options);
             logger.ReadFrom
                 .Configuration(configuration)
+                // The sinks, enrichers and filters registered in the container join (a test host's log capture).
+                .ReadFrom.Services(provider)
                 .Enrich.With<TraceContextEnricher>();
             options.ConfigureLogging?.Invoke(logger);
         });

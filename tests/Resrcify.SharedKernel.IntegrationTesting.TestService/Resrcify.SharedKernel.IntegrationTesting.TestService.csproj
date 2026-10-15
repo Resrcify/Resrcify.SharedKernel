@@ -8,5 +8,21 @@
 
   <ItemGroup>
     <PackageReference Include="Npgsql" />
+    <!-- Observability's dependencies are private: a service references them itself. -->
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" />
+    <PackageReference Include="Serilog.Extensions.Hosting" />
+    <PackageReference Include="Serilog.Settings.Configuration" />
+    <PackageReference Include="Serilog.AspNetCore" />
+  </ItemGroup>
+
+  <!-- Turned on by settings, for the fixture's log capture and message bus tests. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.MessageBus\Resrcify.SharedKernel.MessageBus.csproj" />
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Observability\Resrcify.SharedKernel.Observability.csproj" />
   </ItemGroup>
 </Project>

@@ -103,6 +103,15 @@ every package in the repository is released together under one version.
   `using Resrcify.SharedKernel.Abstractions.Health;` where it names `HealthTags` (Oracle, Sentinel, Shard and Tournament
   in `Infrastructure/InfrastructureServiceRegistration.cs`; keep the Web one where `HealthEndpointOptions` is used).
 
+- **The container fixtures take their settings as init properties; a subclass' members of those names clash**
+  (Resrcify.SharedKernel.IntegrationTesting). `PostgresContainerFixture` has `Image`, `Database`, `Username` and
+  `Password`, `RabbitMqContainerFixture` `Image`, `Username`, `Password` and `ProductionQueueDefaults` (see Added). ⚠️
+  A subclass declaring members of those names (the services' `PostgresFixture` / `RabbitMqFixture` with `const string
+  Username` / `Password` / `Database`) hides them: warning CS0108, an error under `TreatWarningsAsErrors`. Delete the
+  subclass (what the init properties are for) or rename its constants. The package now references
+  Resrcify.SharedKernel.MessageBus.Testing (so MessageBus, Rebus and Rebus.RabbitMq come with it),
+  Microsoft.Extensions.Diagnostics.Testing and Serilog.
+
 ### Behaviour changes
 
 - **One transient contract, owned by SharedKernel, with a DI hook** (Resrcify.SharedKernel.Results, Abstractions,
@@ -309,6 +318,12 @@ every package in the repository is released together under one version.
     (`Infrastructure/*.csproj`) and its `PackageVersion`, and `"Serilog.Enrichers.Span"` from `Serilog:Using` and
     `"WithSpan"` from `Serilog:Enrich` (`Web/appsettings.Production.json`).
 
+- **`AddServiceTelemetry`'s Serilog reads the container's sinks** (Resrcify.SharedKernel.Observability): it is set up
+  with `ReadFrom.Services(provider)`, so an `ILogEventSink`, `ILogEventEnricher`, `ILogEventFilter`,
+  `IDestructuringPolicy` or `LoggingLevelSwitch` registered in the container joins the logger (it is how
+  `ServiceHostFixture.Logs` hears a service on Serilog). ⚠️ A service registering one of those for another purpose has
+  it applied to its logs.
+
 ### Added
 
 - **Abstractions: `RetrySchedule`** (`Resilience`; see Breaking changes), and the options that take one:
@@ -402,6 +417,53 @@ every package in the repository is released together under one version.
 - **Observability: `ServiceTelemetryOptions.NpgsqlInstrumentation`, `MaximumDestructuringDepth`,
   `MaximumDestructuredCollectionCount`, `MaximumDestructuredStringLength`, and `TelemetrySources.Npgsql`** (see
   Behaviour changes).
+
+- **IntegrationTesting: production-like fixtures, logs and the bus harness without a fixture class per service.**
+  - `PostgresContainerFixture { Image, Database, Username, Password }` and `RabbitMqContainerFixture { Image, Username,
+    Password, ProductionQueueDefaults }` (init properties; the images stay production's, `postgres:18` and
+    `rabbitmq:4.3.4-management`). `ProductionQueueDefaults` mounts production's `additionalConfig`
+    (`ProductionQueueConfig`: quorum queues by default, an operator policy with a delivery limit of a million).
+  - `RabbitMqContainerFixture.QueuesAsync(virtualHost = "/")` (each queue's name, type and whether it is exclusive, as
+    `RabbitMqQueue`), `AddQuorumVirtualHostAsync(name?)` (a virtual host whose queues are quorum queues, with
+    production's delivery limit; returns its `RabbitMqConnection`), `Connection` (the broker as the bus connects to
+    it), `BrokerUsername` / `BrokerPassword`. SharedKernel's own `BusFixture` uses them (its `rabbitmqctl` copy is gone).
+  - `ServiceHostFixture.Logs`: Microsoft's `FakeLogCollector`, holding what the host logged through the logging
+    abstraction and through Serilog (`AddServiceTelemetry`'s, which reads the container's sinks). SharedKernel's three
+    `CapturingLoggerProvider` test copies are replaced by `FakeLoggerProvider`.
+  - `ServiceHostFixture.UsesMessageBusTestHarness` (`protected virtual bool`, off by default), `BusNetwork` and
+    `Harness`: the service's buses on the message bus test harness, after its own registrations.
+  - The `CreatePostgres` / `CreateRabbitMq` documentation no longer invites a fixture of the service's own for its
+    image: it is production's, and `RESRCIFY_TEST_*_IMAGE` tries another.
+- **MessageBus.Testing: `PublishedEventListener.StartAsync(RabbitMqConnection, listen => listen.Listen<TEvent>(wireName?))`**:
+  a subscriber to a service's integration events on a real broker (a bus with an input queue of its own, bound to each
+  event's topic), recording them in `Received` (a `MessageRecording`); disposing it unsubscribes.
+- **Adopting the test helpers, per service** (`tests/*IntegrationTests`):
+  - **Shard**: delete `Fixtures/PostgresFixture.cs` (it pinned `postgres:16`) and `Fixtures/RabbitMqFixture.cs`
+    (`CreatePostgres() => new() { Database = "ShardDb", Username = "ShardUser", Password = "K33pTr4ck" }`,
+    `CreateRabbitMq() => new() { Username = "messageUser", Password = "supersecretC0de" }`, or no credentials at all);
+    `Harness/HarnessShardHostFixture.cs` keeps `ConfigureSettings` and `CreatePostgres` and replaces its `BusNetwork`
+    and `ConfigureTestServices` with `protected override bool UsesMessageBusTestHarness => true;`; delete
+    `Fixtures/TopicListener.cs` (and its `RabbitMQ.Client` use) for `PublishedEventListener`
+    (`TopicListener.StartAsync(_host.Broker, nameof(ShardPayoutRotatedEventMessage))` + `WaitForEventAsync(timeout,
+    bodyContains)` becomes `PublishedEventListener.StartAsync(_host.RabbitMq!.Connection, listen =>
+    listen.Listen<ShardPayoutRotatedEventMessage>())` + `Received.WaitForAsync<ShardPayoutRotatedEventMessage>(e => ...,
+    timeout)`, in `OutboxDispatchTests`, `OutboxWakeUpTests` and `ShardDeliveryHealthTests`).
+  - **Sentinel**: delete `Fixtures/PostgresFixture.cs` (`postgres:16`) and `Fixtures/RabbitMqFixture.cs` the same
+    way; `Harness/HarnessSentinelHostFixture.cs` (and the other `Harness/*HostFixture.cs` that copy its `BusNetwork` and
+    `AddMessageBusTestHarness`) take `UsesMessageBusTestHarness`; the system tests' `Support/EventSubscriber.cs` can
+    become a `PublishedEventListener`.
+  - **Oracle**: delete `Fixtures/PostgresFixture.cs` (`postgres:16`) and `Fixtures/RabbitMqFixture.cs`, whose quorum
+    `conf.d` file is `ProductionQueueDefaults = true`; `Harness/HarnessOracleHostFixture.cs` takes
+    `UsesMessageBusTestHarness`.
+  - **Tournament**: delete `Fixtures/QuorumRabbitMqFixture.cs` for `new() { ProductionQueueDefaults = true }`, its
+    `QueuesAsync()` being the fixture's (`RabbitMqQueue(Name, Type, Exclusive)` for the tuple);
+    `Harness/HarnessTournamentHostFixture.cs` takes `UsesMessageBusTestHarness` (its `StartDependenciesAsync` stand-in
+    joins `BusNetwork` as before). `Fixtures/PersistenceFixture.cs` can set its credentials with init properties.
+  - **Discord**: delete `Fixtures/RabbitMqFixture.cs` the same way (its `BotHostFactoryBase` isn't a
+    `ServiceHostFixture`, so `BotBusHarnessFixture` keeps its own `AddMessageBusTestHarness()`).
+  - Every service can drop a `CapturingLoggerProvider` of its own for `ServiceHostFixture.Logs` (or a
+    `FakeLoggerProvider`), and needs no package reference for them: the package brings
+    Microsoft.Extensions.Diagnostics.Testing.
 
 ### Fixed
 
