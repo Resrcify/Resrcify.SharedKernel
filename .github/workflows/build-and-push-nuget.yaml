@@ -32,6 +32,25 @@ jobs:
         run: dotnet pack Resrcify.SharedKernel.slnx --configuration Release /p:Version=${VERSION} --no-build --output . -m:1
       - name: List generated packages
         run: ls *.nupkg
+      # Every package is published at the tag's version and depends on the other SharedKernel packages at that same
+      # version: a mismatch fails here, before anything reaches nuget.org.
+      - name: Verify every package has the release version
+        run: |
+          status=0
+          for package in *.nupkg; do
+            case "$package" in
+              *."${VERSION}".nupkg) ;;
+              *) echo "::error::$package is not version ${VERSION}"; status=1 ;;
+            esac
+            mismatched=$(unzip -p "$package" '*.nuspec' \
+              | grep -o '<dependency id="Resrcify\.SharedKernel[^"]*" version="[^"]*"' \
+              | grep -v "version=\"${VERSION}\"" || true)
+            if [ -n "$mismatched" ]; then
+              echo "::error::$package depends on another SharedKernel version: $mismatched"
+              status=1
+            fi
+          done
+          exit $status
       # Each package's .snupkg goes up with it. --skip-duplicate: a re-run after a failed push publishes the rest.
       - name: Push Packages to NuGet
         run: |
