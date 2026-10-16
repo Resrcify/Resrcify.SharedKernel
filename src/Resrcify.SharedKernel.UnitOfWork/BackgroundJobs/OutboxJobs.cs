@@ -44,8 +44,25 @@ internal sealed record OutboxJobClaim<TDbContext>(IOutboxLaneClaim? Claim)
     public static System.Type DbContextType => typeof(TDbContext);
 }
 
+/// <summary>
+/// The claim <typeparamref name="TDbContext"/>'s outbox job and lanes use when the service set none: registered by
+/// the package that writes the outbox (the Postgres package's <c>WithOutbox()</c> registers its
+/// <c>PostgresOutboxLaneClaim</c>), whatever the order of the registrations.
+/// </summary>
+internal sealed record OutboxDefaultClaim<TDbContext>(IOutboxLaneClaim Claim)
+    where TDbContext : DbContext
+{
+    /// <summary>The claim the job and the lanes use: the one set, else the default one, else none.</summary>
+    public static IOutboxLaneClaim? Effective(
+        IOutboxLaneClaim? set,
+        System.IServiceProvider services)
+        => set ?? (services.GetService(typeof(OutboxDefaultClaim<TDbContext>)) as OutboxDefaultClaim<TDbContext>)?.Claim;
+}
+
 /// <summary>The lane options of <typeparamref name="TDbContext"/>: each DbContext with an outbox has its own.</summary>
-internal sealed record OutboxLaneSettings<TDbContext>(OutboxLaneOptions Options)
+/// <param name="Options">The options, as configured.</param>
+/// <param name="RetryLimits">The retry limits the options make (<see cref="OutboxRetryLimits.Create"/>), made once.</param>
+internal sealed record OutboxLaneSettings<TDbContext>(OutboxLaneOptions Options, OutboxRetryLimits RetryLimits)
     where TDbContext : DbContext
 {
     /// <summary>The DbContext these settings belong to (the type parameter keys them in DI).</summary>

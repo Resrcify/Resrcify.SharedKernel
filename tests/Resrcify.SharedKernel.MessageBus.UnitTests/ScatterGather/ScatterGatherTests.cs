@@ -87,9 +87,9 @@ public sealed class ScatterGatherTests
     {
         var assembly = typeof(ScatterGatherTests).Assembly;
         var services = new ServiceCollection();
-        services.AddMediator(assembly);
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(assembly));
         services.AddMessageBus(bus => bus.UseRabbitMq(Connection).AddScatterGather(assembly));
-        services.AddMediator(assembly);
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(assembly));
 
         ScatterGatherAdapters(services).ShouldBe(1);
         LaneEvents(services).Count.ShouldBe(1);
@@ -174,10 +174,10 @@ public sealed class ScatterGatherTests
     {
         var services = new ServiceCollection();
         if (mediatorFirst)
-            services.AddMediator(typeof(ScatterGatherTests).Assembly);
+            services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(ScatterGatherTests).Assembly));
         services.AddMessageBus(bus => bus.UseRabbitMq(Connection).AddScatterGather());
         if (!mediatorFirst)
-            services.AddMediator(typeof(ScatterGatherTests).Assembly);
+            services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(ScatterGatherTests).Assembly));
         return services;
     }
 

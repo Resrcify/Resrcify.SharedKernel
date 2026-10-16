@@ -17,6 +17,7 @@
     - [Combining results](#combining-results)
     - [Functional chaining](#functional-chaining)
     - [Logging an exception once](#logging-an-exception-once)
+    - [Transient failures](#transient-failures)
   - [Common issues](#common-issues)
   - [Sample project](#sample-project)
 
@@ -36,8 +37,16 @@
     - `Combine(...)`
     - `Map(...)`, `Bind(...)`, `Tap(...)`, `Ensure(...)`, `Match(...)`
 - Sync and async extension methods for fluent pipelines.
+- `ErrorCodes`: the code of every error SharedKernel returns or answers with (`ErrorCodes.Http.Unreachable`,
+  `ErrorCodes.Persistence.Concurrency`, `ErrorCodes.Request.Unhandled`, ...), so a service matches `Error.Code` without
+  a string of its own.
+- `ErrorTypes.FromHttpStatus(int)` / `ToHttpStatus(ErrorType)`: the one mapping between an error type and an HTTP
+  status (the Web package answers and reads responses by it).
 - `Diagnostics/LoggedExceptions`: the convention that logs an exception at `Error` once across the packages that see
   it.
+- `Diagnostics/TransientFailureException` and `Diagnostics/TransientFailures`: SharedKernel's one rule for whether an
+  exception is transient (`IsTransient(exception)`), and `result.ThrowIfTransient()` to turn a transient failed result
+  into an exception where a result can't be returned (an outbox handler, a job).
 
 ## Prerequisites
 
@@ -147,6 +156,31 @@ catch (Exception exception)
 ```
 
 An exception whose `Data` is read-only can't be marked: everyone logs it at `Error`, as before.
+
+### Transient failures
+
+`TransientFailures.IsTransient(exception)` is the rule every package judges an exception by (the outbox's tries, the
+level the mediator's behaviors, the jobs and the message bus log it at): the exception or any of its causes
+(`InnerException`, every one of an `AggregateException`'s) is a `TransientFailureException`, a `TimeoutException`, an
+`OperationCanceledException` (a handler's own: the callers rule out their shutdown first), a `DbException` with
+`IsTransient`, or an `HttpRequestException` without a status or with a transient one (`ErrorTypes.FromHttpStatus`:
+408, 429, 5xx). Packages and services add to it with an `ITransientFailureRule` (Abstractions,
+`services.AddTransientFailureRule(...)`); the `ITransientFailureClassifier` in the container ORs them.
+
+A domain event handler (or a job) that gets a failed result it can't return throws it when another try may pass:
+
+```csharp
+var player = await swgohApi.GetPlayerAsync(allyCode, cancellationToken)
+    .ThrowIfTransient();   // SwgohApi unreachable: the outbox tries the event again later, logged at Warning
+if (player.IsFailure)
+    return;                // a definite answer (no such player): nothing to retry
+```
+
+`ThrowIfTransient()` (on `Result`, `Result<T>`, `Task<Result>` and `Task<Result<T>>`) throws a
+`TransientFailureException` holding the result's errors when any of them is transient (`Error.IsTransient()`), and
+returns the result otherwise. The exception's `Errors` travel: the message bus shows them as the reason a message
+failed, a rate-limited queue answers its requester with them, and the Web package's exception handler answers a request
+with their problem details.
 
 ## Common issues
 

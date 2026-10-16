@@ -10,6 +10,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Npgsql;
+using NSubstitute;
+using Resrcify.SharedKernel.UnitOfWork.Extensions;
+using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.Interceptors;
@@ -270,6 +273,45 @@ public sealed class PostgresServiceCollectionExtensionsTests
             wakeUp.ReconnectDelay = TimeSpan.FromMilliseconds(reconnectMilliseconds);
             wakeUp.MaxReconnectDelay = TimeSpan.FromMilliseconds(maxReconnectMilliseconds);
         }));
+    }
+
+    [Fact]
+    public async Task WithOutbox_ShouldGiveTheOutboxThePostgresClaim_WhenTheServiceSetsNone()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOutboxProcessing<TestDbContext>();   // before or after: the claim is resolved when used
+        services.AddPostgresDbContext<TestDbContext>(Configuration(Settings()), db => db.WithOutbox());
+        await using var provider = services.BuildServiceProvider();
+
+        OutboxDefaultClaim<TestDbContext>.Effective(provider.GetRequiredService<OutboxJobClaim<TestDbContext>>().Claim, provider)
+            .ShouldBeSameAs(PostgresOutboxLaneClaim.Instance);
+    }
+
+    [Fact]
+    public async Task WithOutbox_ShouldKeepTheClaimTheServiceSet()
+    {
+        var own = Substitute.For<IOutboxLaneClaim>();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddPostgresDbContext<TestDbContext>(Configuration(Settings()), db => db.WithOutbox());
+        services.AddOutboxProcessing<TestDbContext>(outbox => outbox.Claim = own);
+        await using var provider = services.BuildServiceProvider();
+
+        OutboxDefaultClaim<TestDbContext>.Effective(provider.GetRequiredService<OutboxJobClaim<TestDbContext>>().Claim, provider)
+            .ShouldBeSameAs(own);
+    }
+
+    [Fact]
+    public async Task AddOutboxProcessing_ShouldClaimNothing_WithoutThePostgresOutbox()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOutboxProcessing<TestDbContext>();
+        await using var provider = services.BuildServiceProvider();
+
+        OutboxDefaultClaim<TestDbContext>.Effective(provider.GetRequiredService<OutboxJobClaim<TestDbContext>>().Claim, provider)
+            .ShouldBeNull();
     }
 
     private static ServiceProvider Build(

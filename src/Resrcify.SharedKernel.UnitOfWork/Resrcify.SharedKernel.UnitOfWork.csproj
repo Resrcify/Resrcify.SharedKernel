@@ -8,25 +8,25 @@
     <PackageTags>$(PackageTags);unit-of-work;outbox;entity-framework-core;quartz;domain-events</PackageTags>
   </PropertyGroup>
 
+  <!-- Real dependencies: EF Core (DbContext, interceptors, the model builder) and Quartz (IJob, the job helpers) are in
+       this package's API, so a service gets them from this reference, at least at the versions this package was built
+       against. -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="Quartz">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <!-- The outbox lanes are a hosted service that logs: needed at run time, so not private. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Quartz" />
+    <!-- The outbox lanes are a hosted service that logs. -->
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
-    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.UnitTests" />
+    <!-- WithOutbox() registers its PostgresOutboxLaneClaim as the outbox's default claim through OutboxDefaultClaim,
+         the one internal type the Postgres package uses: kept internal so a service sets a claim only through the
+         options. -->
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.Postgres" />
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.Postgres.UnitTests" />
     <InternalsVisibleTo Include="Resrcify.SharedKernel.UnitOfWork.IntegrationTests" />
   </ItemGroup>
 

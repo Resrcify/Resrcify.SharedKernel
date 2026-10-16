@@ -1,9 +1,8 @@
-using Microsoft.EntityFrameworkCore;
+using System;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
-using Resrcify.SharedKernel.UnitOfWork.Interceptors;
-using Resrcify.SharedKernel.UnitOfWork.Outbox;
+using Resrcify.SharedKernel.UnitOfWork.Postgres.Extensions;
 using Resrcify.SharedKernel.WebApiExample.Application.Abstractions.Repositories;
 using Resrcify.SharedKernel.WebApiExample.Persistence.Repositories;
 
@@ -11,28 +10,28 @@ namespace Resrcify.SharedKernel.WebApiExample.Persistence;
 
 public static class PersistenceServiceRegistration
 {
-    public static IServiceCollection AddPersistanceServices(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddPersistenceServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
-        // One outbox serializer instance, shared by the write side (interceptor)
-        // and the read side (processing job) so they cannot drift apart.
-        var outboxSerializer = new SystemTextJsonOutboxSerializer();
+        // The context from the Database section (validated on start), with the auditable, soft-delete and outbox
+        // interceptors built by the container, the outbox woken on commit (NOTIFY) and claimed per message
+        // (PostgresOutboxLaneClaim, the default with WithOutbox()) so several instances never publish one twice.
+        services.AddPostgresDbContext<AppDbContext>(configuration, db => db
+            .WithOutbox()
+            .WithOutboxWakeUp());
 
-        services.AddDbContext<AppDbContext>(option =>
-        {
-            option.UseNpgsql(configuration.GetConnectionString("Database"));
-            option.AddInterceptors(
-                new InsertOutboxMessagesInterceptor(outboxSerializer),
-                new UpdateAuditableEntitiesInterceptor(),
-                new UpdateDeletableEntitiesInterceptor());
-        });
+        // The unit of work and the outbox processing job (and its lanes), every 20 s on top of the wake-up.
+        services.AddOutboxProcessing<AppDbContext>(outbox => outbox.ProcessInterval = TimeSpan.FromSeconds(20));
 
-        // Read side: unit of work, the serializer for the job, and the Quartz job.
-        services.AddOutboxProcessing<AppDbContext>(outboxSerializer);
+        // Migrates while the host starts, before it serves (Migrations:Run).
+        services.AddMigrationsOnStartup<AppDbContext>(configuration);
 
         services.AddScoped<ICompanyRepository, CompanyRepository>();
 
-        // Migrates while the host starts, before it serves (Migrations:Run in appsettings.json).
-        services.AddMigrationsOnStartup<AppDbContext>(configuration);
+        services.AddHealthChecks()
+            .AddPostgres<AppDbContext>()   // tagged ready
+            .AddOutbox<AppDbContext>();    // tagged ready, Degraded on a backlog
 
         return services;
     }

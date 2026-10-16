@@ -41,7 +41,7 @@ internal sealed class OutboxJobTestHarness : IAsyncDisposable
         Queries = queries;
         Job = new ProcessOutboxMessagesJob<TestDbContext>(
             provider.GetRequiredService<IServiceScopeFactory>(),
-            clock,
+            clock ?? TimeProvider.System,
             provider.GetService<OutboxWakeUp<TestDbContext>>());
     }
 
@@ -75,6 +75,7 @@ internal sealed class OutboxJobTestHarness : IAsyncDisposable
         services.AddScoped<IUnitOfWork, UnitOfWork<TestDbContext>>();
         services.AddSingleton(publisher);
         services.AddSingleton<IOutboxSerializer>(new SystemTextJsonOutboxSerializer());
+        services.AddSingleton(clock ?? TimeProvider.System);
         configure?.Invoke(services);
 
         var provider = services.BuildServiceProvider();
@@ -106,15 +107,28 @@ internal sealed class OutboxJobTestHarness : IAsyncDisposable
     internal static IJobExecutionContext JobContext(
         int batchSize = 10,
         int maxRetryCount = 3,
-        int? intervalInSeconds = null)
+        int? intervalInSeconds = null,
+        TimeSpan? retryDelay = null,
+        TimeSpan? maxRetryDelay = null,
+        int? maxTransientRetryCount = null,
+        TimeSpan? interval = null)
     {
         var data = new JobDataMap
         {
             { "ProcessBatchSize", batchSize },
             { "ProcessMaxRetryCount", maxRetryCount },
         };
-        if (intervalInSeconds is { } interval)
-            data.Add("ProcessIntervalInSeconds", interval);
+        if (maxTransientRetryCount is { } transient)
+            data.Add("ProcessMaxTransientRetryCount", transient);
+        // As 4.2 and before stored it (whole seconds), and as 4.3 does (milliseconds).
+        if (intervalInSeconds is { } seconds)
+            data.Add("ProcessIntervalInSeconds", seconds);
+        if (interval is { } stored)
+            data.Add("ProcessIntervalInMilliseconds", (long)stored.TotalMilliseconds);
+        if (retryDelay is { } delay)
+            data.Add("ProcessRetryDelayInMilliseconds", (long)delay.TotalMilliseconds);
+        if (maxRetryDelay is { } maxDelay)
+            data.Add("ProcessMaxRetryDelayInMilliseconds", (long)maxDelay.TotalMilliseconds);
         var jobContext = Substitute.For<IJobExecutionContext>();
         jobContext.MergedJobDataMap.Returns(data);
         return jobContext;

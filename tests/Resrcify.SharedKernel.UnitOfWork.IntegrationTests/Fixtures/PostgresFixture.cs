@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using Resrcify.SharedKernel.IntegrationTesting.Fixtures;
-using Testcontainers.PostgreSql;
 
 namespace Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Fixtures;
 
@@ -15,9 +14,10 @@ namespace Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Fixtures;
 public sealed class PostgresFixture
     : PostgresContainerFixture
 {
-    protected override PostgreSqlBuilder Configure(PostgreSqlBuilder builder)
-        => builder
-            .WithDatabase("integration")
-            .WithUsername("integration")
-            .WithPassword("integration");
+    public PostgresFixture()
+    {
+        Database = "integration";
+        Username = "integration";
+        Password = "integration";
+    }
 }

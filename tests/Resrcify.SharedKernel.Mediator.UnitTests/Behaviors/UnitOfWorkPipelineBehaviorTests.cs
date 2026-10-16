@@ -98,6 +98,18 @@ public class UnitOfWorkPipelineBehaviorTests
     }
 
     [Fact]
+    public async Task Handle_ShouldLogATransientExceptionAtWarning()
+    {
+        _logger.IsEnabled(Arg.Any<LogLevel>()).Returns(true);
+        var exception = new TimeoutException("the database didn't answer");
+        _next.When(n => n.Invoke()).Do(_ => throw exception);
+
+        await Should.ThrowAsync<TimeoutException>(() => _behavior.Handle(_command, _next, CancellationToken.None));
+
+        LoggedEntries().ShouldBe([(LogLevel.Warning, exception)]);
+    }
+
+    [Fact]
     public async Task Handle_ShouldLogAtDebugWithoutTheException_WhenItWasAlreadyLogged()
     {
         // Arrange — a request sent by the handler logged it already.

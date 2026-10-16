@@ -24,13 +24,15 @@ lead to their trace.
 
 - **Tracing**: ASP.NET Core (without the `/metrics` and `/health…` requests: `UntracedPaths`), HttpClient, every
   SharedKernel source (`Resrcify.SharedKernel.*`: the mediator, the outbox), Rebus.Diagnostics (the message bus' send
-  and handle spans) and Quartz 4 (a span per job run). The service is named `serviceName` (`service.name`).
+  and handle spans), Quartz 4 (a span per job run) and Npgsql (a span per database command; harmless without
+  PostgreSQL). The service is named `serviceName` (`service.name`).
 - **Metrics**: ASP.NET Core, HttpClient, the .NET runtime, every SharedKernel meter (the mediator, the outbox, the
   message bus), Rebus.Diagnostics and Quartz 4, exported to Prometheus.
 - **OTLP**: traces exported to `Observability:OtlpEndpoint` when it is set (the section and key the services already
   have), nothing otherwise.
 - **Serilog** as the logger: `ReadFrom.Configuration` (the `Serilog` section), Serilog's self-log to standard error,
-  and every event enriched with `TraceId` and `SpanId` (the names Serilog.Enrichers.Span uses).
+  every event enriched with `TraceId` and `SpanId` (the names Serilog.Enrichers.Span uses, so `WithSpan` is redundant),
+  and a destructured property (`{@...}`) bounded to 4 levels, 20 items a collection and 1,024 characters a string.
 
 `app.MapServiceMetrics(path = "/metrics")` maps the Prometheus scrape endpoint, open to anonymous callers whatever the
 authorization fallback policy.
@@ -47,44 +49,36 @@ names those libraries publish (`RebusDiagnosticConstants`, `QuartzInstrumentatio
 ## Prerequisites
 
 - .NET 10 SDK, an ASP.NET Core host.
-- **The packages it wires, referenced by the service.** Like every SharedKernel package, this one keeps its
-  dependencies private, so a service lists what it ships: the OpenTelemetry host, instrumentation and exporter
-  packages and the Serilog host packages below. A missing one fails at start-up naming the assembly; the Prometheus
-  exporter (only ever published as a prerelease) gets a message of its own, or set `PrometheusExporter = false`.
+- **The packages it wires come with it**: the OpenTelemetry host, instrumentation and OTLP exporter packages and the
+  Serilog host packages (`Serilog.Extensions.Hosting`, `Serilog.Settings.Configuration`, `Serilog.AspNetCore`) are
+  dependencies of this package, so NuGet gives the service at least the versions it was built against (a lower one
+  is refused at restore, instead of a `MissingMethodException` at run time). A service references one itself only
+  to move it higher.
+- **The Prometheus exporter, referenced by the service.** `OpenTelemetry.Exporter.Prometheus.AspNetCore` is only
+  ever published as a prerelease, which a stable package can't depend on (NU5104): the service references it. A
+  missing one gets a message of its own at start-up, or set `PrometheusExporter = false`.
 - A `Serilog` configuration section and the sinks it names (e.g. `Serilog.Sinks.Console`), as today.
 
 ## Install
 
 ```xml
 <PackageReference Include="Resrcify.SharedKernel.Observability" Version="<latest>" />
-<!-- What it wires (its own references are private, so the service lists them): -->
-<PackageReference Include="OpenTelemetry.Extensions.Hosting" />
-<PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
-<PackageReference Include="OpenTelemetry.Instrumentation.Http" />
-<PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
-<PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
-<PackageReference Include="Serilog.Extensions.Hosting" />
-<PackageReference Include="Serilog.Settings.Configuration" />
+<!-- A prerelease, so not a dependency of the package: the service references it. -->
 <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.19.1-beta.1" />
-<!-- For UseServiceRequestLogging only (its RequestLoggingOptions is in the signature): -->
-<PackageReference Include="Serilog.AspNetCore" />
 ```
 
-Use the versions in SharedKernel's `Directory.Packages.props` (or newer). Most services reference these already.
+The OpenTelemetry and Serilog host packages come with it. The sinks the `Serilog` section names
+(`Serilog.Sinks.Console`, ...) are the service's.
 
 ## Quick Start
 
 ```csharp
 // Infrastructure
-services.AddServiceTelemetry("shardmanagement", configuration, telemetry =>
-{
-    telemetry.ActivitySources.Add("Npgsql");
-    telemetry.Meters.Add("Npgsql");
-});
+services.AddServiceTelemetry("shardmanagement", configuration);   // Npgsql's spans included
 
 // Program.cs
+app.UseServiceRequestLogging();   // before UseExceptionHandler(): it logs the status the handler answers
 app.UseExceptionHandler();
-app.UseServiceRequestLogging();
 app.UseRouting();
 // ...
 app.MapServiceMetrics();
@@ -112,18 +106,49 @@ app.MapServiceMetrics();
 is used as is.
 
 Logs carry `TraceId` and `SpanId` as properties: a JSON formatter writes them, a text template shows them with
-`{TraceId}`. A service using Serilog.Enrichers.Span's `WithSpan` can drop it (a property already set is kept).
+`{TraceId}`. **`Serilog.Enrichers.Span` / `"WithSpan"` is redundant**: drop the package reference, and
+`"Serilog.Enrichers.Span"` from `Serilog:Using` and `"WithSpan"` from `Serilog:Enrich` in the configuration (a property
+already set is kept, so leaving it changes nothing but costs a package).
+
+A destructured property (`{@Payload}`) is bounded by default, so a whole event message destructured by mistake (a
+Sentinel change event is ~100 KB) stays a few KB: 4 levels deep (`MaximumDestructuringDepth`), 20 items a collection
+(`MaximumDestructuredCollectionCount`), 1,024 characters a string (`MaximumDestructuredStringLength`). They are set
+before the `Serilog` section is read, so the section overrides any of them:
+
+```json
+"Serilog": { "Destructure": [ { "Name": "ToMaximumCollectionCount", "Args": { "maximumCollectionCount": 100 } } ] }
+```
+
+and so does `ConfigureLogging`; set an option to `null` to keep Serilog's own (depth 10, the rest unbounded).
 
 ## Request logging
 
 `app.UseServiceRequestLogging()` (`Resrcify.SharedKernel.Observability.Extensions`) replaces
-`app.UseSerilogRequestLogging()`, in the same place: after `UseExceptionHandler()`, before `UseRouting()`. One line per
-request, Serilog's `HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms`:
+`app.UseSerilogRequestLogging()`. Place it **before `UseExceptionHandler()`** (and before `UseRouting()`):
+
+```csharp
+app.UseServiceRequestLogging();
+app.UseExceptionHandler();
+```
+
+There it logs the status the exception handler answered: a 500 for an unhandled exception (whose stack the handler logs,
+once: Web's `ResultExceptionHandler` follows the logged-once convention, so after a mediator behavior has logged it,
+only a `Debug` line), and a 499 for a request the client gave up on. Placed after `UseExceptionHandler()`, where
+`UseSerilogRequestLogging()` usually went, Serilog's middleware sees the exception itself, and Serilog logs every
+exception passing through it as "responded 500", at `Error`, a client abort (an `OperationCanceledException` once
+`RequestAborted` is cancelled) included. It still logs correctly there, so a service that hasn't moved it isn't
+misled: its own branch answers a client abort (an `OperationCanceledException` or `IOException` thrown once
+`RequestAborted` is cancelled, as `UseExceptionHandler()` tells one) with a 499, logged at `Information` with no
+exception, and the line of a real exception carries its stack only when nothing logged it before (the
+`LoggedExceptions` convention, through Results' `LoggedExceptions.Claim`), so the stack is logged once either way.
+
+One line per request, Serilog's `HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms`:
 
 | Request | Line |
 |---|---|
 | `UntracedPaths` (`/health`, `/health/ready`, `/health/live`, `/metrics` by default) | none |
-| 5xx, or an exception (logged with the line; the exception handler then answers 500) | `Error` |
+| 5xx, or an exception (the exception handler then answers 500) | `Error` |
+| a request the client gave up on (499) | `Information` |
 | anything else, 4xx included | `Information` |
 
 - **The probes and the scrape aren't logged at all**, rather than at `Verbose`: they come every few seconds and say
@@ -137,7 +162,8 @@ request, Serilog's `HTTP {RequestMethod} {RequestPath} responded {StatusCode} in
   (the `ClaimTypes.NameIdentifier` claim, the one Web's `GetUserId()` reads, when the request is authenticated; read
   when the request ends, so wherever `UseAuthentication()` is). Every line also carries `TraceId` and `SpanId`, those of
   the request's span, from `AddServiceTelemetry`'s enricher.
-- It writes through the host's own Serilog logger, not the static `Log.Logger`.
+- It writes through the host's own Serilog logger, not the static `Log.Logger` (or the `Logger` `configure` sets),
+  following the logged-once convention for an exception's stack.
 
 It needs `AddServiceTelemetry` (for the paths) with Serilog as the logger (`Logging` on, or the service's own
 `AddSerilog`); without them it throws `InvalidOperationException` saying which. `configure` runs on Serilog's
@@ -167,10 +193,12 @@ app.UseServiceRequestLogging(logging =>
 | `AspNetCoreInstrumentation`, `HttpClientInstrumentation`, `RuntimeInstrumentation` | on | The instrumentation libraries. |
 | `SharedKernelInstrumentation` | on | `Resrcify.SharedKernel.*` and Rebus.Diagnostics. |
 | `QuartzInstrumentation` | on | Quartz 4's source and meter. |
+| `NpgsqlInstrumentation` | on | Npgsql's activity source (`TelemetrySources.Npgsql`); harmless without PostgreSQL. |
 | `PrometheusExporter` | on | The exporter `MapServiceMetrics` serves. |
 | `OtlpExporter` | on | Still needs `Observability:OtlpEndpoint`. |
 | `UntracedPaths` | `/metrics`, `/health` | Request path prefixes left out of the traces and the request log (their metrics stay). |
-| `ActivitySources`, `Meters` | empty | More names to subscribe to, e.g. `Npgsql`; wildcards allowed. |
+| `ActivitySources`, `Meters` | empty | More names to subscribe to, e.g. `StackExchange.Redis`, or the `Npgsql` meter; wildcards allowed. |
+| `MaximumDestructuringDepth`, `MaximumDestructuredCollectionCount`, `MaximumDestructuredStringLength` | 4, 20, 1024 | Serilog's destructuring bounds; the `Serilog` section and `ConfigureLogging` override them, `null` turns one off. |
 | `ConfigureTracing`, `ConfigureMetrics`, `ConfigureLogging` | none | Run last on the tracer, the meter provider and the Serilog configuration. |
 
 ```csharp
@@ -229,8 +257,7 @@ After:
 
 ```csharp
 // InfrastructureServiceRegistration
-services.AddServiceTelemetry("shardmanagement", configuration, telemetry =>
-    telemetry.ActivitySources.Add("Npgsql"));
+services.AddServiceTelemetry("shardmanagement", configuration);
 
 // Program.cs
 app.UseServiceRequestLogging();
@@ -238,10 +265,9 @@ app.UseServiceRequestLogging();
 app.MapServiceMetrics();
 ```
 
-Then delete the service's `ObservabilityOptions` class. Keep its package references (the ones listed under
-[Install](#install), the Serilog sinks and the Prometheus exporter), since this package's are private; keep
-`Serilog.AspNetCore` for `UseServiceRequestLogging`, or drop it if the service logs no requests and
-`Serilog.Extensions.Hosting` is all it used. The configuration doesn't change. What the service gains: the mediator's spans and metrics and the Quartz meter (which
+Then delete the service's `ObservabilityOptions` class, and the package references this package brings (the
+OpenTelemetry host, instrumentation and OTLP exporter packages, `Serilog.Extensions.Hosting`,
+`Serilog.Settings.Configuration`, `Serilog.AspNetCore`); keep the Serilog sinks and the Prometheus exporter. The configuration doesn't change. What the service gains: the mediator's spans and metrics and the Quartz meter (which
 most services didn't subscribe to), trace ids on every log line, no spans and no request lines for the probes and the
 scrape, and the host, client IP and user id on every request line.
 

@@ -8,8 +8,10 @@ public sealed class UnitOfWorkPipelineOptions
 {
     /// <summary>
     /// Save with <c>IUnitOfWork.TryCompleteAsync</c> and return its failure as the command's result, instead of letting
-    /// the exception through: a concurrency conflict or a unique-constraint violation becomes a <c>Conflict</c> (409), a
-    /// serialization failure or a deadlock outside a transaction a transient <c>Failure</c>. Anything else still throws.
+    /// the exception through: a concurrency conflict, a unique-constraint or a foreign-key violation becomes a
+    /// <c>Conflict</c> (409), a not-null or check-constraint violation or a string too long for its column a
+    /// <c>Validation</c> error (400), a serialization failure or a deadlock outside a transaction a transient
+    /// <c>Failure</c>. Anything else still throws.
     /// <see langword="false"/> by default (the save throws, as before).
     /// </summary>
     /// <remarks>

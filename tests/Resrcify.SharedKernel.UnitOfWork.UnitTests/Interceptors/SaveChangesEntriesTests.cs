@@ -34,7 +34,7 @@ public sealed class SaveChangesEntriesTests : DbSetupBase
         : base(
             new UpdateDeletableEntitiesInterceptor(clock),
             new UpdateAuditableEntitiesInterceptor(clock),
-            new InsertOutboxMessagesInterceptor(new SystemTextJsonOutboxSerializer(), timeProvider: clock),
+            new InsertOutboxMessagesInterceptor(new SystemTextJsonOutboxSerializer(), clock),
             failOnce)
     {
         _clock = clock;

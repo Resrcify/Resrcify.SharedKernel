@@ -73,55 +73,11 @@ internal sealed partial class Mediator
         return runtime;
     }
 
+    // The pipeline the container composed (it doesn't throw when built without a handler: it reports that when
+    // executed).
     private ISendRuntimeExecutor<TRequest, TResponse> CreateSendRuntime<TRequest, TResponse>()
         where TRequest : IRequest<TResponse>
-    {
-        var composedRuntime = GetComposedSendRuntime<TRequest, TResponse>();
-        if (composedRuntime is not null)
-            return composedRuntime;
-
-        var preProcessors = serviceProvider.GetServices<IRequestPreProcessor<TRequest>>();
-        var preProcessorArray = MaterializeServices(preProcessors);
-
-        var postProcessors = serviceProvider.GetServices<IRequestPostProcessor<TRequest, TResponse>>();
-        var postProcessorArray = MaterializeServices(postProcessors);
-
-        var valueTaskHandler = serviceProvider.GetService<IValueTaskRequestHandler<TRequest, TResponse>>();
-        if (valueTaskHandler is not null)
-        {
-            var valueTaskBehaviors = serviceProvider.GetServices<IValueTaskPipelineBehavior<TRequest, TResponse>>();
-            var valueTaskBehaviorArray = MaterializeServices(valueTaskBehaviors);
-            var valueTaskRequestBehaviors = serviceProvider.GetServices<IValueTaskRequestPipelineBehavior<TRequest, TResponse>>();
-            var valueTaskRequestBehaviorArray = MaterializeServices(valueTaskRequestBehaviors);
-
-            return new ValueTaskSendRuntime<TRequest, TResponse>(
-                valueTaskHandler,
-                valueTaskBehaviorArray,
-                valueTaskRequestBehaviorArray,
-                preProcessorArray,
-                postProcessorArray);
-        }
-
-        var handler = serviceProvider.GetService<IRequestHandler<TRequest, TResponse>>()
-            ?? throw new InvalidOperationException($"No request handler registered for '{typeof(TRequest).FullName}'.");
-
-        var behaviors = serviceProvider.GetServices<IPipelineBehavior<TRequest, TResponse>>();
-        var behaviorArray = MaterializeServices(behaviors);
-        var requestBehaviors = serviceProvider.GetServices<IRequestPipelineBehavior<TRequest, TResponse>>();
-        var requestBehaviorArray = MaterializeServices(requestBehaviors);
-
-        return new SendRuntime<TRequest, TResponse>(
-            handler,
-            behaviorArray,
-            requestBehaviorArray,
-            preProcessorArray,
-            postProcessorArray);
-    }
-
-    // The composed runtime doesn't throw when built without a handler (it reports that when executed).
-    private IDiComposedSendRuntime<TRequest, TResponse>? GetComposedSendRuntime<TRequest, TResponse>()
-        where TRequest : IRequest<TResponse>
-        => serviceProvider.GetService<IDiComposedSendRuntime<TRequest, TResponse>>();
+        => serviceProvider.GetRequiredService<IDiComposedSendRuntime<TRequest, TResponse>>();
 
     private static Type GetClosedRequestInterface(Type requestType)
     {
@@ -210,7 +166,7 @@ internal sealed partial class Mediator
         CancellationToken cancellationToken)
         where TRequest : IRequest<TResponse>
     {
-        var time = serviceProvider.GetService<TimeProvider>() ?? TimeProvider.System;
+        var time = serviceProvider.GetRequiredService<TimeProvider>();
         var started = time.GetTimestamp();
         using var activity = MediatorDiagnostics.StartSend(typeof(TRequest));
         try

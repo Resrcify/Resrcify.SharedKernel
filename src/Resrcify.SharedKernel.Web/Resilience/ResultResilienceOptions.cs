@@ -3,6 +3,7 @@ using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 
 namespace Resrcify.SharedKernel.Web.Resilience;
 
@@ -15,20 +16,26 @@ namespace Resrcify.SharedKernel.Web.Resilience;
 /// </summary>
 public sealed class ResultResilienceOptions
 {
-    /// <summary>Retries after the first attempt (default 3); 0 turns retrying off.</summary>
-    public int MaxRetries { get; set; } = 3;
-
-    /// <summary>The first retry's delay (default 1 s); each next one doubles it, up to <see cref="MaxRetryDelay"/>.</summary>
-    public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(1);
+    /// <summary>
+    /// The attempts in all, the first one included, and the waits between them: by default 4 attempts (3 retries), 1 s
+    /// before the second, doubling up to 30 s, with jitter (so the clients of a failing service don't retry in step).
+    /// <see cref="RetrySchedule.MaxAttempts"/> of 1 turns retrying off. Mapped to Polly's retry
+    /// (<c>MaxRetryAttempts</c> = attempts - 1, <c>Delay</c>, <c>MaxDelay</c>, <c>UseJitter</c>, exponential), whose own
+    /// jitter spreads the delays. A <c>Retry-After</c> isn't capped by <see cref="RetrySchedule.MaxDelay"/>; one at least
+    /// as long as what is left of <see cref="TotalTimeout"/> isn't waited for, the response is returned instead.
+    /// </summary>
+    public RetrySchedule Retries { get; set; } = DefaultRetries;
 
     /// <summary>
-    /// The longest computed delay between two attempts (default 30 s). A <c>Retry-After</c> isn't capped by it; one at
-    /// least as long as what is left of <see cref="TotalTimeout"/> isn't waited for, the response is returned instead.
+    /// The schedule by default: 4 attempts, 1 s doubling up to 30 s, with jitter. A new instance on each read, so that
+    /// binding a configuration section into one options' schedule (which sets its values in place) never changes
+    /// another's.
     /// </summary>
-    public TimeSpan MaxRetryDelay { get; set; } = TimeSpan.FromSeconds(30);
-
-    /// <summary>Spread the delays randomly (default on), so the clients of a failing service don't retry in step.</summary>
-    public bool UseJitter { get; set; } = true;
+    public static RetrySchedule DefaultRetries => new(
+        4,
+        TimeSpan.FromSeconds(1),
+        TimeSpan.FromSeconds(30),
+        Jitter: true);
 
     /// <summary>One attempt's longest time (default 10 s); an attempt that takes longer is cancelled and retried.</summary>
     public TimeSpan AttemptTimeout { get; set; } = TimeSpan.FromSeconds(10);
@@ -76,13 +83,20 @@ public sealed class ResultResilienceOptions
     public IReadOnlySet<int>? RetryOnly { get; set; }
 
     /// <summary>
-    /// Throw a timeout (<c>TimeoutRejectedException</c>, an attempt's or the whole call's) and an open circuit
-    /// (<c>BrokenCircuitException</c>) to the caller, as 4.0.0 did. Off by default: the caller gets a response made up
-    /// in their place instead, which <c>ToResultAsync</c> reads as <see cref="ResultResilienceErrors.Timeout"/> (504) or
-    /// <see cref="ResultResilienceErrors.CircuitOpen"/> (502), like any other failed answer (see
-    /// <see cref="ResultResilienceErrors"/>). The caller's own cancellation throws <c>OperationCanceledException</c>
-    /// either way.
+    /// Throw a timeout (<c>TimeoutRejectedException</c>, an attempt's or the whole call's), an open circuit
+    /// (<c>BrokenCircuitException</c>) and a service that couldn't be reached (HttpClient's
+    /// <c>HttpRequestException</c>) to the caller, as 4.0.0 did. Off by default: the caller gets a response made up in
+    /// their place instead, which <c>ToResultAsync</c> reads as <see cref="ResultResilienceErrors.Timeout"/> (504),
+    /// <see cref="ResultResilienceErrors.CircuitOpen"/> (502) or <see cref="ResultResilienceErrors.Unreachable"/> (502),
+    /// like any other failed answer (see <see cref="ResultResilienceErrors"/>). The caller's own cancellation throws
+    /// <c>OperationCanceledException</c> either way.
     /// </summary>
+    /// <remarks>
+    /// A failure while HttpClient reads the body of an answer it got (the connection reset halfway through a
+    /// buffered response, after the pipeline returned it) still throws an <c>HttpRequestException</c>: it happens
+    /// outside the pipeline. So does one while the caller reads a response it asked for unbuffered
+    /// (<c>HttpCompletionOption.ResponseHeadersRead</c>).
+    /// </remarks>
     public bool ThrowTimeoutsAndOpenCircuits { get; set; }
 
     /// <summary>
@@ -103,18 +117,50 @@ public sealed class ResultResilienceOptions
     }.ToFrozenSet();
 
     /// <summary>
-    /// Throws on a contradictory configuration, as the service registers the client; takes a copy of
-    /// <see cref="RetryOnly"/>, so that changing the set given afterwards changes nothing.
+    /// What makes these options unusable, each as a sentence (none when they are valid): checked when the host starts
+    /// (<c>ValidateOnStart</c>), so a contradictory configuration stops it rather than surprise a call.
     /// </summary>
-    internal void Validate()
+    internal IEnumerable<string> Problems()
+    {
+        if (Retries is null)
+            yield return "Retries can't be null: a single attempt is new RetrySchedule(1, TimeSpan.Zero, TimeSpan.Zero).";
+        else if (Retries.MaxAttempts < 1 || Retries.FirstDelay < TimeSpan.Zero || Retries.MaxDelay < TimeSpan.Zero)
+            yield return "Retries needs at least 1 attempt and delays that aren't negative.";
+
+        if (AttemptTimeout <= TimeSpan.Zero)
+            yield return $"AttemptTimeout must be positive, not {AttemptTimeout}.";
+        if (TotalTimeout <= TimeSpan.Zero)
+            yield return $"TotalTimeout must be positive, not {TotalTimeout}.";
+        if (AttemptTimeout > TotalTimeout)
+            yield return $"AttemptTimeout ({AttemptTimeout}) can't be longer than TotalTimeout ({TotalTimeout}): the "
+                + "call would end before its first attempt could.";
+
+        foreach (var problem in CircuitBreakerProblems())
+            yield return problem;
+        foreach (var problem in RetryOnlyProblems())
+            yield return problem;
+    }
+
+    private IEnumerable<string> CircuitBreakerProblems()
+    {
+        if (CircuitBreakerSamplingDuration < TimeSpan.Zero)
+            yield return "CircuitBreakerSamplingDuration can't be negative.";
+        if (CircuitBreakerBreakDuration < TimeSpan.Zero)
+            yield return "CircuitBreakerBreakDuration can't be negative.";
+        if (CircuitBreakerFailureRatio is < 0 or > 1)
+            yield return $"CircuitBreakerFailureRatio is a ratio between 0 and 1, not {CircuitBreakerFailureRatio}.";
+        if (CircuitBreakerMinimumThroughput < 0)
+            yield return "CircuitBreakerMinimumThroughput can't be negative.";
+    }
+
+    private IEnumerable<string> RetryOnlyProblems()
     {
         if (RetryOnly is not { } retryOnly)
-            return;
+            yield break;
 
         if (AlsoRetry.Count > 0 || NeverRetry.Count > 0)
-            throw new InvalidOperationException(
-                "ResultResilienceOptions.RetryOnly lists every status retried, so it can't be combined with AlsoRetry "
-                + "or NeverRetry: add the statuses to RetryOnly, or leave them out of it.");
+            yield return "RetryOnly lists every status retried, so it can't be combined with AlsoRetry or NeverRetry: "
+                + "add the statuses to RetryOnly, or leave them out of it.";
 
         var notErrorStatuses = retryOnly
             .Where(status => status is < 400 or > 599)
@@ -122,11 +168,17 @@ public sealed class ResultResilienceOptions
             .Select(status => status.ToString(CultureInfo.InvariantCulture))
             .ToList();
         if (notErrorStatuses.Count > 0)
-            throw new InvalidOperationException(
-                "ResultResilienceOptions.RetryOnly holds error statuses (400-599) only, not "
-                + string.Join(", ", notErrorStatuses) + ".");
+            yield return "RetryOnly holds error statuses (400-599) only, not " + string.Join(", ", notErrorStatuses) + ".";
+    }
 
-        RetryOnly = retryOnly.ToFrozenSet();
+    /// <summary>
+    /// Takes a copy of <see cref="RetryOnly"/> once the options are configured, so that changing the set given
+    /// afterwards changes nothing.
+    /// </summary>
+    internal void FreezeRetryOnly()
+    {
+        if (RetryOnly is { } retryOnly and not FrozenSet<int>)
+            RetryOnly = retryOnly.ToFrozenSet();
     }
 
     private static class StatusCodes

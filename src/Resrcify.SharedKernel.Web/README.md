@@ -21,6 +21,8 @@
     - [Read an HTTP response as a result](#read-an-http-response-as-a-result)
     - [Unhandled exceptions: the same problem details](#unhandled-exceptions-the-same-problem-details)
     - [Health endpoints](#health-endpoints)
+    - [The message bus' error queue](#the-message-bus-error-queue)
+    - [The outbox](#the-outbox)
     - [Calling another service: resilience keyed on ErrorType](#calling-another-service-resilience-keyed-on-errortype)
     - [Accepting Resrcify.Identity's tokens](#accepting-resrcifyidentitys-tokens)
   - [Common issues](#common-issues)
@@ -35,9 +37,12 @@
 - `IdempotencyHeaders`: the `Idempotency-Key` header for the mediator's idempotent requests, and the
   `Idempotency-Replayed` mark the request endpoints put on a replayed answer.
 - Consistent mapping from `ErrorType` to HTTP problem responses.
-- `AddResultProblemDetails()`: unhandled exceptions answered with the same problem details as a failed result.
+- `AddResultProblemDetails()`: unhandled exceptions answered with the same problem details as a failed result, and a
+  minimal-API parameter that fails to bind with a 400 naming it, in every environment.
 - `MapHealthEndpoints()`: `/health`, `/health/ready` and `/health/live`, anonymous, with a JSON response writer.
 - `MapErrorQueueAdministration()`: the message bus' error queue under `/admin/error-queue` (show, delete, move back).
+- `MapOutboxAdministration<TContext>()`: a DbContext's outbox under `/admin/outbox` (what waits and what gave up,
+  try again, delete).
 - `AddResultResilience()`: retries, timeouts and a circuit breaker for an `HttpClient`, retrying what the result
   pattern calls transient.
 - `AddResrcifyJwtBearer(configuration)`: JWT bearer authentication against Resrcify.Identity.
@@ -241,14 +246,37 @@ app.UseExceptionHandler();
 ```
 
 An exception no handler caught is answered like a failed result (`ToProblemDetails`): a 500 problem details whose
-`errors` hold one `Failure` error coded `Unhandled` (`ResultExceptionHandler.ErrorCode`), so a caller's
+`errors` hold one `Failure` error coded `Unhandled` (`ErrorCodes.Request.Unhandled`), so a caller's
 `ToResultAsync` reads it back as that error. Outside Development the message is only "An unexpected error occurred.";
 in Development the error's message is the exception's type and message and the problem's `detail` the whole exception
 (`options.IncludeExceptionDetails` decides either way). The exception is logged once, at `Error` (the exception
 handler middleware logs nothing more for an exception a handler handled), following Results' `LoggedExceptions`
 convention: when the mediator's behaviors logged it already on its way out, the handler logs a `Debug` line without the
-stack instead, and answers the same 500. A request the client aborted (an
-`OperationCanceledException` once `RequestAborted` fired) is a 499, logged at `Debug`, not as an error.
+stack instead, and answers the same 500. A request the client aborted (an `OperationCanceledException` or `IOException`
+once `RequestAborted` fired) never reaches the handler: `UseExceptionHandler()` answers it with a 499 itself, logged at
+`Debug`, not as an error. A
+`TransientFailureException` (Results; itself or among the causes) holding errors is answered as the failed result it
+stands for, with problem details of its `Errors` (a 502 for an upstream's failure, a 504 for a timeout ...), logged at
+`Warning`, once.
+
+A request ASP.NET Core couldn't bind (its `BadHttpRequestException`: a required query, route, header or body value left
+out, a value that doesn't parse, such as `/shards/abc` for a `Guid id`, a body that isn't valid JSON) isn't a fault of
+the service: it is answered with the exception's status (400, or 413, 415 ...) and problem details whose `errors` hold
+one `Validation` error coded with the parameter's name (`ErrorCodes.Request.Binding`, `Request`, when
+the exception names none), logged at `Debug`:
+
+```json
+{ "status": 400, "title": "Bad Request", "errors": [ { "code": "page",
+  "message": "The required parameter \"page\" was not provided from query string." } ] }
+```
+
+The message names the parameter only, never its type or the value sent; in Development (`IncludeExceptionDetails`)
+the problem's `detail` holds ASP.NET Core's own message. Minimal APIs throw the exception only when
+`RouteHandlerOptions.ThrowOnBadRequest` is on, which ASP.NET Core does in Development only (elsewhere an empty 400),
+so `AddResultProblemDetails()` turns it on in every environment. To keep ASP.NET Core's default, set
+`options.ProblemDetailsForBindingFailures = false` (a `BadHttpRequestException` that reaches the handler is still
+answered as above). A service's own handler for it (Oracle's `BadRequestExceptionHandler`) and its
+`ThrowOnBadRequest = true` can go.
 
 It replaces `builder.Services.AddProblemDetails()` (it registers it); keep `app.UseExceptionHandler()`.
 
@@ -256,11 +284,18 @@ It replaces `builder.Services.AddProblemDetails()` (it registers it); keep `app.
 
 ```csharp
 builder.Services.AddHealthChecks()
-    .AddNpgSql(connectionString, name: "postgres", tags: [HealthTags.Ready])
-    .AddCheck<QuartzJobLivenessHealthCheck>("quartz-jobs", tags: [HealthTags.Live]);
+    .AddPostgres<ShardDbContext>()          // UnitOfWork.Postgres: ready by default
+    .AddMessageBus()                        // MessageBus: ready by default
+    .AddOutbox<ShardDbContext>()            // UnitOfWork: ready by default (Degraded on a backlog)
+    .AddQuartzJobs()                        // UnitOfWork: live by default
+    .AddCheck<UpstreamHealthCheck>("upstream", tags: [HealthTags.Ready]);
 // ...
 app.MapHealthEndpoints();
 ```
+
+`HealthTags` (`Ready`, `Live`) lives in Resrcify.SharedKernel.Abstractions (`Resrcify.SharedKernel.Abstractions.Health`),
+so every package's checks share it: given no tags, SharedKernel's checks take `HealthTags.Ready` (`AddPostgres`,
+`AddMessageBus`, `AddOutbox`) or `HealthTags.Live` (`AddQuartzJobs`); pass `tags: []` for none.
 
 | Path | Runs | |
 |---|---|---|
@@ -304,6 +339,33 @@ They answer through `IErrorQueue` (registered by the MessageBus package's `AddMe
 an authenticated caller; add the admin policy on the group returned. Messages hold event content: never open these to
 everyone.
 
+### The outbox
+
+So an operator never needs hand-written SQL to see what is stuck in a DbContext's outbox or to try it again:
+
+```csharp
+app.MapOutboxAdministration<AppDbContext>()             // under /admin/outbox
+    .RequireAuthorization(policy => policy.RequireRole("Admin"));
+```
+
+| Endpoint | |
+|---|---|
+| `GET /` | messages waiting, retrying and given up, in all and per event type (with its lane) |
+| `GET /given-up?type=&take=` | the messages that gave up, most recent first (50 by default, 1 to 500) |
+| `GET /messages/{id}` | a message with its content, where it stands and its last error; 404 |
+| `POST /messages/{id}/retry` | tries a message that gave up again: 204, or 404 when it didn't give up |
+| `POST /given-up/retry?type=` | tries every message that gave up, or every one of the type, again: `{ "retried": n }` |
+| `DELETE /messages/{id}` | deletes a message that gave up, for good: 204, or 404 when it didn't give up |
+| `DELETE /given-up?type=` | deletes every message that gave up, or every one of the type: `{ "deleted": n }` |
+
+They answer through `IOutboxAdministration<AppDbContext>` (Abstractions), which the UnitOfWork package registers with
+the outbox (`AddOutboxProcessing`, `AddProcessOutboxMessagesJob`, `AddOutboxLanes`): this package doesn't reference
+UnitOfWork. A retried message starts from its first try, keeps its last error until the next one, and the outbox is
+woken so it is handled at once; a deleted one's event is never handled. Only messages that gave up are tried again or
+deleted. The endpoints are named `Outbox.<context>.<operation>` (`Outbox.AppDbContext.Summary`, ...), require an
+authenticated caller (add the admin policy on the group returned), and messages hold event content: never open these to
+everyone.
+
 ### Calling another service: resilience keyed on ErrorType
 
 ```csharp
@@ -312,11 +374,12 @@ services
     .AddResultResilience(resilience => resilience.AlsoRetry.Add(StatusCodes.Status404NotFound));
 ```
 
-Built on Microsoft.Extensions.Http.Resilience (Polly 8), which the service references itself. Outermost to
+Built on Microsoft.Extensions.Http.Resilience (Polly 8), which comes with the package. Outermost to
 innermost: the answer for a timeout or an open circuit, the total timeout (30 s), the retries, the circuit breaker,
 the attempt timeout (10 s).
 
-- **What is retried** (3 times by default, `MaxRetries`; 1 s doubling to at most 30 s, with jitter): a response whose
+- **What is retried** (`Retries`, a `RetrySchedule`: 4 attempts by default, the first included, 1 s doubling to at
+  most 30 s, with jitter; `MaxAttempts = 1` turns retrying off): a response whose
   status `ToResultAsync` reads as a transient `ErrorType` (`Failure`, `ExternalFailure`, `Timeout`, `RateLimit`: a
   5xx, a 408 or a 429), a network error (`HttpRequestException`), an attempt that timed out. Not a 400, 401, 403, 404,
   409 or 422: those are answers. Never the caller's cancellation.
@@ -324,8 +387,9 @@ the attempt timeout (10 s).
   them, and wins over `AlsoRetry`.
 - **`RetryOnly`** replaces the rule with a list: only those statuses are retried (network errors and timed-out
   attempts still are), any other is returned at once and doesn't count against the circuit. It can't be combined
-  with `AlsoRetry` or `NeverRetry` and holds 400–599 only: `AddResultResilience` throws `InvalidOperationException`
-  as the service registers the client otherwise. `ResultResilienceOptions.SafeToRetryStatuses` (408, 429, 503) is
+  with `AlsoRetry` or `NeverRetry` and holds 400–599 only: the host doesn't start otherwise (see
+  [Options, validated when the host starts](#options-validated-when-the-host-starts)).
+  `ResultResilienceOptions.SafeToRetryStatuses` (408, 429, 503) is
   the list for a service that retries its own failures, so that its other 5xx are final:
 
   ```csharp
@@ -340,20 +404,73 @@ the attempt timeout (10 s).
   count), for 5 s; `CircuitBreaker = false` turns it off.
 - **Time** is the `TimeProvider` in the container: every delay, timeout and `Retry-After` date runs on a
   `FakeTimeProvider` in tests.
+- **HttpClient's own timeout** (`HttpClient.Timeout`, 100 s by default) never ends a call before the pipeline does:
+  when it is shorter than `TotalTimeout` plus `ResultResilienceHttpClientBuilderExtensions.HttpClientTimeoutMargin`
+  (5 s), it is raised to that, after every other configuration of the client (a `ConfigureHttpClient` before or after
+  `AddResultResilience` alike). A longer one the service set, or `Timeout.InfiniteTimeSpan`, is kept. So a hung call
+  ends as `ResultResilienceErrors.Timeout`, never as HttpClient's `TaskCanceledException`, whatever `TotalTimeout` is:
+  a service no longer keeps its timeouts "inside HttpClient's 100 s", nor sets `HttpClient.Timeout` for them.
+
+#### Options, validated when the host starts
+
+The options are the client's named `ResultResilienceOptions` (named after the client), so a service configures them
+in code, from a configuration section, or both, and never reads `IConfiguration` itself:
+
+```csharp
+// appsettings.json: "SwgohApiService": { "Resilience": { "AttemptTimeout": "00:01:00", "TotalTimeout": "00:01:35",
+//   "CircuitBreaker": false, "Retries": { "MaxAttempts": 4, "FirstDelay": "00:00:01", "MaxDelay": "00:00:04", "Jitter": true } } }
+services.AddHttpClient<ISwgohApiClient, SwgohApiClient>()
+    .AddResultResilience("SwgohApiService:Resilience", resilience =>
+        resilience.RetryOnly = ResultResilienceOptions.SafeToRetryStatuses);
+```
+
+The `configure` action runs first (the service's own defaults, in code), then the section is bound
+(`BindConfiguration`) when the options are first read: a value the section holds wins (a test's shorter timeouts), one
+it leaves out keeps the code's or the default, `Retries`' values one by one too (`Retries:FirstDelay` alone keeps the
+attempts). Either way the options are validated when the host starts (`ValidateOnStart`): a
+host whose options are unusable doesn't start, with an `OptionsValidationException` naming the client and the problem:
+an `AttemptTimeout` longer than `TotalTimeout` (or one that isn't positive), a negative circuit-breaker duration, a
+failure ratio outside 0–1, no `Retries`, or a `RetryOnly` combined with `AlsoRetry` / `NeverRetry` or holding a status
+outside 400–599. A container used without a host gets that exception when it first builds the pipeline.
+
+Before (Sentinel's `SwgohApiResilienceOptions`): a class of its own with the same properties and production's values,
+a `Validate` method keeping `TotalTimeout` under HttpClient's 100 s, `AddOptions<...>().BindConfiguration(...).ValidateOnStart()`,
+and `configuration.GetSection(...).Get<...>()` to copy each value into `AddResultResilience`. After: production's
+values in the `configure` action, the tests' overrides under the same section (`Retries:FirstDelay` /
+`Retries:MaxDelay` for `RetryDelay` / `MaxRetryDelay`), and the one call:
+
+```csharp
+client.AddResultResilience("SwgohApiService:Resilience", resilience =>
+{
+    resilience.Retries = new RetrySchedule(4, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(4), Jitter: true);
+    resilience.AttemptTimeout = TimeSpan.FromSeconds(60);
+    resilience.TotalTimeout = TimeSpan.FromSeconds(95);
+    resilience.CircuitBreaker = false;
+    resilience.RetryOnly = ResultResilienceOptions.SafeToRetryStatuses;
+});
+```
 
 After the retries the caller gets the last response (`ToResultAsync` turns it into a failure). A timeout (the last
-attempt's, or the whole call's) or an open circuit is answered in the service's place, so `ToResultAsync` reads it as
-a failure like any other, with no try/catch:
+attempt's, or the whole call's), an open circuit or a service that couldn't be reached after the retries is answered in
+the service's place, so `ToResultAsync` reads it as a failure like any other, with no try/catch:
 
 | Gave up on | Response | `ToResultAsync`'s error |
 |---|---|---|
 | a timeout (`TimeoutRejectedException`) | 504, problem details | `ResultResilienceErrors.Timeout` (`Http.ResilienceTimeout`, `Timeout`) |
 | an open circuit (`BrokenCircuitException`) | 502, problem details | `ResultResilienceErrors.CircuitOpen` (`Http.CircuitOpen`, `ExternalFailure`) |
+| no answer (`HttpRequestException` without a status: refused, reset, a name that doesn't resolve) | 502, problem details | `ResultResilienceErrors.Unreachable(authority, cause)` (`Http.Unreachable`, `ExternalFailure`), e.g. `The service at swgohapi:8080 could not be reached: Connection refused (swgohapi:8080)` |
 
-The made-up response carries the header `Resrcify-Resilience: timeout` / `circuit-open` (a response from the service
-called never does) and the request; `EnsureSuccessStatusCode` throws `HttpRequestException` for it, as for a real 504.
-The caller's own cancellation still throws `OperationCanceledException`. `ThrowTimeoutsAndOpenCircuits = true` throws
-`TimeoutRejectedException` / `BrokenCircuitException` instead, as `AddStandardResilienceHandler` (and 4.0.0) does.
+The made-up response carries the header `Resrcify-Resilience: timeout` / `circuit-open` / `unreachable` (a response
+from the service called never does) and the request; `EnsureSuccessStatusCode` throws `HttpRequestException` for it, as
+for a real 504. The caller's own cancellation still throws `OperationCanceledException`.
+`ThrowTimeoutsAndOpenCircuits = true` throws `TimeoutRejectedException` / `BrokenCircuitException` /
+`HttpRequestException` instead, as `AddStandardResilienceHandler` (and 4.0.0) does. A failure while HttpClient reads the
+body of an answer it got (a connection reset halfway through a buffered response) still throws an
+`HttpRequestException`: it happens after the pipeline returned the response, outside it.
+
+`AddResultResilience` also adds the Web package's `ITransientFailureRule` (Abstractions): Polly's rejections
+(`ExecutionRejectedException`: a timeout, a broken or isolated circuit, the rate limiter), when they are thrown, are
+transient to the outbox, the mediator's logging and the message bus. The other packages never name Polly's types.
 
 Before (Shard and Tournament):
 
@@ -365,7 +482,7 @@ Before (Shard and Tournament):
 ```
 
 After: `.AddResultResilience(resilience => resilience.AlsoRetry.Add(404))`, and drop `Microsoft.Extensions.Http.Polly`.
-Six retries up to 64 s apart don't fit in the default 30 s total: raise `TotalTimeout` and `MaxRetries` to keep that
+Six retries up to 64 s apart don't fit in the default 30 s total: raise `TotalTimeout` and `Retries.MaxAttempts` to keep that
 patience, or take the defaults.
 
 ### Accepting Resrcify.Identity's tokens
@@ -383,8 +500,8 @@ The `Jwt` section (`ResrcifyJwtOptions`) is bound and validated at start-up (`Au
 `Issuer` and `Audience` set). JWT bearer becomes the default scheme; its signing keys come from the authority's
 discovery document (JWKS, refreshed when Identity rotates its keys), and the issuer, audience, lifetime and signature
 are checked. `RequireHttpsMetadata` is off unless set: the services reach Identity over plain HTTP in the cluster.
-The optional `Action<JwtBearerOptions>` runs after, for events or claim mapping. The service references
-`Microsoft.AspNetCore.Authentication.JwtBearer` itself. It replaces Sandbox's `JwtOptions` and `ConfigureJwtOptions`
+The optional `Action<JwtBearerOptions>` runs after, for events or claim mapping.
+`Microsoft.AspNetCore.Authentication.JwtBearer` comes with the package. It replaces Sandbox's `JwtOptions` and `ConfigureJwtOptions`
 (same section, same keys).
 
 ## Common issues

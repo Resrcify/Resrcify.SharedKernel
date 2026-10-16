@@ -8,6 +8,7 @@ using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using Quartz;
 using Resrcify.SharedKernel.Abstractions.Mediator;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.Results.Diagnostics;
 using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
@@ -91,6 +92,33 @@ public sealed class CommandJobTests
         var entry = _logger.Entries.ShouldHaveSingleItem();
         entry.Level.ShouldBe(LogLevel.Error);
         entry.Exception.ShouldBeSameAs(failure);
+    }
+
+    [Fact]
+    public async Task Execute_ShouldLogATransientExceptionAtWarning()
+    {
+        var failure = new TransientFailureException([Error.ExternalFailure("Upstream.Down", "The upstream is down.")]);
+        _sender.Send<Result>(Arg.Any<PingCommand>(), Arg.Any<CancellationToken>()).ThrowsAsync(failure);
+
+        await Should.ThrowAsync<JobExecutionException>(() => _job.Execute(Context()).AsTask());
+
+        var entry = _logger.Entries.ShouldHaveSingleItem();
+        entry.Level.ShouldBe(LogLevel.Warning);
+        entry.Exception.ShouldBeSameAs(failure);
+    }
+
+    [Fact]
+    public async Task Execute_ShouldLogAnExceptionAtWarning_WhenTheContainersClassifierCallsItTransient()
+    {
+        var classifier = Substitute.For<ITransientFailureClassifier>();
+        classifier.IsTransient(Arg.Any<Exception>()).Returns(true);
+        var job = new SendCommandJob<PingCommand>(_sender, _logger, classifier);
+        _sender.Send<Result>(Arg.Any<PingCommand>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new InvalidOperationException("the service's own outage"));
+
+        await Should.ThrowAsync<JobExecutionException>(() => job.Execute(Context()).AsTask());
+
+        _logger.Entries.ShouldHaveSingleItem().Level.ShouldBe(LogLevel.Warning);
     }
 
     [Fact]

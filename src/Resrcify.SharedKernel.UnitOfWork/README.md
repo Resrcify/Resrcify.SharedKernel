@@ -36,7 +36,8 @@
 
 - `IUnitOfWork` contract in `Resrcify.SharedKernel.Abstractions.UnitOfWork`.
 - EF Core-backed `UnitOfWork<TDbContext>` implementation, with `TryCompleteAsync` returning a concurrency conflict,
-  a duplicate or a serialization failure as a `Result` (`PersistenceErrors`).
+  a broken constraint (unique, foreign key, not null, check, too long) or a serialization failure as a `Result`
+  (`PersistenceErrors`).
 - Outbox/background-job helpers in `BackgroundJobs/`: the outbox job (draining a backlog in one run), its lanes,
   `OutboxWakeUp`, and Quartz helpers (`AddIntervalJob`, `AddCronJob`, `CommandJob`, `AsyncCommandJob`, job heartbeats and a liveness check).
 - Interceptors for domain events and auditable/deletable entities, registrable in the container
@@ -46,17 +47,17 @@
   object property.
 - On PostgreSQL, `Resrcify.SharedKernel.UnitOfWork.Postgres` sets the DbContext up in one call.
 
-### Packages the service references
+### Packages that come with it
 
-This package's own references are private, so a service references what it uses: `Microsoft.EntityFrameworkCore`
-and `Microsoft.EntityFrameworkCore.Relational` (and its provider), `Quartz` for the outbox job and the Quartz helpers,
-and `Microsoft.Extensions.Diagnostics.HealthChecks` for the health checks (an ASP.NET Core host has it).
+`Microsoft.EntityFrameworkCore` and `Microsoft.EntityFrameworkCore.Relational`, `Quartz` (the outbox job and the Quartz
+helpers) and `Microsoft.Extensions.Diagnostics.HealthChecks` are dependencies of this package, at least at the versions
+it was built against (NuGet refuses a lower one at restore). The service references its database provider (or
+`Resrcify.SharedKernel.UnitOfWork.Postgres`, which brings Npgsql's), and one of these only to move it higher.
 
 ## Prerequisites
 
 - .NET 10 SDK.
-- Entity Framework Core in the consuming project.
-- Optional Quartz integration for scheduled outbox processing.
+- An EF Core database provider in the consuming project (EF Core and Quartz come with the package).
 
 ## Install
 
@@ -165,8 +166,20 @@ scope doesn't save half of it; the mediator's unit-of-work behavior sends every 
 |---|---|---|
 | `DbUpdateConcurrencyException` (a row changed since it was read) | `Persistence.Concurrency` | `Conflict` |
 | `SQLSTATE 23505` (a unique constraint) | `Persistence.UniqueViolation` | `Conflict` |
+| `23503` (a foreign key), or `23001` (an `ON DELETE RESTRICT` key, EF Core's `DeleteBehavior.Restrict`) | `Persistence.ForeignKeyViolation` | `Conflict` |
+| `23502` (a `NOT NULL` column left empty) | `Persistence.NotNullViolation` | `Validation` |
+| `23514` (a check constraint) | `Persistence.CheckViolation` | `Validation` |
+| `22001` (a string longer than its column) | `Persistence.ValueTooLong` | `Validation` |
 | `40001` (a serialization failure), outside a transaction | `Persistence.SerializationFailure` | `Failure` (transient) |
 | `40P01` (a deadlock), outside a transaction | `Persistence.Deadlock` | `Failure` (transient) |
+
+The constraint violations (all but the unique one) name what was broken in the message, when the driver reports it:
+`A value the database requires is missing (table "Members", column "Nickname").`, `The data refers to data that
+doesn't exist, or other data still refers to it (constraint "FK_Members_Shards_ShardId", table "Members").`. The names
+are read from `Exception.Data` (`ConstraintName`, `TableName`, `ColumnName`), where Npgsql's `PostgresException` puts
+them; never a value (PostgreSQL's detail, which holds the row's data, isn't read). PostgreSQL names no column for
+`22001`. So match on `Code`, not on the whole error. A `Validation` answers 400 and a `Conflict` 409 through the Web
+package's problem details, where the exception would have been a 500.
 
 Anything else still throws. After a refused save the pending changes are discarded (and their events dropped), so
 the scope's next save doesn't send them again: read the data again to retry. The `SQLSTATE` is read from the BCL's
@@ -307,7 +320,7 @@ services.AddDbContext<AppDbContext>(options => options
 
 services.AddOutboxProcessing<AppDbContext>(
     outboxSerializer,
-    options => options.MaxRetryCount = 3);
+    options => options.Retries = options.Retries with { MaxAttempts = 3 });
 
 // Quartz hosts the registered job.
 services.AddQuartz();
@@ -331,7 +344,7 @@ services.AddDbContext<AppDbContext>((provider, options) => options
 The constructors are unchanged, so `new` still works. On PostgreSQL `AddPostgresDbContext` does all of this.
 
 Under a retrying execution strategy (`EnableRetryOnFailure`), an insert strategy that writes the messages itself
-(`PostgresOnConflictOutboxInsertStrategy`) needs a transaction around the save, which the strategy allows only inside
+(`PostgresOnConflictOutboxInsertStrategy`, in the Postgres package) needs a transaction around the save, which the strategy allows only inside
 its own execution: save through `IUnitOfWork` (`CompleteAsync` and `ExecuteInTransactionAsync` run under it), or run
 the save with `context.Database.CreateExecutionStrategy().ExecuteAsync(...)`. A `DbContext.SaveChangesAsync()` of
 domain events called directly throws an `InvalidOperationException` that says so, before anything is written.
@@ -344,21 +357,67 @@ Each message is then handled in its **own DI scope and transaction** (via
 message processed commit together, so the message is only marked done if everything
 its handlers persisted commits as well. Because every message gets a fresh scope, the
 job never shares (or clears) a `DbContext` change tracker with other work. A handler
-that throws does not abort the batch — the failure is written to the `Error` column
-and `RetryCount` is incremented (in a lane, `NextAttemptOnUtc` is set to when its next try is due, which every instance
-waits out). When its last try (`MaxRetryCount`, or its lane's) fails, the message **gives up**:
+that throws does not abort the batch — the failure is written to the `Error` column,
+`RetryCount` is incremented and `NextAttemptOnUtc` is set to when its next try is due, which every instance waits out.
+When its last try fails (`Retries`' attempts, or `TransientRetries`' for a transient failure, see below; or its
+lane's), the message **gives up**:
 its `ProcessedOnUtc` is set to `OutboxMessage.GivenUpProcessedOnUtc` (9999-12-31) and `Error` starts with
 `Gave up at <time> after <n> tries.`. That takes it out of the unprocessed rows (and their index), so the polls no
 longer read past it, and the cleanup keeps it for inspection. To see and try again the messages that gave up,
-`OutboxAdministration<TDbContext>` (scoped, registered with the outbox) lists them and retries one or all; the
-**Resrcify.SharedKernel.UnitOfWork.Web** package maps it to admin endpoints (`app.MapOutboxAdministration<AppDbContext>()`).
+`IOutboxAdministration<TDbContext>` (Abstractions; `OutboxAdministration<TDbContext>`, scoped, registered with the
+outbox) lists them, retries or deletes one or all; the **Resrcify.SharedKernel.Web** package maps it to admin
+endpoints (`app.MapOutboxAdministration<AppDbContext>()`).
 By hand: `UPDATE "OutboxMessages" SET "ProcessedOnUtc" = NULL, "RetryCount" = 0 WHERE "Id" = '<id>'`.
 
 A run **drains a backlog**: while a batch comes back full it reads the next one, so 70 waiting messages with a batch
 of 20 are handled in one run (four reads) instead of four runs. It stops starting batches after 80% of the trigger's
-interval (`ProcessIntervalInSeconds`; a batch already started finishes), so a run ends before the next trigger is due.
-A quiet outbox costs one query per run, as before. A message that fails in a run is not read again in that run: it
-keeps its retry pace and waits for the next run.
+interval (`ProcessInterval`; a batch already started finishes), so a run ends before the next trigger is due.
+A quiet outbox costs one query per run, as before. A message that fails in a run is not read again in that run.
+
+**Retries back off**, in the job as in the lanes, by a `RetrySchedule` (Abstractions): a failed message waits
+`Retries.FirstDelay` (5 s) before its next try, then twice as long each time (10 s, 20 s, …), up to `Retries.MaxDelay`
+(5 min), so a handler failing through an outage of a
+few minutes (a downstream service down) doesn't spend its tries in the first minute of it. The job
+reads only the messages that are due (`NextAttemptOnUtc` passed or empty); the wait is a minimum, the try comes with
+the first run (or wake-up) after it. That filter is a residual one on the unprocessed rows the partial index
+(`IX_OutboxMessages_Unprocessed`, `ProcessedOnUtc IS NULL`) narrows the read to, as the lanes' read: no migration.
+Set them with `AddOutboxProcessing<AppDbContext>(outbox => outbox.Retries = new RetrySchedule(3,
+TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(5)))` (or `AddProcessOutboxMessagesJob`'s `retries`); a `FirstDelay` of
+`TimeSpan.Zero` tries again at the next run, as before 4.3.0. Every count is attempts, the first one included.
+
+**A transient failure gets more tries** than any other, in the job as in the lanes: `TransientRetries` (12 attempts,
+about 30 minutes of an outage with the default delays, or `Retries`' attempts when that is higher) against
+`Retries` (3 attempts, which the backoff alone spends in about a minute: 5 s and 10 s are shorter than a 20 s run
+interval). A failure is transient when another try may pass, as the container's `ITransientFailureClassifier`
+(Abstractions) tells: a `TransientFailureException` (Results; e.g. a handler's `result.ThrowIfTransient()`), a
+cancellation or timeout, a transient database failure or a concurrency conflict, an HTTP request that got no answer or a
+408, 429 or 5xx, anywhere among the exception's causes, or what a registered `ITransientFailureRule` calls transient
+(the Web package's `AddResultResilience` adds one for its timeouts and open circuits; a service adds its own with
+`services.AddTransientFailureRule(...)`). Any other failure (a handler's bug, a 400)
+gives up at its `Retries.MaxAttempts`th try, and at once when transient retries took the message past it (a message that
+failed 5 times through an outage, then once on a bug, gives up on that 6th try). The jobs read, and the backlog monitor
+counts as waiting, every message under the higher limit. Left unset, `TransientRetries` is `Retries` with the higher of
+12 and its attempts, so a service that gave `Retries` more than 12 attempts gives a transient failure as many tries;
+set with fewer attempts than `Retries`, registration throws. Set them equal to give every failure the same tries, as
+before 4.3.0:
+
+```csharp
+services.AddOutboxProcessing<AppDbContext>(outbox => outbox.TransientRetries = outbox.Retries);
+services.AddOutboxLanes<AppDbContext>(lanes => lanes.TransientRetries = lanes.Retries);
+// Or, registering the job on the Quartz builder:
+var retries = new RetrySchedule(3, TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(5));
+quartz.AddProcessOutboxMessagesJob<AppDbContext>(retries: retries, transientRetries: retries);
+```
+
+**Failed tries are logged** (category `Resrcify.SharedKernel.UnitOfWork.Outbox`), by the job and the lanes alike: each
+failed try once, at `Warning` when another try may pass (the transient rule above) and at `Error` otherwise, as
+`Outbox message {MessageId} ({EventType}, {DbContext}) failed try {Attempt} of {MaxRetryCount}; the next try waits
+{RetryDelay}: {Error}`, where `{MaxRetryCount}` is the tries this failure gets (12 for a transient one, 3 for any other
+by default); the last one as the give-up, at `Error`: `... gave up after try {Attempt} ({FailureKind} failures get
+{MaxRetryCount} tries); it is kept as poison: {Error}`, `{FailureKind}` being `transient` or `non-transient`.
+The exception goes with the line, with its stack, unless something logged it already on
+its way out (Results' `LoggedExceptions`, e.g. the mediator's unit-of-work behavior around a command the handler sent):
+then the line names its type and message only.
 
 ### Waking the outbox
 
@@ -369,16 +428,17 @@ calls it when a save commits outbox messages, through a `NOTIFY`; anything else 
 `IOutboxSaveObserver` registered in the container is told whenever a save wrote outbox messages.
 
 In tests, `await wakeUp.DrainAsync()` wakes the outbox until no unprocessed message is due: every message saved so
-far, and every one its handlers saved in turn, was processed or gave up (a lane message waiting for a later try isn't
-waited for). It throws a `TimeoutException` when messages are still due after the timeout (30 s by default), e.g.
+far, and every one its handlers saved in turn, was processed or gave up (a message waiting for a later try, after a
+failed one, isn't waited for: advance the clock, or set `Retries = new RetrySchedule(3, TimeSpan.Zero, TimeSpan.Zero)`
+in the test host). It throws a `TimeoutException` when messages are still due after the timeout (30 s by default), e.g.
 when the host doesn't process the outbox.
 
 ### Cleaning up processed messages
 
 Processed messages are deleted after **7 days** by an hourly job (`CleanupOutboxMessagesJob`), in batches of 5,000,
 so the outbox table and its indexes don't grow forever. Messages not processed yet, and messages that gave up (their
-`ProcessedOnUtc` is 9999-12-31, never before the cutoff), are kept. `AddOutboxProcessing` (`OutboxOptions.ProcessedRetentionInDays`) and
-`AddProcessOutboxMessagesJob` (`processedRetentionInDays`) add it; 0 turns it off.
+`ProcessedOnUtc` is 9999-12-31, never before the cutoff), are kept. `AddOutboxProcessing` (`OutboxOptions.ProcessedRetention`, a `TimeSpan`) and
+`AddProcessOutboxMessagesJob` (`processedRetention`) add it; `TimeSpan.Zero` turns it off.
 
 ### Outbox lanes
 
@@ -398,7 +458,8 @@ every message behind it. An **outbox lane** moves those event types out of the r
   polls every `PollInterval`, and at once when one of its messages finishes (so the freed slot takes the next) or the
   outbox is woken (`OutboxWakeUp`). A message another instance holds is looked at again at the next poll.
 - **Processing is the same as the regular job:** own scope and transaction, publish, mark processed, and
-  record the failure and retry up to `MaxRetryCount`.
+  record the failure (logged the same way) and retry by `Retries`, or `TransientRetries` for a transient failure (the
+  lane options of the same names: 3 and 12 attempts, 5 s doubling up to 5 min, by default). The options apply to every lane of the context.
 - **Tracing:** every processed message, by the regular job or a lane, gets a span on
   `OutboxDiagnostics.ActivitySourceName`; whatever its handlers do (database, HTTP, bus sends) runs inside it.
 
@@ -409,12 +470,12 @@ to a directly registered outbox job, with:
 services.AddOutboxLanes<AppDbContext>(lanes =>
 {
     lanes.MaxConcurrency = 8;
-    lanes.Claim = PostgresOutboxLaneClaim.Instance;   // safe with several service instances
+    lanes.Claim = PostgresOutboxLaneClaim.Instance;   // UnitOfWork.Postgres; safe with several instances (the default with WithOutbox())
 });
 ```
 
 A lane message holds a database connection and an open transaction while it is handled, so
-`MaxConcurrency` also bounds the connections a lane uses. On PostgreSQL, `PostgresOutboxLaneClaim` locks
+`MaxConcurrency` also bounds the connections a lane uses. On PostgreSQL, `PostgresOutboxLaneClaim` (UnitOfWork.Postgres) locks
 the message row (`FOR UPDATE SKIP LOCKED`) for that transaction, so another instance skips it instead
 of processing it twice.
 
@@ -451,10 +512,10 @@ services.AddQuartz(quartz => quartz
     .AddIntervalCommandJob<RequestShardMemberRankSyncCommand>(TimeSpan.FromMinutes(1)));
 ```
 
-`AddIntervalJob<TJob>(interval, startAfter = 30 s, timeProvider = DI's)` registers the job under its type name
+`AddIntervalJob<TJob>(interval, startAfter = 30 s)` registers the job under its type name
 (`IntervalJobSetup.JobKeyFor<TJob>()`; a generic job's type arguments follow a dash, as in
 `ProcessOutboxMessagesJob-ShardDbContext`) with a trigger repeating every `interval`, first `startAfter` after the
-scheduler is built. Runs never overlap (the job is registered as `DisallowConcurrentExecution`; mark the class too,
+scheduler is built, on the container's `TimeProvider`. Runs never overlap (the job is registered as `DisallowConcurrentExecution`; mark the class too,
 so it says so where it is written). It replaces a `*JobSetup` class per job.
 
 ### Cron jobs
@@ -467,7 +528,7 @@ services.AddQuartz(quartz => quartz
     .AddCronJob<SendDailyDigestJob>("0 0 8 * * ?", TimeZoneInfo.FindSystemTimeZoneById("Europe/Stockholm")));
 ```
 
-`AddCronJob<TJob>(cronExpression, timeZone = UTC, timeProvider = DI's)` is the cron counterpart of `AddIntervalJob`:
+`AddCronJob<TJob>(cronExpression, timeZone = UTC)` is the cron counterpart of `AddIntervalJob`:
 the same key (`IntervalJobSetup.JobKeyFor<TJob>()`), runs that never overlap, and a trigger starting when the
 scheduler is built (read from the registered `TimeProvider`), first firing at the expression's next time. The
 expression is a Quartz one (seconds first: `"0 0/15 * * * ?"`), read in UTC unless a zone is given (so a schedule
@@ -485,8 +546,7 @@ sends a `new TCommand()`); a job that builds its command derives from `CommandJo
 
 A command without a parameterless constructor (a record whose parameters are all optional, so `new()` can't make it), or
 one built from services, takes the overloads with a `createCommand` factory: `AddIntervalCommandJob<TCommand>(interval,
-createCommand, startAfter, timeProvider)`, `AddCronCommandJob<TCommand>(cronExpression, createCommand, timeZone,
-timeProvider)`, and their `<TCommand, TResponse>` forms. The factory, a `Func<IServiceProvider, TCommand>`, is called on
+createCommand, startAfter)`, `AddCronCommandJob<TCommand>(cronExpression, createCommand, timeZone)`, and their `<TCommand, TResponse>` forms. The factory, a `Func<IServiceProvider, TCommand>`, is called on
 every run with that run's DI scope (Quartz builds the job in a scope of its own per run), so it can read a
 `TimeProvider` or a scoped service. The job's key is the one the `new()` overload gives (`SendCommandJob-<command>`), so
 moving to the factory doesn't rename the job. A command type has one factory: registering a second one, with either
@@ -538,7 +598,7 @@ services.AddQuartz(quartz => quartz.AddIntervalJob<AddPlayersJob>(TimeSpan.FromM
 
 ```csharp
 services.AddQuartz(quartz => quartz.AddJobHeartbeats());
-services.AddHealthChecks().AddQuartzJobs(tags: ["live"]);   // HealthTags.Live in the Web package
+services.AddHealthChecks().AddQuartzJobs();   // tagged HealthTags.Live (Abstractions) unless given tags
 ```
 
 `AddJobHeartbeats()` stamps a heartbeat (`JobHeartbeatRegistry`) whenever any job fires or finishes: one listener, no
@@ -564,11 +624,10 @@ services.AddHealthChecks().AddQuartzJobs(
     jobs => jobs
         .Exclude<ImportArchiveJob>()                       // by type (the key AddIntervalJob / AddCronJob give it)
         .Exclude(new JobKey("nightly-report"))             // by key
-        .Exclude(job => job.Group == "reports"),           // by predicate
-    tags: [HealthTags.Live]);
+        .Exclude(job => job.Group == "reports"));          // by predicate
 
 // A service whose only jobs are the outbox's, and would rather restart than alert:
-services.AddHealthChecks().AddQuartzJobs(jobs => jobs.WatchOutboxJobs = true, tags: [HealthTags.Live]);
+services.AddHealthChecks().AddQuartzJobs(jobs => jobs.WatchOutboxJobs = true);
 ```
 
 `jobs.MaxSilence` sets the window, as `maxSilence` does. Exclude a job rather than give it an endless window
@@ -580,7 +639,7 @@ Add the meter and the health check; the dashboard and alerts are in `Resrcify.Ku
 
 ```csharp
 builder.Services.AddOpenTelemetry().WithMetrics(metrics => metrics.AddMeter(OutboxDiagnostics.MeterName));
-builder.Services.AddHealthChecks().AddOutbox<ShardDbContext>(tags: ["ready"]);
+builder.Services.AddHealthChecks().AddOutbox<ShardDbContext>();   // tagged HealthTags.Ready unless given tags
 ```
 
 | Metric | Type | Tags | What |
@@ -592,7 +651,7 @@ builder.Services.AddHealthChecks().AddOutbox<ShardDbContext>(tags: ["ready"]);
 | `outbox.messages.poison` | gauge | `context` | Messages that gave up. |
 | `outbox.oldest_waiting.age` | gauge (s) | `context` | How long the oldest waiting message has waited. |
 
-The gauges come from a backlog monitor that measures every 30 s (`BacklogCheckIntervalInSeconds`), so neither a
+The gauges come from a backlog monitor that measures every 30 s (`BacklogCheckInterval`), so neither a
 scrape nor a health check queries the database. Both outbox registrations run it: `AddOutboxProcessing<TDbContext>`
 and the bare `quartz.AddProcessOutboxMessagesJob<TDbContext>()` (every 30 s; `AddOutboxProcessing` sets its own
 interval). Registering `AddOutbox<TDbContext>` with neither fails the host's start, with a message naming the missing
@@ -603,18 +662,20 @@ backlog can't be measured. Messages that gave up don't fail it; the `OutboxMessa
 ### Time
 
 Every timestamp and delay the outbox reads (`OccurredOnUtc`, `ProcessedOnUtc`, `CreatedOnUtc`, `DeletedOnUtc`, the
-cleanup cutoff, the lanes' retry delays and polling) comes from `TimeProvider`: the one registered in DI (the system
-clock by default), or the one passed to an interceptor's constructor. In tests, register a `FakeTimeProvider`
-(Microsoft.Extensions.TimeProvider.Testing) and pass it to the interceptors you create (or let the container build
-them: `AddEntityInterceptors` / `AddOutboxInterceptor`, see [Interceptors from the container](#interceptors-from-the-container)),
-then move time with `Advance`:
+cleanup cutoff, the lanes' retry delays and polling, the jobs' first runs) comes from the `TimeProvider` registered in
+DI, and only from it. Every registration (`AddOutboxProcessing`, `AddProcessOutboxMessagesJob`, `AddOutboxLanes`, the
+interval and cron jobs, the heartbeats, the interceptors, the migrations) registers the system clock with
+`TryAddSingleton`, so a service needs no registration of its own, and one registered before or after them wins: a
+`FakeTimeProvider` added in `ConfigureTestServices` drives the jobs' schedule too. The interceptors take the clock as a
+required constructor argument: let the container build them (`AddEntityInterceptors` / `AddOutboxInterceptor`, see
+[Interceptors from the container](#interceptors-from-the-container)), or hand one made with `new` the container's. In
+tests, register a `FakeTimeProvider` (Microsoft.Extensions.TimeProvider.Testing), then move time with `Advance`:
 
 ```csharp
 var clock = new FakeTimeProvider(new DateTimeOffset(2026, 10, 5, 12, 0, 0, TimeSpan.Zero));
-services.AddSingleton<TimeProvider>(clock);
-services.AddDbContext<AppDbContext>(o => o.AddInterceptors(
-    new InsertOutboxMessagesInterceptor(serializer, timeProvider: clock),
-    new UpdateAuditableEntitiesInterceptor(clock)));
+services.AddSingleton<TimeProvider>(clock);   // before or after the SharedKernel registrations
+services.AddEntityInterceptors().AddOutboxInterceptor();
+services.AddDbContext<AppDbContext>((provider, o) => o.AddSaveChangesInterceptors(provider));
 
 clock.Advance(TimeSpan.FromDays(8));   // e.g. past the 7-day cleanup
 ```

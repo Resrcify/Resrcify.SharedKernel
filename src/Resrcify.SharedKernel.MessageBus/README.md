@@ -252,8 +252,8 @@ gets each item as one:
 |---|---|
 | Returns a value | The item is in `Results`; `replies[key]` is a success. |
 | Returns a failure that is the request's fault (`NotFound`, `Validation`, `Conflict`, `Unauthorized`, `Forbidden`) | Answered at once: the item is in `Failures` with the **same errors** (code, message and `ErrorType`), sent back over the bus. |
-| Returns any other failure (`Failure`, `ExternalFailure`, `Timeout`, `RateLimit`) | Another try may pass: the request goes back to its queue (any instance may take it, through the rate limiter again), up to 5 tries, 0.5, 1, 2 and 4 s apart. If it still fails, the item is in `Failures` with the last try's errors. |
-| Throws | Like any other failure, as `<TRequest>.ResponderFailed` (`ErrorType.Failure`). Exceptions are for bugs: return a failure instead. |
+| Returns any other failure (`Failure`, `ExternalFailure`, `Timeout`, `RateLimit`) | Another try may pass: the request goes back to its queue (any instance may take it, through the rate limiter again), up to 5 tries, 0.5, 1, 2 and 4 s apart (`queue.Retries`, a `RetrySchedule`). If it still fails, the item is in `Failures` with the last try's errors. |
+| Throws | Like any other failure, as `<TRequest>.ResponderFailed` (`ErrorType.Failure`), or, for a `TransientFailureException` (`ThrowIfTransient()`), with its errors. Logged at `Error`, at `Warning` when transient. Exceptions are for bugs: return a failure instead. |
 | Never answers | The item is in `UnansweredKeys`; `replies[key]` is `ScatterGather.Unanswered` (`ErrorType.Timeout`). |
 
 A failure is an answer: it settles the item without waiting for the timeout. Type its errors for what they mean:
@@ -370,7 +370,7 @@ services.AddMessageBus(bus => bus
 |---|---|
 | a success | is done |
 | a failure that is the event's fault (every error `NotFound`, `Validation`, `Conflict`, `Unauthorized` or `Forbidden`) | logs it and doesn't retry (`outcome=rejected`): another try would fail the same way |
-| any other failure (`Failure`, `ExternalFailure`, `Timeout`, `RateLimit`), or a concurrency conflict | tries the handler again in place (5 tries, 0.5, 1, 2 and 4 s apart; more tries wait 4 s each), each try in a DI scope and a Rebus transaction of its own (what a failed try changed or published is dropped), then moves the event to the service's own `<input queue>.error` (`outcome=error`) |
+| any other failure (`Failure`, `ExternalFailure`, `Timeout`, `RateLimit`), or a concurrency conflict | tries the handler again in place (5 tries, 0.5, 1, 2 and 4 s apart, more tries waiting 4 s each: `bus.WithEventRetries(new RetrySchedule(...))` changes it), each try in a DI scope and a Rebus transaction of its own (what a failed try changed or published is dropped), then moves the event to the service's own `<input queue>.error` (`outcome=error`) |
 
 An exception is a bug, not an answer, but it's caught and handled like the last row; only a shutdown leaves the event
 for the next instance. A retry starts at the handler that failed, so the ones before it don't run twice. The number of
@@ -527,8 +527,21 @@ disposed when it stops.
 ## Health check
 
 ```csharp
-services.AddHealthChecks().AddMessageBus(tags: ["ready"]);
+services.AddHealthChecks().AddMessageBus();   // tagged HealthTags.Ready (Abstractions) unless given tags
 ```
+
+It watches the bus' own connection to RabbitMQ, so it **replaces a RabbitMQ check of the service's**: delete
+`AddRabbitMQ(...)` (and the `AspNetCore.HealthChecks.Rabbitmq` package), and the `IConnection` built by hand for it
+(`services.AddSingleton<IConnection>(sp => factory.CreateConnectionAsync(...))`). Before (Sentinel, Shard, SwgohApi):
+
+```csharp
+services.AddSingleton<IConnection>(sp => new ConnectionFactory { ... }.CreateConnectionAsync("health").GetAwaiter().GetResult());
+services.AddHealthChecks()
+    .AddRabbitMQ(name: "rabbitmq", tags: ["ready"])
+    .AddMessageBus(tags: ["ready"]);
+```
+
+After: `services.AddHealthChecks().AddMessageBus();`
 
 (The queues' own gate is separate: every queue on a health-check tag shares one check of it, every
 `HealthCheckInterval` (the shortest any of them asks for) and early after a failed request, so an upstream's check

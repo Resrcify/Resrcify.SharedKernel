@@ -16,6 +16,7 @@ using Rebus.Pipeline.Receive;
 using Rebus.Retry;
 using Rebus.Retry.Simple;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.MessageBus.Abstractions;
 using Resrcify.SharedKernel.MessageBus.Broker;
 using Resrcify.SharedKernel.Results.Diagnostics;
@@ -38,7 +39,10 @@ namespace Resrcify.SharedKernel.MessageBus.RateLimitedQueues;
 /// Failures are answered or tried again without exceptions: a failure that is the request's fault
 /// (<see cref="RateLimitedQueueOptions.AnswerFailure"/>) is answered at once; any other (or a responder that threw) is
 /// sent back to the queue for another try, through the rate limiter, on whichever instance takes it, and answered with
-/// its errors after the last try. A message the bus itself can't handle (unreadable) is dropped
+/// its errors after the last try: a responder's exception holding a <see cref="TransientFailureException"/> with that
+/// exception's errors, any other with a <c>&lt;TRequest&gt;.ResponderFailed</c> failure. A responder's exception is logged
+/// at <c>Warning</c> when it is transient (the container's <see cref="ITransientFailureClassifier"/>, else
+/// <see cref="TransientFailures"/>), at <c>Error</c> otherwise. A message the bus itself can't handle (unreadable) is dropped
 /// (<see cref="DropFailedRequestErrorHandler"/>).
 /// <para>
 /// The handler's cancellation token fires when the queue stops consuming (the request goes back to the queue, for
@@ -47,7 +51,7 @@ namespace Resrcify.SharedKernel.MessageBus.RateLimitedQueues;
 /// </para>
 /// <para>
 /// A bus that fails to start (RabbitMQ unreachable while the health gate says healthy) is logged and tried again,
-/// 5 s doubling to 1 min; the queue isn't consuming meanwhile, and its host keeps running. A responder (or a handler
+/// 5 s doubling to 1 min (<see cref="StartRetries"/>); the queue isn't consuming meanwhile, and its host keeps running. A responder (or a handler
 /// behind it) may take anything that needs <c>IBus</c>, e.g. <c>IEventBus</c>: it gets this queue's bus.
 /// </para>
 /// </remarks>
@@ -62,9 +66,12 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
     where TRequest : class
     where TResponse : class
 {
-    private static TimeSpan FirstStartRetryDelay => TimeSpan.FromSeconds(5);
-
-    private static TimeSpan MaxStartRetryDelay => TimeSpan.FromMinutes(1);
+    /// <summary>A bus that fails to start is tried again for as long as the host runs: 5 s, doubling up to 1 min.</summary>
+    internal static RetrySchedule StartRetries
+        => new(
+            int.MaxValue,
+            TimeSpan.FromSeconds(5),
+            TimeSpan.FromMinutes(1));
 
     private BuiltinHandlerActivator? _activator;
     private RateLimiter? _limiter;
@@ -72,8 +79,8 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
     private HealthGate? _healthGate;
     private TaskCompletionSource _wake = NewSignal();
     private int _restartRequested;
-    private int _tries = 5;
-    private TimeSpan _startRetryDelay = FirstStartRetryDelay;
+    private RetrySchedule _retries = options.Retries ?? MessageBusSettings.DefaultInPlaceRetries;
+    private int _failedStarts;
     private DateTimeOffset? _startRetryAt;
 
     /// <summary>Whether this instance is currently consuming. For tests and diagnostics.</summary>
@@ -102,7 +109,7 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
             if (_healthGate is not null)
                 await _healthGate.FirstCheck.WaitAsync(stoppingToken);
             var stopped = Task.Delay(Timeout.Infinite, stoppingToken);
-            var time = serviceProvider.GetService<TimeProvider>() ?? TimeProvider.System;
+            var time = serviceProvider.GetRequiredService<TimeProvider>();
             while (!stoppingToken.IsCancellationRequested)
             {
                 // Take the signals before acting, so a check or a restart request meanwhile wakes the next round.
@@ -152,21 +159,19 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
         {
             StartBus();
             _startRetryAt = null;
-            _startRetryDelay = FirstStartRetryDelay;
+            _failedStarts = 0;
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            LogStartFailed(exception, queueName, _startRetryDelay.TotalSeconds);
-            _startRetryAt = time.GetUtcNow() + _startRetryDelay;
-            _startRetryDelay = Max(Min(_startRetryDelay * 2, MaxStartRetryDelay), FirstStartRetryDelay);
+            _failedStarts = Math.Min(_failedStarts + 1, int.MaxValue - 1);
+            var delay = StartRetries.DelayAfter(_failedStarts);
+            LogStartFailed(exception, queueName, delay.TotalSeconds);
+            _startRetryAt = time.GetUtcNow() + delay;
         }
     }
 
     private static TimeSpan Max(TimeSpan first, TimeSpan second)
         => first > second ? first : second;
-
-    private static TimeSpan Min(TimeSpan first, TimeSpan second)
-        => first < second ? first : second;
 
     private void OnBrokerRecovered()
     {
@@ -224,7 +229,7 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
         CancellationToken consuming)
     {
         var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
-        var time = serviceProvider.GetService<TimeProvider>() ?? TimeProvider.System;
+        var time = serviceProvider.GetRequiredService<TimeProvider>();
         var rateLimitStep = new RateLimitStep(limiter, queueName, time, consuming);
         Configure.With(activator)
             .Logging(logging => logging.Use(new RebusLoggerFactory(loggerFactory)))
@@ -239,11 +244,13 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
             {
                 configure.SetNumberOfWorkers(1);
                 configure.SetMaxParallelism(prefetch);
-                // A failed request is tried again (sent back to the queue) as often as the strategy would deliver it.
+                // A failed request is tried again (sent back to the queue) as often as the strategy would deliver it,
+                // unless the queue's options say how often.
                 configure.Decorate(context =>
                 {
                     var retry = context.Get<RetryStrategySettings>();
-                    Volatile.Write(ref _tries, Math.Max(1, retry.MaxDeliveryAttempts));
+                    if (options.Retries is null)
+                        Volatile.Write(ref _retries, _retries with { MaxAttempts = Math.Max(1, retry.MaxDeliveryAttempts) });
                     return retry;
                 });
                 configure.Decorate<IPipeline>(context => new PipelineStepInjector(context.Get<IPipeline>())
@@ -275,7 +282,7 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
 
     private async Task HandleAsync(IBus bus, IMessageContext context, TRequest request, CancellationToken consuming)
     {
-        var time = serviceProvider.GetService<TimeProvider>() ?? TimeProvider.System;
+        var time = serviceProvider.GetRequiredService<TimeProvider>();
         var remaining = MessageDeadline.Remaining(context.Headers, time.GetUtcNow()) ?? Timeout.InfiniteTimeSpan;
         if (remaining != Timeout.InfiniteTimeSpan && remaining <= TimeSpan.Zero)
         {
@@ -298,9 +305,10 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
         var (response, failedUnexpectedly) = handled;
         var attempt = RequestTries.Read(context.Headers);
         var mayPassNextTime = response.IsFailure && (failedUnexpectedly || !options.AnswerFailure(response.Errors));
-        if (mayPassNextTime && attempt < Volatile.Read(ref _tries))
+        var retries = Volatile.Read(ref _retries);
+        if (mayPassNextTime && retries.HasAttemptAfter(attempt))
         {
-            await TryAgainAsync(bus, attempt, response.Errors, time, started, consuming, expiry.Token);
+            await TryAgainAsync(bus, attempt, retries.DelayAfter(attempt), response.Errors, time, started, consuming, expiry.Token);
             return;
         }
 
@@ -327,6 +335,7 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
     private async Task TryAgainAsync(
         IBus bus,
         int attempt,
+        TimeSpan delay,
         IReadOnlyList<Error> errors,
         TimeProvider time,
         long started,
@@ -337,7 +346,7 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
         LogTryingAgain(queueName, attempt, string.Join(", ", errors.Select(error => $"{error.Code} ({error.Type})")));
         try
         {
-            await Task.Delay(RetryDelay(attempt), time, expiry);
+            await Task.Delay(delay, time, expiry);
         }
         catch (OperationCanceledException) when (!consuming.IsCancellationRequested)
         {
@@ -348,10 +357,6 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
         await bus.Advanced.TransportMessage.Forward(queueName, RequestTries.Next(attempt));
         MessageBusDiagnostics.RecordRequest(queueName, RequestOutcome.Retried, time.GetElapsedTime(started));
     }
-
-    /// <summary>0.5 s before the second try, doubling: 0.5, 1, 2, 4 s.</summary>
-    internal static TimeSpan RetryDelay(int failedAttempt)
-        => TimeSpan.FromMilliseconds(500 * Math.Pow(2, failedAttempt - 1));
 
     /// <summary>
     /// The handler's result, and whether it threw (an exception becomes a failure, answered or tried again like any);
@@ -385,19 +390,30 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
         catch (Exception exception)
         {
             LogResponderFailedOnce(exception);
-            return (Result.Failure<TResponse>(Error.Failure(
-                $"{typeof(TRequest).Name}.ResponderFailed",
-                $"The responder failed ({exception.GetType().Name}); see its logs.")), true);
+            return (Result.Failure<TResponse>(ErrorsOf(exception)), true);
         }
     }
 
-    // At Error with the stack unless a mediator behavior behind the responder did so already; turned into a failure here,
-    // the exception's journey ends, so its mark is released.
+    // A transient failure's own errors (what the responder's call failed with), else a failure naming the exception.
+    private static Error[] ErrorsOf(Exception exception)
+        => TransientFailures.TryGetErrors(exception, out var errors)
+            ? [.. errors]
+            : [Error.Failure(
+                ErrorCodes.ScatterGather.ResponderFailed(typeof(TRequest).Name),
+                $"The responder failed ({exception.GetType().Name}); see its logs.")];
+
+    // At Error (Warning when transient) with the stack unless a mediator behavior behind the responder did so already;
+    // turned into a failure here, the exception's journey ends, so its mark is released.
     private void LogResponderFailedOnce(Exception exception)
     {
         if (LoggedExceptions.Claim(exception))
         {
-            LogResponderFailed(exception, queueName);
+            var transient = serviceProvider.GetService<ITransientFailureClassifier>()?.IsTransient(exception)
+                ?? TransientFailures.IsTransient(exception);
+            var level = transient
+                ? LogLevel.Warning
+                : LogLevel.Error;
+            LogResponderFailed(level, exception, queueName);
         }
         else if (logger.IsEnabled(LogLevel.Debug))
         {
@@ -411,8 +427,8 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
     [LoggerMessage(Level = LogLevel.Warning, Message = "A request on {Queue} failed (try {Attempt}: {Errors}); sending it back to the queue for another try")]
     private partial void LogTryingAgain(string queue, int attempt, string errors);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "The responder of {Queue} threw; the request is tried again, then answered with a failure")]
-    private partial void LogResponderFailed(Exception exception, string queue);
+    [LoggerMessage(Message = "The responder of {Queue} threw; the request is tried again, then answered with a failure")]
+    private partial void LogResponderFailed(LogLevel level, Exception exception, string queue);
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "The responder of {Queue} threw {ExceptionType} (logged already); the request is tried again, then answered with a failure")]
     private partial void LogResponderFailedLoggedAlready(string queue, string exceptionType);

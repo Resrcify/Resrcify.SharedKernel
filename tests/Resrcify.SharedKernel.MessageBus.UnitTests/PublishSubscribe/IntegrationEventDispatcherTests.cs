@@ -8,6 +8,8 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Rebus.Transport.InMem;
+using Resrcify.SharedKernel.MessageBus.Configuration;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.Abstractions.Caching;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
 using Resrcify.SharedKernel.Caching.Primitives;
@@ -17,6 +19,9 @@ using Resrcify.SharedKernel.MessageBus.UnitTests.Support;
 using Resrcify.SharedKernel.Results.Primitives;
 using Shouldly;
 using Xunit;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
+using Resrcify.SharedKernel.Results.Diagnostics;
 
 namespace Resrcify.SharedKernel.MessageBus.UnitTests.PublishSubscribe;
 
@@ -28,6 +33,7 @@ namespace Resrcify.SharedKernel.MessageBus.UnitTests.PublishSubscribe;
     "Performance",
     "CA1515:Consider making public types internal",
     Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
+[Collection(SharedMeterCollection.Name)]
 public sealed class IntegrationEventDispatcherTests
 {
     [Fact]
@@ -173,6 +179,31 @@ public sealed class IntegrationEventDispatcherTests
     }
 
     [Fact]
+    public async Task Handle_ShouldLogATriedAgainExceptionAtError_ButATransientOneAtWarning()
+    {
+        // Every exception is tried again; the classifier picks the line's level.
+        using var logs = new FakeLoggerProvider();
+        var (log, _, subscriber, publisher, _) = await StartScriptedAsync(logs);
+        using (subscriber)
+        using (publisher)
+        {
+            log.Throws.Enqueue(new InvalidOperationException("the handler's bug"));
+            log.Throws.Enqueue(new TransientFailureException([Error.ExternalFailure("SwgohApi.Unreachable", "Down.")]));
+
+            await publisher.Services.GetRequiredService<IEventBus>().PublishAsync(new ScriptedEvent("e1"));
+            await InMemoryServices.WaitUntilAsync(() => !log.Handled.IsEmpty);
+
+            log.Attempts.ShouldBe(3);
+            var retries = logs.Collector.GetSnapshot()
+                .Where(entry => entry.Message.Contains("trying it again in its place", StringComparison.Ordinal))
+                .ToList();
+            retries.Select(entry => entry.Level).ShouldBe([LogLevel.Error, LogLevel.Warning]);
+            retries[0].Exception.ShouldBeOfType<InvalidOperationException>();
+            retries[1].Message.ShouldContain("SwgohApi.Unreachable (ExternalFailure): Down.");
+        }
+    }
+
+    [Fact]
     public async Task Handle_ShouldNotRetry_WhenTheFailureIsTheEventsFault()
     {
         using var metrics = new MetricsCapture();
@@ -272,9 +303,32 @@ public sealed class IntegrationEventDispatcherTests
     [InlineData(4, 4000)]
     [InlineData(5, 4000)]
     [InlineData(13, 4000)]
-    public void RetryDelay_ShouldDoubleUpToFourSeconds_WhateverTheNumberOfTries(int failedAttempt, int milliseconds)
-        => Resrcify.SharedKernel.MessageBus.PublishSubscribe.IntegrationEventDispatcher<PayoutRotated>.RetryDelay(failedAttempt)
-            .ShouldBe(TimeSpan.FromMilliseconds(milliseconds));
+    [InlineData(int.MaxValue, 4000)]
+    public void InPlaceRetries_ShouldDoubleUpToFourSeconds_WhateverTheNumberOfTries(int failedAttempt, int milliseconds)
+        => MessageBusSettings.DefaultInPlaceRetries.DelayAfter(failedAttempt).ShouldBe(TimeSpan.FromMilliseconds(milliseconds));
+
+    [Fact]
+    public async Task Handle_ShouldTryAsWithEventRetriesSays_ThenMoveTheEventToTheErrorQueue()
+    {
+        var network = new InMemNetwork();
+        var log = new ScriptLog();
+        var queue = $"subscriber-{Guid.NewGuid():N}";
+        using var subscriber = await InMemoryServices.StartAsync(
+            network,
+            bus => bus
+                .WithInputQueue(queue)
+                .AddEventHandlers(typeof(IntegrationEventDispatcherTests).Assembly)
+                .WithEventRetries(new RetrySchedule(2, TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(10))),
+            services => services.AddSingleton(log));
+        using var publisher = await InMemoryServices.StartAsync(network, _ => { });
+        for (var i = 0; i < 5; i++)
+            log.Answers.Enqueue(Result.Failure(Error.Failure("Discord.Down", "Down.")));
+
+        await publisher.Services.GetRequiredService<IEventBus>().PublishAsync(new ScriptedEvent("e1"));
+        await InMemoryServices.WaitUntilAsync(() => network.GetCount($"{queue}.error") == 1);
+
+        log.Attempts.ShouldBe(2);
+    }
 
     private static async Task<(RetryLog Log, IHost Subscriber, IHost Publisher)> StartRetriedAsync()
     {
@@ -323,7 +377,8 @@ public sealed class IntegrationEventDispatcherTests
             => Task.FromResult(Enumerable.Empty<T?>());
     }
 
-    private static async Task<(ScriptLog Log, InMemNetwork Network, IHost Subscriber, IHost Publisher, string ErrorQueue)> StartScriptedAsync()
+    private static async Task<(ScriptLog Log, InMemNetwork Network, IHost Subscriber, IHost Publisher, string ErrorQueue)> StartScriptedAsync(
+        FakeLoggerProvider? logs = null)
     {
         var network = new InMemNetwork();
         var log = new ScriptLog();
@@ -331,7 +386,12 @@ public sealed class IntegrationEventDispatcherTests
         var subscriber = await InMemoryServices.StartAsync(
             network,
             bus => bus.WithInputQueue(queue).AddEventHandlers(typeof(IntegrationEventDispatcherTests).Assembly),
-            services => services.AddSingleton(log));
+            services =>
+            {
+                services.AddSingleton(log);
+                if (logs is not null)
+                    services.AddSingleton<ILoggerProvider>(logs);
+            });
         var publisher = await InMemoryServices.StartAsync(network, _ => { });
         return (log, network, subscriber, publisher, $"{queue}.error");
     }

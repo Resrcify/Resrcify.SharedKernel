@@ -21,7 +21,7 @@ public class CachingBenchmarks
     public async Task GlobalSetup()
     {
         var distributedCache = new InMemoryDistributedCache();
-        _cachingService = new DistributedCachingService(distributedCache);
+        _cachingService = new DistributedCachingService(distributedCache, TimeProvider.System);
 
         await _cachingService.SetSlidingAsync(
             "payload",

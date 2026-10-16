@@ -52,7 +52,7 @@ public sealed class OutboxDispatchTests
         collection.AddDbContext<TestDbContext>(options =>
             options
                 .UseNpgsql(connectionString)
-                .AddInterceptors(new InsertOutboxMessagesInterceptor(_serializer)));
+                .AddInterceptors(new InsertOutboxMessagesInterceptor(_serializer, TimeProvider.System)));
 
         // Read side: unit of work, serializer for the job, and the job itself.
         collection.AddOutboxProcessing<TestDbContext>(_serializer);
@@ -226,7 +226,8 @@ public sealed class OutboxDispatchTests
     private async Task RunOutboxJobAsync(int maxRetryCount = 3)
     {
         var job = new ProcessOutboxMessagesJob<TestDbContext>(
-            _services.GetRequiredService<IServiceScopeFactory>());
+            _services.GetRequiredService<IServiceScopeFactory>(),
+            _services.GetRequiredService<TimeProvider>());
 
         var jobContext = Substitute.For<IJobExecutionContext>();
         jobContext.MergedJobDataMap.Returns(new JobDataMap

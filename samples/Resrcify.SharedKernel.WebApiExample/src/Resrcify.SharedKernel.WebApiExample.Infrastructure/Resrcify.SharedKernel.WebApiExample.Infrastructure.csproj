@@ -4,17 +4,21 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Resrcify.SharedKernel.WebApiExample.Persistence\Resrcify.SharedKernel.WebApiExample.Persistence.csproj" />
-    <ProjectReference Include="..\Resrcify.SharedKernel.WebApiExample.Application\Resrcify.SharedKernel.WebApiExample.Application.csproj" />
-    <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.Caching\Resrcify.SharedKernel.Caching.csproj" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.3.0" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.13" />
-    <PackageReference Include="Microsoft.Extensions.Http.Polly" Version="10.0.13" />
+    <ProjectReference Include="..\Resrcify.SharedKernel.WebApiExample.Application\Resrcify.SharedKernel.WebApiExample.Application.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.Caching\Resrcify.SharedKernel.Caching.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.Observability\Resrcify.SharedKernel.Observability.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.UnitOfWork\Resrcify.SharedKernel.UnitOfWork.csproj" />
+    <ProjectReference Include="..\..\..\..\src\Resrcify.SharedKernel.Web\Resrcify.SharedKernel.Web.csproj" />
+  </ItemGroup>
+
+  <!-- OpenTelemetry, Serilog's hosting, HTTP resilience and Quartz come with the SharedKernel packages. The service
+       references the Prometheus exporter (a prerelease, so no package's dependency) and its Serilog sinks. -->
+  <ItemGroup>
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.19.1-beta.1" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
-    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
-    <PackageReference Include="Quartz" Version="4.5.0" />
   </ItemGroup>
 </Project>

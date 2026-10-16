@@ -30,14 +30,8 @@ namespace Resrcify.SharedKernel.Mediator.Configuration;
 internal static class BehaviorCheck
 {
     /// <summary>What to do when the behavior is registered after <c>AddMediator(cfg => ...)</c>.</summary>
-    internal const string ConfigurationRemedy =
+    internal const string Remedy =
         "If a behavior registered after AddMediator handles them, call cfg.SkipBehaviorCheck().";
-
-    /// <summary>What to do when the behavior is registered after <c>AddMediator(assemblies)</c>, which has no options.</summary>
-    internal const string AssembliesRemedy =
-        "If you register it yourself, do so before AddMediator(assemblies), or register the mediator with "
-        + "AddMediator(cfg => cfg.RegisterServicesFromAssemblies(...).AddStandardBehaviors()) (cfg.SkipBehaviorCheck() "
-        + "turns the check off there).";
 
     private static readonly (Type Interface, Type Behavior)[] Required =
     [
@@ -72,21 +66,18 @@ internal static class BehaviorCheck
     public static void Run(
         IServiceCollection services,
         IReadOnlyCollection<Assembly> assemblies,
-        IEnumerable<Type> configuredBehaviorTypes,
-        string remedy)
+        IEnumerable<Type> configuredBehaviorTypes)
         => RunFor(
             services,
             HandledRequests(assemblies),
-            configuredBehaviorTypes,
-            remedy);
+            configuredBehaviorTypes);
 
     /// <summary>Checks <paramref name="requests"/>, each with the kind of handler it has.</summary>
     /// <exception cref="InvalidOperationException">A request asks for a behavior that isn't registered.</exception>
     internal static void RunFor(
         IServiceCollection services,
         IReadOnlyCollection<(Type Request, PipelineKind Kind)> requests,
-        IEnumerable<Type> configuredBehaviorTypes,
-        string remedy = ConfigurationRemedy)
+        IEnumerable<Type> configuredBehaviorTypes)
     {
         if (requests.Count == 0)
             return;
@@ -109,7 +100,7 @@ internal static class BehaviorCheck
                 var handled = behaviors.Exists(registered => registered.Kind == kind
                     && Handles(registered.Type, requiredInterface));
                 if (asking.Count > 0 && !handled)
-                    throw new InvalidOperationException(Describe(requiredInterface, behavior, kind, asking, remedy));
+                    throw new InvalidOperationException(Describe(requiredInterface, behavior, kind, asking));
             }
         }
     }
@@ -145,8 +136,7 @@ internal static class BehaviorCheck
         Type requiredInterface,
         Type behavior,
         PipelineKind kind,
-        List<Type> asking,
-        string remedy)
+        List<Type> asking)
     {
         var examples = string.Join(", ", asking.Take(3).Select(type => type.Name));
         var more = asking.Count > 3 ? $" and {asking.Count - 3} more" : string.Empty;
@@ -156,10 +146,10 @@ internal static class BehaviorCheck
                 + "ValueTask handler (IValueTaskRequestHandler), but no ValueTask pipeline behavior "
                 + $"(IValueTaskPipelineBehavior) handles {requiredInterface.Name}, so they would run without it: "
                 + $"{behaviorName} and the other standard behaviors run only for Task handlers. Handle them with "
-                + $"IRequestHandler, or add a ValueTask behavior that handles {requiredInterface.Name}. {remedy}";
+                + $"IRequestHandler, or add a ValueTask behavior that handles {requiredInterface.Name}. {Remedy}";
 
         return $"{asking.Count} request type(s) implement {requiredInterface.Name} ({examples}{more}), but no registered "
             + $"pipeline behavior handles {requiredInterface.Name}, so they would run without it. Add {behaviorName} "
-            + $"(cfg.AddStandardBehaviors(), or cfg.AddOpenBehavior(typeof({behaviorName}<,>))). {remedy}";
+            + $"(cfg.AddStandardBehaviors(), or cfg.AddOpenBehavior(typeof({behaviorName}<,>))). {Remedy}";
     }
 }

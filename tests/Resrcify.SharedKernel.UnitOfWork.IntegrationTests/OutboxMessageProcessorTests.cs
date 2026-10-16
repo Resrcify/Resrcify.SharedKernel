@@ -18,6 +18,7 @@ using Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Fixtures;
 using Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Models;
 using Resrcify.SharedKernel.UnitOfWork.Interceptors;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
+using Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox;
 using Shouldly;
 using Xunit;
 
@@ -45,7 +46,7 @@ public sealed class OutboxMessageProcessorTests(PostgresFixture pg)
         services.AddMediator(cfg => cfg.RegisterServicesFromAssemblies(Assembly.GetExecutingAssembly()));
         services.AddDbContext<TestDbContext>(options => options
             .UseNpgsql(connectionString)
-            .AddInterceptors(new InsertOutboxMessagesInterceptor(Serializer)));
+            .AddInterceptors(new InsertOutboxMessagesInterceptor(Serializer, TimeProvider.System)));
         services.AddOutboxProcessing<TestDbContext>(Serializer);
         _services = services.BuildServiceProvider();
 
@@ -151,8 +152,7 @@ public sealed class OutboxMessageProcessorTests(PostgresFixture pg)
             _services.GetRequiredService<IServiceScopeFactory>(),
             new OutboxMessageToProcess(message.Id, message.Type, message.Content, message.RetryCount, message.OccurredOnUtc),
             PostgresOutboxLaneClaim.Instance,
-            maxRetryCount: 3,
-            retryDelay: TimeSpan.FromSeconds(5),
+            OutboxRetryLimits.Default,
             CancellationToken.None);
 
         outcome.ShouldBe(OutboxProcessOutcome.Failed);
@@ -196,9 +196,18 @@ public sealed class OutboxMessageProcessorTests(PostgresFixture pg)
 
     private async Task RunJobAsync(int maxRetryCount = 3)
     {
-        var job = new ProcessOutboxMessagesJob<TestDbContext>(_services.GetRequiredService<IServiceScopeFactory>());
+        var job = new ProcessOutboxMessagesJob<TestDbContext>(
+            _services.GetRequiredService<IServiceScopeFactory>(),
+            _services.GetRequiredService<TimeProvider>());
         var context = Substitute.For<IJobExecutionContext>();
-        context.MergedJobDataMap.Returns(new JobDataMap { { "ProcessBatchSize", 10 }, { "ProcessMaxRetryCount", maxRetryCount } });
+        // No wait between tries: the job and the processor read the same fake clock, which these tests don't move.
+        context.MergedJobDataMap.Returns(new JobDataMap
+        {
+            { "ProcessBatchSize", 10 },
+            { "ProcessMaxRetryCount", maxRetryCount },
+            { "ProcessRetryDelayInMilliseconds", 0L },
+            { "ProcessMaxRetryDelayInMilliseconds", 0L },
+        });
         await job.Execute(context);
     }
 

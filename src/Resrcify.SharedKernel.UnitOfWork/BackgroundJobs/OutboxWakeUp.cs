@@ -45,15 +45,14 @@ public sealed partial class OutboxWakeUp<TDbContext>(
 
     /// <summary>
     /// For tests: wakes the outbox until no unprocessed message is due. Returns once every message saved so far, and
-    /// every one their handlers saved in turn, was processed or gave up, or waits for a later try (a lane message's
-    /// <see cref="OutboxMessage.NextAttemptOnUtc"/>; advance the clock for those). The processing job's retries run at
-    /// once, since each wake-up runs it. Throws a <see cref="TimeoutException"/> when messages are still due after
+    /// every one their handlers saved in turn, was processed or gave up, or waits for a later try after a failed one
+    /// (its <see cref="OutboxMessage.NextAttemptOnUtc"/>; advance the clock for those, or set the retry delay to zero). Throws a <see cref="TimeoutException"/> when messages are still due after
     /// <paramref name="timeout"/> (real time), e.g. when nothing in this host processes the outbox.
     /// </summary>
     public async Task DrainAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
     {
         var limit = timeout ?? DefaultDrainTimeout;
-        var time = provider.GetService<TimeProvider>() ?? TimeProvider.System;
+        var time = provider.GetRequiredService<TimeProvider>();
         var started = TimeProvider.System.GetTimestamp();
         while (true)
         {

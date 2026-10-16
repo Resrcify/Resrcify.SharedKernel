@@ -14,9 +14,12 @@ using Resrcify.SharedKernel.UnitOfWork.Outbox;
 namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 
 /// <summary>How the backlog of <typeparamref name="TDbContext"/>'s outbox is measured.</summary>
-/// <param name="MaxRetryCount">The tries a regular message gets; a lane message gets its lane's.</param>
+/// <param name="RetryLimit">
+/// The most tries a regular message gets (<see cref="OutboxRetryLimits.ReadLimit"/>, the higher of
+/// <c>Retries</c>' and <c>TransientRetries</c>' attempts): one under it still waits. A lane message gets its lane's.
+/// </param>
 /// <param name="Interval">How often the backlog is measured.</param>
-internal sealed record OutboxBacklogSettings<TDbContext>(int MaxRetryCount, TimeSpan Interval)
+internal sealed record OutboxBacklogSettings<TDbContext>(int RetryLimit, TimeSpan Interval)
     where TDbContext : DbContext
 {
     /// <summary>The DbContext these settings belong to (the type parameter keys them in DI).</summary>
@@ -32,11 +35,11 @@ internal sealed partial class OutboxBacklogMonitor<TDbContext>(
     IServiceScopeFactory scopeFactory,
     OutboxBacklogSettings<TDbContext> settings,
     ILogger<OutboxBacklogMonitor<TDbContext>> logger,
-    TimeProvider? timeProvider = null)
+    TimeProvider timeProvider)
     : BackgroundService
     where TDbContext : DbContext
 {
-    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
+    private readonly TimeProvider _time = timeProvider;
     private OutboxBacklog? _latest;
     private StrongBox<DateTimeOffset>? _startedAt;
 
@@ -98,8 +101,9 @@ internal sealed partial class OutboxBacklogMonitor<TDbContext>(
         await using var scope = scopeFactory.CreateAsyncScope();
         var provider = scope.ServiceProvider;
         var laneTypes = provider.GetService<OutboxLaneRegistry>()?.LaneEventTypes ?? [];
-        var laneMaxRetryCount = provider.GetService<OutboxLaneSettings<TDbContext>>()?.Options.MaxRetryCount
-            ?? settings.MaxRetryCount;
+        // The higher of a lane's two limits: a message retrying transiently past MaxRetryCount still waits.
+        var laneRetryLimit = provider.GetService<OutboxLaneSettings<TDbContext>>()?.RetryLimits.ReadLimit
+            ?? settings.RetryLimit;
 
         var dbContext = provider.GetRequiredService<TDbContext>();
         // One snapshot for the four counts: read one after another without it, a message saved or processed between two
@@ -111,7 +115,7 @@ internal sealed partial class OutboxBacklogMonitor<TDbContext>(
                 async token =>
                 {
                     await using var snapshot = await dbContext.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, token);
-                    var backlog = await CountAsync(dbContext, laneTypes, laneMaxRetryCount, token);
+                    var backlog = await CountAsync(dbContext, laneTypes, laneRetryLimit, token);
                     await snapshot.CommitAsync(token);
                     return backlog;
                 },
@@ -121,18 +125,18 @@ internal sealed partial class OutboxBacklogMonitor<TDbContext>(
     private async Task<OutboxBacklog> CountAsync(
         TDbContext dbContext,
         IReadOnlyList<string> laneTypes,
-        int laneMaxRetryCount,
+        int laneRetryLimit,
         CancellationToken cancellationToken)
     {
-        var maxRetryCount = settings.MaxRetryCount;
+        var retryLimit = settings.RetryLimit;
         var messages = dbContext
             .Set<OutboxMessage>()
             .AsNoTracking();
         var unprocessed = messages.Where(m => m.ProcessedOnUtc == null);
         // A lane's message is tried as often as its lane allows, any other as often as the regular job does.
         var waiting = unprocessed.Where(m => laneTypes.Contains(m.Type)
-            ? m.RetryCount < laneMaxRetryCount
-            : m.RetryCount < maxRetryCount);
+            ? m.RetryCount < laneRetryLimit
+            : m.RetryCount < retryLimit);
         // Marked when its last try failed (an equality seek on the processed index).
         var givenUp = messages.Where(m => m.ProcessedOnUtc == OutboxMessage.GivenUpProcessedOnUtc);
 

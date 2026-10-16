@@ -61,7 +61,7 @@ public sealed class DependencyServiceHostFixture
     public sealed class DependencyPostgres
         : PostgresContainerFixture
     {
-        protected override PostgreSqlBuilder Configure(PostgreSqlBuilder builder)
-            => builder.WithDatabase(DependencyDatabase);
+        public DependencyPostgres()
+            => Database = DependencyDatabase;
     }
 }

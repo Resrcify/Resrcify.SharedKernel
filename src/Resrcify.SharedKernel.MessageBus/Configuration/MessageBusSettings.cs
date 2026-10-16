@@ -16,6 +16,7 @@ using Rebus.Serialization.Json;
 using Rebus.Time;
 using Rebus.Transport;
 using Rebus.Transport.InMem;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.MessageBus.Abstractions;
 using Resrcify.SharedKernel.MessageBus.Broker;
 using Resrcify.SharedKernel.MessageBus.PublishSubscribe;
@@ -140,10 +141,24 @@ internal sealed class MessageBusSettings
         => _subscriptions.Values.Any(options => options is IPublishOrderedSubscription { InPublishOrder: true });
 
     /// <summary>
-    /// How many times an event's handler is tried (in place) before the event goes to the error queue: the bus' retry
-    /// strategy's delivery attempts (5 unless a configuration strategy changes them), read when the bus starts.
+    /// How an event's handler is tried in place before the event goes to the error queue: 5 attempts, 0.5 s doubling up
+    /// to 4 s, by default. Unless <see cref="EventRetriesSet"/>, its attempts follow the bus' retry strategy's delivery
+    /// attempts (5 unless a configuration strategy changes them), read when the bus starts.
     /// </summary>
-    public int EventTries { get; set; } = 5;
+    public RetrySchedule EventRetries { get; set; } = DefaultInPlaceRetries;
+
+    /// <summary>Whether <c>WithEventRetries</c> set <see cref="EventRetries"/>, which the retry strategy then doesn't change.</summary>
+    public bool EventRetriesSet { get; set; }
+
+    /// <summary>
+    /// The bus' in-place schedule by default, for events and rate-limited queues: 5 attempts, 0.5 s before the second,
+    /// doubling up to 4 s. A message is held unacknowledged while it waits (a worker, a prefetch slot, its partition), and
+    /// RabbitMQ closes a channel that holds one past its consumer timeout, so the waits stay short.
+    /// </summary>
+    public static RetrySchedule DefaultInPlaceRetries { get; } = new(
+        5,
+        TimeSpan.FromMilliseconds(500),
+        TimeSpan.FromSeconds(4));
 
     /// <summary>How long the service remembers the integration events it handled, to skip duplicates; null: it doesn't.</summary>
     public TimeSpan? RememberHandledEventsFor { get; set; }
@@ -227,7 +242,7 @@ internal sealed class MessageBusSettings
         options.EnableDiagnosticSources();
         // Rebus' clock (a message's sent time, its expiry) is the container's, as every other clock here: with a
         // FakeTimeProvider a request's deadline is measured on one clock, not the sender's real one against a fake now.
-        var time = provider.GetService<TimeProvider>() ?? TimeProvider.System;
+        var time = provider.GetRequiredService<TimeProvider>();
         options.Register<IRebusTime>(_ => new TimeProviderRebusTime(time));
         options.Decorate<IPipeline>(context => WithCompression(context.Get<IPipeline>()));
         foreach (var instrumentation in provider.GetServices<IBusInstrumentation>())

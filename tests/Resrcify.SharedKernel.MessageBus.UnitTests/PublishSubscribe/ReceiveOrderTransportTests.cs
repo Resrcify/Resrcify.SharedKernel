@@ -23,7 +23,7 @@ public sealed class ReceiveOrderTransportTests
     public async Task Receive_ShouldNumberEveryMessageInTheOrderItWasDelivered_WhenManyReceivesWaitAtOnce()
     {
         var queue = new DeliveringTransport();
-        using var transport = new ReceiveOrderTransport(queue, new ReceiveOrder());
+        using var transport = new ReceiveOrderTransport(queue, new ReceiveOrder(TimeProvider.System));
 
         // As the bus' worker does with MaxParallelism 20: twenty receives waiting at once.
         var received = await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => Task.Run(() => ReceiveAsync(transport))));

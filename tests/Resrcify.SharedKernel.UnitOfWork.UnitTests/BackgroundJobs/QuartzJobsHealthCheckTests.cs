@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Quartz;
+using Resrcify.SharedKernel.Abstractions.Health;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
@@ -174,9 +175,8 @@ public sealed class QuartzJobsHealthCheckTests
     {
         // A broker outage stalling the outbox mustn't restart every replica: the outbox's own check alerts on it.
         await using var host = await BuildAsync(quartz => quartz.AddProcessOutboxMessagesJob<TestDbContext>(
-            processIntervalInSeconds: 20,
-            delayInSecondsBeforeStart: 0,
-            timeProvider: new FakeTimeProvider(Start)));
+            processInterval: TimeSpan.FromSeconds(20),
+            delayBeforeStart: TimeSpan.Zero));
 
         host.Clock.Advance(TimeSpan.FromHours(3));
         var result = await host.CheckAsync();
@@ -190,9 +190,8 @@ public sealed class QuartzJobsHealthCheckTests
     {
         await using var host = await BuildAsync(
             quartz => quartz.AddProcessOutboxMessagesJob<TestDbContext>(
-                processIntervalInSeconds: 20,
-                delayInSecondsBeforeStart: 0,
-                timeProvider: new FakeTimeProvider(Start)),
+                processInterval: TimeSpan.FromSeconds(20),
+                delayBeforeStart: TimeSpan.Zero),
             jobs: jobs => jobs.WatchOutboxJobs = true);
 
         host.Clock.Advance(TimeSpan.FromHours(3));
@@ -232,6 +231,19 @@ public sealed class QuartzJobsHealthCheckTests
 
         result.Status.ShouldBe(HealthStatus.Unhealthy);
         result.Data.Keys.ShouldBe([IntervalJobSetup.JobKeyFor<GenericJob<PingCommand>>().ToString()]);
+    }
+
+    [Fact]
+    public async Task AddQuartzJobs_ShouldBeALivenessCheck_WhenGivenNoTags()
+    {
+        var services = new ServiceCollection();
+        services.AddHealthChecks().AddQuartzJobs();
+        services.AddHealthChecks().AddQuartzJobs(jobs => jobs.WatchOutboxJobs = true, name: "all-jobs");
+        await using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations
+            .Select(registration => registration.Tags)
+            .ShouldAllBe(tags => tags.SequenceEqual(new[] { HealthTags.Live }));
     }
 
     [Fact]

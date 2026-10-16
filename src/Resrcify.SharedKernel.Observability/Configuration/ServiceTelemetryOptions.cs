@@ -49,6 +49,12 @@ public sealed class ServiceTelemetryOptions
     public bool QuartzInstrumentation { get; set; } = true;
 
     /// <summary>
+    /// Npgsql's activity source (<see cref="TelemetrySources.Npgsql"/>): a span per database command. Harmless in a
+    /// service without PostgreSQL.
+    /// </summary>
+    public bool NpgsqlInstrumentation { get; set; } = true;
+
+    /// <summary>
     /// The Prometheus exporter, scraped at the endpoint <c>MapServiceMetrics()</c> maps. The service references
     /// <c>OpenTelemetry.Exporter.Prometheus.AspNetCore</c> itself (it is only published as a prerelease).
     /// </summary>
@@ -66,7 +72,7 @@ public sealed class ServiceTelemetryOptions
     /// </summary>
     public ICollection<string> UntracedPaths { get; } = ["/metrics", "/health"];
 
-    /// <summary>More activity sources to trace, e.g. <c>"Npgsql"</c>. Wildcards (<c>*</c>) are allowed.</summary>
+    /// <summary>More activity sources to trace, e.g. <c>"StackExchange.Redis"</c>. Wildcards (<c>*</c>) are allowed.</summary>
     public ICollection<string> ActivitySources { get; } = [];
 
     /// <summary>More meters to collect, e.g. <c>"Npgsql"</c>. Wildcards (<c>*</c>) are allowed.</summary>
@@ -80,4 +86,23 @@ public sealed class ServiceTelemetryOptions
 
     /// <summary>Runs last on the Serilog configuration, after the configuration file and the enrichment.</summary>
     public Action<LoggerConfiguration>? ConfigureLogging { get; set; }
+
+    /// <summary>
+    /// How deep a destructured property (<c>{@...}</c>) is written (4 by default), so a whole event message destructured
+    /// by mistake stays a few KB. Set before the <c>Serilog</c> section is read: its <c>Destructure</c> entries, or
+    /// <see cref="ConfigureLogging"/>, override it. <see langword="null"/> keeps Serilog's own (10).
+    /// </summary>
+    public int? MaximumDestructuringDepth { get; set; } = 4;
+
+    /// <summary>
+    /// How many items of a destructured collection are written (20 by default). Overridable as
+    /// <see cref="MaximumDestructuringDepth"/>; <see langword="null"/> writes them all.
+    /// </summary>
+    public int? MaximumDestructuredCollectionCount { get; set; } = 20;
+
+    /// <summary>
+    /// How many characters of a destructured string are written (1,024 by default). Overridable as
+    /// <see cref="MaximumDestructuringDepth"/>; <see langword="null"/> writes them all.
+    /// </summary>
+    public int? MaximumDestructuredStringLength { get; set; } = 1024;
 }

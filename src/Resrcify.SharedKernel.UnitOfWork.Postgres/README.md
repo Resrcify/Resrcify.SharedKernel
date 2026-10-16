@@ -34,37 +34,41 @@ factory `dotnet ef` needs and an `xmin` concurrency token.
   - `IUnitOfWork` as `UnitOfWork<TContext>` (unless one is registered);
   - opt-ins: `.WithOutbox()`, `.WithOutboxWakeUp()`, `.RetryOnFailure()`, `.ConfigureNpgsql(...)`,
     `.ConfigureDbContext(...)`, `.ConfigureConnection(...)`, `.FromSection(...)`.
-- `provider.GetPostgresConnectionString<TContext>()` for what else needs the connection (a health check).
+- `AddHealthChecks().AddPostgres<TContext>()`: the database's health check (a connection from the pool and
+  `SELECT 1`, tagged `HealthTags.Ready` unless given tags), on the connection `AddPostgresDbContext` built, without
+  `AspNetCore.HealthChecks.NpgSql`. Without `AddPostgresDbContext<TContext>` the host fails to start, with a message
+  saying so. `AddPostgres<TContext>(name = "postgres", failureStatus = Unhealthy, tags = [ready], timeout)`.
+- The outbox's PostgreSQL pieces (`Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox`): `PostgresOutboxLaneClaim`
+  (`FOR UPDATE SKIP LOCKED`, the claim `.WithOutbox()` gives the job and the lanes), `PostgresOnConflictOutboxInsertStrategy`
+  (`ON CONFLICT ("DedupKey") ... DO NOTHING`) and `PostgresOutboxIndexes` (the partial indexes for
+  `ApplyOutboxMessageConfiguration`'s hooks).
+- `provider.GetPostgresConnectionString<TContext>()` for what else needs the connection string.
 - `PostgresDesignTimeFactory<TContext>`: the factory `dotnet ef` uses, reading the same settings, in one line.
 - `builder.HasPostgresRowVersion()`: optimistic concurrency on the `xmin` system column, without a new column.
 
 ## Prerequisites
 
 - .NET 10 SDK, PostgreSQL.
-- **The packages it uses, referenced by the service.** Like every SharedKernel package, this one keeps its
-  dependencies private, so the service lists what it ships:
+- **The packages it uses come with it**, at least at the versions it was built against (NuGet refuses a lower one at
+  restore):
 
   | Package | Why |
   |---|---|
-  | `Npgsql.EntityFrameworkCore.PostgreSQL` | the EF Core provider (its builder types are in this package's API) |
+  | `Npgsql.EntityFrameworkCore.PostgreSQL` (and Npgsql) | the EF Core provider (its builder types are in this package's API) |
   | `Microsoft.EntityFrameworkCore`, `Microsoft.EntityFrameworkCore.Relational` | EF Core |
-  | `Microsoft.Extensions.Hosting` | the configuration providers and options binding (a web host has them; a Persistence project running `dotnet ef` needs them) |
-  | `Quartz` | only with `WithOutboxWakeUp()` and the outbox job (UnitOfWork's requirement already) |
+  | `Microsoft.Extensions.Hosting` | the configuration providers and options binding (a Persistence project running `dotnet ef` needs them) |
+  | `Quartz` | the outbox job and `WithOutboxWakeUp()` (through UnitOfWork) |
 
-  Every service's Persistence project references the first three already, and its Application project
-  `Microsoft.Extensions.Hosting`.
+  A service references one itself only to move it higher (and `Microsoft.EntityFrameworkCore.Design` for `dotnet ef`,
+  which is never a dependency).
 
 ## Install
 
 ```xml
 <PackageReference Include="Resrcify.SharedKernel.UnitOfWork.Postgres" Version="<latest>" />
-<!-- What it uses (its own references are private, so the service lists them): -->
-<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
-<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
-<PackageReference Include="Microsoft.Extensions.Hosting" />
 ```
 
-It references `Resrcify.SharedKernel.UnitOfWork`, which comes along.
+It references `Resrcify.SharedKernel.UnitOfWork`, EF Core, Npgsql's provider and Quartz, which come along.
 
 ## Quick Start
 
@@ -113,8 +117,12 @@ registered:
 
 ```csharp
 services.AddPostgresDbContext<ShardDbContext>(configuration, db => db.WithOutbox());
-services.AddOutboxProcessing<ShardDbContext>(outbox => outbox.ProcessIntervalInSeconds = 20);
+services.AddOutboxProcessing<ShardDbContext>(outbox => outbox.ProcessInterval = TimeSpan.FromSeconds(20));
 ```
+
+With `.WithOutbox()` the outbox job and the lanes claim each message with `PostgresOutboxLaneClaim.Instance`
+(`FOR UPDATE SKIP LOCKED`) when the service sets no `Claim` of its own (`OutboxOptions.Claim`, `OutboxLaneOptions.Claim`,
+`AddProcessOutboxMessagesJob`'s `claim`), whichever is registered first: safe with several service instances.
 
 (A serializer of another type passed to `AddOutboxProcessing` throws, rather than being ignored.) A context without
 `.WithOutbox()` doesn't get the interceptor, even when another context of the service has it.
@@ -137,8 +145,8 @@ a tenth of a second (76 ms measured, with the job polling every 10 minutes):
 - the polling stays as the safety net: a notification that is lost (the process died between the commit and the
   notify) only means the message waits for the next poll.
 
-Needs `.WithOutbox()`. With several service instances every instance is woken, so set the outbox's `Claim`
-(`PostgresOutboxLaneClaim.Instance`), as several instances need anyway.
+Needs `.WithOutbox()`. With several service instances every instance is woken; each claims a message before it
+handles it (`PostgresOutboxLaneClaim`, the default with `.WithOutbox()`), as several instances need anyway.
 
 ### Retries
 
@@ -240,8 +248,8 @@ services.AddMigrationsOnStartup<ShardDbContext>(configuration);
 // ShardDbContextFactory.cs
 internal sealed class ShardDbContextFactory : PostgresDesignTimeFactory<ShardDbContext>;
 
-// InfrastructureServiceRegistration: the health check reads the same connection
-.AddNpgSql(sp => sp.GetPostgresConnectionString<ShardDbContext>(), name: "postgres", tags: ["ready"])
+// InfrastructureServiceRegistration: the health check reads the same connection (no AspNetCore.HealthChecks.NpgSql)
+.AddPostgres<ShardDbContext>()
 ```
 
 Then delete `PersistenceOptions` and `MigrationsOptions`. The configuration doesn't change. Sentinel and Tournament

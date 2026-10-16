@@ -19,8 +19,7 @@ namespace Resrcify.SharedKernel.PerformanceTests.Mediator;
 [RankColumn]
 public class MediatorPerScopeBenchmarks : IDisposable
 {
-    private ServiceProvider _composedProvider = default!;
-    private ServiceProvider _uncomposedProvider = default!;
+    private ServiceProvider _customProvider = default!;
     private ServiceProvider _mediatRProvider = default!;
     private CustomAbstractions.ISender _warmSender = default!;
 
@@ -32,29 +31,19 @@ public class MediatorPerScopeBenchmarks : IDisposable
     [GlobalSetup]
     public async Task GlobalSetup()
     {
-        _composedProvider = BuildCustomProvider(composeAtDiTime: true);
-        _uncomposedProvider = BuildCustomProvider(composeAtDiTime: false);
+        _customProvider = BuildCustomProvider();
         _mediatRProvider = BuildMediatRProvider();
-        _warmSender = _composedProvider.GetRequiredService<CustomAbstractions.ISender>();
+        _warmSender = _customProvider.GetRequiredService<CustomAbstractions.ISender>();
 
-        _ = await Custom_PerScope_Composed();
-        _ = await Custom_PerScope_Uncomposed();
+        _ = await Custom_PerScope();
         _ = await MediatR_PerScope();
-        _ = await Custom_Warm_Composed();
+        _ = await Custom_Warm();
     }
 
     [Benchmark(Baseline = true)]
-    public async Task<int> Custom_PerScope_Composed()
+    public async Task<int> Custom_PerScope()
     {
-        await using var scope = _composedProvider.CreateAsyncScope();
-        var sender = scope.ServiceProvider.GetRequiredService<CustomAbstractions.ISender>();
-        return await sender.Send(_customRequest, CancellationToken.None);
-    }
-
-    [Benchmark]
-    public async Task<int> Custom_PerScope_Uncomposed()
-    {
-        await using var scope = _uncomposedProvider.CreateAsyncScope();
+        await using var scope = _customProvider.CreateAsyncScope();
         var sender = scope.ServiceProvider.GetRequiredService<CustomAbstractions.ISender>();
         return await sender.Send(_customRequest, CancellationToken.None);
     }
@@ -68,7 +57,7 @@ public class MediatorPerScopeBenchmarks : IDisposable
     }
 
     [Benchmark]
-    public Task<int> Custom_Warm_Composed()
+    public Task<int> Custom_Warm()
         => _warmSender.Send(_customRequest, CancellationToken.None);
 
     public void Dispose()
@@ -84,29 +73,23 @@ public class MediatorPerScopeBenchmarks : IDisposable
 
         if (disposing)
         {
-            _composedProvider?.Dispose();
-            _uncomposedProvider?.Dispose();
+            _customProvider?.Dispose();
             _mediatRProvider?.Dispose();
         }
 
         _disposed = true;
     }
 
-    private static ServiceProvider BuildCustomProvider(bool composeAtDiTime)
+    private static ServiceProvider BuildCustomProvider()
     {
         var services = new ServiceCollection();
-        services.AddMediator(configure =>
-        {
-            if (composeAtDiTime)
-                configure.EnableDiTimePipelineComposition();
-            // No assembly scan: it would also register every other benchmark's open behaviors from this assembly.
-            configure
-                .AddOpenBehavior(typeof(NoopBehavior1<,>))
-                .AddOpenBehavior(typeof(NoopBehavior2<,>))
-                .AddOpenBehavior(typeof(NoopBehavior3<,>))
-                .AddOpenBehavior(typeof(NoopBehavior4<,>))
-                .AddOpenBehavior(typeof(NoopBehavior5<,>));
-        });
+        // No assembly scan: it would also register every other benchmark's open behaviors from this assembly.
+        services.AddMediator(configure => configure
+            .AddOpenBehavior(typeof(NoopBehavior1<,>))
+            .AddOpenBehavior(typeof(NoopBehavior2<,>))
+            .AddOpenBehavior(typeof(NoopBehavior3<,>))
+            .AddOpenBehavior(typeof(NoopBehavior4<,>))
+            .AddOpenBehavior(typeof(NoopBehavior5<,>)));
         services.AddTransient<CustomAbstractions.IRequestHandler<ScopedPing, int>, ScopedPingHandler>();
         return services.BuildServiceProvider();
     }

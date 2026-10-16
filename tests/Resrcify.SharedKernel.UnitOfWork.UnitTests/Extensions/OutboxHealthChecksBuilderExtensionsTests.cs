@@ -8,6 +8,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Quartz;
+using Resrcify.SharedKernel.Abstractions.Health;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
@@ -23,6 +24,18 @@ namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.Extensions;
     Justification = "xUnit analyzer requires test classes to remain public for discovery in this project")]
 public sealed class OutboxHealthChecksBuilderExtensionsTests
 {
+    [Fact]
+    public async Task AddOutbox_ShouldBeAReadinessCheck_WhenGivenNoTags()
+    {
+        var services = new ServiceCollection();
+        services.AddHealthChecks().AddOutbox<TestDbContext>();
+        await using var provider = services.BuildServiceProvider();
+
+        provider.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations
+            .ShouldHaveSingleItem()
+            .Tags.ShouldBe([HealthTags.Ready]);
+    }
+
     [Fact]
     public void AddOutbox_ShouldFailAsDegraded_ByDefault()
     {
@@ -104,7 +117,7 @@ public sealed class OutboxHealthChecksBuilderExtensionsTests
         services.AddQuartz(quartz => quartz.AddProcessOutboxMessagesJob<TestDbContext>());
         services.AddOutboxProcessing<TestDbContext>(
             new SystemTextJsonOutboxSerializer(),
-            outbox => outbox.BacklogCheckIntervalInSeconds = 90);
+            outbox => outbox.BacklogCheckInterval = TimeSpan.FromSeconds(90));
         using var provider = services.BuildServiceProvider();
 
         provider.GetServices<IHostedService>().OfType<OutboxBacklogMonitor<TestDbContext>>().ShouldHaveSingleItem();

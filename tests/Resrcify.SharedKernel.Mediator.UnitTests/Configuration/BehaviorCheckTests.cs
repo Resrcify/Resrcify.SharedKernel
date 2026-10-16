@@ -100,13 +100,12 @@ public sealed class BehaviorCheckTests
             [typeof(OwnValueTaskCachingBehavior<,>)]));
 
     [Fact]
-    public void RunFor_ShouldSayToRegisterBeforeAddMediator_ForTheAssembliesOverload()
+    public void RunFor_ShouldSayHowToSkipTheCheck_WhenABehaviorIsMissing()
         => Should.Throw<InvalidOperationException>(() => BehaviorCheck.RunFor(
                 new ServiceCollection(),
                 [Task(typeof(CachedQuery))],
-                [],
-                BehaviorCheck.AssembliesRemedy))
-            .Message.ShouldContain("before AddMediator(assemblies)");
+                []))
+            .Message.ShouldContain("cfg.SkipBehaviorCheck()");
 
     [Fact]
     public void HandledRequests_ShouldBeTheRequestsWithAHandler_WhenAnAssemblyIsScanned()

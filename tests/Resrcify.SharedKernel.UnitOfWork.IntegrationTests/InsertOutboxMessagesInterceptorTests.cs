@@ -14,6 +14,7 @@ using Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Fixtures;
 using Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Models;
 using Resrcify.SharedKernel.UnitOfWork.Interceptors;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
+using Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox;
 using Resrcify.SharedKernel.UnitOfWork.Primitives;
 using Shouldly;
 using Xunit;
@@ -255,7 +256,7 @@ public sealed class InsertOutboxMessagesInterceptorTests(PostgresFixture pg)
                     if (retryOnFailure)
                         npgsql.EnableRetryOnFailure(3, TimeSpan.FromMilliseconds(50), null);
                 })
-                .AddInterceptors(new InsertOutboxMessagesInterceptor(Serializer, insertStrategy))
+                .AddInterceptors(new InsertOutboxMessagesInterceptor(Serializer, TimeProvider.System, insertStrategy))
                 .AddInterceptors(moreInterceptors))
             .BuildServiceProvider();
         await using var scope = services.CreateAsyncScope();

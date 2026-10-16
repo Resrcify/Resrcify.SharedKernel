@@ -11,6 +11,7 @@ using Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Fixtures;
 using Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Models;
 using Resrcify.SharedKernel.UnitOfWork.Interceptors;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
+using Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox;
 using Shouldly;
 using Xunit;
 
@@ -47,6 +48,7 @@ public sealed class OutboxDedupTests
                 .UseNpgsql(connectionString)
                 .AddInterceptors(new InsertOutboxMessagesInterceptor(
                     _serializer,
+                    TimeProvider.System,
                     new PostgresOnConflictOutboxInsertStrategy())));
 
         _services = collection.BuildServiceProvider();

@@ -3,8 +3,8 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
     build:
-      context: ./
-      dockerfile: Dockerfile
+      context: ../..   # the repository root: the sample builds against the SharedKernel projects
+      dockerfile: samples/Resrcify.SharedKernel.WebApiExample/Dockerfile
     ports:
       - 11000:11000
 

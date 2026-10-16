@@ -7,7 +7,7 @@ services:
       - webapiexampledb
 
   webapiexampledb:
-    image: postgres:latest
+    image: postgres:18   # the version production runs
     container_name: WebApiExampleDb
     cap_add:
       - SYS_NICE # CAP_SYS_NICE

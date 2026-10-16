@@ -11,6 +11,7 @@ using Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Fixtures;
 using Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Models;
 using Resrcify.SharedKernel.UnitOfWork.Interceptors;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
+using Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox;
 using Resrcify.SharedKernel.UnitOfWork.Primitives;
 using Shouldly;
 using Xunit;
@@ -196,7 +197,7 @@ public sealed class UnitOfWorkTransactionAtomicityTests
         collection.AddDbContext<TestDbContext>(options =>
             options
                 .UseNpgsql(connectionString)
-                .AddInterceptors(new InsertOutboxMessagesInterceptor(_serializer, strategy)));
+                .AddInterceptors(new InsertOutboxMessagesInterceptor(_serializer, TimeProvider.System, strategy)));
 
         collection.AddScoped<IUnitOfWork, UnitOfWork<TestDbContext>>();
 

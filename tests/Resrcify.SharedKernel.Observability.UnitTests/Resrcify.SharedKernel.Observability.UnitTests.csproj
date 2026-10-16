@@ -19,18 +19,8 @@
     <PackageReference Include="Shouldly" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
-    <!-- What a service references itself (the package's references are private). -->
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
-    <PackageReference Include="Serilog.Extensions.Hosting" />
-    <PackageReference Include="Serilog.Settings.Configuration" />
-    <PackageReference Include="Serilog.AspNetCore" />
+    <!-- What a service references itself: a prerelease, so no dependency of the package. -->
     <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" />
-    <!-- Only for QuartzInstrumentation's names, checked against TelemetrySources. -->
-    <PackageReference Include="Quartz" />
   </ItemGroup>
 
   <ItemGroup>
@@ -39,5 +29,7 @@
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Mediator\Resrcify.SharedKernel.Mediator.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.MessageBus\Resrcify.SharedKernel.MessageBus.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.UnitOfWork\Resrcify.SharedKernel.UnitOfWork.csproj" />
+    <!-- The exception handler the request logging is placed around (ResultExceptionHandler). -->
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Web\Resrcify.SharedKernel.Web.csproj" />
   </ItemGroup>
 </Project>

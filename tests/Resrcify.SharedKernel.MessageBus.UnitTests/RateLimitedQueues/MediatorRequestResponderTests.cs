@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Rebus.Transport.InMem;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
 using Resrcify.SharedKernel.Mediator.Extensions;
@@ -14,6 +15,7 @@ using Resrcify.SharedKernel.MessageBus.UnitTests.Support;
 using Resrcify.SharedKernel.Results.Primitives;
 using Shouldly;
 using Xunit;
+using Resrcify.SharedKernel.Results.Diagnostics;
 
 namespace Resrcify.SharedKernel.MessageBus.UnitTests.RateLimitedQueues;
 
@@ -61,11 +63,33 @@ public sealed class MediatorRequestResponderTests
     }
 
     [Fact]
+    public async Task HandleAsync_ShouldTryAsTheQueuesRetriesSay()
+    {
+        var (reply, calls) = await AskAsync(
+            "upstream-down",
+            retries: new RetrySchedule(2, TimeSpan.FromMilliseconds(10), TimeSpan.FromMilliseconds(10)));
+
+        reply.Errors.ShouldHaveSingleItem().Code.ShouldBe("Upstream.Down");
+        calls.Count.ShouldBe(2);
+    }
+
+    [Fact]
     public async Task HandleAsync_ShouldTryAgainThenAnswerAFailure_WhenTheHandlerThrows()
     {
         var (reply, calls) = await AskAsync("throws", timeout: TimeSpan.FromSeconds(20));
 
         reply.Errors.ShouldHaveSingleItem().Code.ShouldBe("PlayerQuestion.ResponderFailed");
+        calls.Count.ShouldBe(5);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ShouldTryAgainThenAnswerTheTransientFailuresErrors_WhenTheHandlerThrowsOne()
+    {
+        // The handler turned the upstream's failure into an exception (ThrowIfTransient): after the last try, the
+        // requester gets the upstream's errors, not ResponderFailed.
+        var (reply, calls) = await AskAsync("throws-transient", timeout: TimeSpan.FromSeconds(20));
+
+        reply.Errors.ShouldHaveSingleItem().Code.ShouldBe("Upstream.Down");
         calls.Count.ShouldBe(5);
     }
 
@@ -97,7 +121,8 @@ public sealed class MediatorRequestResponderTests
     private static async Task<(Result<PlayerAnswer> Reply, LookupCalls Calls)> AskAsync(
         string name,
         bool answerEveryFailure = false,
-        TimeSpan? timeout = null)
+        TimeSpan? timeout = null,
+        RetrySchedule? retries = null)
     {
         var network = new InMemNetwork();
         var calls = new LookupCalls();
@@ -108,12 +133,13 @@ public sealed class MediatorRequestResponderTests
                 options =>
                 {
                     options.PerSecond = 100;
+                    options.Retries = retries;
                     if (answerEveryFailure)
                         options.AnswerFailure = _ => true;
                 }),
             services => services
                 .AddSingleton(calls)
-                .AddMediator(typeof(MediatorRequestResponderTests).Assembly));
+                .AddMediator(config => config.RegisterServicesFromAssemblies(typeof(MediatorRequestResponderTests).Assembly)));
         using var requester = await InMemoryServices.StartAsync(
             network,
             bus => bus.AddRequest<PlayerQuestion, PlayerAnswer>().AddScatterGather());
@@ -146,6 +172,8 @@ public sealed class MediatorRequestResponderTests
             calls.Add();
             if (request.Name == "throws")
                 throw new InvalidOperationException("A bug in the handler.");
+            if (request.Name == "throws-transient")
+                Result.Failure(new Error("Upstream.Down", "The game is down", ErrorType.ExternalFailure)).ThrowIfTransient();
             Result<PlayerAnswer> result = request.Name switch
             {
                 "unknown" => new Error("Player.NotFound", "No such player", ErrorType.NotFound),

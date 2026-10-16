@@ -10,6 +10,7 @@ using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.Primitives;
 
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Extensions;
 
@@ -27,7 +28,7 @@ public static class OutboxServiceCollectionExtensions
     /// the serializer the interceptor writes with, so this reads with the same one:
     /// <code>
     /// services.AddPostgresDbContext&lt;AppDbContext&gt;(configuration, db =&gt; db.WithOutbox());
-    /// services.AddOutboxProcessing&lt;AppDbContext&gt;(outbox =&gt; outbox.ProcessIntervalInSeconds = 20);
+    /// services.AddOutboxProcessing&lt;AppDbContext&gt;(outbox =&gt; outbox.ProcessInterval = TimeSpan.FromSeconds(20));
     /// </code>
     /// </summary>
     public static IServiceCollection AddOutboxProcessing<TDbContext>(
@@ -85,37 +86,42 @@ public static class OutboxServiceCollectionExtensions
         configure?.Invoke(options);
         // A batch of 0 would never come back short, so a run would keep reading until its time is up.
         ArgumentOutOfRangeException.ThrowIfLessThan(options.BatchSize, 1);
-        ArgumentOutOfRangeException.ThrowIfLessThan(options.ProcessIntervalInSeconds, 1);
-        ArgumentOutOfRangeException.ThrowIfLessThan(options.MaxRetryCount, 1);
-        ArgumentOutOfRangeException.ThrowIfNegative(options.DelayInSecondsBeforeStart);
-        ArgumentOutOfRangeException.ThrowIfNegative(options.ProcessedRetentionInDays);
-        ArgumentOutOfRangeException.ThrowIfLessThan(options.BacklogCheckIntervalInSeconds, 1);
-        var time = options.TimeProvider ?? RegisteredTimeProvider(services) ?? TimeProvider.System;
+        ArgumentOutOfRangeException.ThrowIfLessThan(options.ProcessInterval, TimeSpan.FromSeconds(1));
+        var retryLimits = OutboxRetryLimits.Create(
+            options.Retries,
+            options.TransientRetries,
+            nameof(OutboxOptions.Retries),
+            nameof(OutboxOptions.TransientRetries));
+        ArgumentOutOfRangeException.ThrowIfLessThan(options.DelayBeforeStart, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThan(options.ProcessedRetention, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThan(options.BacklogCheckInterval, TimeSpan.FromSeconds(1));
 
         UseOneSerializer<TDbContext>(services, serializer);
-        // The clock outbox processing, cleanup and the lanes read; replace it (e.g. with FakeTimeProvider) in tests.
-        services.TryAddSingleton(time);
+        // The clock outbox processing, cleanup and the lanes read, and the jobs' first runs are computed from, resolved
+        // when the container is built: a later registration (e.g. a FakeTimeProvider in a test) replaces it.
+        services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<IUnitOfWork, UnitOfWork<TDbContext>>();
         services.AddOutboxMessageContext();
+        services.AddTransientFailureRule<PersistenceTransientFailureRule>();
 
         // AddQuartz composes: every call after the first adds to the same default scheduler
         // (its registrations are TryAdd), so this is safe alongside the application's own
         // AddQuartz call, in either order.
-        services.AddQuartz(quartz => quartz.AddProcessOutboxMessagesJob<TDbContext>(
+        services.AddQuartz(quartz => ProcessOutboxMessagesJobSetup.AddProcessOutboxMessagesJob<TDbContext>(
+            quartz,
             options.BatchSize,
-            options.ProcessIntervalInSeconds,
-            options.DelayInSecondsBeforeStart,
-            options.MaxRetryCount,
-            options.ProcessedRetentionInDays,
-            options.Claim,
-            time));
+            options.ProcessInterval,
+            options.DelayBeforeStart,
+            retryLimits,
+            options.ProcessedRetention,
+            options.Claim));
 
         // The backlog monitor behind the outbox.messages.* gauges and the outbox health check (AddOutbox<TDbContext>).
         // The job registration above registered it with the default interval; these options replace that.
         services.AddOutboxBacklogMonitor(
             new OutboxBacklogSettings<TDbContext>(
-                options.MaxRetryCount,
-                TimeSpan.FromSeconds(options.BacklogCheckIntervalInSeconds)),
+                retryLimits.ReadLimit,
+                options.BacklogCheckInterval),
             replace: true);
 
         // Outbox lanes (e.g. scatter-gather) with defaults, unless AddOutboxLanes tuned them already; either way they
@@ -170,8 +176,4 @@ public static class OutboxServiceCollectionExtensions
         var registeredType = registered.ImplementationInstance?.GetType() ?? registered.ImplementationType;
         return registeredType == serializer.GetType();
     }
-
-    private static TimeProvider? RegisteredTimeProvider(IServiceCollection services)
-        => services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(TimeProvider))?.ImplementationInstance
-            as TimeProvider;
 }

@@ -10,11 +10,11 @@ public class Error
         string.Empty,
         ErrorType.Failure);
     public static readonly Error NullValue = new(
-        "Error.NullValue",
+        ErrorCodes.General.NullValue,
         "The specified result value is null.",
         ErrorType.Failure);
     public static readonly Error EmptyInput = new(
-        "Error.EmptyInput",
+        ErrorCodes.General.EmptyInput,
         "The specified input collection is empty.",
         ErrorType.Failure);
     public static Error Validation(

@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using Rebus.Config;
 using Rebus.Handlers;
 using Rebus.Transport.InMem;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.Abstractions.Caching;
 using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
@@ -147,6 +148,26 @@ public sealed class MessageBusBuilder
         if (bytes is not null)
             ArgumentOutOfRangeException.ThrowIfNegative(bytes.Value);
         Settings.CompressAboveBytes = bytes;
+        return this;
+    }
+
+    /// <summary>
+    /// How an integration event's handler is tried in place before the event goes to the error queue (default: 5
+    /// attempts, 0.5 s before the second, doubling up to 4 s; the attempts follow the retry strategy's delivery attempts
+    /// unless this is called). The event is held unacknowledged while it waits, so keep
+    /// <see cref="RetrySchedule.MaxDelay"/> well under RabbitMQ's consumer timeout.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// bus.WithEventRetries(new RetrySchedule(MaxAttempts: 8, FirstDelay: TimeSpan.FromSeconds(1), MaxDelay: TimeSpan.FromSeconds(10)));
+    /// </code>
+    /// </example>
+    /// <param name="retries">The attempts and waits.</param>
+    public MessageBusBuilder WithEventRetries(RetrySchedule retries)
+    {
+        ArgumentNullException.ThrowIfNull(retries);
+        Settings.EventRetries = retries;
+        Settings.EventRetriesSet = true;
         return this;
     }
 
@@ -325,7 +346,7 @@ public sealed class MessageBusBuilder
         Services.RegisterScatterGatherHandlers(additionalAssemblies);
         Services.AddSingleton(provider => new ScatterGatherTransport(
             Settings,
-            provider.GetService<TimeProvider>() ?? TimeProvider.System,
+            provider.GetRequiredService<TimeProvider>(),
             provider,
             provider.GetRequiredService<ILogger<ScatterGatherTransport>>()));
         Services.AddSingleton<IScatterGatherClient>(provider => provider.GetRequiredService<ScatterGatherTransport>());

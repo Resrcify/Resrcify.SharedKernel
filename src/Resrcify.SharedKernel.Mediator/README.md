@@ -63,9 +63,10 @@ The contracts live in `Resrcify.SharedKernel.Abstractions.Mediator`, so the Doma
 
 - .NET 10 SDK (current target is `net10.0`).
 - Dependency injection via `Microsoft.Extensions.DependencyInjection`.
+- `FluentValidation` (the validation behavior and the validator scan) and `Microsoft.Extensions.Logging` (the
+  behaviors' logging) come with the package, at least at the versions it was built against: the Application project
+  needs no reference of its own to them.
 - Optional dependencies depending on chosen behaviors:
-    - `FluentValidation` (validation behavior)
-    - `Microsoft.Extensions.Logging` (logging behavior)
     - Caching abstraction implementation (`ICachingService`) for caching behavior
     - Unit-of-work implementation (`IUnitOfWork`) for transaction/unit-of-work behaviors
 
@@ -115,8 +116,6 @@ public static class DependencyInjection
             cfg.AddStandardBehaviors();
 
             cfg.UseNotificationPublishStrategy(NotificationPublishStrategy.Sequential);
-
-            cfg.EnableDiTimePipelineComposition(enabled: false);
         });
 
         return services;
@@ -322,6 +321,8 @@ The package includes the following built-in behaviors in `src/Resrcify.SharedKer
     - Constraint: `TResponse : Result`.
 - `ValidationPipelineBehavior<TRequest, TResponse>`
     - Runs the request's `FluentValidation.IValidator<TRequest>`s one at a time (they often share a scoped DbContext) and returns a validation `Result` failure when invalid.
+    - The validators are registered by `RegisterServicesFromAssemblies` (see [Registration phase](#registration-phase)):
+      no `AddValidatorsFromAssembly` needed.
     - Constraint: `TResponse : Result`.
 - `IdempotencyPipelineBehavior<TRequest, TResponse>`
     - Answers an `IIdempotentRequest` sent again with its `IdempotencyKey` with the first one's result instead of
@@ -340,13 +341,16 @@ The package includes the following built-in behaviors in `src/Resrcify.SharedKer
       the change tracker and a later save in the scope doesn't save half of it.
     - With `cfg.ConfigureUnitOfWork(uow => uow.ReturnPersistenceFailures = true)`, saves with
       `IUnitOfWork.TryCompleteAsync` instead and returns its failure as the command's result (`ResultFactory.Failure`):
-      a concurrency conflict or a duplicate is a `Conflict` (409), a serialization failure or a deadlock outside a
-      transaction a transient `Failure`; anything else still throws. Off by default. See
+      a concurrency conflict, a duplicate or a foreign-key violation is a `Conflict` (409), a not-null or check
+      violation or a string too long for its column a `Validation` error (400), a serialization failure or a deadlock
+      outside a transaction a transient `Failure`; anything else still throws. Off by default. See
       [Unit-of-work options](#unit-of-work-options).
     - Constraint: `TRequest : IBaseCommand`, `TResponse : Result`.
 
 The logging, transaction and unit-of-work behaviors log a handler's exception (not a cancellation the caller asked
-for) and let it through unchanged, so callers can catch it by type. It is logged at `Error`, with its stack, **once**:
+for) and let it through unchanged, so callers can catch it by type. It is logged at `Error` (at `Warning` when it is
+transient: the container's `ITransientFailureClassifier`, else Results' `TransientFailures`, e.g. a
+`TransientFailureException` or a timeout), with its stack, **once**:
 by the first of them it passes on its way out, which is the innermost (the unit-of-work behavior for a plain command:
 "Request X threw Y; nothing it changed is saved"; the transaction behavior for a transactional one, once whatever the
 retries of a retrying execution strategy: "...; its transaction is rolled back"; the logging behavior for a query). The behaviors it passes after that log a `Debug` line without the stack (the logging behavior's
@@ -413,8 +417,7 @@ says so. `AddMediator` therefore throws `InvalidOperationException` when a scann
 has no registered behavior that handles it: one whose request type parameter is constrained to that interface
 (`CachingPipelineBehavior` and `TransactionPipelineBehavior` are; so may a service's own). It sees the behaviors added
 to the configuration and those registered in the container before `AddMediator`; if yours is registered after,
-call `cfg.SkipBehaviorCheck()` (with `AddMediator(assemblies)`, which takes no configuration, register it before, or
-switch to `AddMediator(cfg => ...)`). The behavior must also run for the request's handler: a `Task` handler
+call `cfg.SkipBehaviorCheck()`. The behavior must also run for the request's handler: a `Task` handler
 (`IRequestHandler`) runs only Task behaviors, a ValueTask handler (`IValueTaskRequestHandler`) only ValueTask ones, so
 an `ICachingQuery` with a ValueTask handler and only the standard behaviors fails the check.
 
@@ -440,7 +443,10 @@ cfg.ConfigureUnitOfWork(uow => uow.ReturnPersistenceFailures = true);
 
 A command whose save hits a concurrency conflict (`PersistenceErrors.Concurrency`, e.g. an `xmin` row version on
 PostgreSQL) or a unique constraint (`PersistenceErrors.UniqueViolation`) then fails with that error, which the Web
-package answers with a 409, instead of throwing a `DbUpdateException` (a 500). The logging behavior logs it at
+package answers with a 409, instead of throwing a `DbUpdateException` (a 500). So does a foreign key
+(`PersistenceErrors.ForeignKeyViolation`, 409), and a not-null or check constraint or a string too long for its column
+(`NotNullViolation`, `CheckViolation`, `ValueTooLong`: `Validation`, a 400), whose message names the constraint, table
+and column when the database reports them (match on `Code`). The logging behavior logs it at
 `Information`, as an expected answer. Inside a transactional command, a serialization failure or a deadlock still
 throws: it aborted the whole transaction, so the transaction behavior's execution strategy (with retries on) runs the
 command again; the transaction behavior needs no option of its own, since it rolls back on the failure the
@@ -520,6 +526,12 @@ When nothing listens, a send costs one check: no span, no clock reading, no tags
 - request handlers (`IRequestHandler<,>`, `IValueTaskRequestHandler<,>`)
 - stream handlers (`IStreamRequestHandler<,>`)
 - notification handlers (`INotificationHandler<>`)
+- FluentValidation validators (every `IValidator<T>`, internal ones included, scoped, as itself too), as
+  `AddValidatorsFromAssembly(assembly, includeInternalTypes: true)` registers them and with its semantics: one
+  registered already, by that call before or after `AddMediator` or by hand, isn't registered again, so the validation
+  behavior never runs one twice. Only assemblies referencing FluentValidation are scanned for them.
+  `cfg.SkipValidatorScan()` turns it off, for a service registering its
+  validators with another lifetime or a filter.
 
 Behaviors and pre/post processors are registered only as added (`AddOpenBehavior`, `AddStandardBehaviors`,
 `AddRequestPreProcessor`, `AddRequestPostProcessor`, or the container), in that order. Then it runs
@@ -531,7 +543,11 @@ Behaviors and pre/post processors are registered only as added (`AddOpenBehavior
 transient: it keeps only the last runtime it built for each kind of call (send, publish, stream), reused when its next
 call has the same types (e.g. a job sending one command per item).
 
-- **Send path** (`Runtime/Mediator.Send.cs` + `Runtime/Mediator.SendRuntimes.cs`)
+There is one runtime: a request's pipeline is resolved from the container as one service
+(`DiComposedSendRuntime<,>` / `DiComposedStreamRuntime<,>`, transient), which the container builds with its handler,
+behaviors and processors at their own lifetimes (transient unless registered otherwise).
+
+- **Send path** (`Runtime/Mediator.Send.cs` + `Runtime/DiComposedRuntimes.cs`)
     - Resolves `ValueTask` handler first if available, otherwise task-based handler.
     - Executes pre-processors -> pipeline -> handler -> post-processors.
     - Keeps the last send runtime (one slot).
@@ -539,7 +555,7 @@ call has the same types (e.g. a job sending one command per item).
     - Resolves all handlers for a notification type.
     - Uses selected strategy (`Sequential` or `Parallel`).
     - Keeps the last publish runtime (one slot).
-- **Stream path** (`Runtime/Mediator.Stream.cs` + `Runtime/Mediator.StreamRuntime.cs`)
+- **Stream path** (`Runtime/Mediator.Stream.cs` + `Runtime/DiComposedRuntimes.cs`)
     - Resolves stream handler and stream pipeline behaviors.
     - Keeps the last stream runtime (one slot).
 
@@ -559,20 +575,13 @@ cfg.UseNotificationPublishStrategy(
 
 Use `Sequential` when handler order/serialization matters; use `Parallel` for throughput when handlers are independent and thread-safe.
 
-### DI-time pipeline composition
-
-```csharp
-cfg.EnableDiTimePipelineComposition(true);
-```
-
-When enabled, `DiComposedSendRuntime<,>` / `DiComposedStreamRuntime<,>` are built through DI and reused by mediator runtime lookup. This can reduce per-call composition overhead in some scenarios.
-
 ## Common issues
 
 - **"No request handler registered for '...'"**
     - Ensure `RegisterServicesFromAssemblies(...)` includes the assembly containing your handler.
 - **Validation behavior does nothing**
-    - Ensure validators are registered and behavior is added with `AddOpenBehavior` (or `AddStandardBehaviors`).
+    - Ensure the validators' assembly is scanned (`RegisterServicesFromAssemblies`, without `SkipValidatorScan()`) and
+      the behavior is added with `AddOpenBehavior` (or `AddStandardBehaviors`).
 - **A behavior or processor in my assembly doesn't run**
     - The scan registers handlers only: add it with `AddOpenBehavior` / `AddRequestPreProcessor` /
       `AddRequestPostProcessor`, or register a closed one in the container.

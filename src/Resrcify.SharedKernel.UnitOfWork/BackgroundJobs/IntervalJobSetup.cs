@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Quartz;
 using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.Results.Primitives;
@@ -32,23 +33,17 @@ public static class IntervalJobSetup
     /// <param name="quartz">The Quartz builder.</param>
     /// <param name="interval">Time between runs.</param>
     /// <param name="startAfter">Time from the scheduler's build to the first run; 30 s when <see langword="null"/>.</param>
-    /// <param name="timeProvider">
-    /// The clock the first run is computed from; the <see cref="TimeProvider"/> registered in DI when
-    /// <see langword="null"/> (the system clock when none is). The scheduler itself runs on the registered one (Quartz 4).
-    /// </param>
     public static IQuartzBuilder AddIntervalJob<TJob>(
         this IQuartzBuilder quartz,
         TimeSpan interval,
-        TimeSpan? startAfter = null,
-        TimeProvider? timeProvider = null)
+        TimeSpan? startAfter = null)
         where TJob : class, IJob
     {
         ArgumentNullException.ThrowIfNull(quartz);
         return quartz.ScheduleIntervalJob<TJob>(
             JobKeyFor<TJob>(),
             interval,
-            startAfter,
-            timeProvider);
+            startAfter);
     }
 
     /// <summary>
@@ -59,20 +54,18 @@ public static class IntervalJobSetup
     /// <inheritdoc cref="AddIntervalJob{TJob}" path="/param"/>
     /// <exception cref="InvalidOperationException">
     /// <typeparamref name="TCommand"/> returns a value (<c>Result&lt;T&gt;</c>): use
-    /// <see cref="AddIntervalCommandJob{TCommand, TResponse}(IQuartzBuilder, TimeSpan, TimeSpan?, TimeProvider?)"/>.
+    /// <see cref="AddIntervalCommandJob{TCommand, TResponse}(IQuartzBuilder, TimeSpan, TimeSpan?)"/>.
     /// </exception>
     public static IQuartzBuilder AddIntervalCommandJob<TCommand>(
         this IQuartzBuilder quartz,
         TimeSpan interval,
-        TimeSpan? startAfter = null,
-        TimeProvider? timeProvider = null)
+        TimeSpan? startAfter = null)
         where TCommand : IRequest<Result>, new()
     {
         CommandJobs.EnsureReturns<TCommand, Result>();
         return quartz.AddIntervalJob<SendCommandJob<TCommand>>(
             interval,
-            startAfter,
-            timeProvider);
+            startAfter);
     }
 
     /// <summary>
@@ -84,23 +77,21 @@ public static class IntervalJobSetup
     public static IQuartzBuilder AddIntervalCommandJob<TCommand, TResponse>(
         this IQuartzBuilder quartz,
         TimeSpan interval,
-        TimeSpan? startAfter = null,
-        TimeProvider? timeProvider = null)
+        TimeSpan? startAfter = null)
         where TCommand : IRequest<TResponse>, new()
         where TResponse : Result
     {
         CommandJobs.EnsureReturns<TCommand, TResponse>();
         return quartz.AddIntervalJob<SendCommandJob<TCommand, TResponse>>(
             interval,
-            startAfter,
-            timeProvider);
+            startAfter);
     }
 
     /// <summary>
     /// Sends the <typeparamref name="TCommand"/> <paramref name="createCommand"/> makes through the mediator every
     /// <paramref name="interval"/>, for a command without a parameterless constructor (a record whose parameters are
     /// all optional) or one built from services. The job's key is <c>SendCommandJob-&lt;command type name&gt;</c>, the
-    /// one <see cref="AddIntervalCommandJob{TCommand}(IQuartzBuilder, TimeSpan, TimeSpan?, TimeProvider?)"/> gives it,
+    /// one <see cref="AddIntervalCommandJob{TCommand}(IQuartzBuilder, TimeSpan, TimeSpan?)"/> gives it,
     /// so moving between the two doesn't rename the job.
     /// </summary>
     /// <inheritdoc cref="AddIntervalJob{TJob}" path="/param"/>
@@ -110,33 +101,31 @@ public static class IntervalJobSetup
     /// </param>
     /// <exception cref="InvalidOperationException">
     /// <typeparamref name="TCommand"/> returns a value (<c>Result&lt;T&gt;</c>): use
-    /// <see cref="AddIntervalCommandJob{TCommand, TResponse}(IQuartzBuilder, TimeSpan, Func{IServiceProvider, TCommand}, TimeSpan?, TimeProvider?)"/>.
+    /// <see cref="AddIntervalCommandJob{TCommand, TResponse}(IQuartzBuilder, TimeSpan, Func{IServiceProvider, TCommand}, TimeSpan?)"/>.
     /// Or a factory for <typeparamref name="TCommand"/> is registered already.
     /// </exception>
     public static IQuartzBuilder AddIntervalCommandJob<TCommand>(
         this IQuartzBuilder quartz,
         TimeSpan interval,
         Func<IServiceProvider, TCommand> createCommand,
-        TimeSpan? startAfter = null,
-        TimeProvider? timeProvider = null)
+        TimeSpan? startAfter = null)
         where TCommand : IRequest<Result>
     {
         CommandFactory.Register<TCommand, Result>(quartz, createCommand);
         return quartz.ScheduleIntervalJob<FactoryCommandJob<TCommand, Result>>(
             SendCommandJobKeyFor<TCommand>(),
             interval,
-            startAfter,
-            timeProvider);
+            startAfter);
     }
 
     /// <summary>
     /// Sends the <typeparamref name="TCommand"/> returning <typeparamref name="TResponse"/> that
     /// <paramref name="createCommand"/> makes through the mediator every <paramref name="interval"/>. The job's key is
     /// <c>SendCommandJob-&lt;command type name&gt;-&lt;response type name&gt;</c>, the one
-    /// <see cref="AddIntervalCommandJob{TCommand, TResponse}(IQuartzBuilder, TimeSpan, TimeSpan?, TimeProvider?)"/>
+    /// <see cref="AddIntervalCommandJob{TCommand, TResponse}(IQuartzBuilder, TimeSpan, TimeSpan?)"/>
     /// gives it.
     /// </summary>
-    /// <inheritdoc cref="AddIntervalCommandJob{TCommand}(IQuartzBuilder, TimeSpan, Func{IServiceProvider, TCommand}, TimeSpan?, TimeProvider?)" path="/param"/>
+    /// <inheritdoc cref="AddIntervalCommandJob{TCommand}(IQuartzBuilder, TimeSpan, Func{IServiceProvider, TCommand}, TimeSpan?)" path="/param"/>
     /// <exception cref="InvalidOperationException">
     /// <typeparamref name="TCommand"/> doesn't return <typeparamref name="TResponse"/>, or a factory for
     /// <typeparamref name="TCommand"/> is registered already.
@@ -145,8 +134,7 @@ public static class IntervalJobSetup
         this IQuartzBuilder quartz,
         TimeSpan interval,
         Func<IServiceProvider, TCommand> createCommand,
-        TimeSpan? startAfter = null,
-        TimeProvider? timeProvider = null)
+        TimeSpan? startAfter = null)
         where TCommand : IRequest<TResponse>
         where TResponse : Result
     {
@@ -154,8 +142,7 @@ public static class IntervalJobSetup
         return quartz.ScheduleIntervalJob<FactoryCommandJob<TCommand, TResponse>>(
             SendCommandJobKeyFor<TCommand, TResponse>(),
             interval,
-            startAfter,
-            timeProvider);
+            startAfter);
     }
 
     /// <summary>
@@ -186,14 +173,15 @@ public static class IntervalJobSetup
         this IQuartzBuilder quartz,
         JobKey jobKey,
         TimeSpan interval,
-        TimeSpan? startAfter,
-        TimeProvider? timeProvider)
+        TimeSpan? startAfter)
         where TJob : class, IJob
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(interval, TimeSpan.Zero);
         if (startAfter < TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(startAfter), startAfter, "The first run can't be in the past.");
         var delay = startAfter ?? DefaultStartAfter;
+        // The clock the first run is computed from, the container's (as Quartz 4 runs the scheduler on it).
+        quartz.Services.TryAddSingleton(TimeProvider.System);
 
         return quartz
             .AddJob<TJob>(job => job
@@ -201,7 +189,7 @@ public static class IntervalJobSetup
                 .DisallowConcurrentExecution())
             .AddTrigger<TJob>((provider, trigger) => trigger
                 .ForJob(jobKey)
-                .StartAt(Clock(provider, timeProvider).GetUtcNow() + delay)
+                .StartAt(provider.GetRequiredService<TimeProvider>().GetUtcNow() + delay)
                 .WithSchedule(SimpleScheduleBuilder
                     .Create()
                     .WithInterval(interval)
@@ -224,9 +212,4 @@ public static class IntervalJobSetup
             name = name[..arity];
         return string.Join('-', typeArguments.Select(NameOf).Prepend(name));
     }
-
-    private static TimeProvider Clock(IServiceProvider provider, TimeProvider? timeProvider)
-        => timeProvider
-            ?? provider.GetService<TimeProvider>()
-            ?? TimeProvider.System;
 }

@@ -16,6 +16,7 @@ using Resrcify.SharedKernel.Mediator.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.Interceptors;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
+using Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox;
 using Resrcify.SharedKernel.MessageBus.Configuration;
 using Resrcify.SharedKernel.MessageBus.Extensions;
 using Resrcify.SharedKernel.Results.Primitives;
@@ -45,8 +46,8 @@ internal sealed class RequesterHost : IAsyncDisposable
         var outboxSerializer = new SystemTextJsonOutboxSerializer();
         builder.Services.AddDbContext<TestDbContext>(options => options
             .UseNpgsql(databaseConnectionString)
-            .AddInterceptors(new InsertOutboxMessagesInterceptor(outboxSerializer, new PostgresOnConflictOutboxInsertStrategy())));
-        builder.Services.AddMediator(typeof(RequesterHost).Assembly);
+            .AddInterceptors(new InsertOutboxMessagesInterceptor(outboxSerializer, TimeProvider.System, new PostgresOnConflictOutboxInsertStrategy())));
+        builder.Services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(RequesterHost).Assembly));
         builder.Services.AddOutboxLanes<TestDbContext>(lanes =>
         {
             lanes.PollInterval = TimeSpan.FromMilliseconds(200);
@@ -54,8 +55,8 @@ internal sealed class RequesterHost : IAsyncDisposable
         });
         builder.Services.AddOutboxProcessing<TestDbContext>(outboxSerializer, outbox =>
         {
-            outbox.ProcessIntervalInSeconds = 1;
-            outbox.DelayInSecondsBeforeStart = 0;
+            outbox.ProcessInterval = TimeSpan.FromSeconds(1);
+            outbox.DelayBeforeStart = TimeSpan.Zero;
         });
         builder.Services.AddQuartzHostedService();
         builder.Services.AddMessageBus(bus =>

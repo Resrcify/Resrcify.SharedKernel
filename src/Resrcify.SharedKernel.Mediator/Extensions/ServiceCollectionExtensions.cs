@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using FluentValidation;
 using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.Mediator.Behaviors;
 using Resrcify.SharedKernel.Mediator.Publishing;
@@ -16,27 +17,13 @@ namespace Resrcify.SharedKernel.Mediator.Extensions;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddMediator(
-        this IServiceCollection services,
-        params Assembly[] assemblies)
-        => services.AddMediator(ServiceLifetime.Transient, assemblies);
-
-    public static IServiceCollection AddMediator(
-        this IServiceCollection services,
-        ServiceLifetime mediatorLifetime,
-        params Assembly[] assemblies)
-    {
-        MediatorConfigurationValidation.ValidateMediatorLifetime(mediatorLifetime, nameof(mediatorLifetime));
-
-        services.RegisterMediatorTypes(assemblies);
-        BehaviorCheck.Run(services, assemblies, configuredBehaviorTypes: [], BehaviorCheck.AssembliesRemedy);
-
-        return services.AddMediatorRuntime(
-            NotificationPublishStrategy.Sequential,
-            useDiTimePipelineComposition: false,
-            mediatorLifetime: mediatorLifetime);
-    }
-
+    /// <summary>
+    /// Registers the mediator: the handlers of the assemblies <paramref name="configure"/> names
+    /// (<see cref="MediatorConfiguration.RegisterServicesFromAssemblies"/>), their FluentValidation validators (unless
+    /// <see cref="MediatorConfiguration.SkipValidatorScan"/>), and the behaviors and processors it adds, in order. Each request's pipeline (its handler, behaviors and processors) is
+    /// resolved from the container as one service, so the container builds it with their lifetimes: transient unless
+    /// registered otherwise, the mediator too (<see cref="MediatorConfiguration.UseMediatorLifetime"/>).
+    /// </summary>
     public static IServiceCollection AddMediator(
         this IServiceCollection services,
         Action<MediatorConfiguration> configure)
@@ -46,12 +33,13 @@ public static class ServiceCollectionExtensions
         configure(configuration);
 
         services.RegisterMediatorTypes(configuration.Assemblies);
+        if (configuration.ScansValidators)
+            services.RegisterValidators(configuration.Assemblies);
         if (configuration.ChecksBehaviors)
             BehaviorCheck.Run(
                 services,
                 configuration.Assemblies,
-                configuration.OpenBehaviorTypes,
-                BehaviorCheck.ConfigurationRemedy);
+                configuration.OpenBehaviorTypes);
 
         foreach (var behaviorRegistration in configuration.OpenBehaviorRegistrations)
         {
@@ -81,7 +69,6 @@ public static class ServiceCollectionExtensions
 
         return services.AddMediatorRuntime(
             configuration.NotificationPublishStrategy,
-            configuration.UseDiTimePipelineComposition,
             configuration.MediatorLifetime);
     }
 
@@ -182,6 +169,46 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Registers every FluentValidation validator of <paramref name="assemblies"/>, internal ones included, as
+    /// <c>AddValidatorsFromAssembly</c> does (scoped, as its <c>IValidator&lt;T&gt;</c> and as itself), and with its
+    /// semantics: a validator registered already (by <c>AddValidatorsFromAssembly</c>, before or after, or by hand) isn't
+    /// registered again, so the validation behavior never runs one twice.
+    /// </summary>
+    private static void RegisterValidators(
+        this IServiceCollection services,
+        IReadOnlyCollection<Assembly> assemblies)
+    {
+        // Only an assembly that references FluentValidation can hold a validator: the others aren't scanned.
+        var withValidators = assemblies
+            .Where(ReferencesFluentValidation)
+            .ToList();
+        RegisterValidatorsOf(services, withValidators);
+    }
+
+    private static bool ReferencesFluentValidation(Assembly assembly)
+        => assembly
+            .GetReferencedAssemblies()
+            .Any(reference => reference.Name == FluentValidationAssemblyName);
+
+    private const string FluentValidationAssemblyName = "FluentValidation";
+
+    private static void RegisterValidatorsOf(
+        IServiceCollection services,
+        List<Assembly> assemblies)
+    {
+        foreach (var assembly in assemblies)
+        {
+            foreach (var validator in AssemblyScanner.FindValidatorsInAssembly(assembly, includeInternalTypes: true))
+            {
+                services.TryAddEnumerable(
+                    ServiceDescriptor.Scoped(validator.InterfaceType, validator.ValidatorType));
+                services.TryAdd(
+                    ServiceDescriptor.Scoped(validator.ValidatorType, validator.ValidatorType));
+            }
+        }
+    }
+
+    /// <summary>
     /// Records the scanned assemblies and tells the listeners registered so far, so packages that look for
     /// handlers of their own (the message bus) follow this scan whichever is registered first.
     /// </summary>
@@ -210,7 +237,6 @@ public static class ServiceCollectionExtensions
     private static IServiceCollection AddMediatorRuntime(
         this IServiceCollection services,
         NotificationPublishStrategy publishStrategy,
-        bool useDiTimePipelineComposition,
         ServiceLifetime mediatorLifetime)
     {
         MediatorConfigurationValidation.ValidateMediatorLifetime(mediatorLifetime, nameof(mediatorLifetime));
@@ -219,13 +245,10 @@ public static class ServiceCollectionExtensions
         // The clock the logging behavior reads; replace it (e.g. with FakeTimeProvider) in tests.
         services.TryAddSingleton(TimeProvider.System);
 
-        // Transient: each mediator keeps the runtime it built (one slot per kind of call), so scoping it only cost
-        // every scope its tracking dictionary.
-        if (useDiTimePipelineComposition)
-        {
-            services.TryAddTransient(typeof(IDiComposedSendRuntime<,>), typeof(DiComposedSendRuntime<,>));
-            services.TryAddTransient(typeof(IDiComposedStreamRuntime<,>), typeof(DiComposedStreamRuntime<,>));
-        }
+        // A request's pipeline, composed by the container (the one runtime): transient, as each mediator keeps the
+        // one it built (one slot per kind of call), so scoping it only cost every scope its tracking dictionary.
+        services.TryAddTransient(typeof(IDiComposedSendRuntime<,>), typeof(DiComposedSendRuntime<,>));
+        services.TryAddTransient(typeof(IDiComposedStreamRuntime<,>), typeof(DiComposedStreamRuntime<,>));
 
         services.TryAdd(ServiceDescriptor.Describe(typeof(IMediator), typeof(Runtime.Mediator), mediatorLifetime));
         if (mediatorLifetime == ServiceLifetime.Transient)

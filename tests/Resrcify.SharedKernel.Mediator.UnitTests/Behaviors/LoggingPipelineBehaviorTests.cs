@@ -12,6 +12,8 @@ using Resrcify.SharedKernel.Mediator.Behaviors;
 using System.Linq;
 using Resrcify.SharedKernel.Results.Primitives;
 using Shouldly;
+using Resrcify.SharedKernel.Abstractions.Resilience;
+using Resrcify.SharedKernel.Results.Diagnostics;
 
 namespace Resrcify.SharedKernel.Mediator.UnitTests.Behaviors;
 
@@ -27,7 +29,7 @@ public class LoggingPipelineBehaviorTests
     public LoggingPipelineBehaviorTests()
     {
         _logger = Substitute.For<ILogger<LoggingPipelineBehavior<MockRequest, Result>>>();
-        _behavior = new LoggingPipelineBehavior<MockRequest, Result>(_logger);
+        _behavior = new LoggingPipelineBehavior<MockRequest, Result>(_logger, TimeProvider.System);
     }
 
     [Fact]
@@ -80,6 +82,7 @@ public class LoggingPipelineBehaviorTests
         _logger.IsEnabled(Arg.Any<LogLevel>()).Returns(true);
         var behavior = new LoggingPipelineBehavior<MockRequest, Result>(
             _logger,
+            TimeProvider.System,
             options: new LoggingPipelineOptions { RequestLevel = LogLevel.Debug });
 
         await behavior.Handle(new MockRequest(), _ => Task.FromResult(Result.Success()), CancellationToken.None);
@@ -142,6 +145,34 @@ public class LoggingPipelineBehaviorTests
 
         caught.ShouldBeSameAs(thrown);
         LoggedLevels().ShouldBe([LogLevel.Information, LogLevel.Error]);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldLogATransientExceptionAtWarning()
+    {
+        _logger.IsEnabled(Arg.Any<LogLevel>()).Returns(true);
+        var thrown = new TransientFailureException([Error.ExternalFailure("Upstream.Down", "The upstream is down.")]);
+
+        await Should.ThrowAsync<TransientFailureException>(
+            () => _behavior.Handle(new MockRequest(), _ => Task.FromException<Result>(thrown), CancellationToken.None));
+
+        LoggedLevels().ShouldBe([LogLevel.Information, LogLevel.Warning]);
+    }
+
+    [Fact]
+    public async Task Handle_ShouldLogAnExceptionAtWarning_WhenTheContainersClassifierCallsItTransient()
+    {
+        _logger.IsEnabled(Arg.Any<LogLevel>()).Returns(true);
+        var classifier = Substitute.For<ITransientFailureClassifier>();
+        classifier.IsTransient(Arg.Any<Exception>()).Returns(true);
+        var behavior = new LoggingPipelineBehavior<MockRequest, Result>(_logger, TimeProvider.System, transientFailures: classifier);
+
+        await Should.ThrowAsync<InvalidOperationException>(() => behavior.Handle(
+            new MockRequest(),
+            _ => Task.FromException<Result>(new InvalidOperationException("the service's own outage")),
+            CancellationToken.None));
+
+        LoggedLevels().ShouldBe([LogLevel.Information, LogLevel.Warning]);
     }
 
     [Fact]

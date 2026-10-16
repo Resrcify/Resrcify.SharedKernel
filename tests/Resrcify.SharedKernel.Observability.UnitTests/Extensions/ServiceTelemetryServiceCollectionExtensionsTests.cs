@@ -79,14 +79,14 @@ public sealed partial class ServiceTelemetryServiceCollectionExtensionsTests
         var exported = new List<Activity>();
         using var provider = Telemetry.Build(options =>
         {
-            options.ActivitySources.Add("Npgsql");
+            options.ActivitySources.Add("StackExchange.Redis");
             options.ConfigureTracing = tracing => tracing.AddInMemoryExporter(exported);
         });
         provider.GetRequiredService<TracerProvider>();
 
-        RecordActivity("Npgsql");
+        RecordActivity("StackExchange.Redis");
 
-        exported.ShouldContain(activity => activity.Source.Name == "Npgsql");
+        exported.ShouldContain(activity => activity.Source.Name == "StackExchange.Redis");
     }
 
     [Fact]
@@ -321,6 +321,135 @@ public sealed partial class ServiceTelemetryServiceCollectionExtensionsTests
         await WaitUntilAsync(() => PathsOf(exported).Contains("/players"));
 
         PathsOf(exported).ShouldBe(["/players"]);
+    }
+
+    [Fact]
+    public void AddServiceTelemetry_ShouldTraceNpgsql_ByDefault()
+    {
+        var exported = new List<Activity>();
+        using var provider = Telemetry.Build(options => options.ConfigureTracing = tracing => tracing.AddInMemoryExporter(exported));
+        provider.GetRequiredService<TracerProvider>();
+
+        RecordActivity(TelemetrySources.Npgsql);
+
+        exported.ShouldContain(activity => activity.Source.Name == TelemetrySources.Npgsql);
+    }
+
+    [Fact]
+    public void AddServiceTelemetry_ShouldNotTraceNpgsql_WhenItsInstrumentationIsOff()
+    {
+        var exported = new List<Activity>();
+        using var provider = Telemetry.Build(options =>
+        {
+            options.NpgsqlInstrumentation = false;
+            options.ConfigureTracing = tracing => tracing.AddInMemoryExporter(exported);
+        });
+        provider.GetRequiredService<TracerProvider>();
+
+        RecordActivity(TelemetrySources.Npgsql);
+
+        exported.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void AddServiceTelemetry_ShouldBoundWhatADestructuredPropertyWrites_ByDefault()
+    {
+        var sink = new CollectingSink();
+        using var provider = LoggingOnly(sink);
+
+        var logger = provider.GetRequiredService<ILoggerFactory>().CreateLogger("test");
+        var logged = Payload();
+        LogPayload(logger, logged);
+
+        var payload = (StructureValue)sink.Events.ShouldHaveSingleItem().Properties["Payload"];
+        Property(payload, nameof(DestructuredPayload.Text)).ShouldBeOfType<ScalarValue>().Value
+            .ShouldBeOfType<string>().Length.ShouldBeLessThanOrEqualTo(1024 + 1);
+        ((SequenceValue)Property(payload, nameof(DestructuredPayload.Items))).Elements.Count.ShouldBe(20);
+        DepthOf(Property(payload, nameof(DestructuredPayload.Nested))).ShouldBeLessThan(4);
+    }
+
+    [Fact]
+    public void AddServiceTelemetry_ShouldLetTheSerilogSectionOverrideTheBounds()
+    {
+        var sink = new CollectingSink();
+        using var provider = LoggingOnly(sink, new Dictionary<string, string?>
+        {
+            ["Serilog:Destructure:0:Name"] = "ToMaximumCollectionCount",
+            ["Serilog:Destructure:0:Args:maximumCollectionCount"] = "5",
+        });
+
+        var logger = provider.GetRequiredService<ILoggerFactory>().CreateLogger("test");
+        var logged = Payload();
+        LogPayload(logger, logged);
+
+        var payload = (StructureValue)sink.Events.ShouldHaveSingleItem().Properties["Payload"];
+        ((SequenceValue)Property(payload, nameof(DestructuredPayload.Items))).Elements.Count.ShouldBe(5);
+    }
+
+    [Fact]
+    public void AddServiceTelemetry_ShouldWriteEverything_WhenTheBoundsAreTurnedOff()
+    {
+        var sink = new CollectingSink();
+        using var provider = Telemetry.Build(options =>
+        {
+            options.Tracing = false;
+            options.Metrics = false;
+            options.MaximumDestructuredCollectionCount = null;
+            options.MaximumDestructuredStringLength = null;
+            options.ConfigureLogging = logging => logging.WriteTo.Sink(sink);
+        });
+
+        var logger = provider.GetRequiredService<ILoggerFactory>().CreateLogger("test");
+        var logged = Payload();
+        LogPayload(logger, logged);
+
+        var payload = (StructureValue)sink.Events.ShouldHaveSingleItem().Properties["Payload"];
+        ((SequenceValue)Property(payload, nameof(DestructuredPayload.Items))).Elements.Count.ShouldBe(50);
+        ((ScalarValue)Property(payload, nameof(DestructuredPayload.Text))).Value.ShouldBe(new string('x', 5000));
+    }
+
+    private static ServiceProvider LoggingOnly(
+        CollectingSink sink,
+        Dictionary<string, string?>? settings = null)
+        => Telemetry.Build(
+            options =>
+            {
+                options.Tracing = false;
+                options.Metrics = false;
+                options.ConfigureLogging = logging => logging.WriteTo.Sink(sink);
+            },
+            settings);
+
+    private static DestructuredPayload Payload()
+        => new(
+            new string('x', 5000),
+            [.. Enumerable.Range(0, 50)],
+            new Level(new Level(new Level(new Level(new Level(null))))));
+
+    private static LogEventPropertyValue Property(
+        StructureValue structure,
+        string name)
+        => structure.Properties.Single(property => property.Name == name).Value;
+
+    // How many structures deep a value goes before it is cut (a cut one is written as a scalar or left out).
+    private static int DepthOf(LogEventPropertyValue value)
+        => value is StructureValue structure && structure.Properties.FirstOrDefault(property => property.Name == nameof(Level.Inner)) is { } inner
+            ? 1 + DepthOf(inner.Value)
+            : 0;
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Payload {@Payload}")]
+    private static partial void LogPayload(
+        ILogger logger,
+        DestructuredPayload payload);
+
+    internal sealed record DestructuredPayload(
+        string Text,
+        int[] Items,
+        Level Nested);
+
+    internal sealed class Level(Level? inner)
+    {
+        public Level? Inner { get; } = inner;
     }
 
     private static void RecordActivity(

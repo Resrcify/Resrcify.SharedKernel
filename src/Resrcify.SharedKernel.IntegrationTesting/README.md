@@ -16,7 +16,11 @@ RabbitMQ in Testcontainers, and a host fixture that runs a service's `Program` i
   - [A service without a database](#a-service-without-a-database)
   - [What a service changes](#what-a-service-changes)
   - [A Program with its own configuration builder](#a-program-with-its-own-configuration-builder)
+  - [What the service logged: `Logs`](#what-the-service-logged-logs)
+  - [The message bus on the test harness: `UsesMessageBusTestHarness`](#the-message-bus-on-the-test-harness-usesmessagebustestharness)
 - [Container fixtures](#container-fixtures)
+  - [A production-like broker](#a-production-like-broker)
+  - [Events on a real broker: `PublishedEventListener`](#events-on-a-real-broker-publishedeventlistener)
 
 ## What you get
 
@@ -27,10 +31,16 @@ RabbitMQ in Testcontainers, and a host fixture that runs a service's `Program` i
 - `IntegrationFactoryBase<TProgram>` (`Factories/`): a `WebApplicationFactory` whose subclass supplies settings, for
   hosts that own no containers. The settings win over `appsettings*.json` and environment variables, with
   `WebApplication.CreateBuilder` and `Host.CreateDefaultBuilder` alike.
-- `PostgresContainerFixture`, `RabbitMqContainerFixture` (`Fixtures/`): one container each, `postgres:18` and
-  `rabbitmq:4.3.4-management` (the RabbitMQ Cluster Operator v2.23.0's default) by default (`RESRCIFY_TEST_POSTGRES_IMAGE` / `RESRCIFY_TEST_RABBITMQ_IMAGE` replace the
-  image for every fixture), a readiness probe, `JoinNetwork(network, aliases)`, and for RabbitMQ
-  `WaitForExchangePublish`.
+- `ServiceHostFixture.Logs`: what the host logged, through the logging abstraction and Serilog, in Microsoft's
+  `FakeLogCollector`; `UsesMessageBusTestHarness`: the service's buses on the message bus test harness, in memory.
+- `PostgresContainerFixture`, `RabbitMqContainerFixture` (`Fixtures/`): one container each, on the images production
+  runs, `postgres:18` and `rabbitmq:4.3.4-management` (the RabbitMQ Cluster Operator v2.23.0's default)
+  (`RESRCIFY_TEST_POSTGRES_IMAGE` / `RESRCIFY_TEST_RABBITMQ_IMAGE` replace the image for every fixture), their
+  database and credentials set with init properties (no subclass), a readiness probe, `JoinNetwork(network, aliases)`,
+  and for RabbitMQ production's queue defaults (`ProductionQueueDefaults`), `QueuesAsync`, `AddQuorumVirtualHostAsync`,
+  `Connection` and `WaitForExchangePublish`.
+- With Resrcify.SharedKernel.MessageBus.Testing (which this references): `PublishedEventListener`, a subscriber to
+  the integration events a service publishes on a real broker.
 
 ## Prerequisites
 
@@ -50,8 +60,12 @@ RabbitMQ in Testcontainers, and a host fixture that runs a service's `Program` i
 public sealed class ShardHostFixture
     : ServiceHostFixture<Program>
 {
-    protected override PostgresContainerFixture CreatePostgres() => new PostgresFixture();      // the service's own
-    protected override RabbitMqContainerFixture? CreateRabbitMq() => new RabbitMqFixture();     // null: no broker
+    // The service's database and credentials; production's image. null: no database.
+    protected override PostgresContainerFixture CreatePostgres()
+        => new() { Database = "ShardDb", Username = "ShardUser", Password = "K33pTr4ck" };
+    // null (the default): no broker. Production's quorum queues and delivery limit.
+    protected override RabbitMqContainerFixture? CreateRabbitMq()
+        => new() { ProductionQueueDefaults = true };
     protected override bool UsesNetwork => true;                                               // see below
 
     protected override void ConfigureSettings(IDictionary<string, string?> settings)
@@ -205,10 +219,50 @@ public sealed class ShardHostFixture : WebApplicationFactory<Program>, IAsyncLif
 }
 ```
 
-After: the class above. The service's `PostgresFixture`/`RabbitMqFixture` stay as they are; a `RabbitMqFixture` that
-built its own network can drop it for `UsesNetwork` (its alias is the same, `rabbitmq`). Tests reach the containers as
-`host.Postgres` / `host.RabbitMq` (typed as the base fixtures; cast for the service's own members, or keep the
-constants on the service's fixture classes).
+After: the class above. The service's `PostgresFixture` / `RabbitMqFixture` subclasses, which only set credentials
+(and an image), go: their values move into `CreatePostgres()` / `CreateRabbitMq()` as init properties
+(`Database`, `Username`, `Password`), and the image stays production's. A `RabbitMqFixture` that built its own network
+can drop it for `UsesNetwork` (its alias is the same, `rabbitmq`). Tests reach the containers as `host.Postgres` /
+`host.RabbitMq`, the broker as the bus connects to it as `host.RabbitMq.Connection`, and its user as
+`host.RabbitMq.BrokerUsername` / `BrokerPassword`.
+
+### What the service logged: `Logs`
+
+`Logs` is Microsoft's `FakeLogCollector` (Microsoft.Extensions.Diagnostics.Testing): every line the host logged that
+its own level filters let through, with its category, level, message, exception and structured state.
+
+```csharp
+await client.PostAsJsonAsync("/shards", request);
+var warning = host.Logs.GetSnapshot().ShouldHaveSingleItem(record => record.Level == LogLevel.Warning);
+```
+
+It hears both ways a service logs: through a provider of the logging abstraction, and, for a service on Serilog,
+through a sink registered in the container, which `AddServiceTelemetry`'s Serilog reads (`ReadFrom.Services`). A line
+arrives once (Serilog bypasses the abstraction's providers). A service setting up Serilog itself without
+`ReadFrom.Services(provider)` is heard through the providers only, i.e. not at all. `Logs.Clear()` between tests in a
+shared fixture.
+
+### The message bus on the test harness: `UsesMessageBusTestHarness`
+
+```csharp
+public sealed class HarnessShardHostFixture : ServiceHostFixture<Program>
+{
+    protected override bool UsesMessageBusTestHarness => true;   // no broker: CreateRabbitMq stays null
+
+    protected override PostgresContainerFixture CreatePostgres()
+        => new() { Database = "ShardDb", Username = "ShardUser", Password = "K33pTr4ck" };
+}
+
+// In a test:
+await host.Harness.Published.WaitForAsync<ShardCreated>(e => e.Name == "Main");
+await using var players = await host.BusNetwork.StartResponderAsync<GetPlayer, PlayerProfile>(...);
+```
+
+The fixture calls `AddMessageBusTestHarness(BusNetwork)` after the service's registrations, so every bus of the
+service runs in memory on `BusNetwork`, whatever transport it configured (no `MessageBus:*` settings are needed),
+recorded by `Harness` (the service's `MessageBusTestHarness`; reading it without the switch throws). It replaces the
+`BusNetwork` property and the `ConfigureTestServices(services => services.AddMessageBusTestHarness(BusNetwork))` each
+service's `Harness*HostFixture` wrote.
 
 ### A Program with its own configuration builder
 
@@ -228,5 +282,44 @@ builder.Services.AddPersistenceServices(configuration);
 ## Container fixtures
 
 Use them on their own (`IClassFixture<PostgresContainerFixture>`) when a test needs a database but no host;
-`CreateIsolatedConnectionString()` gives each test class a database of its own. Subclass them to set the image,
-database or credentials (`Configure`).
+`CreateIsolatedConnectionString()` gives each test class a database of its own. Set the database and credentials with
+init properties (`new PostgresContainerFixture { Database = "ShardDb", Username = "ShardUser", Password = "..." }`,
+`new RabbitMqContainerFixture { Username = "messageUser", Password = "..." }`), or in a subclass' constructor when xUnit
+needs a type of its own (`public ShardPostgres() => Database = "ShardDb";`). Both default to the images production
+runs: leave `Image` alone (a test on another version proves less), and try another version for a whole run with
+`RESRCIFY_TEST_POSTGRES_IMAGE` / `RESRCIFY_TEST_RABBITMQ_IMAGE`. `Configure` (a subclass) still sets any other builder
+option.
+
+### A production-like broker
+
+Production's RabbitMQ declares a queue without a type as a quorum queue and gives every queue a delivery limit of a
+million (RabbitMQ 4 limits a quorum queue to 20 redeliveries otherwise): Resrcify.Kubernetes' `additionalConfig`.
+
+```csharp
+new RabbitMqContainerFixture { ProductionQueueDefaults = true }      // the whole broker, as production
+
+var quorum = await rabbitMq.AddQuorumVirtualHostAsync();             // or one virtual host of a shared broker
+await host.StartAsync(quorum);                                       // a RabbitMqConnection in that virtual host
+
+var queues = await rabbitMq.QueuesAsync(quorum.VirtualHost);         // name, type (classic, quorum), exclusive
+queues.ShouldContain(new RabbitMqQueue("shardmanagement", "quorum", Exclusive: false));
+```
+
+`ProductionQueueConfig` is the configuration it mounts (`/etc/rabbitmq/conf.d/90-production-queues.conf`).
+
+### Events on a real broker: `PublishedEventListener`
+
+`PublishedEventListener` (Resrcify.SharedKernel.MessageBus.Testing) subscribes to a service's integration events on a
+real broker as another service would: a bus of its own with an input queue of its own, bound to each event's topic
+(its wire name), recording what arrives.
+
+```csharp
+await using var events = await PublishedEventListener.StartAsync(
+    host.RabbitMq!.Connection,
+    listen => listen.Listen<ShardCreated>().Listen<ShardRenamed>("ShardRenamedV2"));   // a wire name of its own
+await client.PostAsJsonAsync("/shards", request);
+var created = await events.Received.WaitForAsync<ShardCreated>(e => e.Name == "Main");
+```
+
+Start it before the publish (a publish before its queue is bound has nowhere to go); disposing it unsubscribes and
+stops it. It replaces Shard's `TopicListener` (raw RabbitMQ on `RebusTopics`) and Sentinel's `EventSubscriber`.

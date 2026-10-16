@@ -12,9 +12,12 @@
     <ProjectReference Include="..\Resrcify.SharedKernel.Abstractions\Resrcify.SharedKernel.Abstractions.csproj" />
   </ItemGroup>
 
+  <!-- Real dependencies: IDistributedCache (DistributedCachingService) and MemoryDistributedCacheOptions
+       (AddDistributedCaching) are in this package's API. Inner layers never reference this package (they use
+       ICachingService from Abstractions), so nothing reaches Domain or Application through it. -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
+    <!-- AddDistributedCaching's in-memory cache. -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
   </ItemGroup>
 </Project>

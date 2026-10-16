@@ -9,7 +9,10 @@ namespace Resrcify.SharedKernel.MessageBus.UnitTests.Support;
 
 /// <summary>
 /// Records the message bus' counters as <c>"name tag=value …"</c>, tags sorted, for tests to look for. Every test in the
-/// process shares the meter, so look for what the test itself caused (e.g. tagged with its own queue).
+/// process shares the meter, so look for what the test itself caused (e.g. tagged with its own queue). A count of a
+/// measurement tagged only with names other classes use too (the <c>events.*</c> counters carry the event's name and
+/// the outcome, no tag of the bus) is only exact in a class of the <see cref="SharedMeterCollection"/>, which runs with
+/// no other class beside it.
 /// </summary>
 internal sealed class MetricsCapture : IDisposable
 {

@@ -12,6 +12,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Fixtures;
 using Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Models;
@@ -97,14 +98,14 @@ public sealed class MigrateOnStartupServiceTests(
     {
         var failures = new List<Exception>();
         var rounds = RaceRounds();
-        using var logs = new CapturingLoggerProvider();
+        using var logs = new FakeLoggerProvider();
 
         for (var round = 0; round < rounds; round++)
             failures.AddRange(await StartAtOnceAsync(round, historySchema, logs));
 
-        var retries = logs.Entries
+        var retries = logs.Collector.GetSnapshot()
             .Where(entry => entry.Level == LogLevel.Warning)
-            .Where(entry => entry.Category.Contains("MigrateOnStartupService", StringComparison.Ordinal))
+            .Where(entry => entry.Category?.Contains("MigrateOnStartupService", StringComparison.Ordinal) == true)
             .ToList();
         output.WriteLine($"{failures.Count} of {rounds * RaceInstances} instances failed to start in {rounds} rounds");
         output.WriteLine($"{retries.Count} tries lost a creation race and were retried");
@@ -115,7 +116,7 @@ public sealed class MigrateOnStartupServiceTests(
     private async Task<List<Exception>> StartAtOnceAsync(
         int round,
         string? historySchema,
-        CapturingLoggerProvider logs)
+        FakeLoggerProvider logs)
     {
         var connectionString = postgres.CreateIsolatedConnectionString();
         var hosts = Enumerable.Range(0, RaceInstances)
@@ -179,7 +180,7 @@ public sealed class MigrateOnStartupServiceTests(
         string connectionString,
         string? run,
         string? historySchema = null,
-        CapturingLoggerProvider? logs = null)
+        FakeLoggerProvider? logs = null)
     {
         var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings());
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["Migrations:Run"] = run });

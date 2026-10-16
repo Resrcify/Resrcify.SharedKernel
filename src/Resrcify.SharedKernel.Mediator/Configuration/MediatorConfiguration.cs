@@ -25,8 +25,6 @@ public sealed class MediatorConfiguration
 
     internal NotificationPublishStrategy NotificationPublishStrategy { get; private set; } = NotificationPublishStrategy.Sequential;
 
-    internal bool UseDiTimePipelineComposition { get; private set; }
-
     internal ServiceLifetime MediatorLifetime { get; private set; } = ServiceLifetime.Transient;
 
     /// <summary>Whether <see cref="ConfigureLogging"/> was called (its options then replace another call's defaults).</summary>
@@ -54,13 +52,21 @@ public sealed class MediatorConfiguration
     /// </summary>
     internal bool ChecksBehaviors { get; private set; } = true;
 
+    /// <summary>
+    /// Whether <c>AddMediator</c> registers the FluentValidation validators of the scanned assemblies (see
+    /// <see cref="SkipValidatorScan"/>).
+    /// </summary>
+    internal bool ScansValidators { get; private set; } = true;
+
     /// <summary>The pre- and post-processors to register, in order.</summary>
     internal IReadOnlyList<ServiceDescriptor> ProcessorRegistrations => _processorRegistrations;
 
     /// <summary>
     /// Registers the request handlers (<see cref="IRequestHandler{TRequest, TResponse}"/>,
-    /// <see cref="IValueTaskRequestHandler{TRequest, TResponse}"/>, <see cref="IStreamRequestHandler{TRequest, TResponse}"/>)
-    /// and notification handlers (<see cref="INotificationHandler{TNotification}"/>) of <paramref name="assemblies"/>.
+    /// <see cref="IValueTaskRequestHandler{TRequest, TResponse}"/>, <see cref="IStreamRequestHandler{TRequest, TResponse}"/>),
+    /// notification handlers (<see cref="INotificationHandler{TNotification}"/>) and FluentValidation validators
+    /// (every <c>IValidator&lt;T&gt;</c>, internal ones included, scoped, unless <see cref="SkipValidatorScan"/>) of
+    /// <paramref name="assemblies"/>.
     /// Behaviors and processors in them are not registered: add them with <see cref="AddOpenBehavior(Type)"/>,
     /// <see cref="AddStandardBehaviors"/>, <see cref="AddRequestPreProcessor(Type)"/> and
     /// <see cref="AddRequestPostProcessor(Type)"/>, so they run only when asked for, in the order asked for.
@@ -185,16 +191,21 @@ public sealed class MediatorConfiguration
         return this;
     }
 
+    /// <summary>
+    /// Turns off the registration of the scanned assemblies' FluentValidation validators, for a service that registers
+    /// them itself with another lifetime or a filter. A service calling <c>AddValidatorsFromAssembly</c> for the same
+    /// assemblies doesn't need it: a validator is registered once, whichever comes first.
+    /// </summary>
+    public MediatorConfiguration SkipValidatorScan()
+    {
+        ScansValidators = false;
+        return this;
+    }
+
     public MediatorConfiguration UseNotificationPublishStrategy(
         NotificationPublishStrategy strategy)
     {
         NotificationPublishStrategy = strategy;
-        return this;
-    }
-
-    public MediatorConfiguration EnableDiTimePipelineComposition(bool enabled = true)
-    {
-        UseDiTimePipelineComposition = enabled;
         return this;
     }
 

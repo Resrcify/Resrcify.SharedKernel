@@ -27,13 +27,16 @@ Release notes, including what each major version breaks and how to upgrade: [CHA
       service hosted in-process on its own PostgreSQL and RabbitMQ)
     - `Resrcify.SharedKernel.Mediator`
     - `Resrcify.SharedKernel.MessageBus`
+    - `Resrcify.SharedKernel.MessageBus.Testing` (the message bus test harness: an in-memory network, awaitable
+      recordings, stand-in responders, and `PublishedEventListener` for events on a real broker)
     - `Resrcify.SharedKernel.Observability` (one-call OpenTelemetry, Prometheus, OTLP and Serilog wiring)
     - `Resrcify.SharedKernel.Repository`
     - `Resrcify.SharedKernel.Results`
     - `Resrcify.SharedKernel.UnitOfWork`
     - `Resrcify.SharedKernel.UnitOfWork.Postgres` (the PostgreSQL DbContext setup, design-time factory, `xmin` row
-      versions and an outbox woken by `NOTIFY`)
-    - `Resrcify.SharedKernel.Web`
+      versions, an outbox woken by `NOTIFY`, and the database's health check)
+    - `Resrcify.SharedKernel.Web` (problem details, the health endpoints, HTTP resilience, JWT bearer, and the
+      admin endpoints of the message bus' error queue and of the outbox)
 - Unit-test projects under `tests/` for each source module.
 - Benchmark suite in `tests/Resrcify.SharedKernel.PerformanceTests`.
 - Runnable sample in `samples/Resrcify.SharedKernel.WebApiExample`.
@@ -57,7 +60,7 @@ SharedKernel package is used only where it belongs. Inner layers reach the imple
 | Caching | Domain, Application, Persistence, Presentation |
 | Web | Domain, Application, Persistence |
 | Observability | Domain, Application, Persistence, Presentation |
-| ArchitectureTesting, IntegrationTesting | every layer (tests only) |
+| ArchitectureTesting, IntegrationTesting, MessageBus.Testing | every layer (tests only) |
 
 Override `SharedKernelPackageRestrictions` (keyed by the `SharedKernelPackage` enum, layers from `Layers`) to change it.
 
@@ -76,7 +79,7 @@ Override `SharedKernelPackageRestrictions` (keyed by the `SharedKernelPackage` e
 ## Build and test
 
 ```powershell
-Set-Location "d:\Google Drive\Projects\Titan404\Resrcify.SharedKernel"
+# From the repository root (where Resrcify.SharedKernel.slnx is):
 dotnet restore .\Resrcify.SharedKernel.slnx
 dotnet build .\Resrcify.SharedKernel.slnx
 dotnet test .\Resrcify.SharedKernel.slnx

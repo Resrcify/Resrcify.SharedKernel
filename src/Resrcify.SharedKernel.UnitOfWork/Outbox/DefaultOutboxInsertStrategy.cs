@@ -11,7 +11,7 @@ namespace Resrcify.SharedKernel.UnitOfWork.Outbox;
 /// race-tolerant, but a partial unique index on the table would fail this
 /// strategy with <see cref="Microsoft.EntityFrameworkCore.DbUpdateException"/>
 /// and rollback the user transaction. Use
-/// <see cref="PostgresOnConflictOutboxInsertStrategy"/> instead if a strict
+/// <c>PostgresOnConflictOutboxInsertStrategy</c> instead if a strict
 /// unique index is required.
 /// </summary>
 public sealed class DefaultOutboxInsertStrategy : IOutboxInsertStrategy

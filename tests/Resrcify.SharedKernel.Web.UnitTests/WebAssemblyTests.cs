@@ -10,11 +10,11 @@ using Xunit;
 namespace Resrcify.SharedKernel.Web.UnitTests;
 
 /// <summary>
-/// The Web assembly in a service that references none of its optional (private) packages: JwtBearer for
-/// AddResrcifyJwtBearer, Http.Resilience and Polly for AddResultResilience. MVC loads every type of it to find
-/// controllers (it has ApiController), so no type may need those packages just to load: no base type, interface,
-/// generic argument of either, or value-type field (static too) from them. Methods may use them; they load only when
-/// called.
+/// The Web assembly without the packages only some of its methods use: JwtBearer for AddResrcifyJwtBearer,
+/// Http.Resilience and Polly for AddResultResilience. They are the package's dependencies (4.3.0), but a service may
+/// leave them out (<c>ExcludeAssets</c>) when it calls neither. MVC loads every type of it to find controllers (it has
+/// ApiController), so no type may need those packages just to load: no base type, interface, generic argument of
+/// either, or value-type field (static too) from them. Methods may use them; they load only when called.
 /// </summary>
 [SuppressMessage(
     "Performance",

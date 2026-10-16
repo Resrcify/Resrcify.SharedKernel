@@ -27,10 +27,10 @@ public sealed class IntegrationEventRegistrationTests
     {
         var services = new ServiceCollection();
         if (mediatorFirst)
-            services.AddMediator(typeof(IntegrationEventRegistrationTests).Assembly);
+            services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(IntegrationEventRegistrationTests).Assembly));
         services.AddMessageBus(bus => bus.UseInMemory().AddEventHandlers());
         if (!mediatorFirst)
-            services.AddMediator(typeof(IntegrationEventRegistrationTests).Assembly);
+            services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(IntegrationEventRegistrationTests).Assembly));
 
         services.ShouldContain(descriptor =>
             descriptor.ServiceType == typeof(IIntegrationEventHandler<ShardRenamed>) &&
@@ -46,9 +46,9 @@ public sealed class IntegrationEventRegistrationTests
     {
         var assembly = typeof(IntegrationEventRegistrationTests).Assembly;
         var services = new ServiceCollection();
-        services.AddMediator(assembly);
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(assembly));
         services.AddMessageBus(bus => bus.UseInMemory().AddEventHandlers(assembly));
-        services.AddMediator(assembly);
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(assembly));
 
         services.Count(descriptor => descriptor.ServiceType == typeof(IHandleMessages<ShardRenamed>)).ShouldBe(1);
         SubscribedEvents(services).Count(eventType => eventType == typeof(ShardRenamed)).ShouldBe(1);

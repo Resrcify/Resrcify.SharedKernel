@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Resrcify.SharedKernel.Abstractions.Health;
 using Resrcify.SharedKernel.Web.Health;
 
 namespace Resrcify.SharedKernel.Web.Extensions;

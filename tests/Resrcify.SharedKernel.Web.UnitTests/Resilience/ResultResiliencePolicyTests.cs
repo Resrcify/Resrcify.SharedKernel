@@ -7,7 +7,9 @@ using System.Net.Http.Headers;
 using Microsoft.Extensions.Time.Testing;
 using Polly;
 using Polly.CircuitBreaker;
+using Polly.RateLimiting;
 using Polly.Timeout;
+using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.Web.Resilience;
 using Shouldly;
 using Xunit;
@@ -83,6 +85,22 @@ public sealed class ResultResiliencePolicyTests
     }
 
     [Fact]
+    public void ShouldRetry_ShouldRetryWhatSharedKernelsRuleCallsTransient_ButNotARejection()
+    {
+        Policy().ShouldRetry(Outcome.FromException<HttpResponseMessage>(new TimeoutException("too slow"))).ShouldBeTrue();
+        Policy()
+            .ShouldRetry(Outcome.FromException<HttpResponseMessage>(new HttpRequestException("down", null, HttpStatusCode.ServiceUnavailable)))
+            .ShouldBeTrue();
+        Policy()
+            .ShouldRetry(Outcome.FromException<HttpResponseMessage>(new HttpRequestException("no such thing", null, HttpStatusCode.NotFound)))
+            .ShouldBeFalse();
+        Policy().ShouldRetry(Outcome.FromException<HttpResponseMessage>(new InvalidOperationException("a bug"))).ShouldBeFalse();
+        Policy().ShouldRetry(Outcome.FromException<HttpResponseMessage>(new BrokenCircuitException())).ShouldBeFalse();
+        Policy().ShouldRetry(Outcome.FromException<HttpResponseMessage>(new IsolatedCircuitException())).ShouldBeFalse();
+        Policy().ShouldRetry(Outcome.FromException<HttpResponseMessage>(new RateLimiterRejectedException())).ShouldBeFalse();
+    }
+
+    [Fact]
     public void ShouldRetry_ShouldNotRetryACancellation()
         => Policy().ShouldRetry(Outcome.FromException<HttpResponseMessage>(new OperationCanceledException())).ShouldBeFalse();
 
@@ -152,13 +170,14 @@ public sealed class ResultResiliencePolicyTests
     }
 
     [Fact]
-    public void AnswersInPlaceOf_ShouldBeATimeoutOrAnOpenCircuit_NeverACancellation()
+    public void AnswersInPlaceOf_ShouldBeATimeoutAnOpenCircuitOrNoAnswer_NeverACancellation()
     {
         Policy().AnswersInPlaceOf(new TimeoutRejectedException()).ShouldBeTrue();
         Policy().AnswersInPlaceOf(new BrokenCircuitException()).ShouldBeTrue();
         Policy().AnswersInPlaceOf(new IsolatedCircuitException()).ShouldBeTrue();
+        Policy().AnswersInPlaceOf(new HttpRequestException("refused")).ShouldBeTrue();
+        Policy().AnswersInPlaceOf(new HttpRequestException("answered", null, HttpStatusCode.ServiceUnavailable)).ShouldBeFalse();
         Policy().AnswersInPlaceOf(new OperationCanceledException()).ShouldBeFalse();
-        Policy().AnswersInPlaceOf(new HttpRequestException("refused")).ShouldBeFalse();
         Policy().AnswersInPlaceOf(null).ShouldBeFalse();
     }
 
@@ -169,6 +188,7 @@ public sealed class ResultResiliencePolicyTests
 
         policy.AnswersInPlaceOf(new TimeoutRejectedException()).ShouldBeFalse();
         policy.AnswersInPlaceOf(new BrokenCircuitException()).ShouldBeFalse();
+        policy.AnswersInPlaceOf(new HttpRequestException("refused")).ShouldBeFalse();
     }
 
     [Theory]
@@ -250,4 +270,12 @@ public sealed class ResultResiliencePolicyTests
     private static HttpResponseMessage RateLimited(
         RetryConditionHeaderValue retryAfter)
         => new(HttpStatusCode.TooManyRequests) { Headers = { RetryAfter = retryAfter } };
+
+    [Fact]
+    public void ResultResilienceErrors_ShouldBeCodedFromResultsCatalogue()
+    {
+        ResultResilienceErrors.Timeout.Code.ShouldBe(ErrorCodes.Http.ResilienceTimeout);
+        ResultResilienceErrors.CircuitOpen.Code.ShouldBe(ErrorCodes.Http.CircuitOpen);
+        ResultResilienceErrors.Unreachable("upstream", "refused").Code.ShouldBe(ErrorCodes.Http.Unreachable);
+    }
 }

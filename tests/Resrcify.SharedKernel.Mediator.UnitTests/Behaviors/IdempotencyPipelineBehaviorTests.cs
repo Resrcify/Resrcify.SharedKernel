@@ -69,7 +69,7 @@ public sealed class IdempotencyPipelineBehaviorTests
     public async Task ARepeatedKey_ShouldGetTheFirstResult_ThroughTheDistributedCache()
     {
         // The Caching package's cache and claim store: the kept result round-trips through its JSON.
-        var cache = new DistributedCachingService(new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())));
+        var cache = new DistributedCachingService(new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())), TimeProvider.System);
         await using var services = Services(store: cache);
 
         var first = await SendAsync(services, new CreateShard("Main", "key-1"));
@@ -234,7 +234,7 @@ public sealed class IdempotencyPipelineBehaviorTests
         services.AddLogging();
         services.AddSingleton(_handled);
         services.AddScoped(_ => Substitute.For<IUnitOfWork>().RunningOperations<Result<ShardView>>());
-        services.AddSingleton<ICachingService>(new DistributedCachingService(new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions()))));
+        services.AddSingleton<ICachingService>(new DistributedCachingService(new MemoryDistributedCache(Options.Create(new MemoryDistributedCacheOptions())), TimeProvider.System));
         services.AddMediator(cfg => cfg.AddStandardBehaviors(options => options.Without(StandardBehavior.Caching)));
         services.AddTransient<IRequestHandler<CreateShard, Result<ShardView>>, CreatingHandler<CreateShard>>();
         await using var provider = services.BuildServiceProvider();

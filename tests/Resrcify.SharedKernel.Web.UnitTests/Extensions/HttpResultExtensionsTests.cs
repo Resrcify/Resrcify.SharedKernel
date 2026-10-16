@@ -138,7 +138,7 @@ public class HttpResultExtensionsTests
             .GetMethod("GetDominantErrorType", BindingFlags.NonPublic | BindingFlags.Static)!
             .Invoke(null, [errors]) as ErrorType? ?? ErrorType.Failure;
 
-        var expectedStatus = HttpResultExtensions.GetStatusCode(dominant);
+        var expectedStatus = ErrorTypes.ToHttpStatus(dominant);
         var expectedTitle = HttpResultExtensions.GetTitle(dominant);
         var expectedType = HttpResultExtensions.GetType(dominant);
 

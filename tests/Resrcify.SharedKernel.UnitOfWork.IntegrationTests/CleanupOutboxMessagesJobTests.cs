@@ -89,14 +89,33 @@ public sealed class CleanupOutboxMessagesJobTests(PostgresFixture pg)
         (await RemainingIdsAsync()).ShouldBeEmpty();
     }
 
-    private async Task RunJobAsync(int retentionInDays, TimeProvider? clock = null)
+    [Fact]
+    public async Task Execute_ShouldReadTheRetentionInDays_OfAJobStoredBefore430()
+    {
+        var now = DateTime.UtcNow;
+        var old = Message(occurred: now.AddDays(-10), processed: now.AddDays(-9));
+        var recent = Message(occurred: now.AddDays(-2), processed: now.AddDays(-1));
+        await SaveAsync(old, recent);
+
+        await RunJobAsync(retentionInDays: 7, storedBefore430: true);
+
+        (await RemainingIdsAsync()).ShouldBe([recent.Id]);
+    }
+
+    private async Task RunJobAsync(
+        int retentionInDays,
+        TimeProvider? clock = null,
+        bool storedBefore430 = false)
     {
         var job = new CleanupOutboxMessagesJob<TestDbContext>(
             _services.GetRequiredService<IServiceScopeFactory>(),
             NullLogger<CleanupOutboxMessagesJob<TestDbContext>>.Instance,
-            clock);
+            clock ?? TimeProvider.System);
         var context = Substitute.For<IJobExecutionContext>();
-        context.MergedJobDataMap.Returns(new JobDataMap { ["ProcessedRetentionInDays"] = retentionInDays });
+        // 4.2 and before stored whole days under the old key; 4.3 stores milliseconds.
+        context.MergedJobDataMap.Returns(storedBefore430
+            ? new JobDataMap { ["ProcessedRetentionInDays"] = retentionInDays }
+            : new JobDataMap { ["ProcessedRetentionInMilliseconds"] = (long)TimeSpan.FromDays(retentionInDays).TotalMilliseconds });
         await job.Execute(context);
     }
 

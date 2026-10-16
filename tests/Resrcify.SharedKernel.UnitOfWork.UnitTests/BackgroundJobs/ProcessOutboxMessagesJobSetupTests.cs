@@ -3,7 +3,10 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using Quartz;
+using Resrcify.SharedKernel.Abstractions.Resilience;
+using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
@@ -31,6 +34,9 @@ public class ProcessOutboxMessagesJobSetupTests
 {
     private static readonly JobKey OutboxJobKey = OutboxJobs.Process<TestDbContext>();
 
+    // A claim of the service's own (PostgreSQL's is in the Postgres package).
+    private static readonly IOutboxLaneClaim Claim = Substitute.For<IOutboxLaneClaim>();
+
     [Fact]
     public async Task AddProcessOutboxMessagesJob_Should_RegisterTheJobOnTheScheduler()
     {
@@ -54,7 +60,8 @@ public class ProcessOutboxMessagesJobSetupTests
         await using var provider = BuildProvider(services => services.AddQuartz(quartz =>
             quartz.AddProcessOutboxMessagesJob<TestDbContext>(
                 processBatchSize: 7,
-                processMaxRetryCount: 5)));
+                retries: new RetrySchedule(5, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(20)),
+                transientRetries: new RetrySchedule(9, TimeSpan.FromSeconds(3), TimeSpan.FromMinutes(1), Jitter: true))));
         var scheduler = await GetSchedulerAsync(provider);
 
         var job = await scheduler.GetJobDetail(OutboxJobKey);
@@ -64,13 +71,21 @@ public class ProcessOutboxMessagesJobSetupTests
         batchSize.ShouldBe(7);
         job.JobDataMap.TryGetValue("ProcessMaxRetryCount", out var maxRetryCount).ShouldBeTrue();
         maxRetryCount.ShouldBe(5);
+        job.JobDataMap.TryGetValue("ProcessMaxTransientRetryCount", out var maxTransientRetryCount).ShouldBeTrue();
+        maxTransientRetryCount.ShouldBe(9);
+        job.JobDataMap["ProcessRetryDelayInMilliseconds"].ShouldBe(2_000L);
+        job.JobDataMap["ProcessMaxRetryDelayInMilliseconds"].ShouldBe(20_000L);
+        job.JobDataMap["ProcessRetryJitter"].ShouldBe(false);
+        job.JobDataMap["ProcessTransientRetryDelayInMilliseconds"].ShouldBe(3_000L);
+        job.JobDataMap["ProcessMaxTransientRetryDelayInMilliseconds"].ShouldBe(60_000L);
+        job.JobDataMap["ProcessTransientRetryJitter"].ShouldBe(true);
     }
 
     [Fact]
     public async Task AddProcessOutboxMessagesJob_Should_ScheduleARepeatingTriggerAtTheGivenInterval()
     {
         await using var provider = BuildProvider(services => services.AddQuartz(quartz =>
-            quartz.AddProcessOutboxMessagesJob<TestDbContext>(processIntervalInSeconds: 45)));
+            quartz.AddProcessOutboxMessagesJob<TestDbContext>(processInterval: TimeSpan.FromSeconds(45))));
         var scheduler = await GetSchedulerAsync(provider);
 
         var trigger = (await scheduler.GetTriggersOfJob(OutboxJobKey)).ShouldHaveSingleItem();
@@ -79,6 +94,9 @@ public class ProcessOutboxMessagesJobSetupTests
         simple.ShouldNotBeNull();
         simple.RepeatInterval.ShouldBe(TimeSpan.FromSeconds(45));
         simple.RepeatCount.ShouldBe(-1);
+        var job = (await scheduler.GetJobDetail(OutboxJobKey)).ShouldNotBeNull();
+        job.JobDataMap["ProcessIntervalInMilliseconds"].ShouldBe(45_000L);
+        job.JobDataMap.ContainsKey("ProcessIntervalInSeconds").ShouldBeFalse();
     }
 
     /// <summary>
@@ -90,7 +108,7 @@ public class ProcessOutboxMessagesJobSetupTests
     public async Task AddProcessOutboxMessagesJob_Should_DelayTheFirstFireByTheGivenSeconds()
     {
         await using var provider = BuildProvider(services => services.AddQuartz(quartz =>
-            quartz.AddProcessOutboxMessagesJob<TestDbContext>(delayInSecondsBeforeStart: 120)));
+            quartz.AddProcessOutboxMessagesJob<TestDbContext>(delayBeforeStart: TimeSpan.FromSeconds(120))));
         var before = DateTimeOffset.UtcNow;
         var scheduler = await GetSchedulerAsync(provider);
         var after = DateTimeOffset.UtcNow;
@@ -116,6 +134,12 @@ public class ProcessOutboxMessagesJobSetupTests
         batchSize.ShouldBe(20);
         job.JobDataMap.TryGetValue("ProcessMaxRetryCount", out var maxRetryCount).ShouldBeTrue();
         maxRetryCount.ShouldBe(3);
+        job.JobDataMap.TryGetValue("ProcessMaxTransientRetryCount", out var maxTransientRetryCount).ShouldBeTrue();
+        maxTransientRetryCount.ShouldBe(12);
+        job.JobDataMap.TryGetValue("ProcessRetryDelayInMilliseconds", out var retryDelay).ShouldBeTrue();
+        retryDelay.ShouldBe(5_000L);
+        job.JobDataMap.TryGetValue("ProcessMaxRetryDelayInMilliseconds", out var maxRetryDelay).ShouldBeTrue();
+        maxRetryDelay.ShouldBe(300_000L);
         trigger.ShouldBeAssignableTo<ISimpleTrigger>().RepeatInterval.ShouldBe(TimeSpan.FromSeconds(60));
     }
 
@@ -160,8 +184,9 @@ public class ProcessOutboxMessagesJobSetupTests
             options =>
             {
                 options.BatchSize = 9;
-                options.MaxRetryCount = 4;
-                options.ProcessIntervalInSeconds = 30;
+                options.Retries = new RetrySchedule(4, TimeSpan.FromSeconds(30), TimeSpan.FromHours(1));
+                options.TransientRetries = options.Retries with { MaxAttempts = 20 };
+                options.ProcessInterval = TimeSpan.FromSeconds(30);
             }));
         var scheduler = await GetSchedulerAsync(provider);
 
@@ -173,6 +198,12 @@ public class ProcessOutboxMessagesJobSetupTests
         batchSize.ShouldBe(9);
         job.JobDataMap.TryGetValue("ProcessMaxRetryCount", out var maxRetryCount).ShouldBeTrue();
         maxRetryCount.ShouldBe(4);
+        job.JobDataMap.TryGetValue("ProcessMaxTransientRetryCount", out var maxTransientRetryCount).ShouldBeTrue();
+        maxTransientRetryCount.ShouldBe(20);
+        job.JobDataMap.TryGetValue("ProcessRetryDelayInMilliseconds", out var retryDelay).ShouldBeTrue();
+        retryDelay.ShouldBe(30_000L);
+        job.JobDataMap.TryGetValue("ProcessMaxRetryDelayInMilliseconds", out var maxRetryDelay).ShouldBeTrue();
+        maxRetryDelay.ShouldBe(3_600_000L);
         trigger.ShouldBeAssignableTo<ISimpleTrigger>().RepeatInterval.ShouldBe(TimeSpan.FromSeconds(30));
     }
 
@@ -209,10 +240,96 @@ public class ProcessOutboxMessagesJobSetupTests
     public async Task AddProcessOutboxMessagesJob_Should_NotScheduleTheCleanup_WhenRetentionIsOff()
     {
         await using var provider = BuildProvider(services => services.AddQuartz(quartz =>
-            quartz.AddProcessOutboxMessagesJob<TestDbContext>(processedRetentionInDays: 0)));
+            quartz.AddProcessOutboxMessagesJob<TestDbContext>(processedRetention: TimeSpan.Zero)));
         var scheduler = await GetSchedulerAsync(provider);
 
         (await scheduler.GetJobDetail(OutboxJobs.Cleanup<TestDbContext>())).ShouldBeNull();
+    }
+
+    [Fact]
+    public void AddOutboxProcessing_ShouldThrow_WithoutRetries()
+        => Should.Throw<ArgumentNullException>(() => new ServiceCollection().AddOutboxProcessing<TestDbContext>(
+                configure: options => options.Retries = null!))
+            .ParamName.ShouldBe(nameof(OutboxOptions.Retries));
+
+    [Theory]
+    [InlineData(5, 4)]
+    [InlineData(13, 12)]
+    public void AddOutboxProcessing_ShouldThrow_WhenTheTransientScheduleHasFewerAttempts(
+        int maxAttempts,
+        int transientMaxAttempts)
+        => Should.Throw<ArgumentOutOfRangeException>(() => new ServiceCollection().AddOutboxProcessing<TestDbContext>(
+            configure: options =>
+            {
+                options.Retries = options.Retries with { MaxAttempts = maxAttempts };
+                options.TransientRetries = options.Retries with { MaxAttempts = transientMaxAttempts };
+            }))
+            .ParamName.ShouldBe(nameof(OutboxOptions.TransientRetries));
+
+    [Theory]
+    [InlineData(20, 20)]
+    [InlineData(5, 12)]
+    public async Task AddOutboxProcessing_ShouldGiveATransientFailureTheHigherOfTwelveAndMaxRetryCount_WhenItIsUnset(
+        int maxRetryCount,
+        int expected)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOutboxProcessing<TestDbContext>(
+            new SystemTextJsonOutboxSerializer(),
+            options => options.Retries = options.Retries with { MaxAttempts = maxRetryCount });
+        await using var provider = services.BuildServiceProvider();
+        var scheduler = await GetSchedulerAsync(provider);
+
+        var job = await scheduler.GetJobDetail(OutboxJobKey);
+
+        job.ShouldNotBeNull();
+        job.JobDataMap.TryGetValue("ProcessMaxRetryCount", out var stored).ShouldBeTrue();
+        stored.ShouldBe(maxRetryCount);
+        job.JobDataMap.TryGetValue("ProcessMaxTransientRetryCount", out var storedTransient).ShouldBeTrue();
+        storedTransient.ShouldBe(expected);
+        services
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<OutboxBacklogSettings<TestDbContext>>()
+            .Last()
+            .RetryLimit.ShouldBe(expected);
+    }
+
+    [Fact]
+    public async Task AddProcessOutboxMessagesJob_ShouldGiveATransientFailureMaxRetryCount_WhenItIsUnsetAndAboveTwelve()
+    {
+        await using var provider = BuildProvider(services => services.AddQuartz(quartz =>
+            quartz.AddProcessOutboxMessagesJob<TestDbContext>(
+                retries: OutboxRetryLimits.DefaultRetries with { MaxAttempts = 20 })));
+        var scheduler = await GetSchedulerAsync(provider);
+
+        var job = await scheduler.GetJobDetail(OutboxJobKey);
+
+        job.ShouldNotBeNull();
+        job.JobDataMap.TryGetValue("ProcessMaxTransientRetryCount", out var maxTransientRetryCount).ShouldBeTrue();
+        maxTransientRetryCount.ShouldBe(20);
+    }
+
+    [Fact]
+    public void AddProcessOutboxMessagesJob_ShouldThrow_WhenTheTransientRetryLimitIsBelowTheOther()
+        => Should.Throw<ArgumentOutOfRangeException>(() => new ServiceCollection().AddQuartz(quartz =>
+                quartz.AddProcessOutboxMessagesJob<TestDbContext>(
+                    retries: OutboxRetryLimits.DefaultRetries with { MaxAttempts = 5 },
+                    transientRetries: OutboxRetryLimits.DefaultRetries with { MaxAttempts = 4 })))
+            .ParamName.ShouldBe("transientRetries");
+
+    [Fact]
+    public void AddOutboxProcessing_ShouldMeasureTheBacklogAgainstTheHigherRetryLimit()
+    {
+        var services = new ServiceCollection();
+
+        services.AddOutboxProcessing<TestDbContext>(new SystemTextJsonOutboxSerializer());
+
+        services
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<OutboxBacklogSettings<TestDbContext>>()
+            .ShouldHaveSingleItem()
+            .RetryLimit.ShouldBe(12);
     }
 
     [Theory]
@@ -248,9 +365,9 @@ public class ProcessOutboxMessagesJobSetupTests
 
         services.AddOutboxProcessing<TestDbContext>(
             new SystemTextJsonOutboxSerializer(),
-            options => options.Claim = PostgresOutboxLaneClaim.Instance);
+            options => options.Claim = Claim);
 
-        LaneOptions(services).Claim.ShouldBeSameAs(PostgresOutboxLaneClaim.Instance);
+        LaneOptions(services).Claim.ShouldBeSameAs(Claim);
     }
 
     [Fact]
@@ -261,9 +378,9 @@ public class ProcessOutboxMessagesJobSetupTests
         services.AddOutboxLanes<TestDbContext>(lanes => lanes.MaxConcurrency = 2);
         services.AddOutboxProcessing<TestDbContext>(
             new SystemTextJsonOutboxSerializer(),
-            options => options.Claim = PostgresOutboxLaneClaim.Instance);
+            options => options.Claim = Claim);
 
-        LaneOptions(services).Claim.ShouldBeSameAs(PostgresOutboxLaneClaim.Instance);
+        LaneOptions(services).Claim.ShouldBeSameAs(Claim);
         LaneOptions(services).MaxConcurrency.ShouldBe(2);
     }
 
@@ -274,10 +391,10 @@ public class ProcessOutboxMessagesJobSetupTests
 
         services.AddOutboxProcessing<TestDbContext>(
             new SystemTextJsonOutboxSerializer(),
-            options => options.Claim = PostgresOutboxLaneClaim.Instance);
+            options => options.Claim = Claim);
         services.AddOutboxLanes<TestDbContext>(lanes => lanes.MaxConcurrency = 2);
 
-        LaneOptions(services).Claim.ShouldBeSameAs(PostgresOutboxLaneClaim.Instance);
+        LaneOptions(services).Claim.ShouldBeSameAs(Claim);
     }
 
     private static OutboxLaneOptions LaneOptions(IServiceCollection services)

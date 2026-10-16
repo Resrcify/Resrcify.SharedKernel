@@ -5,47 +5,23 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Outbox;
 
-/// <summary>The outbox now: messages waiting (and retrying) and messages that gave up, in all and per event type.</summary>
-/// <param name="OldestWaitingOccurredOnUtc">When the oldest waiting message's event occurred; <see langword="null"/> when none waits.</param>
-public sealed record OutboxSummary(
-    int Waiting,
-    int Retrying,
-    int GivenUp,
-    DateTime? OldestWaitingOccurredOnUtc,
-    IReadOnlyList<OutboxEventTypeSummary> EventTypes);
-
-/// <summary>One event type's messages; <paramref name="Lane"/> is its outbox lane, <see langword="null"/> for the regular job.</summary>
-public sealed record OutboxEventTypeSummary(string Type, string? Lane, int Waiting, int Retrying, int GivenUp);
-
-/// <summary>A message that gave up, without its content.</summary>
-public sealed record OutboxMessageSummary(Guid Id, string Type, DateTime OccurredOnUtc, int RetryCount, string? Error);
-
-/// <summary>A message with its content and where it stands.</summary>
-public sealed record OutboxMessageDetails(
-    Guid Id,
-    string Type,
-    string Content,
-    DateTime OccurredOnUtc,
-    DateTime? ProcessedOnUtc,
-    bool GaveUp,
-    int RetryCount,
-    DateTime? NextAttemptOnUtc,
-    string? Error);
-
 /// <summary>
-/// Looks into <typeparamref name="TDbContext"/>'s outbox and tries messages that gave up again: what an operator needs
-/// instead of hand-written SQL. Registered (scoped) by <c>AddOutboxProcessing</c> and <c>AddOutboxLanes</c>; the
-/// Resrcify.SharedKernel.UnitOfWork.Web package maps it to endpoints.
+/// <typeparamref name="TDbContext"/>'s <see cref="IOutboxAdministration{TContext}"/>: looks into its outbox, and tries
+/// again or deletes messages that gave up. Registered (scoped, as itself and as the interface) by
+/// <c>AddOutboxProcessing</c>, <c>AddProcessOutboxMessagesJob</c> and <c>AddOutboxLanes</c>; the Web package maps it to
+/// endpoints (<c>MapOutboxAdministration&lt;TDbContext&gt;</c>).
 /// </summary>
 public sealed class OutboxAdministration<TDbContext>(TDbContext context, IServiceProvider services)
+    : IOutboxAdministration<TDbContext>
     where TDbContext : DbContext
 {
     /// <summary>The most messages <see cref="ListGivenUpAsync"/> returns at once.</summary>
-    public const int MaxTake = 500;
+    public const int MaxTake = IOutboxAdministration<TDbContext>.MaxTake;
 
     /// <summary>Counts of the messages waiting, retrying (waiting after a failed try) and given up, per event type.</summary>
     public async Task<OutboxSummary> GetSummaryAsync(CancellationToken cancellationToken = default)
@@ -128,10 +104,23 @@ public sealed class OutboxAdministration<TDbContext>(TDbContext context, IServic
     public Task<int> RetryAllGivenUpAsync(string? type = null, CancellationToken cancellationToken = default)
         => RetryAsync(GivenUpMessages(type), cancellationToken);
 
+    /// <summary>
+    /// Deletes a message that gave up, for good: its event is never handled. <see langword="false"/> when no message with
+    /// <paramref name="id"/> gave up.
+    /// </summary>
+    public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+        => await GivenUpMessages(type: null)
+            .Where(message => message.Id == id)
+            .ExecuteDeleteAsync(cancellationToken) == 1;
+
+    /// <summary>Deletes every message that gave up (only <paramref name="type"/>'s when given), for good; how many.</summary>
+    public Task<int> DeleteAllGivenUpAsync(string? type = null, CancellationToken cancellationToken = default)
+        => GivenUpMessages(type).ExecuteDeleteAsync(cancellationToken);
+
     private async Task<int> RetryAsync(IQueryable<OutboxMessage> messages, CancellationToken cancellationToken)
     {
-        // Due now: a lane's last failure wrote a later try.
-        var now = (services.GetService<TimeProvider>() ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+        // Due now: the last failure wrote a later try.
+        var now = services.GetRequiredService<TimeProvider>().GetUtcNow().UtcDateTime;
         var retried = await messages.ExecuteUpdateAsync(
             set => set
                 .SetProperty(message => message.ProcessedOnUtc, (DateTime?)null)

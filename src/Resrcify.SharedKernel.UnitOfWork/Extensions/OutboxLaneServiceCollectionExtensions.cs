@@ -7,6 +7,8 @@ using Microsoft.Extensions.Hosting;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
+using Resrcify.SharedKernel.Abstractions.Resilience;
+using Resrcify.SharedKernel.UnitOfWork.Primitives;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Extensions;
 
@@ -28,14 +30,22 @@ public static class OutboxLaneServiceCollectionExtensions
     {
         var options = new OutboxLaneOptions();
         configure?.Invoke(options);
+        var retryLimits = OutboxRetryLimits.Create(
+            options.Retries,
+            options.TransientRetries,
+            nameof(OutboxLaneOptions.Retries),
+            nameof(OutboxLaneOptions.TransientRetries));
         options.Claim ??= services.OutboxJobClaim<TDbContext>();
 
         services.RemoveAll<OutboxLaneSettings<TDbContext>>();
-        services.AddSingleton(new OutboxLaneSettings<TDbContext>(options));
+        services.AddSingleton(new OutboxLaneSettings<TDbContext>(options, retryLimits));
+        // The clock the lanes read; a later registration (e.g. a FakeTimeProvider in a test) replaces it.
+        services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<OutboxLaneRegistry>();
         services.TryAddSingleton<OutboxWakeUp<TDbContext>>();
-        services.TryAddScoped<OutboxAdministration<TDbContext>>();
+        services.TryAddOutboxAdministration<TDbContext>();
         services.AddOutboxMessageContext();
+        services.AddTransientFailureRule<PersistenceTransientFailureRule>();
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, OutboxLanesHost<TDbContext>>());
         return services;
     }

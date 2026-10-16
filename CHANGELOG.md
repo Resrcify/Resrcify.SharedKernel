@@ -3,6 +3,652 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.3.0 (2026-10-16)
+
+### Breaking changes
+
+- **One `RetrySchedule` value type and one backoff function** (Resrcify.SharedKernel.Abstractions, `Resilience`):
+  `public sealed record RetrySchedule(int MaxAttempts, TimeSpan FirstDelay, TimeSpan MaxDelay, bool Jitter = false)`
+  with `DelayAfter(int failedAttempt)` (the first delay doubled per try before it, capped at `MaxDelay`,
+  overflow-safe; with `Jitter`, spread between half of it and all of it) and `HasAttemptAfter(int)`. **Every count is
+  attempts, the first one included.** It replaces the options of every retrying package; the defaults are unchanged:
+
+  | Was | Now |
+  |---|---|
+  | `OutboxOptions.MaxRetryCount` (3), `RetryDelay` (5 s), `MaxRetryDelay` (5 min) | `OutboxOptions.Retries = new RetrySchedule(3, 5 s, 5 min)` |
+  | `OutboxOptions.MaxTransientRetryCount` (`int?`) | `OutboxOptions.TransientRetries` (`RetrySchedule?`; unset: `Retries` with the higher of 12 and its attempts) |
+  | `OutboxLaneOptions.MaxRetryCount`, `MaxTransientRetryCount`, `RetryDelay`, `MaxRetryDelay` | `OutboxLaneOptions.Retries`, `TransientRetries` (as above) |
+  | `AddProcessOutboxMessagesJob(..., int processMaxRetryCount = 3, ..., int? processMaxTransientRetryCount = null)` | `AddProcessOutboxMessagesJob(..., RetrySchedule? retries = null, ..., RetrySchedule? transientRetries = null)` (same positions) |
+  | `ResultResilienceOptions.MaxRetries` (3 **retries**), `RetryDelay` (1 s), `MaxRetryDelay` (30 s), `UseJitter` (on) | `ResultResilienceOptions.Retries = new RetrySchedule(4 attempts, 1 s, 30 s, Jitter: true)`: `MaxRetries = n` is `MaxAttempts = n + 1`; `MaxAttempts = 1` turns retrying off |
+  | the bus' event tries (Rebus' `MaxDeliveryAttempts`, 5), 0.5 s doubling to 4 s, fixed | `MessageBusBuilder.WithEventRetries(RetrySchedule)` (unset: 5 attempts, or the retry strategy's delivery attempts, 0.5 s doubling to 4 s) |
+  | a rate-limited queue's tries (Rebus' `MaxDeliveryAttempts`, 5), 0.5 s × 2ⁿ, **uncapped** | `RateLimitedQueueOptions.Retries` (`RetrySchedule?`; unset: as the events, capped at 4 s) |
+
+  A `MaxRetryDelay` shorter than `RetryDelay` threw at registration; a `MaxDelay` shorter than `FirstDelay` now caps
+  every delay at it. A `RetrySchedule` with fewer than 1 attempt or a negative delay throws as it is made (also with
+  `with`). The hand-written calculators are gone (`OutboxRetryBackoff`, the dispatcher's and the queue host's
+  `RetryDelay`, the queue host's start retry, scatter-gather's restart, `ConcurrentCreationRetry`'s, the PostgreSQL
+  outbox listener's reconnect): they all wait by `RetrySchedule.DelayAfter`, with the same delays.
+  **Fixed with it: a rate-limited queue's wait between tries was uncapped** (500 ms × 2ⁿ⁻¹), so a configuration
+  strategy raising the delivery attempts to about 24 made `Task.Delay` throw (and the waits held the request
+  unacknowledged for minutes before that): it is capped at 4 s, as the events'. Tournament, Shard, Oracle, Discord and
+  Sentinel set `MaxRetries` / `RetryDelay` / `MaxRetryDelay` on `AddResultResilience`: `resilience.Retries = new
+  RetrySchedule(MaxAttempts: 4, FirstDelay: TimeSpan.FromSeconds(1), MaxDelay: TimeSpan.FromSeconds(4), Jitter: true)`
+  for `MaxRetries = 3, RetryDelay = 1 s, MaxRetryDelay = 4 s`; Sentinel's lane sets `lanes.Retries` /
+  `TransientRetries` instead of `MaxRetryCount`.
+
+- **One error-code catalogue: `ErrorCodes`** (Resrcify.SharedKernel.Results, `Primitives`; see Added). The constants
+  it replaces are gone: **`ErrorTypeExtensions.ConcurrencyConflictCode`** (use `ErrorCodes.Persistence.Concurrency`,
+  the same `"Persistence.Concurrency"`) and **`ResultExceptionHandler.ErrorCode`** (Web; use
+  `ErrorCodes.Request.Unhandled`, the same `"Unhandled"`). The codes themselves are unchanged. A service matching a
+  SharedKernel code with a string of its own (Discord's `ErrorMessageExtensions.ResilienceTimeoutCode` /
+  `CircuitOpenCode`, Tournament's test stubs) can use the catalogue's constant instead.
+
+- **One mediator runtime: the pipeline the container composes** (Resrcify.SharedKernel.Mediator). The mediator had two
+  ways to build a request's pipeline, chosen by `cfg.EnableDiTimePipelineComposition()`: every Titan service turned on
+  the container-composed one, while `AddMediator(params Assembly[])` and `AddMediator(ServiceLifetime, params
+  Assembly[])` silently used the other. Now there is one: a request's pipeline (`DiComposedSendRuntime<,>` /
+  `DiComposedStreamRuntime<,>`, transient) is resolved from the container, which builds the handler, behaviors and
+  processors with their own lifetimes (transient unless registered otherwise), and behaviors run in the order added,
+  as before. The mediator stays transient by default (`cfg.UseMediatorLifetime(ServiceLifetime.Scoped)` as before).
+  Removed:
+
+  | Was | Now |
+  |---|---|
+  | `cfg.EnableDiTimePipelineComposition()` / `EnableDiTimePipelineComposition(bool)` | delete the call: it is the only runtime |
+  | `services.AddMediator(params Assembly[] assemblies)` | `services.AddMediator(cfg => cfg.RegisterServicesFromAssemblies(assemblies))` |
+  | `services.AddMediator(ServiceLifetime lifetime, params Assembly[] assemblies)` | `services.AddMediator(cfg => cfg.RegisterServicesFromAssemblies(assemblies).UseMediatorLifetime(lifetime))` |
+
+  Every Titan service (Sentinel, Tournament, Shard, Oracle, Discord, SwgohApi, Sandbox, Identity) deletes its
+  `config.EnableDiTimePipelineComposition();` line in `Application/ApplicationServiceRegistration.cs`; nothing else.
+
+- **One clock path: the container's `TimeProvider`, and only it** (Resrcify.SharedKernel.UnitOfWork,
+  UnitOfWork.Postgres, Mediator, MessageBus, Caching, Web). The clock was found four ways: from the container when
+  used, the one registered *before* `AddOutboxProcessing` (captured at registration, so a `FakeTimeProvider` added
+  later in `ConfigureTestServices` was silently ignored for the jobs' first runs), `OutboxOptions.TimeProvider`, and
+  `timeProvider` parameters defaulting to the system clock. Now every SharedKernel type reads the container's, resolved
+  when it is used (a job trigger's first run when the scheduler is built), and every registration
+  (`AddOutboxProcessing`, `AddProcessOutboxMessagesJob`, `AddCleanupOutboxMessagesJob`, `AddOutboxLanes`, the interval
+  and cron job helpers, `AddJobHeartbeats`, `AddEntityInterceptors` / `AddOutboxInterceptor`, `AddMigrationsOnStartup`,
+  `AddMediator`, `AddMessageBus`, `AddResultResilience`) makes `services.TryAddSingleton(TimeProvider.System)`, so a
+  clock registered before or after it wins. Removed or changed:
+
+  | Was | Now |
+  |---|---|
+  | `OutboxOptions.TimeProvider` | removed: register the clock in the container |
+  | `AddIntervalJob` / `AddIntervalCommandJob` (4 overloads) / `AddCronJob` / `AddCronCommandJob` (4 overloads)`(..., TimeProvider? timeProvider = null)` | the parameter is removed |
+  | `AddProcessOutboxMessagesJob(..., IOutboxLaneClaim? claim, TimeProvider? timeProvider, RetrySchedule? transientRetries)` | `(..., IOutboxLaneClaim? claim, RetrySchedule? transientRetries)` |
+  | `AddCleanupOutboxMessagesJob(int processedRetentionInDays, TimeProvider? timeProvider = null)` | `(int processedRetentionInDays)` |
+  | `new InsertOutboxMessagesInterceptor(serializer, insertStrategy?, timeProvider?, observers?, logger?)` | `new InsertOutboxMessagesInterceptor(serializer, timeProvider, insertStrategy?, observers?, logger?)`: the clock is required and second |
+  | `new UpdateAuditableEntitiesInterceptor(TimeProvider? = null)`, `new UpdateDeletableEntitiesInterceptor(TimeProvider? = null)` | the clock is required |
+  | `ProcessOutboxMessagesJob(scopeFactory, TimeProvider? = null, wakeUp?)`, `CleanupOutboxMessagesJob(scopeFactory, logger, TimeProvider? = null)`, `JobHeartbeatRegistry(TimeProvider? = null)` | the clock is required (the container passes it) |
+  | `LoggingPipelineBehavior(logger, TimeProvider? = null, options?, transientFailures?)` (Mediator), `DistributedCachingService(cache, TimeProvider? = null)` (Caching) | the clock is required (the container passes it) |
+
+  The internal hosted services (outbox lanes, backlog monitor, migrations, the PostgreSQL outbox listener) and the
+  message bus' receive order take it the same way. A service's own `services.TryAddSingleton(TimeProvider.System)` is
+  now redundant wherever it registers any of these (Sentinel and Oracle in `Application/ApplicationServiceRegistration.cs`,
+  Discord in `Application/ApplicationServiceRegistration.cs`, Tournament, Shard and SwgohApi in
+  `Infrastructure/InfrastructureServiceRegistration.cs`, Sandbox in `Infrastructure/InfrastructureServiceRegistration.cs`):
+  delete it, or keep it as documentation; it does no harm. A service that registers `DistributedCachingService`
+  itself without any SharedKernel registration making the clock must register one (or use `AddDistributedCaching`,
+  see Added). **Sandbox and Identity** build the interceptors with `new` in `PersistenceServiceRegistration.cs` and their
+  design-time factories: pass the clock (`new InsertOutboxMessagesInterceptor(serializer, sp.GetRequiredService<TimeProvider>(),
+  new PostgresOnConflictOutboxInsertStrategy())`, `new UpdateAuditableEntitiesInterceptor(sp.GetRequiredService<TimeProvider>())`;
+  `TimeProvider.System` in a design-time factory), or register them with `AddEntityInterceptors().AddOutboxInterceptor()`
+  and `options.AddSaveChangesInterceptors(provider)`. No Titan service passed a `timeProvider` argument or set
+  `OutboxOptions.TimeProvider`.
+
+- **`HealthTags` moved to Abstractions** (from Resrcify.SharedKernel.Web): `Resrcify.SharedKernel.Web.Health.HealthTags`
+  is now `Resrcify.SharedKernel.Abstractions.Health.HealthTags`, the same `Ready` / `Live` constants, so every package
+  registering a check shares it. A service using it changes `using Resrcify.SharedKernel.Web.Health;` to
+  `using Resrcify.SharedKernel.Abstractions.Health;` where it names `HealthTags` (Oracle, Sentinel, Shard and Tournament
+  in `Infrastructure/InfrastructureServiceRegistration.cs`; keep the Web one where `HealthEndpointOptions` is used).
+
+- **The container fixtures take their settings as init properties; a subclass' members of those names clash**
+  (Resrcify.SharedKernel.IntegrationTesting). `PostgresContainerFixture` has `Image`, `Database`, `Username` and
+  `Password`, `RabbitMqContainerFixture` `Image`, `Username`, `Password` and `ProductionQueueDefaults` (see Added). ⚠️
+  A subclass declaring members of those names (the services' `PostgresFixture` / `RabbitMqFixture` with `const string
+  Username` / `Password` / `Database`) hides them: warning CS0108, an error under `TreatWarningsAsErrors`. Delete the
+  subclass (what the init properties are for) or rename its constants. The package now references
+  Resrcify.SharedKernel.MessageBus.Testing (so MessageBus, Rebus and Rebus.RabbitMq come with it),
+  Microsoft.Extensions.Diagnostics.Testing and Serilog.
+
+- **The outbox's intervals and retention are `TimeSpan`s** (Resrcify.SharedKernel.UnitOfWork), as
+  `OutboxLaneOptions.PollInterval` already was. The defaults are unchanged:
+
+  | Was | Now |
+  |---|---|
+  | `OutboxOptions.ProcessIntervalInSeconds` (60) | `OutboxOptions.ProcessInterval` (`TimeSpan.FromSeconds(60)`; at least 1 s) |
+  | `OutboxOptions.DelayInSecondsBeforeStart` (60) | `OutboxOptions.DelayBeforeStart` (`TimeSpan.FromSeconds(60)`) |
+  | `OutboxOptions.ProcessedRetentionInDays` (7; 0 turns the cleanup off) | `OutboxOptions.ProcessedRetention` (`TimeSpan.FromDays(7)`; `TimeSpan.Zero` turns it off) |
+  | `OutboxOptions.BacklogCheckIntervalInSeconds` (30) | `OutboxOptions.BacklogCheckInterval` (`TimeSpan.FromSeconds(30)`; at least 1 s) |
+  | `AddProcessOutboxMessagesJob(..., int processIntervalInSeconds = 60, int delayInSecondsBeforeStart = 60, ..., int processedRetentionInDays = 7, ...)` | `AddProcessOutboxMessagesJob(..., TimeSpan? processInterval = null, TimeSpan? delayBeforeStart = null, ..., TimeSpan? processedRetention = null, ...)` (same positions; `null`: the defaults) |
+  | `AddCleanupOutboxMessagesJob(int processedRetentionInDays = 7)` | `AddCleanupOutboxMessagesJob(TimeSpan? processedRetention = null)` (positive) |
+
+  `AddProcessOutboxMessagesJob` now refuses an interval under 1 s or a negative delay or retention
+  (`ArgumentOutOfRangeException`), as `AddOutboxProcessing` did. The jobs' data stores
+  `ProcessIntervalInMilliseconds` and `ProcessedRetentionInMilliseconds` (longs); a job stored before 4.3.0 in a
+  persistent Quartz store is still read from `ProcessIntervalInSeconds` / `ProcessedRetentionInDays`. The cleanup's
+  log line names the retention as a `TimeSpan` (`older than 7.00:00:00`). Sentinel, Shard and Tournament write
+  `outbox.ProcessInterval = TimeSpan.FromSeconds(20)` for `outbox.ProcessIntervalInSeconds = 20`
+  (`Infrastructure/InfrastructureServiceRegistration.cs`).
+
+- **The packages a SharedKernel package's API is built on are its dependencies, no longer private**
+  (Resrcify.SharedKernel.Observability, Web, UnitOfWork, UnitOfWork.Postgres, Repository, Mediator, Caching). Their
+  `PackageReference`s were `PrivateAssets="all"`, though their types are in the packages' API (`TracerProviderBuilder`,
+  Serilog's `LoggerConfiguration` and `RequestLoggingOptions`, `IHttpResiliencePipelineBuilder`, `JwtBearerOptions`,
+  EF Core's `DbContext`, Quartz's `IJob`, Npgsql's EF builder, FluentValidation's `IValidator<T>`, `IDistributedCache`):
+  every service listed 12–14 of them itself, in lockstep, and one at a lower version than SharedKernel was built
+  against failed at run time with a `MissingMethodException` (or a `FileNotFoundException`, for one it didn't list),
+  not at restore. They are now ordinary dependencies, in each package's `.nuspec`, so NuGet brings them and refuses a
+  lower version at restore (`NU1605`, a downgrade, is an error):
+
+  | Package | Now depends on (at least) |
+  |---|---|
+  | Observability | `OpenTelemetry.Extensions.Hosting` 1.19.1, `OpenTelemetry.Instrumentation.AspNetCore` / `.Http` / `.Runtime` 1.19.0, `OpenTelemetry.Exporter.OpenTelemetryProtocol` 1.19.1, `Serilog.AspNetCore` 10.0.0, `Serilog.Extensions.Hosting` 10.0.0, `Serilog.Settings.Configuration` 10.0.1 |
+  | Web | `Microsoft.Extensions.Http.Resilience` 10.11.0 (and with it `Microsoft.Extensions.Http`), `Microsoft.AspNetCore.Authentication.JwtBearer` 10.0.13 |
+  | UnitOfWork | `Microsoft.EntityFrameworkCore`, `Microsoft.EntityFrameworkCore.Relational`, `Microsoft.Extensions.Diagnostics.HealthChecks` 10.0.13, `Quartz` 4.5.0 |
+  | UnitOfWork.Postgres | UnitOfWork's, `Npgsql.EntityFrameworkCore.PostgreSQL` 10.0.3 (and Npgsql), `Microsoft.Extensions.Hosting` 10.0.13 |
+  | Repository | `Microsoft.EntityFrameworkCore`, `Microsoft.EntityFrameworkCore.Relational` 10.0.13 |
+  | Mediator | `FluentValidation`, `FluentValidation.DependencyInjectionExtensions` 12.2.0, `Microsoft.Extensions.Logging` 10.0.13 |
+  | Caching | `Microsoft.Extensions.Caching.Abstractions`, `Microsoft.Extensions.Caching.Memory` 10.0.13 |
+
+  Still private: SonarAnalyzer (build only), and `OpenTelemetry.Exporter.Prometheus.AspNetCore` (Observability), only
+  ever published as a prerelease, which a stable package can't depend on (`NU5104`): the service keeps referencing it.
+  Abstractions, Results and DomainDrivenDesign, which Domain references, have no such dependency (Abstractions'
+  `Microsoft.Extensions.DependencyInjection.Abstractions` was public already). **Mediator and Caching were kept private
+  on purpose before; not any more**: Mediator's `ValidationPipelineBehavior` takes `IValidator<T>` and its assembly scan
+  (4.3.0, see Behaviour changes) calls FluentValidation's, so a service deleting its own
+  `FluentValidation.DependencyInjectionExtensions` along with `AddValidatorsFromAssembly` would have failed at start-up;
+  Mediator is referenced by Application (where the validators are), never by Domain. Caching is used by
+  Infrastructure only (inner layers take `ICachingService` from Abstractions), so nothing reaches Domain or
+  Application through it. ⚠️ **A service pinning one of these lower than SharedKernel fails to restore** (`NU1605`):
+  **SwgohApi** pins `Microsoft.Extensions.Logging`, `Microsoft.Extensions.Caching.Abstractions` and
+  `Microsoft.Extensions.Diagnostics.HealthChecks` at 10.0.12 (`Directory.Packages.props`): raise them to 10.0.13 (or
+  delete the references, see below). A service may keep any of these references (to move one higher); none is needed.
+  What each service can delete (`PackageReference`s in its `*.csproj`, and their `PackageVersion`s in
+  `Directory.Packages.props` once no project references them):
+  - **Shard**: `Application`: `FluentValidation`, `FluentValidation.DependencyInjectionExtensions`. `Infrastructure`:
+    `OpenTelemetry.Extensions.Hosting`, `OpenTelemetry.Instrumentation.AspNetCore`, `OpenTelemetry.Instrumentation.Http`,
+    `OpenTelemetry.Instrumentation.Runtime`, `OpenTelemetry.Exporter.OpenTelemetryProtocol`, `Serilog.AspNetCore`,
+    `Serilog.Extensions.Hosting`, `Serilog.Settings.Configuration`, `Microsoft.Extensions.Http`,
+    `Microsoft.Extensions.Http.Resilience`, `Quartz`, `Microsoft.Extensions.Diagnostics.HealthChecks`. `Persistence`:
+    `Microsoft.EntityFrameworkCore`, `Microsoft.EntityFrameworkCore.Relational`, `Npgsql.EntityFrameworkCore.PostgreSQL`.
+    `tests/*.IntegrationTests` and `tests/*.SystemTests`: `Microsoft.EntityFrameworkCore`,
+    `Microsoft.EntityFrameworkCore.Relational`, `Npgsql.EntityFrameworkCore.PostgreSQL`, `Quartz`.
+  - **Sentinel**: `Application`: `FluentValidation`, `FluentValidation.DependencyInjectionExtensions`.
+    `Infrastructure`: the same twelve as Shard's. `Persistence`: `Microsoft.EntityFrameworkCore`,
+    `Microsoft.EntityFrameworkCore.Relational`, `Microsoft.EntityFrameworkCore.Abstractions`,
+    `Npgsql.EntityFrameworkCore.PostgreSQL`. `tests/*.IntegrationTests`: the three EF Core / Npgsql ones;
+    `tests/*.SystemTests`: those and `Quartz`.
+  - **Oracle**: `Application`: `FluentValidation`, `FluentValidation.DependencyInjectionExtensions`. `Infrastructure`:
+    the same twelve as Shard's. `Persistence`: `Microsoft.EntityFrameworkCore`, `Microsoft.EntityFrameworkCore.Relational`,
+    `Npgsql.EntityFrameworkCore.PostgreSQL`, `Microsoft.Extensions.Hosting`. `tests/*.IntegrationTests`: the three
+    EF Core / Npgsql ones.
+  - **Tournament**: `Application`: `FluentValidation`, `FluentValidation.DependencyInjectionExtensions`.
+    `Infrastructure`: the same twelve as Shard's. `Persistence`: `Microsoft.EntityFrameworkCore`,
+    `Microsoft.EntityFrameworkCore.Relational`, `Npgsql.EntityFrameworkCore.PostgreSQL`. `tests/*.IntegrationTests`:
+    the three EF Core / Npgsql ones.
+  - **Discord**: `Application`: `FluentValidation`, `FluentValidation.DependencyInjectionExtensions`,
+    `Microsoft.Extensions.Logging`. `Infrastructure`: the five `OpenTelemetry.*` above, `Serilog.Settings.Configuration`,
+    `Serilog.Extensions.Logging`, `Microsoft.Extensions.Http`, `Microsoft.Extensions.Http.Resilience`,
+    `Microsoft.Extensions.Diagnostics.HealthChecks`. `Bot`: `Serilog.Extensions.Hosting`,
+    `Serilog.Settings.Configuration` (keep `Serilog`: it pins 4.4.0, above SharedKernel's).
+  - **SwgohApi**: `Application`: `FluentValidation`, `FluentValidation.DependencyInjectionExtensions`,
+    `Microsoft.Extensions.Logging`. `Infrastructure`: `Microsoft.Extensions.Diagnostics.HealthChecks`; once it moves to
+    the Observability package, its `OpenTelemetry.*` (but the Prometheus exporter and
+    `OpenTelemetry.Instrumentation.StackExchangeRedis`) and `Serilog.AspNetCore`.
+
+  Every service keeps the Prometheus exporter, its Serilog sinks, formatters and enrichers (`Serilog.Sinks.Console`,
+  `Serilog.Formatting.Compact`, `Serilog.Enrichers.Environment`), `Microsoft.EntityFrameworkCore.Design` / `.Tools` /
+  `.Analyzers` (never dependencies), and `Microsoft.Extensions.Hosting` / `Microsoft.Extensions.Caching.Abstractions`
+  in Application (no package it references there brings them).
+
+- **The outbox's PostgreSQL pieces moved to UnitOfWork.Postgres** (from Resrcify.SharedKernel.UnitOfWork), where
+  PostgreSQL-specific code belongs: `PostgresOutboxLaneClaim`, `PostgresOutboxIndexes` and
+  `PostgresOnConflictOutboxInsertStrategy`, unchanged, are now in Resrcify.SharedKernel.UnitOfWork.Postgres, namespace
+  `Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox` (was `Resrcify.SharedKernel.UnitOfWork.Outbox`). UnitOfWork
+  holds no PostgreSQL code (it never referenced Npgsql). A project naming one of them references
+  `Resrcify.SharedKernel.UnitOfWork.Postgres` and adds `using Resrcify.SharedKernel.UnitOfWork.Postgres.Outbox;` (keep
+  `using Resrcify.SharedKernel.UnitOfWork.Outbox;` where it names `OutboxMessage` or the serializer):
+  - **Shard**: `Persistence/ShardDbContext.cs` (`PostgresOutboxIndexes`); `Infrastructure/InfrastructureServiceRegistration.cs`
+    line `outbox.Claim = PostgresOutboxLaneClaim.Instance;`: delete it (the default since 4.3.0, see Behaviour changes),
+    or add the `using`.
+  - **Sentinel**: `Persistence/SentinelDbContext.cs` (`PostgresOutboxIndexes`); `Infrastructure/InfrastructureServiceRegistration.cs`,
+    the same `outbox.Claim` line as Shard's.
+  - **Tournament**: `Persistence/TournamentDbContext.cs` (`PostgresOutboxIndexes`).
+  - **Sandbox** (`Persistence/PersistenceServiceRegistration.cs`, `Persistence/SandboxDbContextFactory.cs`) and
+    **Identity** (`Persistence/PersistenceServiceRegistration.cs`, `Persistence/IdentityAppContextFactory.cs`) build
+    `new PostgresOnConflictOutboxInsertStrategy()`: their Persistence projects reference only UnitOfWork, so they add
+    the `Resrcify.SharedKernel.UnitOfWork.Postgres` `PackageReference` (or move to `AddPostgresDbContext(..., db =>
+    db.WithOutbox(outbox => outbox.OnConflictDoNothing = true))`).
+  - Oracle, Discord and SwgohApi name none of them.
+
+- **Resrcify.SharedKernel.UnitOfWork.Web is retired: the outbox admin endpoints are the Web package's**, next to the
+  error queue's, and reach the outbox through a new contract in Abstractions, so Web references neither UnitOfWork nor
+  EF Core:
+
+  | Was | Now |
+  |---|---|
+  | `app.MapOutboxAdministration<TDbContext>(prefix = "/admin/outbox")` (UnitOfWork.Web, `Resrcify.SharedKernel.UnitOfWork.Web.Extensions`; `where TDbContext : DbContext`) | `app.MapOutboxAdministration<TContext>(prefix = "/admin/outbox")` (Web, `Resrcify.SharedKernel.Web.Extensions`; `where TContext : class`): the same routes, names (`Outbox.<context>.Summary` ...), authorization (an authenticated caller; the group returned takes the rest), requests and answers |
+  | `OutboxRetried` (`Resrcify.SharedKernel.UnitOfWork.Web.Extensions`) | `Resrcify.SharedKernel.Web.Extensions.OutboxRetried` |
+  | `OutboxSummary`, `OutboxEventTypeSummary`, `OutboxMessageSummary`, `OutboxMessageDetails` (`Resrcify.SharedKernel.UnitOfWork.Outbox`) | the same records in `Resrcify.SharedKernel.Abstractions.UnitOfWork` |
+  | `OutboxAdministration<TDbContext>` (UnitOfWork), resolved by the endpoints | `IOutboxAdministration<TContext>` (Abstractions, `Resrcify.SharedKernel.Abstractions.UnitOfWork`), which `OutboxAdministration<TDbContext>` implements; the outbox registrations (`AddOutboxProcessing`, `AddProcessOutboxMessagesJob`, `AddOutboxLanes`) register both, scoped, the same instance in a scope (an `IOutboxAdministration<TContext>` the service registered first is kept) |
+
+  `IOutboxAdministration<TContext>`: `GetSummaryAsync`, `ListGivenUpAsync(take = 50, type)`, `FindAsync(id)`,
+  `RetryAsync(id)`, `RetryAllGivenUpAsync(type)`, the new `DeleteAsync(id)` and `DeleteAllGivenUpAsync(type)` (see
+  Added), `MaxTake` (500) and `ContextType`. A service calling `MapOutboxAdministration` drops its
+  `Resrcify.SharedKernel.UnitOfWork.Web` `PackageReference` and `PackageVersion`, and changes
+  `using Resrcify.SharedKernel.UnitOfWork.Web.Extensions;` to `using Resrcify.SharedKernel.Web.Extensions;`; the call
+  is unchanged. One naming the records adds `using Resrcify.SharedKernel.Abstractions.UnitOfWork;`. **No Titan service
+  used UnitOfWork.Web** (Shard, Sentinel, Oracle, Tournament, Discord, SwgohApi, Sandbox and Identity reference
+  neither the package nor `MapOutboxAdministration`), so none changes anything; it is no longer published.
+
+### Behaviour changes
+
+- **One transient contract, owned by SharedKernel, with a DI hook** (Resrcify.SharedKernel.Results, Abstractions,
+  UnitOfWork, Mediator, MessageBus, Web). Four rules told a transient exception from any other, and disagreed: the
+  outbox's matched Polly's exceptions by type name (and missed an isolated circuit) and walked only `InnerException`,
+  the Web resilience pipeline had its own, the message bus none, and the mediator's behaviors and the command jobs logged
+  every exception at `Error`. **A service's own transient exception wasn't recognised**: Sentinel's
+  `TransientFailureException` got the 3 tries of a handler's bug, not the 12 of an outage. Now one rule decides
+  everywhere, `TransientFailures.IsTransient` (Results): the exception or any of its causes (`InnerException`, and every
+  one of an `AggregateException`'s) is a `TransientFailureException` (Results), a `TimeoutException`, an
+  `OperationCanceledException` (a handler's own; a shutdown is still ruled out by the callers first), a `DbException`
+  with `IsTransient`, or an `HttpRequestException` without a status or with a transient one (408, 429, 5xx). A package
+  or a service adds to it with an `ITransientFailureRule` (Abstractions, `services.AddTransientFailureRule(...)`), which
+  can only add transience; the container's `ITransientFailureClassifier` ORs them all. UnitOfWork registers one for a
+  concurrency conflict, a serialization failure and a deadlock (with every outbox registration), the Web package one for
+  Polly's rejections (`ExecutionRejectedException`: a timeout, a broken or isolated circuit, the rate limiter; by type,
+  with `AddResultResilience`), so no package outside Web names Polly's types. What changes:
+  - **The outbox** gives a failure its transient tries by the classifier: a `TransientFailureException` (and a
+    service's own rule) gets 12 tries, an isolated circuit too.
+  - **The mediator's logging, unit-of-work and transaction behaviors and the command jobs** (`CommandJob`,
+    `AsyncCommandJob`, the `AddIntervalCommandJob` / `AddCronCommandJob` ones) log a transient exception at `Warning`,
+    any other at `Error` as before, once.
+  - **The message bus** (an integration event's handler): an exception holding a `TransientFailureException` is a
+    failure with that exception's errors, which the retry lines and the error queue's reason now show
+    (`SwgohApi.Unreachable (ExternalFailure): ...`, where it showed `TransientFailureException: <message>`). A try that threw is
+    logged at `Warning` when the exception is transient and **at `Error` otherwise** (it was `Warning` for every try).
+    Every exception is still tried again in place.
+  - **A rate-limited queue** answers a responder's `TransientFailureException`, after the last try, with its errors
+    instead of `<TRequest>.ResponderFailed`, and logs a transient exception at `Warning`.
+  - **`ResultExceptionHandler`** (Web) answers a `TransientFailureException` (itself or among the causes) holding
+    errors with the problem details of those errors (a 502 for an upstream's failure, a 504 for a timeout ...), logged at
+    `Warning` once, where it answered a 500 logged at `Error`.
+  - **`AddResultResilience`** retries (and counts against the circuit) the exceptions the rule calls transient, plus
+    Polly's attempt timeout, as before, but never an open circuit, a rate limiter's refusal or a cancellation: also a
+    `TimeoutException` now, and no longer an `HttpRequestException` carrying a status that isn't transient (a 4xx).
+  - **The Web package reads and answers HTTP statuses with Results' `ErrorTypes`** (`FromHttpStatus` /
+    `ToHttpStatus`), the same mapping as before.
+  ⚠️ An alert on `Error` logs no longer fires for a transient exception of a command or a job (now `Warning`), and
+  fires for a non-transient exception an integration event handler threw on a try that is retried. **Sentinel**: delete
+  `Application/Retrying/TransientFailureException.cs` and `TransientFailures.cs`, and use Results'
+  (`result.ThrowIfTransient()`, which logs nothing itself: the outbox logs the failed try at `Warning`); its events then
+  get 12 tries in the regular job as in its `swgohapi` lane.
+
+- **`AddResultResilience` answers a service it couldn't reach with a failed result** (Resrcify.SharedKernel.Web). A
+  call that got no answer after the retries (HttpClient's `HttpRequestException` without a status: a refused or reset
+  connection, a name that doesn't resolve) threw the exception to the caller, which ended a whole job or request; the
+  pipeline now answers it in the service's place, as it does a timeout or an open circuit: a 502 problem details holding
+  `ResultResilienceErrors.Unreachable` (`Http.Unreachable`, `ExternalFailure`, transient, its message naming the
+  authority called and the cause: `The service at swgohapi:8080 could not be reached: Connection refused
+  (swgohapi:8080)`), marked `Resrcify-Resilience: unreachable`, which `ToResultAsync` reads as that failure.
+  `ThrowTimeoutsAndOpenCircuits = true` throws it as before. A failure while HttpClient buffers the body of an answer
+  (after the pipeline returned it) still throws. ⚠️ A caller catching `HttpRequestException` around a call through
+  `AddResultResilience` gets a failed result instead. **Sentinel** can delete its `SwgohApiUnreachableHandler` (and the
+  `SwgohApi.Unreachable` code: match `Http.Unreachable`).
+
+- **`TryCompleteAsync` returns the other constraint violations a caller can answer** (Resrcify.SharedKernel.UnitOfWork),
+  and so does a command under `ReturnPersistenceFailures`: a not-null violation (`SQLSTATE 23502`), a check-constraint
+  violation (`23514`) and a string longer than its column (`22001`) as a `Validation` error (400), a foreign-key
+  violation (`23503`, or `23001` for an `ON DELETE RESTRICT` key, as EF Core's `DeleteBehavior.Restrict` declares it)
+  as a `Conflict` (409). They threw a `DbUpdateException`, which a service answered with a 500. As for a unique
+  violation, the refused save's pending changes are discarded (added rows untracked, changed or deleted ones put back),
+  whether or not a transaction is open. ⚠️ A caller catching `DbUpdateException` around `TryCompleteAsync` for these
+  gets a failed `Result` instead; `CompleteAsync` still throws.
+
+- **`UseServiceRequestLogging` logs a client abort as a 499 at `Information`, wherever it is placed**
+  (Resrcify.SharedKernel.Observability). Placed after `UseExceptionHandler()`, as its documentation said, Serilog's
+  middleware saw a request the client gave up on (an `OperationCanceledException` once `RequestAborted` is cancelled)
+  and logged it as "responded 500" at `Error` (the 500 is hardcoded in Serilog), though the exception handler answered
+  499 at `Debug`: Oracle's Discord requests, closed after 5 s, logged as server errors. Its own branch now answers such
+  an exception (or an `IOException`, as `UseExceptionHandler()` tells a client abort) with a 499 before Serilog sees
+  it, so the line is a 499 at `Information` with no exception attached, and the default level (`LevelOf`) is
+  `Information` for that case too, where it was `Error` for any exception. A real exception still logs as a 500 at
+  `Error`.
+
+- **`UseServiceRequestLogging` logs an exception's stack once** (Resrcify.SharedKernel.Observability), following
+  SharedKernel's `LoggedExceptions` convention (Results' `LoggedExceptions.Claim`, under its lock: the package now
+  references Resrcify.SharedKernel.Results, which has no dependencies). Placed after `UseExceptionHandler()`, the request line attached every unhandled exception,
+  which the mediator's behaviors or `ResultExceptionHandler` logged with its stack as well. The line now carries the
+  exception only when nothing logged it before, and marks it when it does, so `ResultExceptionHandler` then logs only
+  its `Debug` line. A `Logger` set through `configure` is written through the same way.
+
+- **A request that can't be bound is a 400 problem details, not an unhandled 500** (Resrcify.SharedKernel.Web).
+  `ResultExceptionHandler` answered a `BadHttpRequestException` (a minimal-API parameter that fails to bind: a
+  required query or body value left out, an unparsable route segment, malformed JSON) as an unhandled exception: a 500,
+  logged at `Error`. It now answers the exception's own status (400, or 413, 415 ...) with problem details holding one
+  `Validation` error coded with the parameter's name (`ErrorCodes.Request.Binding`, `Request`, when it names none), e.g.
+  `page`: `The required parameter "page" was not provided from query string.`, logged at `Debug`. The message names
+  only the parameter, never its type or the value sent; in Development the problem's `detail` holds ASP.NET Core's
+  message. **And `AddResultProblemDetails()` turns on `RouteHandlerOptions.ThrowOnBadRequest`** (after every other
+  configuration of it), so Production answers these with problem details too, instead of ASP.NET Core's empty 400.
+  ⚠️ A test expecting an empty 400 in Production, or a 500 in Development, for a binding failure now gets the problem
+  details; `ProblemDetailsForBindingFailures = false` keeps ASP.NET Core's `ThrowOnBadRequest`. Oracle's
+  `BadRequestExceptionHandler` and its `ThrowOnBadRequest = true` do the same and can be deleted.
+
+- **The outbox processing job backs off between a message's tries, as the lanes do** (Resrcify.SharedKernel.UnitOfWork).
+  It tried a failed message again at every run (about every 20 s in the services), so a handler failing through a
+  downstream outage spent its 3 tries in about a minute and gave up. A failed try now writes
+  `NextAttemptOnUtc` (5 s, then twice as long each time, up to 5 min: `OutboxOptions.Retries`, a `RetrySchedule`),
+  and the job reads only the messages that are due, as the lanes always have; the wait is a minimum, the try comes
+  with the first run or wake-up after it. The filter is a residual one on the unprocessed rows the partial index
+  `IX_OutboxMessages_Unprocessed` already narrows the read to, on the `NextAttemptOnUtc` column 4.0 added: no
+  migration. ⚠️ Retries are spaced out. 3 tries wait 5 s and 10 s, shorter than a 20 s run interval, so a message
+  failing for a non-transient reason still gives up about two runs after its first failure; a transient failure now
+  gets 12 tries, about 30 minutes (see the next entry). A test that let `OutboxWakeUp.DrainAsync()` retry a failing
+  handler until the message gave up now sees `DrainAsync` return after the first failure (the message waits for a
+  later try): advance the `FakeTimeProvider`, or set `Retries = new RetrySchedule(3, TimeSpan.Zero, TimeSpan.Zero)`
+  in the test host, which tries again at the next run as before.
+
+- **A transient failure gets 12 tries in the outbox, any other still 3** (Resrcify.SharedKernel.UnitOfWork), in the
+  processing job and the lanes alike. With the backoff (above), the default 3 tries still gave up about a minute after a
+  message's first failure, so a downstream outage longer than that made poison of its messages. A failed try now gives
+  up by the limit of its failure's kind: a transient one (SharedKernel's one transient rule, see "One transient
+  contract" below: a `TransientFailureException`, a cancellation or timeout, a transient database failure or a
+  concurrency conflict, an HTTP request that got no answer or a 408, 429 or 5xx, anywhere among the exception's causes,
+  or what a registered `ITransientFailureRule` calls transient, e.g. the Web package's for its resilience pipeline's
+  timeouts and open circuits) at `TransientRetries`' attempts (12, about 30 minutes with the default delays, or
+  `Retries`' attempts when that is higher), any other at `Retries`' (3), and at once when
+  transient retries took the message past that (5 transient failures, then a handler's bug: it gives up on that 6th
+  try). The update that marks the give-up uses
+  the limit of the failure it records. The job's and the lanes' reads and the backlog monitor (the `outbox.messages.*`
+  gauges and the outbox health check) take the higher limit, so a message retrying transiently past 3 is still read
+  and counted as waiting, not as given up (an unmarked one past 12 still is). The give-up's `Error` counts the tries
+  the message had (`Gave up at <time> after 6 tries. ...`). ⚠️ A message failing transiently is tried for about 30
+  minutes before it gives up, and counts as waiting meanwhile; a test that let a handler time out (or fail with an HTTP
+  5xx) until the message gave up sees 12 tries. **`TransientRetries = Retries` keeps the behaviour of 4.2** (on
+  `OutboxOptions`, `OutboxLaneOptions`, or `AddProcessOutboxMessagesJob`'s `transientRetries`). Left unset,
+  `TransientRetries` is `Retries` with the higher of 12 and its attempts, so a service that gave `Retries` more than 12
+  attempts upgrades as it is (a transient failure gets as many tries as any other); one set with fewer attempts than
+  `Retries` throws an `ArgumentOutOfRangeException` at registration (`AddOutboxProcessing`, `AddOutboxLanes`,
+  `AddProcessOutboxMessagesJob`). A job stored before 4.3.0 in a persistent Quartz store, without the new job data,
+  gets the same default: 12 tries for a transient failure, or its `ProcessMaxRetryCount` when that is higher.
+
+- **The outbox logs a message's failed tries and its give-up** (Resrcify.SharedKernel.UnitOfWork), in the processing
+  job and the lanes alike, under the category `Resrcify.SharedKernel.UnitOfWork.Outbox`. Nothing logged a domain event
+  handler's exception (only the `Error` column and the `outbox.messages.handled` counter held it). Each failed try is
+  logged once, at `Warning` when another try may pass (the transient rule, see above) and at `Error` otherwise, with the
+  event type, message id, try and the tries a failure of its kind gets (`Outbox message {MessageId} ({EventType},
+  {DbContext}) failed try {Attempt} of {MaxRetryCount}; the next try waits {RetryDelay}: {Error}`, 12 tries for a
+  transient failure and 3 for any other by default, see above); the last one as the give-up, at `Error` (`... gave up
+  after try {Attempt} ({FailureKind} failures get {MaxRetryCount} tries); it is kept as poison: {Error}`, the kind being
+  `transient` or `non-transient`). The exception goes with the line, with its stack, unless something logged it
+  already on its way out (`LoggedExceptions`, e.g. the mediator's unit-of-work behavior around a command the handler
+  sent): then the line names its type and message only. ⚠️ An alert on `Error` logs fires for a handler's non-transient
+  failure and every give-up.
+
+- **`AddMediator` registers the scanned assemblies' FluentValidation validators** (Resrcify.SharedKernel.Mediator).
+  `cfg.RegisterServicesFromAssemblies(...)` now also registers every `IValidator<T>` in those assemblies, internal ones
+  included, scoped (as its `IValidator<T>` and as itself), as `AddValidatorsFromAssembly(assembly, includeInternalTypes:
+  true)` does and with its `TryAddEnumerable` semantics: a validator registered already (by `AddValidatorsFromAssembly`
+  before or after `AddMediator`, or by hand) is registered once, so the validation behavior never runs it twice. Only
+  assemblies referencing FluentValidation are scanned for them (FluentValidation comes with the package: see "The
+  packages a SharedKernel package's API is built on" under Breaking changes). `cfg.SkipValidatorScan()` turns it off. ⚠️ **Tournament's internal validators run for the first
+  time**: its `AddValidatorsFromAssembly(Assembly.GetExecutingAssembly())` skipped internal types, so a request they
+  reject now fails with a validation error (400) where it went through. Every service can delete its
+  `services.AddValidatorsFromAssembly(...)` line (Sentinel, Tournament, Shard, Oracle and Discord in
+  `Application/ApplicationServiceRegistration.cs`; Sandbox and Identity there too), and, when nothing else uses it, the
+  `using FluentValidation;` with it; keeping it changes nothing.
+
+- **`AddResultResilience` validates its options when the host starts, and owns HttpClient's timeout**
+  (Resrcify.SharedKernel.Web). Its options are now the client's named `ResultResilienceOptions` (named after the
+  client), validated with `ValidateOnStart`: a host whose options are unusable doesn't start, with an
+  `OptionsValidationException` naming the client and every problem. It checks more than before: an `AttemptTimeout`
+  longer than `TotalTimeout` or not positive, a negative circuit-breaker duration, a failure ratio outside 0-1, no
+  `Retries`, and (as before) a `RetryOnly` combined with `AlsoRetry` / `NeverRetry` or holding a status outside 400-599.
+  ⚠️ These threw an `InvalidOperationException` as the service registered the client; they now fail the host's start
+  (or, in a container without a host, the first use of the client). A test expecting the `InvalidOperationException`
+  expects an `OptionsValidationException` instead; a configuration with an attempt timeout longer than the total
+  timeout (it never fired) is now refused. `RetryOnly` is copied when the options are first read (the host's start),
+  not at registration. **And the client's `HttpClient.Timeout` is raised to `TotalTimeout` plus
+  `HttpClientTimeoutMargin` (5 s) when it is shorter**, after every other configuration of the client, so the pipeline
+  always ends a call first (as `Http.ResilienceTimeout`, never HttpClient's `TaskCanceledException`); a longer or
+  infinite one the service set is kept. A service no longer keeps `TotalTimeout` "inside HttpClient's 100 s".
+  `ResultResilienceOptions.DefaultRetries` is a new instance on each read (it was one shared instance, which binding
+  a section would have changed in place). **Sentinel** deletes `Infrastructure/SwgohApiResilienceOptions.cs` and, in
+  `AddSwgohApi`, the `AddOptions<SwgohApiResilienceOptions>()...ValidateOnStart()` block and the
+  `configuration.GetSection(...).Get<...>()` read (so `AddSwgohApi` no longer takes `IConfiguration`), and calls
+  `client.AddResultResilience("SwgohApiService:Resilience", resilience => { resilience.Retries = new RetrySchedule(4,
+  TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(4), Jitter: true); resilience.AttemptTimeout = TimeSpan.FromSeconds(60);
+  resilience.TotalTimeout = TimeSpan.FromSeconds(95); resilience.CircuitBreaker = false; resilience.RetryOnly =
+  ResultResilienceOptions.SafeToRetryStatuses; })`; its tests (`HangingSwgohApiHostFixture`, `SwgohApiClientRetryTests`)
+  write `Retries:FirstDelay` / `Retries:MaxDelay` for `RetryDelay` / `MaxRetryDelay`, under the same section. The
+  services' comments about HttpClient's 100 s (Sentinel's `AddSwgohApi` remarks) can go.
+
+- **SharedKernel's health checks are tagged by default** (Resrcify.SharedKernel.MessageBus, UnitOfWork): given no
+  `tags` (`null`), `AddMessageBus()` and `AddOutbox<TDbContext>()` are tagged `HealthTags.Ready` and `AddQuartzJobs()`
+  `HealthTags.Live`, where they had no tag at all (so `MapHealthEndpoints()` ran them on `/health` only). Every Titan
+  service passed exactly these tags, so it can drop them (`.AddMessageBus()`, `.AddOutbox<ShardDbContext>()`,
+  `.AddQuartzJobs()`, `.AddQuartzJobs(jobs => ...)`); `tags: []` registers a check with none. ⚠️ A check registered
+  without tags now runs on the readiness (or liveness) probe.
+
+- **`AddServiceTelemetry` traces Npgsql and bounds Serilog's destructuring by default** (Resrcify.SharedKernel.Observability).
+  - The `"Npgsql"` activity source (`TelemetrySources.Npgsql`) is traced (a span per database command; nothing in a
+    service without PostgreSQL); `NpgsqlInstrumentation = false` leaves it out. Oracle, Sentinel, Shard and
+    Tournament delete `telemetry.ActivitySources.Add("Npgsql")` (`Infrastructure/InfrastructureServiceRegistration.cs`;
+    `AddServiceTelemetry(name, configuration)` needs no `configure` left in Oracle, Sentinel, Shard and Tournament).
+  - A destructured property (`{@...}`) is written at most 4 levels deep, 20 items a collection and 1,024 characters a
+    string (`MaximumDestructuringDepth`, `MaximumDestructuredCollectionCount`, `MaximumDestructuredStringLength`; `null`
+    turns one off). They are set before the `Serilog` section is read, so its `Destructure` entries and
+    `ConfigureLogging` override them. ⚠️ A log line destructuring something bigger is cut (Serilog writes `…`). Discord
+    deletes its `LimitDestructuring` method and `telemetry.ConfigureLogging = LimitDestructuring;`
+    (`Infrastructure/InfrastructureServiceRegistration.cs`): the defaults are its values.
+  - Documented: `Serilog.Enrichers.Span` / `"WithSpan"` is redundant (the `TraceId` / `SpanId` enricher was already
+    there). Oracle, Sentinel, Shard, Tournament and SwgohApi drop the `Serilog.Enrichers.Span` `PackageReference`
+    (`Infrastructure/*.csproj`) and its `PackageVersion`, and `"Serilog.Enrichers.Span"` from `Serilog:Using` and
+    `"WithSpan"` from `Serilog:Enrich` (`Web/appsettings.Production.json`).
+
+- **`AddServiceTelemetry`'s Serilog reads the container's sinks** (Resrcify.SharedKernel.Observability): it is set up
+  with `ReadFrom.Services(provider)`, so an `ILogEventSink`, `ILogEventEnricher`, `ILogEventFilter`,
+  `IDestructuringPolicy` or `LoggingLevelSwitch` registered in the container joins the logger (it is how
+  `ServiceHostFixture.Logs` hears a service on Serilog). ⚠️ A service registering one of those for another purpose has
+  it applied to its logs.
+
+- **With the Postgres outbox, the outbox job and lanes claim with `PostgresOutboxLaneClaim` by default**
+  (Resrcify.SharedKernel.UnitOfWork.Postgres, UnitOfWork). A context registered with `AddPostgresDbContext(..., db =>
+  db.WithOutbox())` gives its outbox processing job and lanes `PostgresOutboxLaneClaim.Instance` (`FOR UPDATE SKIP
+  LOCKED`) when the service set no claim (`OutboxOptions.Claim`, `OutboxLaneOptions.Claim`,
+  `AddProcessOutboxMessagesJob`'s `claim`), resolved when they run, whatever the order of the registrations; a claim
+  the service set wins. Without it, a service running two instances that forgot the claim published a message twice.
+  ⚠️ A service on `WithOutbox()` that ran without a claim now claims (a row lock per message, in the processing
+  transaction). Sentinel and Shard can delete `outbox.Claim = PostgresOutboxLaneClaim.Instance;`
+  (`Infrastructure/InfrastructureServiceRegistration.cs`); ⚠️ Tournament (on `WithOutbox(...)`, no claim) now claims.
+
+### Added
+
+- **Web: `MapOutboxAdministration<TContext>()`'s `DELETE /messages/{id}` and `DELETE /given-up?type=`**, and
+  **`IOutboxAdministration<TContext>.DeleteAsync(id)` / `DeleteAllGivenUpAsync(type)`** (Abstractions; UnitOfWork's
+  `OutboxAdministration` implements them): deletes a message that gave up (204, or 404 when no message with the id
+  gave up), or every one that gave up, of one type when given (`{ "deleted": n }`, `OutboxDeleted`), for good: its
+  event is never handled. Only messages that gave up: a waiting one is the outbox's, a processed one the cleanup's.
+  Discarding poison took hand-written SQL.
+
+- **Abstractions: `RetrySchedule`** (`Resilience`; see Breaking changes), and the options that take one:
+  `OutboxOptions.Retries` / `TransientRetries`, `OutboxLaneOptions.Retries` / `TransientRetries`,
+  `AddProcessOutboxMessagesJob`'s `retries` / `transientRetries`, `ResultResilienceOptions.Retries` (with
+  `DefaultRetries`), **`MessageBusBuilder.WithEventRetries(RetrySchedule)`** (new: an integration event's in-place
+  tries could only be changed through Rebus' retry strategy, and their waits not at all) and
+  **`RateLimitedQueueOptions.Retries`** (new, per queue).
+
+- **Results: `ErrorCodes`**, the code of every error SharedKernel returns or answers with, nested by the package that
+  emits it: `General` (`NullValue`, `EmptyInput`), `Http` (`ResilienceTimeout`, `CircuitOpen`, `Unreachable`,
+  `EmptyContent`, `UnreadableContent`, `ForStatus(int)` for `Http.<status>`), `Persistence` (every `PersistenceErrors`
+  code), `Request` (`Unhandled`, `Binding` = `"Request"`), `Idempotency` (`InvalidKey`, `KeyReused`, `InProgress`),
+  `ScatterGather` (`Unanswered`, `UnexpectedReply`, `ResponderFailed(string requestType)`), `ErrorQueue` (`None`,
+  `MessageNotFound`, `NotMoved`, `Unavailable`) and `User` (`MissingUserIdClaim`). Every SharedKernel `Error` is coded
+  from it.
+
+- **Web: `ResultResilienceErrors.Unreachable(string authority, string cause)`** (code `Http.Unreachable`) and
+  `UnreachableMarker` (`unreachable`), the answer for a service that couldn't be reached (see
+  above).
+
+- **Results: `TransientFailureException`** (`Diagnostics`, carrying `ImmutableArray<Error> Errors`), **`TransientFailures`**
+  (`IsTransient(Exception)`, `IsTransient(Exception, Func<Exception, bool>?)`, `TryGetErrors(Exception, out
+  ImmutableArray<Error>)`, and `ThrowIfTransient()` on `Result`, `Result<T>`, `Task<Result>` and `Task<Result<T>>`,
+  returning the result for chaining) and **`ErrorTypes.FromHttpStatus(int)` / `ToHttpStatus(ErrorType)`** (`Primitives`),
+  the one status mapping (it was the Web package's, internal).
+
+- **Abstractions: `Resilience/`**: `ITransientFailureRule`, `ITransientFailureClassifier`, and
+  `services.AddTransientFailureRule<TRule>()`, `AddTransientFailureRule(Func<Exception, bool>)`,
+  `TryAddTransientFailureClassifier()` (the default classifier: the built-in rule OR every registered rule, for the
+  exception and each of its causes). The mediator's logging, unit-of-work and transaction behaviors take the classifier
+  as an optional constructor parameter, and so do `CommandJob`, `AsyncCommandJob` and their one-parameter variants
+  (`ITransientFailureClassifier? transientFailures = null`, last); without one, the built-in rule.
+
+- **UnitOfWork: `PersistenceErrors.NotNullViolation`, `CheckViolation`, `ValueTooLong` and `ForeignKeyViolation`**
+  (codes `Persistence.NotNullViolation`, `Persistence.CheckViolation`, `Persistence.ValueTooLong`,
+  `Persistence.ForeignKeyViolation`), with their `SQLSTATE`s (`NotNullViolationSqlState`, `CheckViolationSqlState`,
+  `ValueTooLongSqlState`, `ForeignKeyViolationSqlState`, `RestrictViolationSqlState`). The error returned names what
+  was broken in its message when the driver reports it, e.g. `A value the database requires is missing (table
+  "Members", column "Nickname").`, read from `Exception.Data` (`ConstraintName`, `TableName`, `ColumnName`, where
+  Npgsql's `PostgresException` puts them), so UnitOfWork still references no provider. Never a value: PostgreSQL's
+  detail, which holds the row's data, isn't read. Its message differs from the field's, so match on `Code`.
+
+- **UnitOfWork: `OutboxOptions.Retries` / `TransientRetries` and `OutboxLaneOptions.Retries` / `TransientRetries`**
+  (`RetrySchedule` / `RetrySchedule?`), and `AddProcessOutboxMessagesJob`'s `retries` / `transientRetries`: the
+  attempts and the waits a message gets (see above and "One `RetrySchedule`" under Breaking changes). The lanes'
+  delays were fixed at 5 s doubling to 5 min; a `FirstDelay` of `TimeSpan.Zero` tries a failed message again at once
+  (the next run, or the lane's next poll). A transient failure waits by `TransientRetries`' delays.
+
+- **Web: `ResultProblemDetailsOptions.ProblemDetailsForBindingFailures`** (`true` by default): whether
+  `AddResultProblemDetails()` turns on `RouteHandlerOptions.ThrowOnBadRequest`, so a binding failure reaches
+  `ResultExceptionHandler` in every environment. The code of a binding failure's error when the exception names no
+  parameter is `ErrorCodes.Request.Binding` (`"Request"`).
+
+- **Mediator: `MediatorConfiguration.SkipValidatorScan()`**, to keep `RegisterServicesFromAssemblies` from registering
+  the validators (see Behaviour changes).
+
+- **Web: `AddResultResilience(string configSectionPath, Action<ResultResilienceOptions>? configure = null)`**: the
+  options set by `configure` (the service's defaults), then bound from the configuration section (`BindConfiguration`,
+  the container's `IConfiguration`: the service passes none), which wins for every value it holds, `Retries`' values one
+  by one; validated when the host starts. And **`ResultResilienceHttpClientBuilderExtensions.HttpClientTimeoutMargin`**
+  (5 s), how far above `TotalTimeout` the client's own timeout is raised.
+
+- **UnitOfWork.Postgres: `IHealthChecksBuilder.AddPostgres<TContext>(name = "postgres", failureStatus = Unhealthy,
+  tags = [HealthTags.Ready], timeout = null)`**: the database's health check, on the connection
+  `AddPostgresDbContext<TContext>` built (a pooled connection and `SELECT 1`, without `AspNetCore.HealthChecks.NpgSql`);
+  without `AddPostgresDbContext<TContext>` the host fails to start, with a message saying so. It replaces
+  `.AddNpgSql(sp => sp.GetPostgresConnectionString<TContext>(), name: "postgres", tags: [HealthTags.Ready])` in
+  Oracle, Sentinel, Shard and Tournament (`Infrastructure/InfrastructureServiceRegistration.cs`): write
+  `.AddPostgres<OracleDbContext>()` (and the others' contexts), and drop the `AspNetCore.HealthChecks.NpgSql`
+  `PackageReference` (`Infrastructure/*.csproj`) and its `PackageVersion` (`Directory.Packages.props`).
+- **MessageBus' README: `AddMessageBus()`'s health check replaces a RabbitMQ check.** It watches the bus' own
+  connection: Sentinel and Shard delete `.AddRabbitMQ(name: "rabbitmq", tags: [HealthTags.Ready])`, the
+  `services.AddSingleton<IConnection>(...)` built for it (`Infrastructure/InfrastructureServiceRegistration.cs`) and
+  the `AspNetCore.HealthChecks.Rabbitmq` package (`Infrastructure/*.csproj`, `Directory.Packages.props`). SwgohApi's
+  `IConnection` and `healthChecks.AddRabbitMQ(...)` (`Infrastructure/InfrastructureServiceRegistration.cs`) also watch
+  the broker MassTransit uses: they go with MassTransit, for `.AddMessageBus()` on the SharedKernel bus.
+
+- **Caching: `services.AddDistributedCaching(Action<MemoryDistributedCacheOptions>? configure = null)`**
+  (`Resrcify.SharedKernel.Caching.Extensions`): the in-memory `IDistributedCache` (unless one is registered already),
+  `DistributedCachingService` as the `ICachingService` and the `IClaimStore` (one singleton; one registered before is
+  kept) and the system `TimeProvider` (unless one is registered), in one call. The package references
+  `Microsoft.Extensions.Caching.Memory` (a dependency, see Breaking changes). It replaces the
+  two lines `services.AddDistributedMemoryCache(); services.AddSingleton<ICachingService, DistributedCachingService>();`
+  in Discord, Shard and Tournament (`Infrastructure/InfrastructureServiceRegistration.cs`; Sandbox and Identity there
+  too, and SwgohApi's in-memory branch), and Sentinel's with `AddDistributedMemoryCache(options => options.SizeLimit =
+  1024 * 1024 * 1024)`, which becomes `services.AddDistributedCaching(cache => cache.SizeLimit = 1024 * 1024 * 1024)`.
+  With it the `IClaimStore` is registered too (it was found through `ICachingService` before: same instance, same
+  behaviour).
+
+- **Observability: `ServiceTelemetryOptions.NpgsqlInstrumentation`, `MaximumDestructuringDepth`,
+  `MaximumDestructuredCollectionCount`, `MaximumDestructuredStringLength`, and `TelemetrySources.Npgsql`** (see
+  Behaviour changes).
+
+- **IntegrationTesting: production-like fixtures, logs and the bus harness without a fixture class per service.**
+  - `PostgresContainerFixture { Image, Database, Username, Password }` and `RabbitMqContainerFixture { Image, Username,
+    Password, ProductionQueueDefaults }` (init properties; the images stay production's, `postgres:18` and
+    `rabbitmq:4.3.4-management`). `ProductionQueueDefaults` mounts production's `additionalConfig`
+    (`ProductionQueueConfig`: quorum queues by default, an operator policy with a delivery limit of a million).
+  - `RabbitMqContainerFixture.QueuesAsync(virtualHost = "/")` (each queue's name, type and whether it is exclusive, as
+    `RabbitMqQueue`), `AddQuorumVirtualHostAsync(name?)` (a virtual host whose queues are quorum queues, with
+    production's delivery limit; returns its `RabbitMqConnection`), `Connection` (the broker as the bus connects to
+    it), `BrokerUsername` / `BrokerPassword`. SharedKernel's own `BusFixture` uses them (its `rabbitmqctl` copy is gone).
+  - `ServiceHostFixture.Logs`: Microsoft's `FakeLogCollector`, holding what the host logged through the logging
+    abstraction and through Serilog (`AddServiceTelemetry`'s, which reads the container's sinks). SharedKernel's three
+    `CapturingLoggerProvider` test copies are replaced by `FakeLoggerProvider`.
+  - `ServiceHostFixture.UsesMessageBusTestHarness` (`protected virtual bool`, off by default), `BusNetwork` and
+    `Harness`: the service's buses on the message bus test harness, after its own registrations.
+  - The `CreatePostgres` / `CreateRabbitMq` documentation no longer invites a fixture of the service's own for its
+    image: it is production's, and `RESRCIFY_TEST_*_IMAGE` tries another.
+- **MessageBus.Testing: `PublishedEventListener.StartAsync(RabbitMqConnection, listen => listen.Listen<TEvent>(wireName?))`**:
+  a subscriber to a service's integration events on a real broker (a bus with an input queue of its own, bound to each
+  event's topic), recording them in `Received` (a `MessageRecording`); disposing it unsubscribes.
+- **Adopting the test helpers, per service** (`tests/*IntegrationTests`):
+  - **Shard**: delete `Fixtures/PostgresFixture.cs` (it pinned `postgres:16`) and `Fixtures/RabbitMqFixture.cs`
+    (`CreatePostgres() => new() { Database = "ShardDb", Username = "ShardUser", Password = "K33pTr4ck" }`,
+    `CreateRabbitMq() => new() { Username = "messageUser", Password = "supersecretC0de" }`, or no credentials at all);
+    `Harness/HarnessShardHostFixture.cs` keeps `ConfigureSettings` and `CreatePostgres` and replaces its `BusNetwork`
+    and `ConfigureTestServices` with `protected override bool UsesMessageBusTestHarness => true;`; delete
+    `Fixtures/TopicListener.cs` (and its `RabbitMQ.Client` use) for `PublishedEventListener`
+    (`TopicListener.StartAsync(_host.Broker, nameof(ShardPayoutRotatedEventMessage))` + `WaitForEventAsync(timeout,
+    bodyContains)` becomes `PublishedEventListener.StartAsync(_host.RabbitMq!.Connection, listen =>
+    listen.Listen<ShardPayoutRotatedEventMessage>())` + `Received.WaitForAsync<ShardPayoutRotatedEventMessage>(e => ...,
+    timeout)`, in `OutboxDispatchTests`, `OutboxWakeUpTests` and `ShardDeliveryHealthTests`).
+  - **Sentinel**: delete `Fixtures/PostgresFixture.cs` (`postgres:16`) and `Fixtures/RabbitMqFixture.cs` the same
+    way; `Harness/HarnessSentinelHostFixture.cs` (and the other `Harness/*HostFixture.cs` that copy its `BusNetwork` and
+    `AddMessageBusTestHarness`) take `UsesMessageBusTestHarness`; the system tests' `Support/EventSubscriber.cs` can
+    become a `PublishedEventListener`.
+  - **Oracle**: delete `Fixtures/PostgresFixture.cs` (`postgres:16`) and `Fixtures/RabbitMqFixture.cs`, whose quorum
+    `conf.d` file is `ProductionQueueDefaults = true`; `Harness/HarnessOracleHostFixture.cs` takes
+    `UsesMessageBusTestHarness`.
+  - **Tournament**: delete `Fixtures/QuorumRabbitMqFixture.cs` for `new() { ProductionQueueDefaults = true }`, its
+    `QueuesAsync()` being the fixture's (`RabbitMqQueue(Name, Type, Exclusive)` for the tuple);
+    `Harness/HarnessTournamentHostFixture.cs` takes `UsesMessageBusTestHarness` (its `StartDependenciesAsync` stand-in
+    joins `BusNetwork` as before). `Fixtures/PersistenceFixture.cs` can set its credentials with init properties.
+  - **Discord**: delete `Fixtures/RabbitMqFixture.cs` the same way (its `BotHostFactoryBase` isn't a
+    `ServiceHostFixture`, so `BotBusHarnessFixture` keeps its own `AddMessageBusTestHarness()`).
+  - Every service can drop a `CapturingLoggerProvider` of its own for `ServiceHostFixture.Logs` (or a
+    `FakeLoggerProvider`), and needs no package reference for them: the package brings
+    Microsoft.Extensions.Diagnostics.Testing.
+
+### Fixed
+
+- **A flaky message bus test** (Resrcify.SharedKernel.MessageBus, tests only):
+  `IntegrationEventDispatcherTests.Handle_ShouldStillHandleTheEvent_WhenTheClaimStoreIsOutOfReach` counted
+  `messagebus.events.handled event=PayoutRotated outcome=success` on the process-wide meter, which classes running in
+  parallel add to (CI counted 3 for 1). The `events.*` counters carry no tag of the bus that recorded them, so
+  `IntegrationEventDispatcherTests` and `EventBusTests`, which count them, now run in the new non-parallel
+  `SharedMeterCollection`; the other `MetricsCapture` users count measurements tagged with their own queue or message.
+  `ScatterGatherTests.Tracing_WhenItemsAreAnswered_PutsTheWholeBatchInTheOutboxMessagesTrace` counted the trace's
+  handling spans as soon as the run was gathered, which the last reply's handler does before the replies' spans stop
+  (seen once: 5 of 10): it now waits for them.
+
+- **`UseServiceRequestLogging` is documented before `UseExceptionHandler()`** (its XML docs and the Observability
+  README, Quick Start included), where its line logs the status the exception handler answered (a 500 whose stack the
+  handler logs once, a 499 for a client abort) rather than the exception passing through. It said to put it after,
+  where `UseSerilogRequestLogging()` usually went. Both placements now log the same (see above); moving it is still the
+  recommended order. Oracle's reorder (`8c41d27`) is that order.
+
+- **`ResultExceptionHandler`'s client-abort branch is gone** (Resrcify.SharedKernel.Web): it was dead.
+  `UseExceptionHandler()` answers an `OperationCanceledException` or `IOException` thrown after the request was
+  aborted with a 499 itself (logged at `Debug`), before it asks any `IExceptionHandler`, so the handler never saw one (a
+  test over the real middleware now shows it). The Observability package's own copy, which also knew `IOException`, is
+  the one left (`UseServiceRequestLogging`, which runs outside the exception handler). Nothing changes for a service.
+- **Documentation drift**: AGENTS.md pointed to a missing `INTEGRATION_TESTING.md` and recommended
+  `IntegrationFactoryBase` (it now points at `ServiceHostFixture` and the IntegrationTesting README), and gave EF Core
+  `10.0.7` (now: the version `Directory.Packages.props` pins, `10.0.13`); the READMEs' `d:\Google Drive\...` paths are
+  gone; the README's package list and layer table name MessageBus.Testing.
+- **The sample is the canonical 4.3 service** (`samples/Resrcify.SharedKernel.WebApiExample`, not packed): a top-level
+  `Program.cs` (no `Startup.cs`), minimal-API `IEndpoint`s on `MapPostRequest` / `MapGetRequest` (no controllers, no
+  Swagger: OpenAPI in Development), `AddServiceTelemetry` / `UseServiceRequestLogging` (no `UseSerilogRequestLogging`),
+  `AddPostgresDbContext` with the outbox and its wake-up, `AddOutboxProcessing`, `AddResultResilience` from
+  configuration, the health checks, `AddDistributedCaching`, and the mediator registering the validators. Its
+  Application project no longer references UnitOfWork or Repository, which the layer table forbids there. Its Docker
+  image builds from the repository root on .NET 10, and its database is `postgres:18`.
+
+
 ## 4.2.0 (2026-10-14)
 
 ### Added

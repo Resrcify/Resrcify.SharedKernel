@@ -3,12 +3,19 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Resrcify.SharedKernel.Abstractions.Mediator;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 using Resrcify.SharedKernel.Results.Diagnostics;
 using Resrcify.SharedKernel.Results.Primitives;
 
 namespace Resrcify.SharedKernel.Mediator.Behaviors;
 
+/// <summary>
+/// Runs an <see cref="ITransactionalCommand"/> in a transaction (<c>IUnitOfWork.ExecuteInTransactionAsync</c>): committed
+/// on a successful result, rolled back on a failure or an exception. An exception is logged at
+/// <see cref="LogLevel.Error"/>, or at <see cref="LogLevel.Warning"/> when it is transient (by the container's
+/// <see cref="ITransientFailureClassifier"/>, else <see cref="TransientFailures"/>).
+/// </summary>
 public class TransactionPipelineBehavior<TRequest, TResponse>
     : IPipelineBehavior<TRequest, TResponse>
     where TRequest : IRequest<TResponse>, ITransactionalCommand
@@ -16,13 +23,16 @@ public class TransactionPipelineBehavior<TRequest, TResponse>
 {
     private readonly IUnitOfWork _unitOfWork;
     private readonly ILogger _logger;
+    private readonly ITransientFailureClassifier? _transientFailures;
 
     public TransactionPipelineBehavior(
         IUnitOfWork unitOfWork,
-        ILogger<TransactionPipelineBehavior<TRequest, TResponse>> logger)
+        ILogger<TransactionPipelineBehavior<TRequest, TResponse>> logger,
+        ITransientFailureClassifier? transientFailures = null)
     {
         _unitOfWork = unitOfWork;
         _logger = logger;
+        _transientFailures = transientFailures;
     }
 
     public async Task<TResponse> Handle(
@@ -58,9 +68,11 @@ public class TransactionPipelineBehavior<TRequest, TResponse>
         if (cancellationToken.IsCancellationRequested)
             return false;
 
-        if (_logger.IsEnabled(LogLevel.Error) && LoggedExceptions.Claim(exception))
+        var level = TransientFailureLevels.Of(exception, _transientFailures);
+        if (_logger.IsEnabled(level) && LoggedExceptions.Claim(exception))
         {
-            _logger.LogError(
+            _logger.Log(
+                level,
                 exception,
                 "Request {@RequestName} threw {@ExceptionType}; its transaction is rolled back",
                 typeof(TRequest).Name,

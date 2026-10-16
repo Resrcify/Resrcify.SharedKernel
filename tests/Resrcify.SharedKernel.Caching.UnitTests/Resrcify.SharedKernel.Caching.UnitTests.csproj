@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>net10.0</TargetFrameworks>
     <IsPackable>false</IsPackable>
@@ -20,6 +20,7 @@
      <PackageReference Include="NSubstitute"/>
      <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
      <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
   <ItemGroup>

@@ -17,6 +17,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Shouldly" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="NSubstitute" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
@@ -32,6 +33,8 @@
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.DomainDrivenDesign\Resrcify.SharedKernel.DomainDrivenDesign.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Mediator\Resrcify.SharedKernel.Mediator.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.UnitOfWork\Resrcify.SharedKernel.UnitOfWork.csproj" />
+    <!-- The PostgreSQL insert strategy, indexes and claim the tests run the outbox with. -->
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.UnitOfWork.Postgres\Resrcify.SharedKernel.UnitOfWork.Postgres.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.IntegrationTesting\Resrcify.SharedKernel.IntegrationTesting.csproj" />
   </ItemGroup>
 </Project>

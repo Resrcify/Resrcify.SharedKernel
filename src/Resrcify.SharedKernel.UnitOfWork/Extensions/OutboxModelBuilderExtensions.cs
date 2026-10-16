@@ -27,12 +27,12 @@ public static class OutboxModelBuilderExtensions
     /// Optional hook for tuning the dedup index. Defaults to a non-unique
     /// composite on <c>(DedupKey, ProcessedOnUtc)</c>. Promote to a strict
     /// partial UNIQUE on PostgreSQL via
-    /// <see cref="Outbox.PostgresOutboxIndexes.PartialUniqueDedup"/> when wiring
-    /// <see cref="Outbox.PostgresOnConflictOutboxInsertStrategy"/>.
+    /// <c>PostgresOutboxIndexes.PartialUniqueDedup</c> when wiring
+    /// <c>PostgresOnConflictOutboxInsertStrategy</c>.
     /// </param>
     /// <param name="configureProcessedIndex">
     /// Optional hook for the index the cleanup of processed messages uses; on PostgreSQL,
-    /// <see cref="Outbox.PostgresOutboxIndexes.PartialProcessed"/>.
+    /// <c>PostgresOutboxIndexes.PartialProcessed</c>.
     /// </param>
     public static ModelBuilder ApplyOutboxMessageConfiguration(
         this ModelBuilder modelBuilder,

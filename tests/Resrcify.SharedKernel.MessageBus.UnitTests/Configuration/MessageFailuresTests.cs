@@ -21,7 +21,7 @@ public sealed class MessageFailuresTests
     [Fact]
     public void AreTheMessagesFault_ShouldBeFalse_ForAConcurrencyConflict_WhichATryInANewScopeReadsAgain()
         => MessageFailures.AreTheMessagesFault(
-            [Error.Conflict(ErrorTypeExtensions.ConcurrencyConflictCode, "Changed since it was read.")])
+            [Error.Conflict(ErrorCodes.Persistence.Concurrency, "Changed since it was read.")])
             .ShouldBeFalse();
 
     [Fact]

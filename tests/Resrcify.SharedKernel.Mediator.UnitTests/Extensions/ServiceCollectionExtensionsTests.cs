@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.Mediator.Behaviors;
@@ -27,7 +28,7 @@ public sealed class ServiceCollectionExtensionsTests
     {
         var services = new ServiceCollection();
 
-        services.AddMediator(typeof(ServiceCollectionExtensionsTests).Assembly);
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(ServiceCollectionExtensionsTests).Assembly));
 
         using var serviceProvider = services.BuildServiceProvider();
 
@@ -42,11 +43,13 @@ public sealed class ServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void AddMediator_WithServiceLifetimeOverload_RegistersMediatorAsScoped()
+    public void AddMediator_WithAScopedLifetime_RegistersEveryInterfaceAsTheScopesOneMediator()
     {
         var services = new ServiceCollection();
 
-        services.AddMediator(ServiceLifetime.Scoped, typeof(ServiceCollectionExtensionsTests).Assembly);
+        services.AddMediator(config => config
+            .RegisterServicesFromAssemblies(typeof(ServiceCollectionExtensionsTests).Assembly)
+            .UseMediatorLifetime(ServiceLifetime.Scoped));
 
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
@@ -60,12 +63,100 @@ public sealed class ServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void AddMediator_ShouldRegisterATransientMediatorAndContainerComposedPipelines_ByDefault()
+    {
+        var services = new ServiceCollection();
+
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(ServiceCollectionExtensionsTests).Assembly));
+
+        services.Single(descriptor => descriptor.ServiceType == typeof(IMediator)).Lifetime.ShouldBe(ServiceLifetime.Transient);
+        services.Single(descriptor => descriptor.ServiceType == typeof(ISender)).Lifetime.ShouldBe(ServiceLifetime.Transient);
+        services
+            .Single(descriptor => descriptor.ServiceType == typeof(Abstractions.IDiComposedSendRuntime<,>))
+            .Lifetime.ShouldBe(ServiceLifetime.Transient);
+        services
+            .Single(descriptor => descriptor.ServiceType == typeof(Abstractions.IDiComposedStreamRuntime<,>))
+            .Lifetime.ShouldBe(ServiceLifetime.Transient);
+    }
+
+    [Fact]
+    public async Task AddMediator_ShouldRegisterTheScannedValidators_InternalOnesIncluded()
+    {
+        var services = new ServiceCollection();
+
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(ServiceCollectionExtensionsTests).Assembly));
+
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var scope = provider.CreateAsyncScope();
+        scope.ServiceProvider
+            .GetServices<IValidator<ValidatedRequest>>()
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<ValidatedRequestValidator>();
+    }
+
+    [Fact]
+    public async Task Send_ShouldFailWithTheScannedValidatorsErrors_WhenTheValidationBehaviorIsAdded()
+    {
+        var services = new ServiceCollection();
+        services.AddMediator(config => config
+            .RegisterServicesFromAssemblies(typeof(ServiceCollectionExtensionsTests).Assembly)
+            .AddOpenBehavior(typeof(ValidationPipelineBehavior<,>)));
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+
+        var result = await scope.ServiceProvider.GetRequiredService<ISender>().Send(new ValidatedRequest(string.Empty));
+
+        result.IsFailure.ShouldBeTrue();
+        result.Errors.ShouldHaveSingleItem().Code.ShouldBe(nameof(ValidatedRequest.Name));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AddMediator_ShouldRegisterAValidatorOnce_WhenTheServiceAlsoCallsAddValidatorsFromAssembly(bool before)
+    {
+        var assembly = typeof(ServiceCollectionExtensionsTests).Assembly;
+        var services = new ServiceCollection();
+
+        if (before)
+            services.AddValidatorsFromAssembly(assembly, includeInternalTypes: true);
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(assembly));
+        if (!before)
+            services.AddValidatorsFromAssembly(assembly, includeInternalTypes: true);
+
+        services.Count(descriptor => descriptor.ServiceType == typeof(IValidator<ValidatedRequest>)).ShouldBe(1);
+        services.Count(descriptor => descriptor.ServiceType == typeof(ValidatedRequestValidator)).ShouldBe(1);
+    }
+
+    [Fact]
+    public void AddMediator_ShouldRegisterAValidatorOnce_WhenTwoCallsScanTheSameAssembly()
+    {
+        var assembly = typeof(ServiceCollectionExtensionsTests).Assembly;
+        var services = new ServiceCollection();
+
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(assembly));
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(assembly));
+
+        services.Count(descriptor => descriptor.ServiceType == typeof(IValidator<ValidatedRequest>)).ShouldBe(1);
+    }
+
+    [Fact]
+    public void AddMediator_ShouldRegisterNoValidator_WhenToldToSkipTheScan()
+    {
+        var services = new ServiceCollection();
+
+        services.AddMediator(config => config
+            .RegisterServicesFromAssemblies(typeof(ServiceCollectionExtensionsTests).Assembly)
+            .SkipValidatorScan());
+
+        services.ShouldNotContain(descriptor => descriptor.ServiceType == typeof(IValidator<ValidatedRequest>));
+    }
+
+    [Fact]
     public void AddMediator_ShouldThrow_WhenTheMediatorLifetimeIsSingleton()
     {
         var services = new ServiceCollection();
 
-        Should.Throw<ArgumentOutOfRangeException>(
-            () => services.AddMediator(ServiceLifetime.Singleton, typeof(ServiceCollectionExtensionsTests).Assembly));
         Should.Throw<ArgumentOutOfRangeException>(
             () => services.AddMediator(config => config.UseMediatorLifetime(ServiceLifetime.Singleton)));
     }
@@ -135,7 +226,7 @@ public sealed class ServiceCollectionExtensionsTests
     public void AddMediator_ShouldRecordTheScannedAssemblies_WhenItScans()
     {
         var services = new ServiceCollection();
-        services.AddMediator(typeof(ServiceCollectionExtensionsTests).Assembly);
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(ServiceCollectionExtensionsTests).Assembly));
 
         services
             .Where(descriptor => descriptor.ServiceType == typeof(IMediatorAssemblyScan))
@@ -381,6 +472,21 @@ public sealed class ServiceCollectionExtensionsTests
     }
 
     private sealed class PingRequest : IRequest<Result>;
+
+    private sealed record ValidatedRequest(string Name) : IRequest<Result>;
+
+    private sealed class ValidatedRequestHandler : IRequestHandler<ValidatedRequest, Result>
+    {
+        public Task<Result> Handle(ValidatedRequest request, CancellationToken cancellationToken)
+            => Task.FromResult(Result.Success());
+    }
+
+    // Internal (nested, private), as Tournament's validators are: AddValidatorsFromAssembly's default skips them.
+    private sealed class ValidatedRequestValidator : AbstractValidator<ValidatedRequest>
+    {
+        public ValidatedRequestValidator()
+            => RuleFor(request => request.Name).NotEmpty();
+    }
 
     private sealed class ScopedOpenBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
     {

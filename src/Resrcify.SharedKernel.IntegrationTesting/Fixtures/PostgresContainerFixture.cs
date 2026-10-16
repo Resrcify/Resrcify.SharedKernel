@@ -9,11 +9,10 @@ using Testcontainers.PostgreSql;
 namespace Resrcify.SharedKernel.IntegrationTesting.Fixtures;
 
 /// <summary>
-/// Postgres-flavoured <see cref="ContainerFixture{TContainer}"/>. Subclasses
-/// (or direct consumers) override <see cref="Configure"/> to set image,
-/// database, credentials, and any other builder options. Defaults to
-/// <see cref="DefaultImage"/> — useful when the consumer doesn't care about
-/// specific versions or naming.
+/// Postgres-flavoured <see cref="ContainerFixture{TContainer}"/>, on the image production runs
+/// (<see cref="DefaultImage"/>). The database, credentials and image are set with init properties, without a
+/// subclass: <c>new PostgresContainerFixture { Database = "ShardDb", Username = "ShardUser", Password = "..." }</c>.
+/// A subclass can still override <see cref="Configure"/> for any other builder option.
 ///
 /// Exposes <see cref="Host"/> and <see cref="Port"/> so consumers can wire
 /// connection settings without poking at <see cref="ContainerFixture{TContainer}.Container"/>
@@ -29,16 +28,33 @@ public class PostgresContainerFixture
     private static readonly TimeProvider Time = TimeProvider.System;
 
     /// <summary>
-    /// Image used when <see cref="Configure"/> doesn't call <c>WithImage</c>: the version production runs.
+    /// The image unless <see cref="Image"/> says otherwise: the version production runs (Resrcify.Kubernetes' database
+    /// stateful sets).
     /// </summary>
     protected const string DefaultImage = "postgres:18";
 
     /// <summary>
-    /// Environment variable naming the image to run instead, for every fixture (it wins over a
+    /// Environment variable naming the image to run instead, for every fixture (it wins over <see cref="Image"/> and a
     /// <c>WithImage</c> in <see cref="Configure"/>), e.g. to try a whole suite against the next version.
     /// </summary>
     public const string ImageVariable = "RESRCIFY_TEST_POSTGRES_IMAGE";
 
+    /// <summary>
+    /// The image to run: <see cref="DefaultImage"/> (production's) unless set. Keep it: a test on another version than
+    /// production's proves less; <see cref="ImageVariable"/> tries a suite on another one without a code change.
+    /// </summary>
+    public string Image { get; init; } = DefaultImage;
+
+    /// <summary>The database the container creates (Testcontainers' <c>postgres</c> unless set).</summary>
+    public string? Database { get; init; }
+
+    /// <summary>The user the container creates (Testcontainers' <c>postgres</c> unless set).</summary>
+    public string? Username { get; init; }
+
+    /// <summary>The user's password (Testcontainers' <c>postgres</c> unless set).</summary>
+    public string? Password { get; init; }
+
+    /// <summary>Any other builder option, for a subclass; runs after <see cref="Image"/> and the credentials are applied.</summary>
     protected virtual PostgreSqlBuilder Configure(PostgreSqlBuilder builder)
         => builder;
 
@@ -62,7 +78,14 @@ public class PostgresContainerFixture
 
     protected override PostgreSqlContainer Build()
     {
-        var builder = Configure(new PostgreSqlBuilder(DefaultImage));
+        var builder = new PostgreSqlBuilder(Image);
+        if (Database is { } database)
+            builder = builder.WithDatabase(database);
+        if (Username is { } username)
+            builder = builder.WithUsername(username);
+        if (Password is { } password)
+            builder = builder.WithPassword(password);
+        builder = Configure(builder);
         if (_network is { } network)
             builder = builder
                 .WithNetwork(network)

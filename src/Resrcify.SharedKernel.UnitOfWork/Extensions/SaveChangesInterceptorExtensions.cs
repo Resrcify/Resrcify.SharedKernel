@@ -15,10 +15,10 @@ namespace Resrcify.SharedKernel.UnitOfWork.Extensions;
 /// <see cref="TimeProvider"/>, the outbox serializer and insert strategy), and adds them to a context.
 /// </summary>
 /// <remarks>
-/// An interceptor made with <c>new</c> in <c>AddDbContext</c> reads the system clock unless it is handed one; one the
-/// container builds gets the registered <see cref="TimeProvider"/> (a <c>FakeTimeProvider</c> in tests). The
-/// interceptors keep no state of their own, so each is a singleton shared by every context. Their constructors are
-/// unchanged: <c>new</c> still works.
+/// One the container builds gets the registered <see cref="TimeProvider"/> (a <c>FakeTimeProvider</c> in tests, whenever
+/// it is registered); an interceptor made with <c>new</c> takes the clock as a required argument, so hand it the
+/// container's (<c>provider.GetRequiredService&lt;TimeProvider&gt;()</c>). The interceptors keep no state of their own,
+/// so each is a singleton shared by every context.
 /// </remarks>
 /// <example>
 /// <code>

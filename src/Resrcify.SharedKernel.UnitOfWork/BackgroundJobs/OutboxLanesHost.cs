@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
@@ -22,7 +23,9 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 /// The regular outbox job skips these event types.
 /// </summary>
 /// <remarks>
-/// A failed message is tried again after 5 s, then 10 s, 20 s, … up to 5 min. That schedule is kept in the database
+/// A failed message is tried again by its failure's schedule (<see cref="OutboxLaneOptions.Retries"/>, or
+/// <see cref="OutboxLaneOptions.TransientRetries"/> for a transient failure): after 5 s, then twice as long each time
+/// (10 s, 20 s, …) up to 5 min by default. That schedule is kept in the database
 /// (<see cref="OutboxMessage.NextAttemptOnUtc"/>, written with the failure), not in this instance, so several
 /// instances running the lanes don't spend a message's tries in a few seconds of an outage, however long it waited
 /// before its first try.
@@ -32,19 +35,17 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
     OutboxLaneSettings<TDbContext> settings,
     IServiceScopeFactory scopeFactory,
     ILogger<OutboxLanesHost<TDbContext>> logger,
-    TimeProvider? timeProvider = null,
+    TimeProvider timeProvider,
+    IServiceProvider services,
     OutboxWakeUp<TDbContext>? wakeUp = null)
     : BackgroundService
     where TDbContext : DbContext
 {
-    /// <summary>The first retry of a failed message waits this long; each further one twice as long.</summary>
-    private static TimeSpan FirstRetryDelay => TimeSpan.FromSeconds(5);
-
-    /// <summary>The longest a failed message waits before its next attempt.</summary>
-    private static TimeSpan MaxRetryDelay => TimeSpan.FromMinutes(5);
-
     private readonly OutboxLaneOptions options = settings.Options;
-    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
+
+    // The lanes' own claim, else the outbox job's (AddOutboxLanes), else the one the package writing the outbox gives.
+    private readonly IOutboxLaneClaim? _claim = OutboxDefaultClaim<TDbContext>.Effective(settings.Options.Claim, services);
+    private readonly TimeProvider _time = timeProvider;
 
     /// <summary>Messages another instance held, and when this one may look at them again.</summary>
     private readonly ConcurrentDictionary<Guid, DateTimeOffset> _backingOff = new();
@@ -100,6 +101,8 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
             if (notBefore <= now)
                 _backingOff.TryRemove(id, out _);
         var busy = inFlight.Keys.Concat(_backingOff.Keys).ToList();
+        // The higher of the two limits: a message retrying transiently past MaxRetryCount is still read.
+        var retryLimit = settings.RetryLimits.ReadLimit;
         List<OutboxMessageToProcess> due;
         await using (var scope = scopeFactory.CreateAsyncScope())
         {
@@ -107,7 +110,7 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
                 .Set<OutboxMessage>()
                 .Where(m =>
                     m.ProcessedOnUtc == null &&
-                    m.RetryCount < options.MaxRetryCount &&
+                    m.RetryCount < retryLimit &&
                     eventTypes.Contains(m.Type) &&
                     !busy.Contains(m.Id) &&
                     (m.NextAttemptOnUtc == null || m.NextAttemptOnUtc <= nowUtc))
@@ -139,9 +142,8 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
             var outcome = await OutboxMessageProcessor<TDbContext>.ProcessAsync(
                 scopeFactory,
                 message,
-                options.Claim,
-                options.MaxRetryCount,
-                RetryDelay(message.RetryCount + 1),
+                _claim,
+                settings.RetryLimits,
                 stoppingToken);
             // Another instance holds it (a scatter-gather may hold it a while): look again at the next poll, not at
             // once, or the freed slot would claim it again and again. A failed one waits in the database.
@@ -163,17 +165,6 @@ internal sealed partial class OutboxLanesHost<TDbContext>(
             signal.Set();
         }
     }
-
-    /// <summary>5 s after the first failure, then 10 s, 20 s, … up to <see cref="MaxRetryDelay"/>.</summary>
-    internal static TimeSpan RetryDelay(int failures)
-    {
-        // Doubled at most until past the cap: 5 s doubled 39 times overflows a TimeSpan.
-        var delay = FirstRetryDelay;
-        for (var doubled = 1; doubled < failures && delay < MaxRetryDelay; doubled++)
-            delay *= 2;
-        return delay < MaxRetryDelay ? delay : MaxRetryDelay;
-    }
-
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Outbox lane {Lane} started for {EventTypes} event type(s), {MaxConcurrency} at a time")]
     private partial void LogLaneStarted(string lane, int eventTypes, int maxConcurrency);

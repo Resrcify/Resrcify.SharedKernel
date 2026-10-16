@@ -33,6 +33,8 @@
     <!-- SkipDuplicateEvents remembers handled events in an ICachingService (DistributedCachingService). -->
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Caching\Resrcify.SharedKernel.Caching.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.UnitOfWork\Resrcify.SharedKernel.UnitOfWork.csproj" />
+    <!-- The PostgreSQL insert strategy, indexes and claim the tests run the outbox with. -->
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.UnitOfWork.Postgres\Resrcify.SharedKernel.UnitOfWork.Postgres.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.DomainDrivenDesign\Resrcify.SharedKernel.DomainDrivenDesign.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.IntegrationTesting\Resrcify.SharedKernel.IntegrationTesting.csproj" />
   </ItemGroup>

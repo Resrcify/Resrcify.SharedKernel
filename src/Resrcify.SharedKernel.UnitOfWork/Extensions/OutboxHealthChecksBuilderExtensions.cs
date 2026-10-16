@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Resrcify.SharedKernel.Abstractions.Health;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 
@@ -28,7 +29,8 @@ public static class OutboxHealthChecksBuilderExtensions
     /// validation) gets a check that reports the same message with <paramref name="failureStatus"/>, never an exception.
     /// </para>
     /// </summary>
-    /// <example><c>services.AddHealthChecks().AddOutbox&lt;ShardDbContext&gt;(tags: ["ready"]);</c></example>
+    /// <param name="tags">The check's tags: <see cref="HealthTags.Ready"/> when <see langword="null"/>; <c>[]</c> for none.</param>
+    /// <example><c>services.AddHealthChecks().AddOutbox&lt;ShardDbContext&gt;();</c></example>
     public static IHealthChecksBuilder AddOutbox<TDbContext>(
         this IHealthChecksBuilder builder,
         TimeSpan? maxWaitingAge = null,
@@ -55,7 +57,7 @@ public static class OutboxHealthChecksBuilderExtensions
             name ?? $"outbox-{typeof(TDbContext).Name}",
             provider => Create<TDbContext>(provider, age, missingProcessing),
             failureStatus ?? HealthStatus.Degraded,
-            tags));
+            tags ?? [HealthTags.Ready]));
     }
 
     private static IHealthCheck Create<TDbContext>(
@@ -70,7 +72,7 @@ public static class OutboxHealthChecksBuilderExtensions
         return new OutboxHealthCheck<TDbContext>(
             monitor,
             maxWaitingAge,
-            provider.GetService<TimeProvider>() ?? TimeProvider.System);
+            provider.GetRequiredService<TimeProvider>());
     }
 
     private static string MissingProcessing<TDbContext>()

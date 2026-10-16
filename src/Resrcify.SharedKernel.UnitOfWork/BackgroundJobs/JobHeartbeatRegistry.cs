@@ -15,9 +15,10 @@ public sealed class JobHeartbeatRegistry
     private readonly ConcurrentDictionary<JobKey, DateTimeOffset> _lastBeat = new();
     private readonly TimeProvider _time;
 
-    public JobHeartbeatRegistry(TimeProvider? timeProvider = null)
+    public JobHeartbeatRegistry(TimeProvider timeProvider)
     {
-        _time = timeProvider ?? TimeProvider.System;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _time = timeProvider;
         StartedAt = _time.GetUtcNow();
     }
 

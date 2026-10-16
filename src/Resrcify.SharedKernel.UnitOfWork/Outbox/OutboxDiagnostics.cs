@@ -115,7 +115,7 @@ public static class OutboxDiagnostics
 /// <param name="Poison">Messages that failed their last try (marked given up, or unprocessed and out of tries).</param>
 /// <param name="OldestWaitingAge">How long the oldest waiting message had waited; zero when none waits.</param>
 /// <param name="MeasuredAt">When it was measured.</param>
-/// <param name="WaitingForLaterTry">Of the waiting, those a lane tries again later (their <c>NextAttemptOnUtc</c> is ahead).</param>
+/// <param name="WaitingForLaterTry">Of the waiting, those tried again later, after a failed try (their <c>NextAttemptOnUtc</c> is ahead).</param>
 internal sealed record OutboxBacklog(
     long Waiting,
     long Poison,

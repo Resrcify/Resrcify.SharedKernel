@@ -23,7 +23,8 @@
 ## What you get
 
 - `ICachingService` abstraction in `Resrcify.SharedKernel.Abstractions.Caching`.
-- `DistributedCachingService` implementation in `Primitives/`.
+- `DistributedCachingService` implementation in `Primitives/`, registered with `services.AddDistributedCaching()`
+  (`Extensions/`).
 - Typed JSON serialization via `System.Text.Json`.
 - Support for:
     - Sliding expiration (`TimeSpan`)
@@ -60,20 +61,22 @@ dotnet add package Resrcify.SharedKernel.Caching
 ## Quick Start
 
 ```csharp
-using Microsoft.Extensions.DependencyInjection;
-using Resrcify.SharedKernel.Abstractions.Caching;
-using Resrcify.SharedKernel.Caching.Primitives;
+using Resrcify.SharedKernel.Caching.Extensions;
 
-public static class CachingRegistration
-{
-    public static IServiceCollection AddCaching(
-        this IServiceCollection services)
-    {
-        services.AddDistributedMemoryCache();
-        services.AddSingleton<ICachingService, DistributedCachingService>();
-        return services;
-    }
-}
+services.AddDistributedCaching();
+// or, tuning the in-memory cache:
+services.AddDistributedCaching(cache => cache.SizeLimit = 1024 * 1024 * 1024);
+```
+
+`AddDistributedCaching` registers, in one call: the in-memory `IDistributedCache` (`AddDistributedMemoryCache`, which
+`configure` tunes) unless one is registered already (Redis, registered before it, is kept); `DistributedCachingService`
+as the `ICachingService` **and** the `IClaimStore`, one singleton (the mediator's idempotency behavior and the message
+bus' duplicate skipping claim keys through it); and the system `TimeProvider` unless one is registered (before or
+after). An `ICachingService` or `IClaimStore` registered before is kept. It replaces:
+
+```csharp
+services.AddDistributedMemoryCache();
+services.AddSingleton<ICachingService, DistributedCachingService>();
 ```
 
 ## Usage guide

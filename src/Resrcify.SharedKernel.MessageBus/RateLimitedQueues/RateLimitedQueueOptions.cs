@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.MessageBus.Abstractions;
 using Resrcify.SharedKernel.MessageBus.Configuration;
 using Resrcify.SharedKernel.Results.Primitives;
@@ -39,8 +40,16 @@ public sealed class RateLimitedQueueOptions
     public IRateLimiterStrategy RateLimiter { get; set; } = TokenBucketRateLimiterStrategy.Instance;
 
     /// <summary>
+    /// How a request that may pass next time is tried again (sent back to its queue, through the rate limiter) before it
+    /// is answered with its failure: <see langword="null"/> (the default) is 0.5 s before the second try, doubling up to
+    /// 4 s, with as many tries as the bus' retry strategy delivers a message (5 unless a configuration strategy changes
+    /// them). The request is held unacknowledged while it waits, so keep <see cref="RetrySchedule.MaxDelay"/> short.
+    /// </summary>
+    public RetrySchedule? Retries { get; set; }
+
+    /// <summary>
     /// Whether a failed result is answered at once (<see langword="true"/>), or first sent back to the queue for
-    /// another try (<see langword="false"/>), up to the bus' delivery attempts, after which it is answered anyway.
+    /// another try (<see langword="false"/>), up to <see cref="Retries"/>' attempts, after which it is answered anyway.
     /// Default: <see cref="AnswerFailureWhenItsTheRequestsFault"/>.
     /// </summary>
     public Func<IReadOnlyList<Error>, bool> AnswerFailure { get; set; } = AnswerFailureWhenItsTheRequestsFault;

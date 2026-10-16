@@ -14,6 +14,7 @@ using Resrcify.SharedKernel.MessageBus.UnitTests.Support;
 using Resrcify.SharedKernel.Results.Primitives;
 using Shouldly;
 using Xunit;
+using Resrcify.SharedKernel.Results.Diagnostics;
 
 namespace Resrcify.SharedKernel.MessageBus.UnitTests.ErrorQueues;
 
@@ -45,6 +46,18 @@ public sealed class ErrorQueueTests
         failed.Error!.ShouldContain("Discord.Down");
         failed.Text!.ShouldContain("e1");
         failed.SentOnUtc.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public async Task ListAsync_ShouldShowATransientFailuresErrors_AsWhyItFailed()
+    {
+        await using var service = await FailingServiceAsync(
+            new TransientFailureException([Error.ExternalFailure("SwgohApi.Unreachable", "SwgohApi could not be reached.")]),
+            "e1");
+
+        var failed = (await service.ErrorQueue.ListAsync()).Value.Messages.ShouldHaveSingleItem();
+
+        failed.Error!.ShouldContain("SwgohApi.Unreachable (ExternalFailure): SwgohApi could not be reached.");
     }
 
     [Fact]
@@ -158,7 +171,14 @@ public sealed class ErrorQueueTests
         => $$"""{"id":"{{id}}"}""";
 
     /// <summary>A service whose events go to the error queue after one try; one has failed for each id.</summary>
-    private static async Task<FailingService> FailingServiceAsync(params string[] ids)
+    private static Task<FailingService> FailingServiceAsync(params string[] ids)
+        => FailingServiceAsync(thrown: null, ids);
+
+    /// <summary>
+    /// A service whose events go to the error queue after one try, failing with <paramref name="thrown"/> (or a failed
+    /// result); one has failed for each id.
+    /// </summary>
+    private static async Task<FailingService> FailingServiceAsync(Exception? thrown, params string[] ids)
     {
         var network = new InMemNetwork();
         var log = new ScriptLog();
@@ -175,7 +195,10 @@ public sealed class ErrorQueueTests
 
         foreach (var id in ids)
         {
-            log.Answers.Enqueue(Result.Failure(Error.Failure("Discord.Down", "Down.")));
+            if (thrown is null)
+                log.Answers.Enqueue(Result.Failure(Error.Failure("Discord.Down", "Down.")));
+            else
+                log.Throws.Enqueue(thrown);
             var before = network.GetCount(service.ErrorQueueName);
             await publisher.Services.GetRequiredService<IEventBus>().PublishAsync(new ScriptedEvent(id));
             await InMemoryServices.WaitUntilAsync(() => network.GetCount(service.ErrorQueueName) == before + 1);

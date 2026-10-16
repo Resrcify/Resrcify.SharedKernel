@@ -18,10 +18,10 @@
     <Project Path="src/Resrcify.SharedKernel.IntegrationTesting/Resrcify.SharedKernel.IntegrationTesting.csproj" />
     <Project Path="src/Resrcify.SharedKernel.UnitOfWork/Resrcify.SharedKernel.UnitOfWork.csproj" />
     <Project Path="src/Resrcify.SharedKernel.UnitOfWork.Postgres/Resrcify.SharedKernel.UnitOfWork.Postgres.csproj" />
-    <Project Path="src/Resrcify.SharedKernel.UnitOfWork.Web/Resrcify.SharedKernel.UnitOfWork.Web.csproj" />
     <Project Path="src/Resrcify.SharedKernel.Web/Resrcify.SharedKernel.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Resrcify.SharedKernel.Abstractions.UnitTests/Resrcify.SharedKernel.Abstractions.UnitTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.ArchitectureTesting.UnitTests/Resrcify.SharedKernel.ArchitectureTesting.UnitTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.Caching.UnitTests/Resrcify.SharedKernel.Caching.UnitTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.DomainDrivenDesign.UnitTests/Resrcify.SharedKernel.DomainDrivenDesign.UnitTests.csproj" />
@@ -37,7 +37,6 @@
     <Project Path="tests/Resrcify.SharedKernel.Results.UnitTests/Resrcify.SharedKernel.Results.UnitTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.UnitOfWork.IntegrationTests/Resrcify.SharedKernel.UnitOfWork.IntegrationTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.UnitOfWork.UnitTests/Resrcify.SharedKernel.UnitOfWork.UnitTests.csproj" />
-    <Project Path="tests/Resrcify.SharedKernel.UnitOfWork.Web.UnitTests/Resrcify.SharedKernel.UnitOfWork.Web.UnitTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.UnitOfWork.Postgres.IntegrationTests/Resrcify.SharedKernel.UnitOfWork.Postgres.IntegrationTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.UnitOfWork.Postgres.UnitTests/Resrcify.SharedKernel.UnitOfWork.Postgres.UnitTests.csproj" />
     <Project Path="tests/Resrcify.SharedKernel.Web.UnitTests/Resrcify.SharedKernel.Web.UnitTests.csproj" />

@@ -8,26 +8,20 @@
     <PackageTags>$(PackageTags);unit-of-work;outbox;postgresql;npgsql;entity-framework-core</PackageTags>
   </PropertyGroup>
 
-  <!-- Private, like every SharedKernel package's dependencies: the service references the ones it uses itself (see the
-       README's "Packages the service references"). Npgsql's EF provider and EF Core appear in this package's API. -->
+  <!-- Real dependencies: Npgsql's EF provider and EF Core are in this package's API (the DbContext setup, the design-time
+       factory), so a service gets them from this reference, at least at the versions this package was built against. -->
   <ItemGroup>
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <!-- The configuration providers and options binding the DbContext setup and the design-time factory read with.
-         A web host has them; a Persistence project gets them through Microsoft.Extensions.Hosting. -->
-    <PackageReference Include="Microsoft.Extensions.Hosting">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <!-- The wake-up listener is a hosted service that logs: needed at run time, so not private (as in UnitOfWork). -->
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <!-- The configuration providers and options binding the DbContext setup and the design-time factory read with
+         (a Persistence project gets them from here for dotnet ef). -->
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <!-- The wake-up listener is a hosted service that logs. -->
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
+    <!-- AddPostgres<TContext> extends IHealthChecksBuilder. -->
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
   </ItemGroup>
 
   <ItemGroup>

@@ -8,5 +8,13 @@
 
   <ItemGroup>
     <PackageReference Include="Npgsql" />
+    <!-- What a service references itself next to Observability: a prerelease, so no dependency of the package. -->
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" />
+  </ItemGroup>
+
+  <!-- Turned on by settings, for the fixture's log capture and message bus tests. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.MessageBus\Resrcify.SharedKernel.MessageBus.csproj" />
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Observability\Resrcify.SharedKernel.Observability.csproj" />
   </ItemGroup>
 </Project>

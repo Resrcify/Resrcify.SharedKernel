@@ -75,8 +75,8 @@ public static class PostgresServiceCollectionExtensions
     }
 
     /// <summary>
-    /// The connection string <c>AddPostgresDbContext&lt;TContext&gt;</c> built, e.g. for a health check:
-    /// <c>AddNpgSql(provider =&gt; provider.GetPostgresConnectionString&lt;ShardDbContext&gt;())</c>.
+    /// The connection string <c>AddPostgresDbContext&lt;TContext&gt;</c> built. For the database's health check, use
+    /// <c>AddHealthChecks().AddPostgres&lt;TContext&gt;()</c>.
     /// </summary>
     public static string GetPostgresConnectionString<TContext>(this IServiceProvider provider)
         where TContext : DbContext
@@ -112,13 +112,15 @@ public static class PostgresServiceCollectionExtensions
     {
         EnsureOneSerializer<TContext>(services, outbox.Serializer);
         services.AddOutboxInterceptor(outbox.Serializer);
+        // The claim the outbox job and lanes use when the service set none: several instances share the database.
+        services.TryAddSingleton(new OutboxDefaultClaim<TContext>(PostgresOutboxLaneClaim.Instance));
         services.RemoveAll<PostgresOutboxInterceptor<TContext>>();
         services.AddSingleton(provider => new PostgresOutboxInterceptor<TContext>(new InsertOutboxMessagesInterceptor(
             provider.GetRequiredService<IOutboxSerializer>(),
+            provider.GetRequiredService<TimeProvider>(),
             outbox.OnConflictDoNothing
                 ? new PostgresOnConflictOutboxInsertStrategy()
                 : provider.GetService<IOutboxInsertStrategy>(),
-            provider.GetService<TimeProvider>(),
             provider.GetServices<IOutboxSaveObserver>(),
             provider.GetService<ILogger<InsertOutboxMessagesInterceptor>>())));
     }

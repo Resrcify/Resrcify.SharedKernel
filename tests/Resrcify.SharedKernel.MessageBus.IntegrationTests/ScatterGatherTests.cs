@@ -461,6 +461,10 @@ public sealed class ScatterGatherTests(BusFixture bus, ITestOutputHelper output)
         var outbox = activities.Single(activity =>
             activity.Source.Name == OutboxDiagnostics.ActivitySourceName &&
             Equals(activity.GetTagItem("outbox.message.type"), typeof(PingRequested).FullName));
+        // A handling's span stops once its handler has returned and the message is acknowledged, so the run can be
+        // gathered (by the last reply's handler) before the replies' spans have stopped.
+        await WaitUntilAsync(() => activities.Count(activity =>
+            activity.TraceId == outbox.TraceId && activity.Kind == ActivityKind.Server) >= 10);
         var batch = activities.Where(activity => activity.TraceId == outbox.TraceId).ToList();
         var sends = batch.Where(activity => activity.Kind == ActivityKind.Client).ToList();
         var handlings = batch.Where(activity => activity.Kind == ActivityKind.Server).ToList();

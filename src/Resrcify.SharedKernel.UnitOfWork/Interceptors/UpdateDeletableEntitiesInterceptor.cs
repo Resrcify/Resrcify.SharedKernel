@@ -9,8 +9,8 @@ using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Interceptors;
 
-/// <summary>Turns a delete into a soft delete, with <c>DeletedOnUtc</c> from <paramref name="timeProvider"/> (the system clock by default).</summary>
-public sealed class UpdateDeletableEntitiesInterceptor(TimeProvider? timeProvider = null)
+/// <summary>Turns a delete into a soft delete, with <c>DeletedOnUtc</c> from <paramref name="timeProvider"/> (the container's clock: register it with <c>AddEntityInterceptors</c>).</summary>
+public sealed class UpdateDeletableEntitiesInterceptor(TimeProvider timeProvider)
     : SaveChangesInterceptor
 {
     public override InterceptionResult<int> SavingChanges(
@@ -53,7 +53,7 @@ public sealed class UpdateDeletableEntitiesInterceptor(TimeProvider? timeProvide
         {
             entityEntry.State = EntityState.Modified;
             entityEntry.Property(a => a.DeletedOnUtc)
-                .CurrentValue = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
+                .CurrentValue = timeProvider.GetUtcNow().UtcDateTime;
             entityEntry.Property(a => a.IsDeleted)
                 .CurrentValue = true;
         }

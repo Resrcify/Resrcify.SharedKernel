@@ -8,16 +8,14 @@
     <PackageTags>$(PackageTags);mediator;pipeline-behaviors;commands;queries</PackageTags>
   </PropertyGroup>
 
+  <!-- Real dependencies: ValidationPipelineBehavior takes FluentValidation's IValidator<T>, the assembly scan registers
+       the validators (FluentValidation.DependencyInjectionExtensions), the behaviors take ILogger<T>. Application
+       references this package and holds the validators, so it gets FluentValidation at least at the version this
+       package was built against; Domain never references this package. -->
   <ItemGroup>
-    <PackageReference Include="FluentValidation">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="FluentValidation.DependencyInjectionExtensions">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Logging">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
   </ItemGroup>
 
   <ItemGroup>

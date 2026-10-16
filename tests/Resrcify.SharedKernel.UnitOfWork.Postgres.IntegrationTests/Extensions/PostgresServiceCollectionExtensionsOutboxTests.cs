@@ -94,7 +94,7 @@ public sealed class PostgresServiceCollectionExtensionsOutboxTests(PostgresFixtu
         services.AddPostgresDbContext<TestDbContext>(TwoDatabases(), db => db
             .WithOutbox(outbox => outbox.Serializer = registered));
 
-        services.AddOutboxProcessing<TestDbContext>(outbox => outbox.ProcessIntervalInSeconds = 20);
+        services.AddOutboxProcessing<TestDbContext>(outbox => outbox.ProcessInterval = TimeSpan.FromSeconds(20));
 
         await using var provider = services.BuildServiceProvider();
         provider.GetRequiredService<IOutboxSerializer>().ShouldBeSameAs(registered);

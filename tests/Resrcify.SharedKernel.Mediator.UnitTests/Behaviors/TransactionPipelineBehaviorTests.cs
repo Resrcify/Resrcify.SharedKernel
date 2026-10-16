@@ -93,6 +93,24 @@ public class TransactionPipelineBehaviorTests
     }
 
     [Fact]
+    public async Task Handle_ShouldLogATransientExceptionAtWarning()
+    {
+        _logger.IsEnabled(Arg.Any<LogLevel>()).Returns(true);
+        var exception = new TransientFailureException([Error.ExternalFailure("Upstream.Down", "The upstream is down.")]);
+        _unitOfWork
+            .ExecuteInTransactionAsync(
+                Arg.Any<Func<CancellationToken, Task<Result>>>(),
+                Arg.Any<IsolationLevel>(),
+                Arg.Any<TimeSpan?>(),
+                Arg.Any<CancellationToken>())
+            .Returns<Task<Result>>(_ => throw exception);
+
+        await Should.ThrowAsync<TransientFailureException>(() => _behavior.Handle(_command, _next, CancellationToken.None));
+
+        LoggedEntries().ShouldBe([(LogLevel.Warning, exception)]);
+    }
+
+    [Fact]
     public async Task Handle_ShouldLogAtDebugWithoutTheException_WhenABehaviorInsideAlreadyLoggedIt()
     {
         // Arrange — the unit-of-work behavior inside this one logged it first.

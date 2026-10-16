@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Resrcify.SharedKernel.Abstractions.Mediator;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.Results.Diagnostics;
 using Resrcify.SharedKernel.Results.Primitives;
 
@@ -13,6 +14,9 @@ namespace Resrcify.SharedKernel.Mediator.Behaviors;
 /// Logs each request: when it starts and completes (at <see cref="LoggingPipelineOptions.RequestLevel"/>), a failure
 /// (see <see cref="FailureLevel"/>), an exception, and a request slower than
 /// <see cref="LoggingPipelineOptions.SlowRequestThreshold"/>. Durations come from the <see cref="TimeProvider"/>.
+/// An exception is logged at <see cref="LogLevel.Error"/>, or at <see cref="LogLevel.Warning"/> when it is transient
+/// (by the container's <see cref="ITransientFailureClassifier"/>, else <see cref="TransientFailures"/>: e.g. a
+/// <see cref="TransientFailureException"/>, a timeout).
 /// </summary>
 public class LoggingPipelineBehavior<TRequest, TResponse>
     : IPipelineBehavior<TRequest, TResponse>
@@ -22,15 +26,19 @@ public class LoggingPipelineBehavior<TRequest, TResponse>
     private readonly ILogger<LoggingPipelineBehavior<TRequest, TResponse>> _logger;
     private readonly TimeProvider _time;
     private readonly LoggingPipelineOptions _options;
+    private readonly ITransientFailureClassifier? _transientFailures;
 
     public LoggingPipelineBehavior(
         ILogger<LoggingPipelineBehavior<TRequest, TResponse>> logger,
-        TimeProvider? timeProvider = null,
-        LoggingPipelineOptions? options = null)
+        TimeProvider timeProvider,
+        LoggingPipelineOptions? options = null,
+        ITransientFailureClassifier? transientFailures = null)
     {
         _logger = logger;
-        _time = timeProvider ?? TimeProvider.System;
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _time = timeProvider;
         _options = options ?? new LoggingPipelineOptions();
+        _transientFailures = transientFailures;
     }
 
     public async Task<TResponse> Handle(
@@ -106,7 +114,8 @@ public class LoggingPipelineBehavior<TRequest, TResponse>
 
     // Logs from the exception filter, which doesn't catch: the caller gets the original exception and can handle it by
     // type. A cancellation the caller asked for isn't an error, so it isn't logged. An exception a behavior inside this
-    // one (unit of work, transaction) already logged at Error is logged again only at Debug, without its stack.
+    // one (unit of work, transaction) already logged is logged again only at Debug, without its stack. A transient one
+    // (another try may get past it) is logged at Warning, any other at Error.
     private bool LogUnlessCancelled(
         Exception exception,
         long started,
@@ -115,9 +124,11 @@ public class LoggingPipelineBehavior<TRequest, TResponse>
         if (cancellationToken.IsCancellationRequested)
             return false;
 
-        if (_logger.IsEnabled(LogLevel.Error) && LoggedExceptions.Claim(exception))
+        var level = TransientFailureLevels.Of(exception, _transientFailures);
+        if (_logger.IsEnabled(level) && LoggedExceptions.Claim(exception))
         {
-            _logger.LogError(
+            _logger.Log(
+                level,
                 exception,
                 "Request {@RequestName} threw {@ExceptionType} ({@DifferenceMs} ms)",
                 typeof(TRequest).Name,

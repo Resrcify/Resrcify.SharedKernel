@@ -22,7 +22,7 @@ namespace Resrcify.SharedKernel.UnitOfWork.UnitTests.Interceptors;
 public sealed class InsertOutboxMessagesInterceptorTests : DbSetupBase
 {
     public InsertOutboxMessagesInterceptorTests()
-        : base(new InsertOutboxMessagesInterceptor(new SystemTextJsonOutboxSerializer()))
+        : base(new InsertOutboxMessagesInterceptor(new SystemTextJsonOutboxSerializer(), TimeProvider.System))
     {
     }
     private static readonly JsonSerializerOptions _jsonOptions = new()
@@ -208,7 +208,7 @@ public sealed class InsertOutboxMessagesInterceptorTests : DbSetupBase
     {
         // Arrange — a probe strategy that records what gets handed to it
         var probe = new RecordingInsertStrategy();
-        await using var harness = new InterceptorHarness(new InsertOutboxMessagesInterceptor(new SystemTextJsonOutboxSerializer(), probe));
+        await using var harness = new InterceptorHarness(new InsertOutboxMessagesInterceptor(new SystemTextJsonOutboxSerializer(), TimeProvider.System, probe));
         await harness.InitializeAsync();
 
         var entity = new TestAggregateRoot(SocialSecurityNumber.Create(123456789), "John Doe");
@@ -258,6 +258,7 @@ public sealed class InsertOutboxMessagesInterceptorTests : DbSetupBase
         var observer = new RecordingObserver();
         await using var harness = new InterceptorHarness(new InsertOutboxMessagesInterceptor(
             new SystemTextJsonOutboxSerializer(),
+            TimeProvider.System,
             observers: [observer]));
         await harness.InitializeAsync();
         var quiet = new TestAggregateRoot(SocialSecurityNumber.Create(123456780), "Quiet");
@@ -281,6 +282,7 @@ public sealed class InsertOutboxMessagesInterceptorTests : DbSetupBase
         // The save committed before the observer ran: failing it would have the caller save again what is saved.
         await using var harness = new InterceptorHarness(new InsertOutboxMessagesInterceptor(
             new SystemTextJsonOutboxSerializer(),
+            TimeProvider.System,
             observers: [new ThrowingObserver()]));
         await harness.InitializeAsync();
         var evented = new TestAggregateRoot(SocialSecurityNumber.Create(123456782), "Evented");
@@ -298,6 +300,7 @@ public sealed class InsertOutboxMessagesInterceptorTests : DbSetupBase
     {
         await using var harness = new InterceptorHarness(new InsertOutboxMessagesInterceptor(
             new SystemTextJsonOutboxSerializer(),
+            TimeProvider.System,
             observers: [new ThrowingObserver()]));
         await harness.InitializeAsync();
         var evented = new TestAggregateRoot(SocialSecurityNumber.Create(123456783), "Evented");

@@ -28,7 +28,7 @@ public sealed class OutboxMessageConfiguration
     /// <param name="configureUnprocessedIndex">
     /// Optional hook to apply provider-specific tuning to the unprocessed-messages
     /// index. For PostgreSQL, combine the prebuilt
-    /// <see cref="PostgresOutboxIndexes.PartialUnprocessed"/> filter with your own
+    /// <c>PostgresOutboxIndexes.PartialUnprocessed</c> filter with your own
     /// <c>IncludeProperties(...)</c> call:
     /// <code>
     /// configureUnprocessedIndex: index =>
@@ -43,7 +43,7 @@ public sealed class OutboxMessageConfiguration
     /// to a non-unique single-column index on <c>DedupKey</c> that backs the
     /// outbox writer's pre-check query. To upgrade to a strict partial unique
     /// index on PostgreSQL (pairs with
-    /// <see cref="PostgresOnConflictOutboxInsertStrategy"/>):
+    /// <c>PostgresOnConflictOutboxInsertStrategy</c>):
     /// <code>
     /// configureDedupIndex: PostgresOutboxIndexes.Instance.PartialUniqueDedup
     /// </code>
@@ -52,7 +52,7 @@ public sealed class OutboxMessageConfiguration
     /// </param>
     /// <param name="configureProcessedIndex">
     /// Optional hook for the index the hourly cleanup deletes through (<c>ProcessedOnUtc &lt; cutoff</c>). On PostgreSQL,
-    /// <see cref="PostgresOutboxIndexes.PartialProcessed"/> keeps it to processed rows.
+    /// <c>PostgresOutboxIndexes.PartialProcessed</c> keeps it to processed rows.
     /// </param>
     public OutboxMessageConfiguration(
         string tableName = "OutboxMessages",

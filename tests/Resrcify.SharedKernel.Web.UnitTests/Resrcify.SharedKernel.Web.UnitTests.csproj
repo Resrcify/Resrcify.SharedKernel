@@ -17,14 +17,14 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Shouldly" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
     <PackageReference Include="NSubstitute" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
-    <!-- What a service calling AddResultResilience / AddResrcifyJwtBearer references itself. -->
-    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
-    <!-- What a service using the mediator's standard behaviors references itself (its validation behavior). -->
-    <PackageReference Include="FluentValidation" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- NSubstitute's proxies of a public interface over a test's internal type (IOutboxAdministration<AppDbContext>). -->
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Web\Resrcify.SharedKernel.Web.csproj" />

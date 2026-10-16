@@ -31,7 +31,7 @@ public sealed class ErrorTypeExtensionsTests
 
     [Fact]
     public void IsTransientError_ShouldBeTrue_ForAConcurrencyConflict_ThatAnotherTryReadsAgain()
-        => Error.Conflict(ErrorTypeExtensions.ConcurrencyConflictCode, "Changed since it was read.")
+        => Error.Conflict(ErrorCodes.Persistence.Concurrency, "Changed since it was read.")
             .IsTransient()
             .ShouldBeTrue();
 

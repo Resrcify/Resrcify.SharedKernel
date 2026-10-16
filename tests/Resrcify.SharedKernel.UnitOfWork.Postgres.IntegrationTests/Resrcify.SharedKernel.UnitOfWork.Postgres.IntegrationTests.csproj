@@ -30,5 +30,7 @@
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.DomainDrivenDesign\Resrcify.SharedKernel.DomainDrivenDesign.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Mediator\Resrcify.SharedKernel.Mediator.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.IntegrationTesting\Resrcify.SharedKernel.IntegrationTesting.csproj" />
+    <!-- Answers a command's persistence failure as a service does: problem details. -->
+    <ProjectReference Include="..\..\src\Resrcify.SharedKernel.Web\Resrcify.SharedKernel.Web.csproj" />
   </ItemGroup>
 </Project>

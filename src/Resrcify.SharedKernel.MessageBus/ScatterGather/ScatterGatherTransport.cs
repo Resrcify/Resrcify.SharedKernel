@@ -16,6 +16,7 @@ using Rebus.Messages;
 using Rebus.Retry;
 using Rebus.Routing.TypeBased;
 using Rebus.Transport;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
 using Resrcify.SharedKernel.MessageBus.Abstractions;
 using Resrcify.SharedKernel.MessageBus.Configuration;
@@ -48,8 +49,11 @@ internal sealed partial class ScatterGatherTransport(
     /// <summary>The longest timeout a gather takes: a longer one couldn't be timed (nor set as a message's expiry).</summary>
     public static readonly TimeSpan MaxTimeout = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
 
-    private static readonly TimeSpan FirstRestartDelay = TimeSpan.FromSeconds(1);
-    private static readonly TimeSpan MaxRestartDelay = TimeSpan.FromSeconds(30);
+    // A restart that fails is tried again until one succeeds or the transport stops: 1 s, doubling up to 30 s.
+    private static readonly RetrySchedule Restarts = new(
+        int.MaxValue,
+        TimeSpan.FromSeconds(1),
+        TimeSpan.FromSeconds(30));
     // How long the broker keeps the reply queue with no consumer: past every request's wait, and long enough to ride
     // out a broker restart. The queue's name is this instance's, so nothing else ever consumes it.
     private static readonly TimeSpan ReplyQueueExpiry = TimeSpan.FromMinutes(30);
@@ -151,9 +155,10 @@ internal sealed partial class ScatterGatherTransport(
     // yet) would otherwise leave no bus, and every gather failing, until the next recovery or a pod restart.
     private async Task RestartAsync(CancellationToken stopping)
     {
-        var delay = FirstRestartDelay;
+        var failures = 0;
         while (!stopping.IsCancellationRequested)
         {
+            var delay = Restarts.DelayAfter(Math.Min(failures + 1, int.MaxValue - 1));
             try
             {
                 lock (_gate)
@@ -179,7 +184,7 @@ internal sealed partial class ScatterGatherTransport(
             {
                 return;
             }
-            delay = delay * 2 < MaxRestartDelay ? delay * 2 : MaxRestartDelay;
+            failures = Math.Min(failures + 1, int.MaxValue - 2);
         }
     }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Data.Common;
+using Resrcify.SharedKernel.Abstractions.Resilience;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Migrations;
 
@@ -30,8 +31,14 @@ internal static class ConcurrentCreationRetry
     /// <summary>How many times an instance migrates while it keeps losing the race; the last failure throws.</summary>
     internal const int MaxAttempts = 5;
 
-    /// <summary>The wait before the second try; it doubles before each further one (0.2, 0.4, 0.8, 1.6 s).</summary>
-    internal static readonly TimeSpan FirstDelay = TimeSpan.FromMilliseconds(200);
+    /// <summary>
+    /// The tries and the waits between them: <see cref="MaxAttempts"/>, 0.2 s before the second, doubling before each
+    /// further one (0.2, 0.4, 0.8, 1.6 s).
+    /// </summary>
+    internal static readonly RetrySchedule Schedule = new(
+        MaxAttempts,
+        TimeSpan.FromMilliseconds(200),
+        TimeSpan.FromMilliseconds(1600));
 
     /// <summary>PostgreSQL's <c>SQLSTATE</c> for a database that already exists.</summary>
     internal const string DuplicateDatabase = "42P04";
@@ -72,7 +79,7 @@ internal static class ConcurrentCreationRetry
 
     /// <summary>The wait after the failed try <paramref name="attempt"/> (1-based).</summary>
     internal static TimeSpan DelayAfter(int attempt)
-        => FirstDelay * Math.Pow(2, attempt - 1);
+        => Schedule.DelayAfter(attempt);
 
     /// <summary>The <c>SQLSTATE</c> of the first database exception in <paramref name="exception"/>'s chain.</summary>
     private static string? FindSqlState(Exception exception)
