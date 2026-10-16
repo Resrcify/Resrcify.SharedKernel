@@ -3,6 +3,53 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.4.0 (2026-10-16)
+
+### Added
+
+- **A rate-limited queue's options are named options** (Resrcify.SharedKernel.MessageBus): every `AddRateLimitedQueue`
+  overload (the `THandler` ones, with and without a queue name, and the mediator-forwarding one) registers
+  `services.AddOptions<RateLimitedQueueOptions>(queueName)`, its `configure` becoming that instance's first
+  `Configure`, and the queue's host reads `IOptionsMonitor<RateLimitedQueueOptions>.Get(queueName)` when the host
+  starts instead of taking an instance built at registration. A service can now configure a queue with the options
+  pattern, from its own typed options and with its rate limiter from the container, with no `IConfiguration` at
+  registration. What it registers **after** `AddMessageBus` runs after the registration's `configure` and wins (what it
+  registers before loses to it; `PostConfigure` runs last). **`RateLimitedQueueOptions.NameFor<TRequest>()`** names a
+  queue (the request's class name, as `AddRateLimitedQueue` names it). Two queues given the same
+  `SharedRateLimiterStrategy` instance still share one limiter, also when it comes from a singleton in the container.
+  SwgohApi can drop `configuration.GetSection(GameRateLimits.SectionName).Get<GameRateLimits>()` and the
+  `GetSection("MessageBus:Queues:<name>").Bind(queue)` in `ScatterRequestServiceRegistration`:
+
+  ```csharp
+  services.AddOptions<GameQueues>()
+      .BindConfiguration("GalaxyOfHeroes:Queues", binder => binder.ErrorOnUnknownConfiguration = true)
+      .ValidateOnStart();
+  services.AddSingleton<GameBudgets>();   // IOptions<GameRateLimits> → one SharedRateLimiterStrategy per budget
+  services.AddMessageBus(bus => bus
+      .AddRateLimitedQueue<GuildPayload, GetGuildResponse>(payload => new GetGuildRequest { Payload = payload }));
+  services.AddOptions<RateLimitedQueueOptions>(RateLimitedQueueOptions.NameFor<GuildPayload>())
+      .Configure<IOptions<GameQueues>, GameBudgets>((queue, queues, budgets) =>
+      {
+          queue.RateLimiter = budgets.Authenticated;
+          queue.Prefetch = queues.Value.Guild.Prefetch;
+      });
+  ```
+
+  Existing registrations behave as before: their `configure` sets the same values, now when the host starts.
+
+### Behaviour changes
+
+- **A rate-limited queue's options are validated when the host starts** (`ValidateOnStart`, one validator per queue):
+  `PerSecond` at least 1, `Burst` not negative, `Prefetch` unset or at least 1, a positive `HealthCheckInterval` (at
+  most 49.7 days, what `Task.Delay` takes), a non-empty `HealthCheckTag` when set, a `RateLimiter` and an
+  `AnswerFailure`, and `Retries`' `FirstDelay` / `MaxDelay` within 49.7 days. A bad value fails the start with an
+  `OptionsValidationException` naming the queue and each wrong key (`The rate-limited queue GetGuildRequest's PerSecond
+  must be at least 1; it is 0.`). There was no validation: `PerSecond = 0` failed every start of the queue's bus (the
+  token bucket refused it), logged and retried forever while the host ran, and a zero `HealthCheckInterval` spun the
+  health gate.
+- **A queue's `configure` runs when the host starts, not inside `AddRateLimitedQueue`.** A `configure` that reads a
+  variable sees its value at start; one that throws fails the start instead of the registration.
+
 ## 4.3.0 (2026-10-16)
 
 ### Breaking changes

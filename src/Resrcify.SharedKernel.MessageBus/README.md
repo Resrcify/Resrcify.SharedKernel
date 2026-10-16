@@ -315,6 +315,65 @@ services.AddMessageBus(bus => bus
 The mediator's handler (with its pipeline behaviors) answers, and its result is treated like a responder's (see
 [Failures: the result pattern](#failures-the-result-pattern)).
 
+### A queue's options: the options pattern
+
+Each queue's `RateLimitedQueueOptions` are **named options**, under the queue's name: the request's class name,
+`RateLimitedQueueOptions.NameFor<TRequest>()` (a queue given its own name, or a request renamed with
+`AddMessage<TRequest>(wireName)`, goes by that name). The queue reads them when the host starts, not when it is
+registered, so a service configures them like any options: from its own typed options, and with its rate limiter from
+the container. No `IConfiguration`, no `GetSection`:
+
+```csharp
+// appsettings.json: "GalaxyOfHeroes": { "Queues": { "HealthCheckTag": "game", "Guild": { "Prefetch": 4 }, ... } }
+services.AddOptions<GameQueues>()
+    .BindConfiguration("GalaxyOfHeroes:Queues", binder => binder.ErrorOnUnknownConfiguration = true)   // a misspelt key fails
+    .ValidateOnStart();
+services.AddSingleton<GameBudgets>();   // from IOptions<GameRateLimits>: one SharedRateLimiterStrategy per budget
+
+services.AddMessageBus(bus => bus
+    .UseRabbitMqFromConfiguration()
+    .AddRateLimitedQueue<GetGuildRequest, GetGuildResponse>(request => new GetGuild(request))
+    .AddRateLimitedQueue<LeaderboardRequest, LeaderboardResponse>(request => new GetLeaderboard(request)));
+
+// After AddMessageBus: these run after the registrations' defaults, so they win.
+services.AddOptions<RateLimitedQueueOptions>(RateLimitedQueueOptions.NameFor<GetGuildRequest>())
+    .Configure<IOptions<GameQueues>, GameBudgets>((queue, queues, budgets) =>
+    {
+        queue.RateLimiter = budgets.Authenticated;   // the same instance on every queue of the budget: one limiter
+        queue.Prefetch = queues.Value.Guild.Prefetch;
+        queue.HealthCheckTag = queues.Value.HealthCheckTag;
+    });
+services.AddOptions<RateLimitedQueueOptions>(RateLimitedQueueOptions.NameFor<LeaderboardRequest>())
+    .Configure<IOptions<GameQueues>, GameBudgets>((queue, queues, budgets) =>
+    {
+        queue.RateLimiter = budgets.Authenticated;
+        queue.Prefetch = queues.Value.Leaderboard.Prefetch;
+        queue.HealthCheckTag = queues.Value.HealthCheckTag;
+    });
+
+internal sealed class GameBudgets(IOptions<GameRateLimits> limits)
+{
+    public SharedRateLimiterStrategy Authenticated { get; } =
+        SharedRateLimiterStrategy.TokenBucket(limits.Value.Authenticated.PerSecond, limits.Value.Authenticated.Burst);
+}
+```
+
+- **Order.** The options run their configurations in the order they are registered. `AddRateLimitedQueue`'s
+  `configure` is the first, registered inside `AddMessageBus`: what the service registers **after** `AddMessageBus`
+  (`Configure`, `Configure<TDep>`, `BindConfiguration`) runs after it and wins; what it registers **before** runs first,
+  and `configure` wins over it; a `PostConfigure` always runs last. The options are read once, when the host starts.
+- **A shared budget is one instance.** Queues share a `SharedRateLimiterStrategy` by being given the same instance:
+  hold it in a singleton (as `GameBudgets` above) and give every queue of the budget that instance. A transient
+  registration, or a strategy made per queue, gives each queue a budget of its own.
+- **Bind with `ErrorOnUnknownConfiguration`.** The binder skips a key it doesn't know (`Prefech`) silently, and a
+  section of a name nothing reads binds nothing: bind the service's typed options (a property per queue) with
+  `binder => binder.ErrorOnUnknownConfiguration = true` and `ValidateOnStart()`, so both fail the start.
+- **Validated when the host starts.** Every queue's options are checked (`ValidateOnStart`): `PerSecond` at least 1,
+  `Burst` not negative, `Prefetch` unset or at least 1, a positive `HealthCheckInterval`, a non-empty `HealthCheckTag`
+  when set, a `RateLimiter` and an `AnswerFailure`, and `Retries`' waits within what `Task.Delay` takes (49.7 days). A
+  bad value fails the start with an `OptionsValidationException` naming the queue and the key:
+  `The rate-limited queue GetGuildRequest's PerSecond must be at least 1; it is 0.`
+
 ## Publish/subscribe: integration events
 
 An integration event goes to **every service that subscribes**, and within a service to **one of its instances**.
@@ -501,7 +560,7 @@ Like the outbox's `IOutboxInsertStrategy`, the bus is extended through strategy 
 | Strategy | Set with | Default | Use it for |
 |---|---|---|---|
 | `IBusConfigurationStrategy` | `bus.UseConfigurationStrategy(...)` | `DefaultBusConfigurationStrategy` (changes nothing) | Anything Rebus or the RabbitMQ transport allows: retries, connection-factory settings (e.g. TLS), the error queue, publisher confirms. It runs after the defaults on **every** bus: the service's own, the scatter-gather reply bus and each rate-limited queue. |
-| `IRateLimiterStrategy` | `queue.RateLimiter = ...` | `TokenBucketRateLimiterStrategy` (`PerSecond`, `Burst`) | Any .NET `RateLimiter` for one queue, e.g. a sliding window or a limiter shared with an HTTP client. Return one that queues: a request waits for a lease rather than being rejected. Several queues can share one budget with `SharedRateLimiterStrategy` (e.g. `SharedRateLimiterStrategy.TokenBucket(40, 10)`): together they stay within it on each instance. |
+| `IRateLimiterStrategy` | `queue.RateLimiter = ...` | `TokenBucketRateLimiterStrategy` (`PerSecond`, `Burst`) | Any .NET `RateLimiter` for one queue, e.g. a sliding window or a limiter shared with an HTTP client. Return one that queues: a request waits for a lease rather than being rejected. Several queues can share one budget with `SharedRateLimiterStrategy` (e.g. `SharedRateLimiterStrategy.TokenBucket(40, 10)`): together they stay within it on each instance. Built from other options, set it with `Configure<TDep>` from a singleton (see [A queue's options](#a-queues-options-the-options-pattern)). |
 | `IMessageSerializationStrategy` | `bus.UseSerializationStrategy(...)` | `DefaultMessageSerializationStrategy` (System.Text.Json web defaults) | The JSON of every bus, both directions: converters, naming, or members kept off the wire. The receiver's class doesn't limit what is sent, so filter sensitive data here, on the sending side. |
 
 ```csharp

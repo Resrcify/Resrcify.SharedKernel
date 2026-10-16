@@ -364,6 +364,10 @@ public sealed class MessageBusBuilder
     /// requesters' <see cref="AddRequest{TRequest, TResponse}"/> sends it) on a bus of its own, under its own limit per
     /// instance, with <typeparamref name="THandler"/> producing each reply.
     /// </summary>
+    /// <param name="configure">
+    /// The queue's defaults: a <c>Configure</c> of its named <see cref="RateLimitedQueueOptions"/> (see
+    /// <see cref="AddRateLimitedQueue{TRequest, TResponse}(Func{TRequest, IRequest{Result{TResponse}}}, Action{RateLimitedQueueOptions}?)"/>).
+    /// </param>
     public MessageBusBuilder AddRateLimitedQueue<TRequest, TResponse, THandler>(
         Action<RateLimitedQueueOptions>? configure = null)
         where TRequest : class
@@ -372,7 +376,8 @@ public sealed class MessageBusBuilder
         => AddRateLimitedQueue<TRequest, TResponse, THandler>(queueName: null, configure);
 
     /// <summary>
-    /// Responder side, on a queue named <paramref name="queueName"/> instead of by the request's wire name.
+    /// Responder side, on a queue named <paramref name="queueName"/> instead of by the request's wire name. Its
+    /// options are the named <see cref="RateLimitedQueueOptions"/> of that name.
     /// </summary>
     public MessageBusBuilder AddRateLimitedQueue<TRequest, TResponse, THandler>(
         string? queueName,
@@ -381,12 +386,10 @@ public sealed class MessageBusBuilder
         where TResponse : class
         where THandler : class, IRequestResponder<TRequest, TResponse>
     {
-        var options = new RateLimitedQueueOptions();
-        configure?.Invoke(options);
         Services.AddScoped<IRequestResponder<TRequest, TResponse>, THandler>();
         Services.TryAddScoped<THandler>();
         // This queue's own handler: two queues for the same request type each answer with theirs.
-        return AddQueueHost<TRequest, TResponse>(queueName, options, provider => provider.GetRequiredService<THandler>());
+        return AddQueueHost<TRequest, TResponse>(queueName, configure, provider => provider.GetRequiredService<THandler>());
     }
 
     /// <summary>
@@ -394,9 +397,37 @@ public sealed class MessageBusBuilder
     /// <paramref name="toMediatorRequest"/> makes, and its handler answers, so the queue needs no
     /// <see cref="IRequestResponder{TRequest, TResponse}"/> of its own. A failure is answered or retried as
     /// <see cref="RateLimitedQueueOptions.AnswerFailure"/> says. The queue is named by <typeparamref name="TRequest"/>'s
-    /// wire name.
+    /// wire name (<see cref="RateLimitedQueueOptions.NameFor{TRequest}"/>).
     /// </summary>
-    /// <example><c>bus.AddRateLimitedQueue&lt;GetGuildRequest, GetGuildResponse&gt;(request =&gt; new GetGuild(request))</c></example>
+    /// <remarks>
+    /// <para>
+    /// The queue's options are the named options <c>IOptionsMonitor&lt;RateLimitedQueueOptions&gt;.Get(queueName)</c>,
+    /// read when the host starts (once: a later change of them applies at the next start). <paramref name="configure"/>
+    /// is their first <c>Configure</c>; a service configures them further with the options pattern, and what it registers
+    /// <b>after</b> <c>AddMessageBus</c> runs after <paramref name="configure"/>, so it wins (what it registers before
+    /// <c>AddMessageBus</c> runs first, so <paramref name="configure"/> wins over it; a <c>PostConfigure</c> always runs
+    /// last). <c>Configure&lt;TDep&gt;</c> builds them from the container, e.g. the rate limiter from other options.
+    /// </para>
+    /// <para>
+    /// They are validated when the host starts (<c>ValidateOnStart</c>): <c>PerSecond</c> at least 1, <c>Burst</c> not
+    /// negative, <c>Prefetch</c> unset or at least 1, a positive <c>HealthCheckInterval</c>, a non-empty
+    /// <c>HealthCheckTag</c> when set, a <c>RateLimiter</c> and an <c>AnswerFailure</c>, and <c>Retries</c>' waits within
+    /// what <c>Task.Delay</c> takes. A bad value fails the start, naming the queue and the key
+    /// (<c>The rate-limited queue GuildRequest's PerSecond must be at least 1; it is 0.</c>).
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// services.AddMessageBus(bus =&gt; bus
+    ///     .AddRateLimitedQueue&lt;GetGuildRequest, GetGuildResponse&gt;(request =&gt; new GetGuild(request)));
+    /// services.AddOptions&lt;RateLimitedQueueOptions&gt;(RateLimitedQueueOptions.NameFor&lt;GetGuildRequest&gt;())
+    ///     .Configure&lt;IOptions&lt;GameQueues&gt;, GameBudgets&gt;((queue, queues, budgets) =&gt;
+    ///     {
+    ///         queue.RateLimiter = budgets.Authenticated;   // one singleton budget, shared by every queue that takes it
+    ///         queue.Prefetch = queues.Value.Guild.Prefetch;
+    ///     });
+    /// </code>
+    /// </example>
     public MessageBusBuilder AddRateLimitedQueue<TRequest, TResponse>(
         Func<TRequest, IRequest<Result<TResponse>>> toMediatorRequest,
         Action<RateLimitedQueueOptions>? configure = null)
@@ -404,19 +435,18 @@ public sealed class MessageBusBuilder
         where TResponse : class
     {
         ArgumentNullException.ThrowIfNull(toMediatorRequest);
-        var options = new RateLimitedQueueOptions();
-        configure?.Invoke(options);
         return AddQueueHost<TRequest, TResponse>(
             queueName: null,
-            options,
+            configure,
             provider => new MediatorRequestResponder<TRequest, TResponse>(provider.GetRequiredService<ISender>(), toMediatorRequest));
     }
 
     // One host per queue, keyed by its name: two queues for the same request and response types (a priority queue
-    // next to the regular one) each get their own bus, limit and responder, and both are started.
+    // next to the regular one) each get their own bus, limit and responder, and both are started. Its options are the
+    // named options of its name, read when the host is created (when the service starts), not here.
     private MessageBusBuilder AddQueueHost<TRequest, TResponse>(
         string? queueName,
-        RateLimitedQueueOptions options,
+        Action<RateLimitedQueueOptions>? configure,
         Func<IServiceProvider, IRequestResponder<TRequest, TResponse>> responderFactory)
         where TRequest : class
         where TResponse : class
@@ -425,12 +455,18 @@ public sealed class MessageBusBuilder
         if (Services.Any(descriptor => descriptor.ImplementationInstance is RateLimitedQueueName registered && registered.Name == name))
             throw new InvalidOperationException($"The rate-limited queue {name} is registered twice: give each queue its own name.");
 
+        var options = Services.AddOptions<RateLimitedQueueOptions>(name);
+        if (configure is not null)
+            options.Configure(configure);
+        options.ValidateOnStart();
+        Services.AddSingleton<IValidateOptions<RateLimitedQueueOptions>>(new RateLimitedQueueOptionsValidator(name));
+
         Settings.Receive(typeof(TRequest));
         Services.TryAddSingleton<HealthGates>();
         Services.AddSingleton(new RateLimitedQueueName(name));
         Services.AddKeyedSingleton(name, (provider, _) => new RateLimitedQueueHost<TRequest, TResponse>(
             name,
-            options,
+            provider.GetRequiredService<IOptionsMonitor<RateLimitedQueueOptions>>().Get(name),
             Settings,
             provider,
             responderFactory,

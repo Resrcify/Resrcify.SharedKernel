@@ -8,9 +8,26 @@ using Resrcify.SharedKernel.Results.Primitives;
 
 namespace Resrcify.SharedKernel.MessageBus.RateLimitedQueues;
 
-/// <summary>Limits for one rate-limited queue, per service instance.</summary>
+/// <summary>
+/// Limits for one rate-limited queue, per service instance. Each queue's are the named options of the queue's name
+/// (<see cref="NameFor{TRequest}"/>), read when the host starts: <c>AddRateLimitedQueue</c>'s <c>configure</c> gives the
+/// defaults, and a service can configure them further with the options pattern after <c>AddMessageBus</c>, e.g.
+/// <c>services.AddOptions&lt;RateLimitedQueueOptions&gt;(RateLimitedQueueOptions.NameFor&lt;GuildRequest&gt;()).Configure&lt;GameBudgets&gt;((queue, budgets) =&gt; queue.RateLimiter = budgets.Authenticated)</c>.
+/// They are validated when the host starts (<c>PerSecond</c> at least 1, <c>Burst</c> not negative, <c>Prefetch</c> at
+/// least 1, a positive <c>HealthCheckInterval</c>, ...), naming the queue and the key.
+/// </summary>
 public sealed class RateLimitedQueueOptions
 {
+    /// <summary>
+    /// The name of <typeparamref name="TRequest"/>'s queue, which its named options go by: the request's class name, as
+    /// <c>AddRateLimitedQueue</c> names it. A queue given its own name (<c>AddRateLimitedQueue(queueName, ...)</c>), or a
+    /// request given another wire name with <c>AddMessage&lt;TRequest&gt;(wireName)</c>, goes by that name instead.
+    /// </summary>
+    /// <example><c>services.AddOptions&lt;RateLimitedQueueOptions&gt;(RateLimitedQueueOptions.NameFor&lt;GuildRequest&gt;())</c></example>
+    public static string NameFor<TRequest>()
+        where TRequest : class
+        => typeof(TRequest).Name;
+
     /// <summary>Requests handled per second on this instance. Each added instance adds the same again.</summary>
     public int PerSecond { get; set; } = 10;
 

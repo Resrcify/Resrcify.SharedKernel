@@ -13,15 +13,30 @@ namespace Resrcify.SharedKernel.MessageBus.RateLimitedQueues;
 /// are then not used, so set its <see cref="RateLimitedQueueOptions.Prefetch"/> explicitly.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The limiter lives while at least one queue's bus runs: it is created when the first one starts and disposed
 /// when the last one stops (e.g. every queue gated off by its health check, or shutdown), so the strategy itself
 /// needs no disposing.
+/// </para>
+/// <para>
+/// The budget is the strategy <b>instance</b>: queues share it by being given the same one. Built from the container
+/// (from other options), hold it in a singleton and give each queue that singleton's instance, as below; a transient
+/// registration, or one strategy made per queue, gives each queue a budget of its own.
+/// </para>
 /// </remarks>
 /// <example>
 /// <code>
-/// var gameBudget = SharedRateLimiterStrategy.TokenBucket(perSecond: 18, burst: 2);
-/// bus.AddRateLimitedQueue&lt;GuildRequest, GuildResponse, GuildHandler&gt;("swgohapi.guild", queue => queue.RateLimiter = gameBudget)
-///    .AddRateLimitedQueue&lt;LeaderboardRequest, LeaderboardResponse, LeaderboardHandler&gt;("swgohapi.leaderboard", queue => queue.RateLimiter = gameBudget);
+/// services.AddSingleton(provider =&gt; new GameBudgets(provider.GetRequiredService&lt;IOptions&lt;GameRateLimits&gt;&gt;().Value));
+/// services.AddMessageBus(bus =&gt; bus
+///     .AddRateLimitedQueue&lt;GuildRequest, GuildResponse, GuildHandler&gt;()
+///     .AddRateLimitedQueue&lt;LeaderboardRequest, LeaderboardResponse, LeaderboardHandler&gt;());
+/// foreach (var queue in new[] { RateLimitedQueueOptions.NameFor&lt;GuildRequest&gt;(), RateLimitedQueueOptions.NameFor&lt;LeaderboardRequest&gt;() })
+///     services.AddOptions&lt;RateLimitedQueueOptions&gt;(queue).Configure&lt;GameBudgets&gt;((options, budgets) =&gt; options.RateLimiter = budgets.Authenticated);
+///
+/// internal sealed class GameBudgets(GameRateLimits limits)
+/// {
+///     public SharedRateLimiterStrategy Authenticated { get; } = SharedRateLimiterStrategy.TokenBucket(limits.Authenticated.PerSecond, limits.Authenticated.Burst);
+/// }
 /// </code>
 /// </example>
 /// <param name="createLimiter">Creates the shared limiter (again, after every queue has stopped).</param>
