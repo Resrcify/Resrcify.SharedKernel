@@ -73,9 +73,9 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
             TimeSpan.FromSeconds(5),
             TimeSpan.FromMinutes(1));
 
-    private BuiltinHandlerActivator? _activator;
-    private RateLimiter? _limiter;
-    private CancellationTokenSource? _consuming;
+    // The running bus, if any. Taken out by whoever stops it, so it is stopped once, however many callers stop it at
+    // once; closed when the host stops, so no bus starts after it.
+    private readonly BusSlot<ConsumingBus> _bus = new();
     private HealthGate? _healthGate;
     private TaskCompletionSource _wake = NewSignal();
     private int _restartRequested;
@@ -84,7 +84,7 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
     private DateTimeOffset? _startRetryAt;
 
     /// <summary>Whether this instance is currently consuming. For tests and diagnostics.</summary>
-    public bool IsConsuming => _activator is not null;
+    public bool IsConsuming => _bus.HasBus;
 
     public string QueueName => queueName;
 
@@ -117,19 +117,16 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
                 Interlocked.Exchange(ref _wake, wake);
                 var nextCheck = _healthGate?.NextCheck ?? Task.Delay(Timeout.Infinite, stoppingToken);
 
-                if (Interlocked.Exchange(ref _restartRequested, 0) == 1 && _activator is not null)
-                {
-                    StopBus();
+                if (Interlocked.Exchange(ref _restartRequested, 0) == 1 && StopBus())
                     LogRestarting(queueName);
-                }
 
                 var healthy = _healthGate?.IsHealthy ?? true;
-                if (healthy && _activator is null && DueToStart(time))
+                if (healthy && !_bus.HasBus && DueToStart(time))
                     TryStartBus(time);
-                else if (!healthy && _activator is not null)
+                else if (!healthy)
                     StopBus();
 
-                var retry = _startRetryAt is { } at && _activator is null
+                var retry = _startRetryAt is { } at && !_bus.HasBus
                     ? Task.Delay(Max(at - time.GetUtcNow(), TimeSpan.Zero), time, stoppingToken)
                     : stopped;
                 await Task.WhenAny(nextCheck, wake.Task, retry, stopped);
@@ -155,6 +152,8 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
     // faulting the host: the queue would never consume again, while the health check said it did.
     private void TryStartBus(TimeProvider time)
     {
+        if (_bus.IsClosed)
+            return;   // the host stopped: no bus starts after it
         try
         {
             StartBus();
@@ -182,15 +181,21 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
     private static TaskCompletionSource NewSignal()
         => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    /// <remarks>
+    /// The bus is stopped once, whoever stops it (the loop, this, <see cref="Dispose"/>, several at once: a test host
+    /// stops a service twice at the same time, and disposes it meanwhile), and no bus starts after it: one starting
+    /// meanwhile (the health gate restarting the queue, while the host's shutdown timeout has passed) is stopped as
+    /// soon as it has started.
+    /// </remarks>
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         await base.StopAsync(cancellationToken);
-        StopBus();
+        CloseBus();
     }
 
     public override void Dispose()
     {
-        StopBus();
+        CloseBus();
         base.Dispose();
     }
 
@@ -215,10 +220,18 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
             throw;
         }
 
-        _consuming = consuming;
-        _limiter = limiter;
-        _activator = activator;
-        LogStarted(queueName, options.PerSecond, prefetch);
+        ConsumingBus? started = new(activator, consuming, limiter);
+        try
+        {
+            if (!_bus.TryPut(started))
+                return;   // the host stopped while it started: it never counts as consuming, and is stopped below
+            started = null;
+            LogStarted(queueName, options.PerSecond, prefetch);
+        }
+        finally
+        {
+            started?.Dispose();
+        }
     }
 
     private void ConfigureBus(
@@ -263,21 +276,24 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
     }
 
     /// <summary>
-    /// In-flight requests are cancelled and go back to the queue, as do the prefetched ones when the connection
-    /// closes, so the other instances take them.
+    /// Stops the running bus, if this caller is the one that takes it out of the slot: in-flight requests are cancelled
+    /// and go back to the queue, as do the prefetched ones when the connection closes, so the other instances take them.
     /// </summary>
-    private void StopBus()
+    /// <returns>Whether this caller stopped a bus (another one may have, at the same time).</returns>
+    private bool StopBus()
+        => Stop(_bus.Take());
+
+    /// <summary>Stops the running bus, if any, and any bus starting from now on (the host is stopping).</summary>
+    private void CloseBus()
+        => Stop(_bus.Close());
+
+    private bool Stop(ConsumingBus? bus)
     {
-        if (_activator is null)
-            return;
-        _consuming?.Cancel();
-        _activator.Dispose();
-        _activator = null;
-        _consuming?.Dispose();
-        _consuming = null;
-        _limiter?.Dispose();
-        _limiter = null;
+        if (bus is null)
+            return false;
+        bus.Dispose();
         LogStopped(queueName);
+        return true;
     }
 
     private async Task HandleAsync(IBus bus, IMessageContext context, TRequest request, CancellationToken consuming)
@@ -422,6 +438,22 @@ internal sealed partial class RateLimitedQueueHost<TRequest, TResponse>(
         }
 
         LoggedExceptions.Release(exception);
+    }
+
+    /// <summary>A started bus, with what was started for it: stopped (disposed) together, once.</summary>
+    private sealed class ConsumingBus(
+        BuiltinHandlerActivator activator,
+        CancellationTokenSource consuming,
+        RateLimiter limiter)
+        : IDisposable
+    {
+        public void Dispose()
+        {
+            consuming.Cancel();
+            activator.Dispose();
+            consuming.Dispose();
+            limiter.Dispose();
+        }
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "A request on {Queue} failed (try {Attempt}: {Errors}); sending it back to the queue for another try")]
