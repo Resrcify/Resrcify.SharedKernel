@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
@@ -26,7 +27,6 @@ public sealed class RateLimitedQueueHostTests
     [Fact]
     public async Task HandleAsync_ShouldNotHandleARequest_WhenItExpiredWhileWaitingForTheQueue()
     {
-        using var metrics = new MetricsCapture();
         var network = new InMemNetwork();
         var queue = $"slow-{Guid.NewGuid():N}";
         var calls = new SlowCalls();
@@ -38,17 +38,27 @@ public sealed class RateLimitedQueueHostTests
         using var requester = await InMemoryServices.StartAsync(
             network,
             bus => bus.AddRequest<SlowRequest, SlowResponse>(queue).AddScatterGather());
+        var client = requester.Services.GetRequiredService<IScatterGatherClient>();
 
-        var gathered = await requester.Services.GetRequiredService<IScatterGatherClient>().GatherAsync<SlowRequest, SlowResponse>(
+        // The first request to arrive holds the queue's only slot until the test lets it go, so the other waits behind it.
+        var gathered = await client.GatherAsync<SlowRequest, SlowResponse>(
             new Dictionary<string, SlowRequest> { ["a"] = new("a"), ["b"] = new("b") },
             TimeSpan.FromMilliseconds(300));
-        // The first is cancelled mid-handling when its requester stops waiting; the second has expired by then, so it
-        // is dropped (by the transport, or by the queue's own deadline check) instead of handled.
-        await InMemoryServices.WaitUntilAsync(() => metrics.Count($"messagebus.requests.handled outcome=expired queue={queue}") >= 1);
-        await Task.Delay(TimeSpan.FromMilliseconds(800));
+        // The gather returning means the requester stopped waiting. The second was sent a moment after the gather
+        // started, so its own expiry can be just behind: this margin only ever has to be long enough, never short enough.
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+        calls.ReleaseHeld();
+        // A fresh request behind them: once it is handled, the queue has taken the expired one (one at a time, in
+        // order), so it was dropped (by the transport, or by the queue's own deadline check), not just not reached yet.
+        var marker = await client.GatherAsync<SlowRequest, SlowResponse>(
+            new Dictionary<string, SlowRequest> { ["c"] = new("c") },
+            TimeSpan.FromSeconds(30));
 
         gathered.UnansweredKeys.Count.ShouldBe(2);
-        calls.Count.ShouldBe(1);
+        marker.UnansweredKeys.ShouldBeEmpty();
+        calls.Handled.Count.ShouldBe(2);
+        calls.Handled[0].ShouldBeOneOf("a", "b");
+        calls.Handled[1].ShouldBe("c");
     }
 
     [Fact]
@@ -151,22 +161,37 @@ public sealed class RateLimitedQueueHostTests
 
     internal sealed record SlowResponse(string Key);
 
+    /// <summary>
+    /// The requests <see cref="SlowHandler"/> handled, in order. It holds the first one until <see cref="ReleaseHeld"/>.
+    /// </summary>
     internal sealed class SlowCalls
     {
+        private readonly ConcurrentQueue<string> _handled = new();
+        private readonly TaskCompletionSource _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _count;
 
-        public int Count => Volatile.Read(ref _count);
+        public IReadOnlyList<string> Handled => [.. _handled];
 
-        public void Add()
-            => Interlocked.Increment(ref _count);
+        /// <summary>Records the request; returns a task that completes when it may finish (at once, but for the first).</summary>
+        public Task AddAsync(string key)
+        {
+            _handled.Enqueue(key);
+            return Interlocked.Increment(ref _count) == 1
+                ? _released.Task
+                : Task.CompletedTask;
+        }
+
+        public void ReleaseHeld()
+            => _released.TrySetResult();
     }
 
     internal sealed class SlowHandler(SlowCalls calls) : IRequestResponder<SlowRequest, SlowResponse>
     {
         public async Task<Result<SlowResponse>> HandleAsync(SlowRequest request, CancellationToken cancellationToken = default)
         {
-            calls.Add();
-            await Task.Delay(TimeSpan.FromMilliseconds(600), cancellationToken);
+            // Not cancelled with its requester: the first request keeps the slot until the test is sure the one
+            // waiting behind it has expired.
+            await calls.AddAsync(request.Key);
             return new SlowResponse(request.Key);
         }
     }
