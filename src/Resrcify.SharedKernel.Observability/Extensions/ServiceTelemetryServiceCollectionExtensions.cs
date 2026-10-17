@@ -82,17 +82,24 @@ public static class ServiceTelemetryServiceCollectionExtensions
         // Serilog's own problems (a sink that can't be loaded, a bad configuration) would otherwise go nowhere.
         SelfLog.Enable(Console.Error);
 
-        services.AddSerilog((provider, logger) =>
-        {
-            // First, so the Serilog section's Destructure entries and ConfigureLogging override them.
-            LimitDestructuring(logger, options);
-            logger.ReadFrom
-                .Configuration(configuration)
-                // The sinks, enrichers and filters registered in the container join (a test host's log capture).
-                .ReadFrom.Services(provider)
-                .Enrich.With<TraceContextEnricher>();
-            options.ConfigureLogging?.Invoke(logger);
-        });
+        // The host's own logger behind its logger factory, not the static Log.Logger of the moment, so two hosts in one
+        // process (a test's) each log as themselves and one's stop closes only its own logger; the first host's logger
+        // is still Log.Logger, for the static API (see HostLoggerFactory).
+        var firstAdded = services.Count;
+        services.AddSerilog(
+            (provider, logger) =>
+            {
+                // First, so the Serilog section's Destructure entries and ConfigureLogging override them.
+                LimitDestructuring(logger, options);
+                logger.ReadFrom
+                    .Configuration(configuration)
+                    // The sinks, enrichers and filters registered in the container join (a test host's log capture).
+                    .ReadFrom.Services(provider)
+                    .Enrich.With<TraceContextEnricher>();
+                options.ConfigureLogging?.Invoke(logger);
+            },
+            preserveStaticLogger: true);
+        HostLoggerFactory.Decorate(services, firstAdded);
     }
 
     // Bounds what a destructured property can add to a log line, unless an option is turned off (null).

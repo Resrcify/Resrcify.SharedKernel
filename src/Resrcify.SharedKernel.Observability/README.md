@@ -13,6 +13,7 @@ lead to their trace.
   - [Install](#install)
   - [Quick Start](#quick-start)
   - [Configuration](#configuration)
+  - [One logger per host](#one-logger-per-host)
   - [Request logging](#request-logging)
   - [Turning parts off, adding more](#turning-parts-off-adding-more)
   - [Moving a service to it: before and after](#moving-a-service-to-it-before-and-after)
@@ -33,6 +34,7 @@ lead to their trace.
 - **Serilog** as the logger: `ReadFrom.Configuration` (the `Serilog` section), Serilog's self-log to standard error,
   every event enriched with `TraceId` and `SpanId` (the names Serilog.Enrichers.Span uses, so `WithSpan` is redundant),
   and a destructured property (`{@...}`) bounded to 4 levels, 20 items a collection and 1,024 characters a string.
+  Each host logs through its own logger: see [One logger per host](#one-logger-per-host).
 
 `app.MapServiceMetrics(path = "/metrics")` maps the Prometheus scrape endpoint, open to anonymous callers whatever the
 authorization fallback policy.
@@ -120,6 +122,19 @@ before the `Serilog` section is read, so the section overrides any of them:
 ```
 
 and so does `ConfigureLogging`; set an option to `null` to keep Serilog's own (depth 10, the rest unbounded).
+
+## One logger per host
+
+Every `ILogger` a host makes writes to that host's Serilog logger (Serilog's `AddSerilog` with
+`preserveStaticLogger: true`), and the host's stop disposes that logger and nothing else. So two hosts in one process
+(a test's, `WebApplicationFactory` side by side) each log as themselves, whenever their loggers are made, and one
+stopping never closes the other's logger. (Before 4.4.1 each logger wrote through the static `Log.Logger` of the
+moment it was made, which was the last host built, and a host's stop closed `Log.Logger`.)
+
+Serilog's static `Log.Logger` is still set, for code logging through the static API (`Log.Information(...)`): to the
+first host's logger while it runs, which in a service is the only host, as before. When that host stops, `Log.Logger`
+goes back to `Logger.None` (what `Log.CloseAndFlush()` leaves), unless something else replaced it meanwhile, and the
+next host built takes it. A test with several hosts should log through a host's `ILogger`, not the static API.
 
 ## Request logging
 

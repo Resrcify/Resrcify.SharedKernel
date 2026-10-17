@@ -674,6 +674,7 @@ The package's own metrics (`MessageBusDiagnostics.MeterName`):
 | A request keeps failing on a responder (5 tries) | It is answered with the last try's errors. A message the bus can't handle at all (unreadable) is logged and dropped instead, not moved to the `error` queue: the requester counts it as unanswered. |
 | A request's requester stops waiting while it is handled | The handler's token is cancelled and the request is dropped unanswered. |
 | A responder stops consuming mid-request (unhealthy, or shutting down) | The handler's token is cancelled and the request goes back to the queue, for another instance. |
+| A responder's host is stopped twice at once, or disposed while it stops (a test host: `WebApplicationFactory` stops it while `app.RunAsync()` does too), or stops while the health gate restarts a queue | Each queue's bus is stopped once, and `Stopped consuming <queue>` logged once. No bus runs after the host stopped: one that was starting is stopped as soon as it has started. |
 | An integration event's handler keeps failing | After 5 attempts (or the strategy's `RetryStrategy`) it moves to the service's `<input queue>.error` queue, counted in `messagebus.messages.dead_lettered`. |
 | A message is moved back from the error queue (`IErrorQueue.RetryAsync`) | It is handled again from the handler that failed: the handlers that had finished with it don't run twice. |
 | An outbox message is retried after its handler published | The event goes out again under the same message ID; a subscriber with `SkipDuplicateEvents()` handles it once. |

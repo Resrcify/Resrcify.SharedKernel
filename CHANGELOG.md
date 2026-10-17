@@ -3,6 +3,40 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.4.1 (2026-10-17)
+
+Bug fixes only: no API changes, and nothing for a service to change.
+
+### Fixed
+
+- **A rate-limited queue's bus is stopped once, and none starts after the host stopped** (Resrcify.SharedKernel.MessageBus).
+  A test host stops a service twice at the same time: `WebApplicationFactory.DisposeAsync` stops the host while
+  `Program.cs`'s `app.RunAsync()` waits for it to stop (`WaitForShutdownAsync`) and then stops it too, and
+  `Host.StopAsync` has no guard against a second call, so every hosted service is stopped twice at once (and
+  `app.RunAsync()` then disposes the host, maybe while the first stop still runs). The queue's host checked
+  `_activator is null` and only cleared it after disposing the bus, which waits for its workers, so the second stop
+  passed the check too: the bus was disposed twice and `Stopped consuming <queue>; its messages go back to the other
+  instances` logged twice for one queue (seen in SwgohApi's system tests). The running bus (its activator, its
+  cancellation and its rate limiter) is now taken out of its slot in one atomic step by whoever stops it (the health
+  gate's loop, `StopAsync`, `Dispose`, several at once), so it is disposed once and the line logged once. Also fixed:
+  a bus that was starting when the host stopped without waiting for the queue's loop (`Dispose`, or `StopAsync` past
+  the host's shutdown timeout, while the health gate restarted the queue) kept running, unowned, after the stop; it is
+  now stopped as soon as it has started, and never counts as consuming. A single stop (production's `SIGTERM`) behaves
+  as before.
+- **Each host logs through its own Serilog logger** (Resrcify.SharedKernel.Observability). `AddServiceTelemetry` called
+  Serilog's `AddSerilog` with its default `preserveStaticLogger: false`: the host set the static `Log.Logger` to its
+  logger, every `ILogger` it made wrote through the `Log.Logger` of the moment it was made, and its stop closed
+  `Log.Logger` (`Log.CloseAndFlush`). In a process with two hosts (a test's), a logger the first host made after the
+  second was built (a request handler's, made at its first request) wrote as the second, and the first host's stop
+  closed the second's logger. Now each host's logger factory writes to the host's own logger and its stop disposes
+  that logger only, whatever the other hosts do. **The static `Log.Logger` is still set**, for code logging through
+  Serilog's static API: to the first host's logger while it runs (the only host, in a service, so exactly as before),
+  and back to `Logger.None` when it stops (as `Log.CloseAndFlush` left it) unless something else replaced it
+  meanwhile; a host built after that takes it then. No Titan service logs through the static API today. SwgohApi's
+  system tests can drop their workaround (`SwgohApiInstance.Factory.LogThroughThisHostsLogger`, which takes the host's
+  loggers off `Log.Logger`), and the reason `SwgohApiHostCollection` gives for running its host tests one at a time
+  (the static `Log.Logger`) is gone; both still work unchanged.
+
 ## 4.4.0 (2026-10-16)
 
 ### Added
