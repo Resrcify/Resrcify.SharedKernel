@@ -69,9 +69,11 @@ public sealed class RateLimitedQueueHostStopTests
     }
 
     /// <summary>
-    /// What a test host does to a service: <c>WebApplicationFactory.DisposeAsync</c> stops the host while
-    /// <c>Program.cs</c>'s <c>app.RunAsync()</c> waits for it to stop (<c>WaitForShutdownAsync</c>), and then stops it
-    /// too. <c>Host.StopAsync</c> has no guard against that, so each hosted service is stopped twice at once.
+    /// What a test host does to a service: <c>WebApplicationFactory.DisposeAsync</c> stops the host, which wakes
+    /// <c>Program.cs</c>'s <c>app.RunAsync()</c> (waiting in <c>WaitForShutdownAsync</c>), and that stops the host too.
+    /// <c>Host.StopAsync</c> has no guard against a second call, so each hosted service is stopped twice at once. The
+    /// duplicate came from the second stop arriving while the first was disposing the queue's bus (which waits for its
+    /// workers): here the second stop starts once the first holds that disposal.
     /// </summary>
     private static async Task StopTheHostTwiceAtOnceAsync()
     {
@@ -83,18 +85,18 @@ public sealed class RateLimitedQueueHostStopTests
         await InMemoryServices.WaitUntilAsync(() => consumer.IsConsuming);
         strategy.HoldNextDisposal();
 
-        var (programStop, factoryStop) = StopTwiceAtOnce(host);
+        // The factory's stop, on a thread of its own: holding the queue's disposal holds its caller's thread.
+        var factoryStop = Task.Run(() => host.StopAsync());
         try
         {
-            // One of the two stops is disposing the queue's bus; the other has nothing left to stop, so it finishes.
             await strategy.DisposalHeld.WaitAsync(GiveUpAfter);
-            await Task.WhenAny(programStop, factoryStop).WaitAsync(GiveUpAfter);
+            // The program's stop, while the factory's disposes the bus: it has nothing left to stop, so it finishes.
+            await StopAgainAsync(host).WaitAsync(GiveUpAfter);
             Lines(logs, StoppedLine).ShouldBe(0);
         }
         finally
         {
             strategy.ReleaseDisposal();
-            await programStop;
             await factoryStop;
         }
 
@@ -103,16 +105,10 @@ public sealed class RateLimitedQueueHostStopTests
         consumer.IsConsuming.ShouldBeFalse();
     }
 
-    /// <summary>
-    /// The two stops a test host makes: <c>Program.cs</c>'s, which waits for the host to stop and then stops it
-    /// (<c>app.RunAsync()</c> past its start), and the factory's, on a thread of its own (a stop holding the queue's
-    /// disposal holds its caller's thread).
-    /// </summary>
-    private static (Task Program, Task Factory) StopTwiceAtOnce(IHost host)
+    /// <summary><c>app.RunAsync()</c>'s stop, once <c>WaitForShutdownAsync</c> has seen the host stopping.</summary>
+    private static async Task StopAgainAsync(IHost host)
     {
-        var program = host.WaitForShutdownAsync();
-        var factory = Task.Run(() => host.StopAsync());
-        return (program, factory);
+        await host.WaitForShutdownAsync();
     }
 
     /// <summary>
