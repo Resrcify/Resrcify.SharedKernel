@@ -14,6 +14,7 @@ lead to their trace.
   - [Quick Start](#quick-start)
   - [Configuration](#configuration)
   - [One logger per host](#one-logger-per-host)
+  - [The start of the pipeline: UseServiceDefaults](#the-start-of-the-pipeline-useservicedefaults)
   - [Request logging](#request-logging)
   - [Turning parts off, adding more](#turning-parts-off-adding-more)
   - [Moving a service to it: before and after](#moving-a-service-to-it-before-and-after)
@@ -42,6 +43,10 @@ authorization fallback policy.
 `app.UseServiceRequestLogging(configure?)` logs one line per request with Serilog's request logging, leaving out the
 probes and the scrape (the same `UntracedPaths` the tracing leaves out), at `Error` for a 5xx or an exception, with the
 host, the client's IP, the user id and the request's trace: see [Request logging](#request-logging).
+
+`app.UseServiceDefaults(configureRequestLogging?)` starts the pipeline with `UseServiceRequestLogging` and then
+`UseExceptionHandler()`, the order they must have, in one call: see
+[The start of the pipeline](#the-start-of-the-pipeline-useservicedefaults).
 
 The SharedKernel sources and meters are matched by the wildcard `TelemetrySources.SharedKernel`
 (`Resrcify.SharedKernel.*`), so the package depends on none of the other SharedKernel packages and a new source in
@@ -79,11 +84,64 @@ The OpenTelemetry and Serilog host packages come with it. The sinks the `Serilog
 services.AddServiceTelemetry("shardmanagement", configuration);   // Npgsql's spans included
 
 // Program.cs
-app.UseServiceRequestLogging();   // before UseExceptionHandler(): it logs the status the handler answers
-app.UseExceptionHandler();
+app.UseServiceDefaults();   // the request logging, then the exception handler: first, before anything else
 app.UseRouting();
 // ...
 app.MapServiceMetrics();
+```
+
+## The start of the pipeline: UseServiceDefaults
+
+Every service starts its pipeline with the same two middlewares, and their order matters: the request logging must
+wrap the exception handler, so a request's line carries the status the client got and an exception's stack is logged
+once (see [Request logging](#request-logging)). `app.UseServiceDefaults()` (`Resrcify.SharedKernel.Observability.Extensions`)
+adds both, in that order:
+
+```csharp
+builder.Services.AddResultProblemDetails();     // Web: the problem details the exception handler answers with
+// ... AddServiceTelemetry(...) in Infrastructure
+
+var app = builder.Build();
+app.UseServiceDefaults();                       // 1. UseServiceRequestLogging()  2. UseExceptionHandler()
+app.UseHttpsRedirection();                      // the service's own middleware, inside both
+app.UseStatusCodePages();
+app.UseRouting();
+app.UseCors("ServiceCors");
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapEndpoints();
+app.MapHealthEndpoints();                       // Web
+app.MapServiceMetrics();
+```
+
+- **Call it first.** What the service adds after it (HTTPS redirection, status code pages, routing, CORS,
+  authentication, the endpoints) runs inside both, so its exceptions are answered and logged like an endpoint's.
+- **`configureRequestLogging`** is `UseServiceRequestLogging`'s `configure`:
+  `app.UseServiceDefaults(logging => logging.GetLevel = ...)`.
+- **The exception handler is ASP.NET Core's `UseExceptionHandler()`**, answering with what the service registered:
+  SharedKernel's problem details with `services.AddResultProblemDetails()` (Resrcify.SharedKernel.Web). This package
+  doesn't reference Web: the handler is registered by the service, and `UseExceptionHandler()` finds it. Without
+  `AddResultProblemDetails()` (or `AddProblemDetails()`, or an `ExceptionHandlerOptions` path), `UseExceptionHandler()`
+  throws when the pipeline is built, as it does on its own.
+- **Not in it**: the endpoints SharedKernel maps, `MapHealthEndpoints()` (Web) and `MapServiceMetrics()`. An
+  endpoint's place in `Program.cs` doesn't change anything (routing finds it wherever it was mapped), so there is no
+  order to get wrong; each takes its own options (SwgohApi's health paths) and returns its builder for conventions;
+  and the health endpoints are Web's, which this package doesn't reference. The service's own middleware (HTTPS
+  redirection, status code pages, CORS, authentication, routing) stays the service's.
+- **A second request logging is refused** with an `InvalidOperationException` when the pipeline is built:
+  `UseServiceDefaults()` called twice, or together with `UseServiceRequestLogging()` (before or after it), would log
+  every request twice. The pipeline remembers what added it (in `IApplicationBuilder.Properties`); a branch built after
+  it (`UseWhen`, `Map`) inherits that. A `UseExceptionHandler()` of the service's own, before or after it, isn't looked
+  for: ASP.NET Core leaves no dependable trace of it, and it is harmless (the handler nearest the endpoint answers,
+  the other never sees the exception), so delete it when moving to the one call.
+
+It replaces the two lines every service wrote by hand, `app.UseServiceRequestLogging(); app.UseExceptionHandler();`.
+A service that must put something of its own between them (none does today) keeps calling them itself, in this order,
+the request logging first:
+
+```csharp
+app.UseServiceRequestLogging();
+app.UseExceptionHandler();
 ```
 
 ## Configuration
@@ -139,7 +197,9 @@ next host built takes it. A test with several hosts should log through a host's 
 ## Request logging
 
 `app.UseServiceRequestLogging()` (`Resrcify.SharedKernel.Observability.Extensions`) replaces
-`app.UseSerilogRequestLogging()`. Place it **before `UseExceptionHandler()`** (and before `UseRouting()`):
+`app.UseSerilogRequestLogging()`. `app.UseServiceDefaults()` adds it in its place, with the exception handler after
+it ([above](#the-start-of-the-pipeline-useservicedefaults)); called by hand, place it **before `UseExceptionHandler()`**
+(and before `UseRouting()`), once (a second call throws: it would log every request twice):
 
 ```csharp
 app.UseServiceRequestLogging();
@@ -275,7 +335,7 @@ After:
 services.AddServiceTelemetry("shardmanagement", configuration);
 
 // Program.cs
-app.UseServiceRequestLogging();
+app.UseServiceDefaults();   // the request logging, then UseExceptionHandler()
 // ...
 app.MapServiceMetrics();
 ```
@@ -288,6 +348,7 @@ scrape, and the host, client IP and user id on every request line.
 
 ## Related modules
 
-- `Resrcify.SharedKernel.Web`: `MapHealthEndpoints()` for the `/health`, `/health/ready` and `/health/live` probes.
+- `Resrcify.SharedKernel.Web`: `MapHealthEndpoints()` for the `/health`, `/health/ready` and `/health/live` probes,
+  and `AddResultProblemDetails()`, the problem details `UseServiceDefaults()`'s exception handler answers with.
 - `Resrcify.SharedKernel.Mediator`, `Resrcify.SharedKernel.UnitOfWork`, `Resrcify.SharedKernel.MessageBus`: the
   sources and meters this package subscribes to (their `*Diagnostics` classes describe what each records).

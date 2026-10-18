@@ -38,7 +38,8 @@
   `Idempotency-Replayed` mark the request endpoints put on a replayed answer.
 - Consistent mapping from `ErrorType` to HTTP problem responses.
 - `AddResultProblemDetails()`: unhandled exceptions answered with the same problem details as a failed result, and a
-  minimal-API parameter that fails to bind with a 400 naming it, in every environment.
+  minimal-API parameter that fails to bind with a 400 naming it, in every environment (with
+  `app.UseServiceDefaults()`, Observability, or `app.UseExceptionHandler()`).
 - `MapHealthEndpoints()`: `/health`, `/health/ready` and `/health/live`, anonymous, with a JSON response writer.
 - `MapErrorQueueAdministration()`: the message bus' error queue under `/admin/error-queue` (show, delete, move back).
 - `MapOutboxAdministration<TContext>()`: a DbContext's outbox under `/admin/outbox` (what waits and what gave up,
@@ -242,6 +243,17 @@ response) and `HttpResponseMessageExtensions` (`ToResultAsync`: an HTTP response
 ```csharp
 builder.Services.AddResultProblemDetails();
 // ...
+app.UseServiceDefaults();   // Observability: the request logging, then UseExceptionHandler()
+```
+
+`app.UseServiceDefaults()` (Resrcify.SharedKernel.Observability) starts the pipeline with the request logging and
+then `UseExceptionHandler()`, the order they need: the request's line logs the status the handler answered and the
+stack is logged once, by the handler. A service without the Observability package, or one that must put something of
+its own between the two, calls `app.UseExceptionHandler()` itself, early in the pipeline, after
+`app.UseServiceRequestLogging()` when it has it:
+
+```csharp
+app.UseServiceRequestLogging();
 app.UseExceptionHandler();
 ```
 
@@ -278,7 +290,8 @@ so `AddResultProblemDetails()` turns it on in every environment. To keep ASP.NET
 answered as above). A service's own handler for it (Oracle's `BadRequestExceptionHandler`) and its
 `ThrowOnBadRequest = true` can go.
 
-It replaces `builder.Services.AddProblemDetails()` (it registers it); keep `app.UseExceptionHandler()`.
+It replaces `builder.Services.AddProblemDetails()` (it registers it); keep `app.UseExceptionHandler()`, or
+`app.UseServiceDefaults()`, which adds it.
 
 ### Health endpoints
 

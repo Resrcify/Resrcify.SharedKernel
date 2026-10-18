@@ -18,10 +18,10 @@ builder.Services
 
 var app = builder.Build();
 
-// One line per request (the probes and the scrape left out), logging the status the exception handler answers.
-app.UseServiceRequestLogging();
-// Problem details for an unhandled exception (AddResultProblemDetails), a 499 for a client that gave up.
-app.UseExceptionHandler();
+// First: one line per request (the probes and the scrape left out), then the exception handler inside it, so the line
+// logs the status the handler answered (problem details for an unhandled exception, AddResultProblemDetails; a 499
+// for a client that gave up) and the exception's stack is logged once.
+app.UseServiceDefaults();
 
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
