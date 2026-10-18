@@ -167,7 +167,7 @@ public abstract class ConventionalLayerDependencyTests : BaseArchitectureTest
             [SharedKernelPackage.Caching] = [Layers.Domain, Layers.Application, Layers.Persistence, Layers.Presentation],
             // ASP.NET Core helpers: the HTTP-facing layers (and Infrastructure's auth wiring).
             [SharedKernelPackage.Web] = [Layers.Domain, Layers.Application, Layers.Persistence],
-            // Telemetry is wired by Infrastructure (AddServiceTelemetry) and the host (MapServiceMetrics, UseServiceRequestLogging).
+            // Telemetry is wired by Infrastructure (AddServiceTelemetry) and the host (UseServiceDefaults, UseServiceRequestLogging, MapServiceMetrics).
             [SharedKernelPackage.Observability] = [Layers.Domain, Layers.Application, Layers.Persistence, Layers.Presentation],
             // Test helpers never ship in a layer.
             [SharedKernelPackage.ArchitectureTesting] = AllLayers,

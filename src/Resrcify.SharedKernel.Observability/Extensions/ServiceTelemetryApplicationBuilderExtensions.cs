@@ -42,6 +42,10 @@ public static class ServiceTelemetryApplicationBuilderExtensions
     /// SharedKernel's <c>LoggedExceptions</c>), so the stack is logged once either way.
     /// </para>
     /// <para>
+    /// <see cref="ServiceDefaultsApplicationBuilderExtensions.UseServiceDefaults"/> adds it and <c>UseExceptionHandler()</c>
+    /// in this order in one call; use that instead, unless something of the service's own must go between the two.
+    /// </para>
+    /// <para>
     /// <paramref name="configure"/> runs on options that already hold these defaults (and the host's
     /// <c>RequestLoggingOptions</c>, if it configures them): replace any, or chain onto
     /// <see cref="RequestLoggingOptions.EnrichDiagnosticContext"/> to add fields. A <see cref="RequestLoggingOptions.Logger"/>
@@ -52,7 +56,9 @@ public static class ServiceTelemetryApplicationBuilderExtensions
     /// <param name="configure">Changes to the defaults.</param>
     /// <exception cref="InvalidOperationException">
     /// The service didn't call <c>AddServiceTelemetry</c>, or Serilog isn't its logger (<c>AddServiceTelemetry</c>'s
-    /// <see cref="ServiceTelemetryOptions.Logging"/> is off and it didn't call <c>AddSerilog</c> itself).
+    /// <see cref="ServiceTelemetryOptions.Logging"/> is off and it didn't call <c>AddSerilog</c> itself), or the
+    /// pipeline has the request logging already (this call or <c>UseServiceDefaults</c> made before): a second one
+    /// would log every request twice.
     /// </exception>
     public static IApplicationBuilder UseServiceRequestLogging(
         this IApplicationBuilder app,
@@ -60,6 +66,36 @@ public static class ServiceTelemetryApplicationBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(app);
 
+        ThrowIfRequestLoggingAdded(app);
+        AddRequestLogging(app, configure);
+        RequestLoggingMark.Set(app, RequestLoggingMark.ByServiceRequestLogging);
+        return app;
+    }
+
+    private static void ThrowIfRequestLoggingAdded(
+        IApplicationBuilder app)
+    {
+        var addedBy = RequestLoggingMark.AddedBy(app);
+        if (addedBy == RequestLoggingMark.ByServiceDefaults)
+            throw new InvalidOperationException(
+                "UseServiceDefaults already added the request logging to this pipeline, so this " +
+                "UseServiceRequestLogging call would log every request twice: remove it, and pass its configure " +
+                "to UseServiceDefaults.");
+
+        if (addedBy is not null)
+            throw new InvalidOperationException(
+                "UseServiceRequestLogging was already called on this pipeline, so a second call would log every " +
+                "request twice: call it once.");
+    }
+
+    /// <summary>
+    /// The request logging, without checking or setting <see cref="RequestLoggingMark"/>: the callers do, each with its
+    /// own messages.
+    /// </summary>
+    internal static void AddRequestLogging(
+        IApplicationBuilder app,
+        Action<RequestLoggingOptions>? configure)
+    {
         var services = app.ApplicationServices;
         var untraced = services.GetService<UntracedRequests>()
             ?? throw new InvalidOperationException(
@@ -73,7 +109,7 @@ public static class ServiceTelemetryApplicationBuilderExtensions
         // The host's own logger, not the static Log.Logger, which another host in the process (a test's) may replace.
         var logger = services.GetService<ILogger>();
 
-        return app.UseWhen(
+        app.UseWhen(
             context => !untraced.Contains(context.Request.Path),
             logged =>
             {
