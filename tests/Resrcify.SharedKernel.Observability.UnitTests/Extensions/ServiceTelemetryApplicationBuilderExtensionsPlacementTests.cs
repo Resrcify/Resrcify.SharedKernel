@@ -27,9 +27,9 @@ namespace Resrcify.SharedKernel.Observability.UnitTests.Extensions;
 
 /// <summary>
 /// <c>UseServiceRequestLogging</c> around SharedKernel's exception handler (<c>AddResultProblemDetails()</c> +
-/// <c>UseExceptionHandler()</c>), in the documented place (before it) and where <c>UseSerilogRequestLogging()</c>
-/// usually went (after it): either way a client abort is a 499 at Information, nothing about it an error, and an
-/// unhandled exception a 500 at Error whose stack is logged once.
+/// <c>UseExceptionHandler()</c>), in the documented place (before it), where <c>UseSerilogRequestLogging()</c>
+/// usually went (after it), and added with it by <c>UseServiceDefaults()</c>: every way a client abort is a 499 at
+/// Information, nothing about it an error, and an unhandled exception a 500 at Error whose stack is logged once.
 /// </summary>
 [SuppressMessage(
     "Performance",
@@ -44,8 +44,9 @@ public sealed class ServiceTelemetryApplicationBuilderExtensionsPlacementTests
 
     private const string BeforeExceptionHandler = "before UseExceptionHandler()";
     private const string AfterExceptionHandler = "after UseExceptionHandler()";
+    private const string ServiceDefaults = "UseServiceDefaults()";
 
-    public static TheoryData<string> Placements => [BeforeExceptionHandler, AfterExceptionHandler];
+    public static TheoryData<string> Placements => [BeforeExceptionHandler, AfterExceptionHandler, ServiceDefaults];
 
     [Theory]
     [MemberData(nameof(Placements))]
@@ -216,10 +217,14 @@ public sealed class ServiceTelemetryApplicationBuilderExtensionsPlacementTests
                 app.UseServiceRequestLogging();
                 app.UseExceptionHandler();
             }
-            else
+            else if (placement == AfterExceptionHandler)
             {
                 app.UseExceptionHandler();
                 app.UseServiceRequestLogging();
+            }
+            else
+            {
+                app.UseServiceDefaults();
             }
 
             Map(app, waiting);

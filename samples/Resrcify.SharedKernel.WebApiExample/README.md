@@ -21,7 +21,7 @@ way every Titan service is, built and tested with SharedKernel's own solution (s
   registers the FluentValidation validators (no `AddValidatorsFromAssembly`); cached queries (`ICachingQuery`).
 - **Telemetry**: `AddServiceTelemetry` (OpenTelemetry, Prometheus at `/metrics`, OTLP when
   `Observability:OtlpEndpoint` is set, Serilog from the `Serilog` section, Npgsql's spans) and
-  `UseServiceRequestLogging` (one line per request, before `UseExceptionHandler()`).
+  `UseServiceDefaults` (one line per request, then `UseExceptionHandler()` inside it, in one call).
 - **Problem details** for failed results, unhandled exceptions and unbindable requests (`AddResultProblemDetails`).
 - **PostgreSQL and the outbox**: `AddPostgresDbContext` from the `Database` section with `WithOutbox()` (its claim makes
   several instances safe) and `WithOutboxWakeUp()`, `AddOutboxProcessing` on Quartz, migrations on start-up.
@@ -45,8 +45,7 @@ builder.Services
     .AddPersistenceServices(builder.Configuration);
 
 var app = builder.Build();
-app.UseServiceRequestLogging();
-app.UseExceptionHandler();
+app.UseServiceDefaults();
 if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 app.MapEndpoints();

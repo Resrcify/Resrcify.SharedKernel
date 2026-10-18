@@ -11,7 +11,8 @@ public static class ResultProblemDetailsServiceCollectionExtensions
     /// <summary>
     /// Answers unhandled exceptions with the same problem details as a failed result
     /// (<see cref="ResultExceptionHandler"/>): registers the handler and <c>AddProblemDetails()</c>. The host still
-    /// calls <c>app.UseExceptionHandler()</c>, early in the pipeline. A minimal-API parameter that fails to bind is
+    /// calls <c>app.UseExceptionHandler()</c>, early in the pipeline, or Observability's <c>app.UseServiceDefaults()</c>,
+    /// which adds it after the request logging. A minimal-API parameter that fails to bind is
     /// answered with 400 problem details naming it, in every environment: it turns on
     /// <see cref="RouteHandlerOptions.ThrowOnBadRequest"/> unless
     /// <see cref="ResultProblemDetailsOptions.ProblemDetailsForBindingFailures"/> is <see langword="false"/>.

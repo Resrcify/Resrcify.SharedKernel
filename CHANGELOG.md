@@ -3,6 +3,41 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.5.0 (2026-10-18)
+
+### Added
+
+- **`app.UseServiceDefaults(Action<RequestLoggingOptions>? configureRequestLogging = null)`**
+  (Resrcify.SharedKernel.Observability, `Extensions`, next to `UseServiceRequestLogging`): the start of a service's
+  pipeline in one call, in the order it needs: `UseServiceRequestLogging(configureRequestLogging)`, then
+  `UseExceptionHandler()`. The request logging wraps the exception handler, so a request's line carries the status the
+  client got (the handler's 500, a client abort's 499 at `Information`) and an exception's stack is logged once, by
+  the handler; every service wrote the two lines by hand, in an order only the README held it to. The exception
+  handler is ASP.NET Core's and answers with what the service registers (`services.AddResultProblemDetails()`, Web),
+  so Observability still references no other SharedKernel package but Results, and Web none of Observability's. The
+  endpoints (`MapHealthEndpoints()`, `MapServiceMetrics()`) stay separate calls: an endpoint's place in `Program.cs`
+  changes nothing, each keeps its options and its returned builder, and the health endpoints are Web's. The service's
+  own middleware (HTTPS redirection, status code pages, routing, CORS, authentication) goes after it. Each service
+  replaces its two lines, and the comments above them, in `src/<Service>.Web/Program.cs`:
+
+  | Service | Was | Now |
+  |---|---|---|
+  | Shard, Oracle, SwgohApi | `app.UseServiceRequestLogging();` … `app.UseExceptionHandler();` | `app.UseServiceDefaults();` |
+  | Tournament | `app.UseServiceRequestLogging(); app.UseHttpsRedirection(); app.UseExceptionHandler();` | `app.UseServiceDefaults(); app.UseHttpsRedirection();` (the redirection moves inside the handler: harmless) |
+  | Sentinel | `app.UseServiceRequestLogging();`, `app.UseDeveloperExceptionPage();` in the `IsDevelopment()` branch and `else { app.UseExceptionHandler(); }` | `app.UseServiceDefaults();` before the `if`, which keeps only OpenAPI and Scalar: in Development an unhandled exception is then answered as everywhere else, problem details whose `detail` holds the exception (`ResultExceptionHandler`'s Development details), instead of the developer exception page |
+
+  `MapHealthEndpoints()`, `MapServiceMetrics()` and `AddResultProblemDetails()` stay as they are.
+
+### Behaviour changes
+
+- **A second request logging on one pipeline throws when the pipeline is built** (Resrcify.SharedKernel.Observability):
+  `UseServiceRequestLogging()` or `UseServiceDefaults()` called twice, or the two together (in either order), throws an
+  `InvalidOperationException` naming both calls, instead of logging every request twice. The pipeline records what
+  added its request logging in `IApplicationBuilder.Properties`; a branch built after it (`UseWhen`, `Map`) inherits
+  that. No Titan service calls either twice. A `UseExceptionHandler()` of the service's own next to
+  `UseServiceDefaults()` isn't looked for (ASP.NET Core leaves no dependable trace of it on the pipeline) and is
+  harmless: the handler nearest the endpoint answers; delete it when moving to the one call.
+
 ## 4.4.1 (2026-10-17)
 
 Bug fixes only: no API changes, and nothing for a service to change.
