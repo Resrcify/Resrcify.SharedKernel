@@ -10,6 +10,10 @@ jobs:
     needs: tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # id-token: nuget.org trusted publishing trades this run's GitHub identity for a short-lived API key (no stored key).
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -51,9 +55,16 @@ jobs:
             fi
           done
           exit $status
+      # Trusted publishing: the nuget.org policy for Resrcify/Resrcify.SharedKernel, workflow build-and-push-nuget.yaml,
+      # packages Resrcify.SharedKernel.*, issues a key valid for about an hour.
+      - name: NuGet login (trusted publishing)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: RMarjanovic
       # Each package's .snupkg goes up with it. --skip-duplicate: a re-run after a failed push publishes the rest.
       - name: Push Packages to NuGet
         run: |
           for package in *.nupkg; do
-            dotnet nuget push "$package" --source https://api.nuget.org/v3/index.json --api-key  ${{ secrets.NUGET_API_KEY }} --skip-duplicate
+            dotnet nuget push "$package" --source https://api.nuget.org/v3/index.json --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" --skip-duplicate
           done
