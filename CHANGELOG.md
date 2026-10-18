@@ -3,7 +3,7 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
-## 4.5.0 (unreleased)
+## 4.5.0 (2026-10-18)
 
 ### Added
 
