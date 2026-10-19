@@ -3,6 +3,32 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.7.0 (2026-10-19)
+
+### Added
+
+- **`ConventionalApplicationTests.Handlers_Should_NotDependOnSenderOrMediator`: a request handler doesn't send
+  requests** (Resrcify.SharedKernel.ArchitectureTesting). It fails for every mediator request handler
+  (`ICommandHandler<>`, `ICommandHandler<,>`, `IQueryHandler<,>`, `IRequestHandler<,>`,
+  `IValueTaskRequestHandler<,>`, `IStreamRequestHandler<,>`, and the scatter-gather request handlers
+  `IScatterGatherRequestHandler<,,,>` / `IStreamingScatterGatherRequestHandler<,,,>`, which are sent like any request)
+  with a constructor parameter (a primary constructor's included), field or property, its base classes' included, of
+  `ISender` or `IMediator` (or of anything that is one, also wrapped: `Lazy<ISender>`, `Func<IMediator>`, an array),
+  and names each by layer, handler and member (`Infrastructure: <Handler> → constructor parameter 'sender' (ISender)`).
+  It checks every layer assembly, not only Application, since a handler can live in Infrastructure (a scatter-gather
+  request handler) or anywhere the mediator scans. A request sent from inside a handler runs the pipeline again inside
+  the first request's (validation, a second unit of work, …) and hides the workflow; only entry points send
+  (endpoints, Quartz command jobs, bus consumers, UI handlers). Allowed: `IPublisher` (publishing a notification isn't
+  sending a request); integration event handlers, scatter-gather event handlers, request responders and notification
+  handlers, which aren't request handlers; pipeline behaviors; a type nested in a handler (a type of its own).
+
+  Adopting it: apps that inherit `ConventionalApplicationTests` get the rule on upgrade; a handler that sends another
+  request fails it — move the workflow into the handler through its abstractions, or send from the entry point. To keep
+  one for now, override the test and skip it with the reason.
+- **`ConventionalApplicationTests(IReadOnlyDictionary<string, Assembly> layerAssemblies)`**
+  (Resrcify.SharedKernel.ArchitectureTesting): checks the given layer assemblies instead of the ones found by naming
+  convention, as `ConventionalLayerDependencyTests` already could.
+
 ## 4.6.0 (2026-10-19)
 
 ### Added
