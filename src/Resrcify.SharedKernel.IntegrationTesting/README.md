@@ -22,6 +22,7 @@ RabbitMQ in Testcontainers, and a host fixture that runs a service's `Program` i
 - [Container fixtures](#container-fixtures)
   - [A production-like broker](#a-production-like-broker)
   - [Events on a real broker: `PublishedEventListener`](#events-on-a-real-broker-publishedeventlistener)
+- [Another service's image: `ImageUnderTest`](#another-services-image-imageundertest)
 
 ## What you get
 
@@ -40,6 +41,8 @@ RabbitMQ in Testcontainers, and a host fixture that runs a service's `Program` i
   database and credentials set with init properties (no subclass), a readiness probe, `JoinNetwork(network, aliases)`,
   and for RabbitMQ production's queue defaults (`ProductionQueueDefaults`), `QueuesAsync`, `AddQuorumVirtualHostAsync`,
   `Connection` and `WaitForExchangePublish`.
+- `ImageUnderTest`, `ImageAcquisition` (`Containers/`): another service's image in a system or end-to-end test, pulled
+  fresh (or pinned by digest), and a `[tested against]` line saying exactly which build ran.
 - `HangGuard`, `AwaitableLog<T>`, `CallCounter` (`Waiting/`): waiting for a signal instead of a deadline, with one
   limit that only catches a hang.
 - With Resrcify.SharedKernel.MessageBus.Testing (which this references): `PublishedEventListener`, a subscriber to
@@ -355,3 +358,39 @@ var created = await events.Received.WaitForAsync<ShardCreated>(e => e.Name == "M
 
 Start it before the publish (a publish before its queue is bound has nowhere to go); disposing it unsubscribes and
 stops it. It replaces Shard's `TopicListener` (raw RabbitMQ on `RebusTopics`) and Sentinel's `EventSubscriber`.
+
+## Another service's image: `ImageUnderTest`
+
+A system or end-to-end test that runs another service's image needs to know it ran the release it meant to. One
+`ImageUnderTest` per image per run (a static of the fixture) starts every container of that image:
+
+```csharp
+private static readonly ImageUnderTest Orders = new(
+    service: "Orders",
+    reference: Environment.GetEnvironmentVariable("ORDERS_IMAGE") ?? "ghcr.io/acme/orders:latest",
+    origin: Environment.GetEnvironmentVariable("ORDERS_IMAGE") is null ? "the default" : "ORDERS_IMAGE",
+    acquisition: Environment.GetEnvironmentVariable("ORDERS_IMAGE_LOCAL") is "1" ? ImageAcquisition.LocalOnly : ImageAcquisition.PullFresh,
+    overrides: "set ORDERS_IMAGE (a tag or a digest), or ORDERS_IMAGE_LOCAL=1 to run the local copy");
+
+var container = await Orders.StartAsync(builder => builder
+    .WithNetwork(network)
+    .WithEnvironment("ConnectionStrings__Database", connectionString)
+    .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r.ForPath("/health/ready"))));
+```
+
+- **`ImageAcquisition.PullFresh`** (for CI): the run's first container pulls the image (Testcontainers'
+  `PullPolicy.Always`), so a stale local copy of a moving tag like `latest` never stands in for a newer release; a
+  failed pull fails the run, naming the image, its registry (`docker login …`) and `overrides`, and never falls back
+  to the local copy. **`ImageAcquisition.LocalOnly`** (offline, or an image built on this machine): the local copy,
+  pulled only when there is none.
+- **Pinned by digest** (`ghcr.io/acme/orders@sha256:…`): exactly that build, never re-pulled when present.
+- After the first start, the run names the image by its registry digest, so every later container runs the same
+  build even if the tag moves meanwhile, and `Description` (also written to the console once, for the CI log) says
+  what it was:
+
+```text
+[tested against] Orders: ghcr.io/acme/orders:latest (the default; pulled fresh) = version 2.4.0, revision 1f3c9e2, ghcr.io/acme/orders@sha256:…, image sha256:…, created 2026-10-18T09:12:44Z
+```
+
+The version and revision come from the image's `org.opencontainers.image.version` / `.revision` labels
+(`(unlabelled)` without them).

@@ -49,6 +49,16 @@ every package in the repository is released together under one version.
   `using Resrcify.SharedKernel.IntegrationTesting.Waiting;` (Discord: `IntegrationTests/Fixtures`,
   `Infrastructure.UnitTests/TestDoubles`; Sentinel: its `HangGuard` constants become `HangGuard.Limit`, or
   `limit: TimeSpan.FromMinutes(5)` to keep its 5).
+- **`ImageUnderTest` and `ImageAcquisition`: another service's image, and exactly which build ran**
+  (Resrcify.SharedKernel.IntegrationTesting, `Containers`), from the identical copies in the services' system and
+  end-to-end tests. `StartAsync(configure)` starts a container of the image: the run's first one pulls it fresh
+  (`PullFresh`: Testcontainers' `PullPolicy.Always`, so a stale `latest` never stands in for a newer release, and a
+  failed pull fails the run naming the image, its registry and how to pick another) or uses the local copy
+  (`LocalOnly`); a reference pinned by digest is used as it is. From then on the run names the image by its registry
+  digest, and `Description` — written once to the console as a `[tested against]` line — gives its version and
+  revision labels, digest, image id and creation time. Generic now: no service's image or registry in it (the
+  failed-pull message names the reference's own registry). Adopting it: a service deletes its
+  `Support/ImageUnderTest.cs` (`Fixtures/` in Discord) and adds `using Resrcify.SharedKernel.IntegrationTesting.Containers;`.
 
 ## 4.6.0 (2026-10-19)
 
