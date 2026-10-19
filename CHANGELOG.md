@@ -7,30 +7,9 @@ every package in the repository is released together under one version.
 
 ### Breaking changes
 
-- **Types out of catch-all folders, into namespaces named for what they do** (Resrcify.SharedKernel.ArchitectureTesting,
-  Resrcify.SharedKernel.UnitOfWork). The types are unchanged; only their namespaces move. Replace the `using` (or the
-  qualified name) where a service names one of them:
-
-  | Type | Was | Now |
-  |---|---|---|
-  | `BaseArchitectureTest` | `Resrcify.SharedKernel.ArchitectureTesting.Helpers` | `Resrcify.SharedKernel.ArchitectureTesting.Tests` (beside the `Conventional*Tests`) |
-  | `Layers`, `LayerAssemblyResolver` | `Resrcify.SharedKernel.ArchitectureTesting.Helpers` | `Resrcify.SharedKernel.ArchitectureTesting.Layering` |
-  | `SharedKernelPackage` | `Resrcify.SharedKernel.ArchitectureTesting.Helpers` | `Resrcify.SharedKernel.ArchitectureTesting.PackageRules` |
-  | `OutboxOptions`, `OutboxLaneOptions` | `Resrcify.SharedKernel.UnitOfWork.Extensions` | `Resrcify.SharedKernel.UnitOfWork.Outbox` |
-  | `QuartzJobsHealthCheckOptions` | `Resrcify.SharedKernel.UnitOfWork.Extensions` | `Resrcify.SharedKernel.UnitOfWork.Health` |
-
-  `Resrcify.SharedKernel.ArchitectureTesting.Helpers` is gone: an architecture-test project that overrides `LayerTiers`,
-  `ExtraForbiddenDependencies`, `SharedKernelPackageRestrictions` or `PackageRestrictionsLike` replaces
-  `using Resrcify.SharedKernel.ArchitectureTesting.Helpers;` with `using Resrcify.SharedKernel.ArchitectureTesting.Layering;`
-  (for `Layers`) and, when it names a package, `using Resrcify.SharedKernel.ArchitectureTesting.PackageRules;`.
-  `Resrcify.SharedKernel.UnitOfWork.Extensions` keeps every extension method (`AddOutboxProcessing`, `AddOutboxLane`,
-  `AddOutbox`, `AddQuartzJobs`, …), so its `using` stays; a service that names `OutboxOptions`, `OutboxLaneOptions` or
-  `QuartzJobsHealthCheckOptions` (`services.Configure<OutboxOptions>(…)`, a typed options parameter) adds
-  `using Resrcify.SharedKernel.UnitOfWork.Outbox;` or `using Resrcify.SharedKernel.UnitOfWork.Health;`. A lambda that
-  only sets their properties (`AddOutboxProcessing<T>(options => options.BatchSize = 50)`) needs nothing. The
-  internal helpers moved with them (`PackageRestrictionInheritance` to `PackageRules`, the request-handler detection to
-  `Handlers`, `OutboxAdministrationRegistration` to `Outbox`, `MisconfiguredHealthCheck` to `Health`), and the test
-  projects' `Support` folders became purpose-named ones; neither is visible to a service.
+- **Namespaces renamed, no forwarders** (ArchitectureTesting, UnitOfWork): update the `using`s — `ArchitectureTesting.Helpers` → `.Tests` (`BaseArchitectureTest`), `.Layering` (`Layers`, `LayerAssemblyResolver`),
+  `.PackageRules` (`SharedKernelPackage`); `UnitOfWork.Extensions` → `.Outbox` (`OutboxOptions`, `OutboxLaneOptions`),
+  `.Health` (`QuartzJobsHealthCheckOptions`).
 
 ### Added
 
