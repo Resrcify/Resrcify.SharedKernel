@@ -48,6 +48,9 @@ Add a layer, or move one to another tier, by overriding `LayerTiers`; add rules 
 `ExtraForbiddenDependencies`:
 
 ```csharp
+using Resrcify.SharedKernel.ArchitectureTesting.Layering;   // Layers
+using Resrcify.SharedKernel.ArchitectureTesting.Tests;
+
 public sealed class LayerTests : ConventionalLayerDependencyTests
 {
     protected override IReadOnlyDictionary<string, int> LayerTiers

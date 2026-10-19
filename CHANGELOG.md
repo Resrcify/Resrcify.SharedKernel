@@ -7,7 +7,8 @@ every package in the repository is released together under one version.
 
 ### Breaking changes
 
-- **Namespaces renamed, no forwarders** (ArchitectureTesting, UnitOfWork): update the `using`s — `ArchitectureTesting.Helpers` → `.Tests` (`BaseArchitectureTest`), `.Layering` (`Layers`, `LayerAssemblyResolver`),
+- **Namespaces renamed, no forwarders** (ArchitectureTesting, UnitOfWork): update the `using`s —
+  `ArchitectureTesting.Helpers` → `.Tests` (`BaseArchitectureTest`), `.Layering` (`Layers`, `LayerAssemblyResolver`),
   `.PackageRules` (`SharedKernelPackage`); `UnitOfWork.Extensions` → `.Outbox` (`OutboxOptions`, `OutboxLaneOptions`),
   `.Health` (`QuartzJobsHealthCheckOptions`).
 

@@ -34,7 +34,8 @@ RabbitMQ in Testcontainers, and a host fixture that runs a service's `Program` i
   hosts that own no containers. The settings win over `appsettings*.json` and environment variables, with
   `WebApplication.CreateBuilder` and `Host.CreateDefaultBuilder` alike.
 - `ServiceHostFixture.Logs`: what the host logged, through the logging abstraction and Serilog, in Microsoft's
-  `FakeLogCollector`; `RenderedLogs`: its Serilog lines as production's console prints them; `UsesMessageBusTestHarness`: the service's buses on the message bus test harness, in memory.
+  `FakeLogCollector`; `RenderedLogs`: its Serilog lines as production's console prints them;
+  `UsesMessageBusTestHarness`: the service's buses on the message bus test harness, in memory.
 - `PostgresContainerFixture`, `RabbitMqContainerFixture` (`Fixtures/`): one container each, on the images production
   runs, `postgres:18` and `rabbitmq:4.3.4-management` (the RabbitMQ Cluster Operator v2.23.0's default)
   (`RESRCIFY_TEST_POSTGRES_IMAGE` / `RESRCIFY_TEST_RABBITMQ_IMAGE` replace the image for every fixture), their
