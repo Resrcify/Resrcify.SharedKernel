@@ -279,15 +279,16 @@ public sealed class ServiceCollectionExtensionsTests
                 typeof(IdempotencyPipelineBehavior<,>),
                 typeof(ValidationPipelineBehavior<,>),
                 typeof(ScopedOpenBehavior<,>),
+                typeof(NonConcurrentPipelineBehavior<,>),
                 typeof(TransactionPipelineBehavior<,>),
                 typeof(UnitOfWorkPipelineBehavior<,>),
             ]);
     }
 
     // The documented order (StandardBehavior, AddStandardBehaviors, the README): idempotency right after logging,
-    // whatever order the enum declares its members in.
+    // non-concurrent right after validation, whatever order the enum declares its members in.
     [Fact]
-    public void AddMediator_ShouldRegisterIdempotencyRightAfterLogging_WhenTheStandardBehaviorsAreAddedUnchanged()
+    public void AddMediator_ShouldRegisterTheDocumentedOrder_WhenTheStandardBehaviorsAreAddedUnchanged()
     {
         var services = new ServiceCollection();
 
@@ -301,6 +302,7 @@ public sealed class ServiceCollectionExtensionsTests
                 typeof(LoggingPipelineBehavior<,>),
                 typeof(IdempotencyPipelineBehavior<,>),
                 typeof(ValidationPipelineBehavior<,>),
+                typeof(NonConcurrentPipelineBehavior<,>),
                 typeof(TransactionPipelineBehavior<,>),
                 typeof(UnitOfWorkPipelineBehavior<,>),
                 typeof(CachingPipelineBehavior<,>),

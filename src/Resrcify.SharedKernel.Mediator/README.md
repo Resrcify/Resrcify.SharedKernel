@@ -30,6 +30,7 @@ The contracts live in `Resrcify.SharedKernel.Abstractions.Mediator`, so the Doma
     - [Logging options](#logging-options)
     - [Unit-of-work options](#unit-of-work-options)
     - [Idempotent requests](#idempotent-requests)
+    - [Non-concurrent requests](#non-concurrent-requests)
     - [Pre- and post-processors](#pre--and-post-processors)
   - [Tracing and metrics](#tracing-and-metrics)
   - [How it works internally](#how-it-works-internally)
@@ -112,7 +113,8 @@ public static class DependencyInjection
             cfg.RegisterServicesFromAssemblies(
                 Assembly.GetExecutingAssembly());
 
-            // Logging -> Idempotency -> Validation -> Transaction -> UnitOfWork -> Caching (the first is the outermost).
+            // Logging -> Idempotency -> Validation -> NonConcurrent -> Transaction -> UnitOfWork -> Caching (the first
+            // is the outermost).
             cfg.AddStandardBehaviors();
 
             cfg.UseNotificationPublishStrategy(NotificationPublishStrategy.Sequential);
@@ -159,6 +161,10 @@ Mediator contracts are in `src/Resrcify.SharedKernel.Abstractions/Mediator` (nam
     - `IQuery<TResponse>`, `IQueryHandler<...>`
     - `ICachingQuery<TResponse>`
     - `ITransactionCommand`, `ITransactionCommand<TResponse>`
+- **Request markers** (a behavior acts on the requests implementing them)
+    - `IIdempotentRequest` (`IdempotencyKey`, `IdempotencyScope`): answered with the first result when sent again with
+      its key
+    - `INonConcurrentRequest` (`ConcurrencyKey`, `null` by default): handled one at a time per request type and key
 
 ## Usage Guide
 
@@ -328,6 +334,10 @@ The package includes the following built-in behaviors in `src/Resrcify.SharedKer
     - Answers an `IIdempotentRequest` sent again with its `IdempotencyKey` with the first one's result instead of
       handling it again (see [Idempotent requests](#idempotent-requests)).
     - Constraint: `TRequest : IIdempotentRequest`, `TResponse : Result`.
+- `NonConcurrentPipelineBehavior<TRequest, TResponse>`
+    - Handles an `INonConcurrentRequest` one at a time per request type and `ConcurrencyKey`: another waits until it
+      has finished, then is handled itself (see [Non-concurrent requests](#non-concurrent-requests)).
+    - Constraint: `TRequest : INonConcurrentRequest`, `TResponse : Result`.
 - `CachingPipelineBehavior<TRequest, TResponse>`
     - Uses `ICachingService` and `ICachingQuery` (`CacheKey`, `Expiration`). A successful result is cached for `Expiration` from the time it was cached (an absolute expiry: reads don't extend it).
     - Constraint: `TRequest : ICachingQuery`, `TResponse : Result`.
@@ -382,22 +392,26 @@ once it is added like this.
 Our services run the same chain; `AddStandardBehaviors` adds it, after any behavior added before:
 
 ```csharp
-cfg.AddStandardBehaviors();   // Logging -> Idempotency -> Validation -> Transaction -> UnitOfWork -> Caching
+cfg.AddStandardBehaviors();   // Logging -> Idempotency -> Validation -> NonConcurrent -> Transaction -> UnitOfWork -> Caching
 ```
 
 Idempotency runs right after logging: before validation, so a repeat gets the first answer even when a rule that reads
 the data ("the shard must not exist yet") would refuse it now; and outside the transaction and the unit of work, so a
 result is kept only once committed, and a repeat opens neither. A behavior inserted before `Validation` therefore runs
-after idempotency. (The `StandardBehavior` enum doesn't declare its members in this order: `Idempotency`, added last,
-kept its value. Order by name, never by value.)
+after idempotency. NonConcurrent runs right after validation: an invalid request is refused without waiting; the
+transaction and the unit of work run inside its lock, so the next run starts once the previous one committed (and waits
+without holding a connection); and caching runs inside it too, so a query that waited is answered from what the first
+one cached instead of missing the cache and running again. (The `StandardBehavior` enum doesn't declare its members in
+this order: `Idempotency` (4.0) and `NonConcurrent` (4.6), each added last, kept their values. Order by name, never by
+value.)
 
 Leave one out, or put the service's own behaviors in place:
 
 ```csharp
 cfg.AddStandardBehaviors(standard => standard
-    .InsertAfter(StandardBehavior.Validation, typeof(GuestAuthPipelineBehavior<,>), typeof(SingleFlightPipelineBehavior<,>))
+    .InsertAfter(StandardBehavior.Validation, typeof(GuestAuthPipelineBehavior<,>))
     .Without(StandardBehavior.Caching));
-// Logging -> Idempotency -> Validation -> GuestAuth -> SingleFlight -> Transaction -> UnitOfWork
+// Logging -> Idempotency -> Validation -> GuestAuth -> NonConcurrent -> Transaction -> UnitOfWork
 ```
 
 `InsertBefore` works the same way. A behavior inserted next to one left out keeps its place. Inserted behaviors are
@@ -412,8 +426,9 @@ options throw.
 ### The behavior check
 
 Some requests ask for a behavior by an interface: an `ICachingQuery` must be cached, an `ITransactionalCommand` must
-run in a transaction, an `IIdempotentRequest` must honour its key. Without the behavior they still run, just not cached or not in a transaction, and nothing
-says so. `AddMediator` therefore throws `InvalidOperationException` when a scanned request implementing one of them
+run in a transaction, an `IIdempotentRequest` must honour its key, an `INonConcurrentRequest` must run one at a time.
+Without the behavior they still run, just not cached, not in a transaction or side by side,
+and nothing says so. `AddMediator` therefore throws `InvalidOperationException` when a scanned request implementing one of them
 has no registered behavior that handles it: one whose request type parameter is constrained to that interface
 (`CachingPipelineBehavior` and `TransactionPipelineBehavior` are; so may a service's own). It sees the behaviors added
 to the configuration and those registered in the container before `AddMediator`; if yours is registered after,
@@ -492,6 +507,45 @@ cfg.ConfigureIdempotency(idempotency =>
     idempotency.InProgressTimeout = TimeSpan.FromMinutes(5); // the longest a request holds its key (default 1 minute)
 });
 ```
+
+### Non-concurrent requests
+
+A request implementing `INonConcurrentRequest` runs one at a time: while one is handled, another of the same request
+type and `ConcurrencyKey` waits until it has finished, and is then handled itself. A job command, say, so that its
+scheduled run and one started on demand (`POST api/Jobs/run`) never overlap:
+
+```csharp
+// Every run of it one at a time: no key.
+public sealed record UpdateGameDataCommand : ICommand, INonConcurrentRequest;
+
+// One at a time per shard; different shards side by side.
+public sealed record UpdateShardMembersCommand(Guid ShardId) : ICommand, INonConcurrentRequest
+{
+    public string? ConcurrencyKey => ShardId.ToString();
+}
+```
+
+| Sent | Answer |
+|---|---|
+| while no run of its type and key is handled | handled at once |
+| while one is | waits until it has finished (whatever its end: a result, a failure, an exception), then handled |
+| with another key, or another request type | handled at once, side by side |
+| cancelled while it waits | not handled; the send throws `OperationCanceledException` |
+
+- **It serialises; it doesn't coalesce.** The run that waited is handled too and gets its own result, not the first
+  one's (unlike Go's `singleflight`). To answer a repeat with the first result, make it an `IIdempotentRequest` as well.
+- **Per process.** The locks are the mediator's (a singleton per container), so two replicas of a service each run the
+  request one at a time, but not one at a time between them. What must never overlap across replicas needs a lock they
+  share (the database's).
+- **It waits; it doesn't refuse.** Nothing times out on its own: a caller that can't wait for long passes a
+  `CancellationToken`. The logging behavior's time for the request includes the wait.
+- **No key (`null` or empty) is one lock for the request type**, separate from the keyed ones: a run without a key
+  doesn't wait for a run with one. A request type normally always sets its key, or never.
+- **Not re-entrant.** A handler that sends (and awaits) a request of its own type and key waits for itself, for ever.
+- A lock exists only while a run holds it or waits for it, so keys can be as many as the data makes (every shard's ID):
+  the locks kept are those in use.
+- It runs after validation, so a rule that reads the data was checked before the wait: a check that must see what
+  the previous run saved belongs in the handler.
 
 ### Pre- and post-processors
 
@@ -595,6 +649,9 @@ Use `Sequential` when handler order/serialization matters; use `Parallel` for th
     - Ensure request implements `ICachingQuery` and sets a non-empty `CacheKey`.
 - **Transaction/unit-of-work behavior not applied**
     - Ensure command implements `ITransactionalCommand` / `IBaseCommand` and `IUnitOfWork` is registered.
+- **A non-concurrent request never finishes**
+    - Its handler (or something it awaits) sends a request of the same type and `ConcurrencyKey`, which waits for the
+      first run to finish: send it after the first run (not from within it), or give it another key.
 
 ## Sample project
 

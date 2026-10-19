@@ -24,10 +24,26 @@ public sealed class StandardBehaviorsOptionsTests
             typeof(LoggingPipelineBehavior<,>),
             typeof(IdempotencyPipelineBehavior<,>),
             typeof(ValidationPipelineBehavior<,>),
+            typeof(NonConcurrentPipelineBehavior<,>),
             typeof(TransactionPipelineBehavior<,>),
             typeof(UnitOfWorkPipelineBehavior<,>),
             typeof(CachingPipelineBehavior<,>),
         ]);
+
+    [Fact]
+    public void BehaviorTypes_ShouldLeaveNonConcurrentOut_WhenItIsRemoved()
+        => new StandardBehaviorsOptions()
+            .Without(StandardBehavior.NonConcurrent)
+            .BehaviorTypes()
+            .ShouldBe(
+            [
+                typeof(LoggingPipelineBehavior<,>),
+                typeof(IdempotencyPipelineBehavior<,>),
+                typeof(ValidationPipelineBehavior<,>),
+                typeof(TransactionPipelineBehavior<,>),
+                typeof(UnitOfWorkPipelineBehavior<,>),
+                typeof(CachingPipelineBehavior<,>),
+            ]);
 
     [Fact]
     public void BehaviorTypes_ShouldPutTheServicesBehaviorsInPlace_WhenInsertedAndOneIsLeftOut()
@@ -45,6 +61,7 @@ public sealed class StandardBehaviorsOptionsTests
             typeof(ValidationPipelineBehavior<,>),
             typeof(FirstOwnBehavior<,>),
             typeof(SecondOwnBehavior<,>),
+            typeof(NonConcurrentPipelineBehavior<,>),
             typeof(TransactionPipelineBehavior<,>),
             typeof(UnitOfWorkPipelineBehavior<,>),
         ]);

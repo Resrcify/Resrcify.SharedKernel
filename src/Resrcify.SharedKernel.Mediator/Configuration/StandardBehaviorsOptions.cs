@@ -13,10 +13,10 @@ namespace Resrcify.SharedKernel.Mediator.Configuration;
 /// <example>
 /// <code>
 /// cfg.AddStandardBehaviors(standard => standard
-///     .InsertAfter(StandardBehavior.Validation, typeof(GuestAuthPipelineBehavior&lt;,&gt;), typeof(SingleFlightPipelineBehavior&lt;,&gt;))
+///     .InsertAfter(StandardBehavior.Validation, typeof(GuestAuthPipelineBehavior&lt;,&gt;))
 ///     .Without(StandardBehavior.Caching));
 /// </code>
-/// gives Logging → Idempotency → Validation → GuestAuth → SingleFlight → Transaction → UnitOfWork.
+/// gives Logging → Idempotency → Validation → GuestAuth → NonConcurrent → Transaction → UnitOfWork.
 /// </example>
 public sealed class StandardBehaviorsOptions
 {
@@ -28,6 +28,11 @@ public sealed class StandardBehaviorsOptions
         // committed, and a repeat opens neither.
         StandardBehavior.Idempotency,
         StandardBehavior.Validation,
+        // After validation: an invalid request is refused without waiting. Outside the transaction and the unit of
+        // work: the next run starts once the previous one committed, and sees what it saved (and waits without holding
+        // a connection). Outside caching: a query that waited is answered from what the first one cached, instead of
+        // missing the cache and running again.
+        StandardBehavior.NonConcurrent,
         StandardBehavior.Transaction,
         StandardBehavior.UnitOfWork,
         StandardBehavior.Caching,
@@ -136,6 +141,7 @@ public sealed class StandardBehaviorsOptions
             StandardBehavior.UnitOfWork => typeof(UnitOfWorkPipelineBehavior<,>),
             StandardBehavior.Caching => typeof(CachingPipelineBehavior<,>),
             StandardBehavior.Idempotency => typeof(IdempotencyPipelineBehavior<,>),
+            StandardBehavior.NonConcurrent => typeof(NonConcurrentPipelineBehavior<,>),
             _ => throw new ArgumentOutOfRangeException(nameof(behavior), behavior, "Not a standard behavior."),
         };
 
