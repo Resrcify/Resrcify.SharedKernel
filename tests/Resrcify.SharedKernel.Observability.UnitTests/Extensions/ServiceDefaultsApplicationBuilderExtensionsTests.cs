@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Resrcify.SharedKernel.Observability.Extensions;
-using Resrcify.SharedKernel.Observability.UnitTests.Support;
+using Resrcify.SharedKernel.Observability.UnitTests.TelemetryCapture;
 using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.Web.Exceptions;
 using Resrcify.SharedKernel.Web.Extensions;

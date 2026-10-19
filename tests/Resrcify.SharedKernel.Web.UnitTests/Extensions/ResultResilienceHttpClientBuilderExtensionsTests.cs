@@ -19,7 +19,7 @@ using Resrcify.SharedKernel.Abstractions.Resilience;
 using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.Web.Extensions;
 using Resrcify.SharedKernel.Web.Resilience;
-using Resrcify.SharedKernel.Web.UnitTests.Support;
+using Resrcify.SharedKernel.Web.UnitTests.Hosting;
 using Shouldly;
 using Xunit;
 

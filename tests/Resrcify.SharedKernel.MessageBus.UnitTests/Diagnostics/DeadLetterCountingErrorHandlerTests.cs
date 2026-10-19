@@ -4,7 +4,9 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Rebus.Transport.InMem;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
-using Resrcify.SharedKernel.MessageBus.UnitTests.Support;
+using Resrcify.SharedKernel.MessageBus.UnitTests.Events;
+using Resrcify.SharedKernel.MessageBus.UnitTests.Hosting;
+using Resrcify.SharedKernel.MessageBus.UnitTests.Metrics;
 using Shouldly;
 using Xunit;
 

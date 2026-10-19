@@ -16,11 +16,13 @@ RabbitMQ in Testcontainers, and a host fixture that runs a service's `Program` i
   - [A service without a database](#a-service-without-a-database)
   - [What a service changes](#what-a-service-changes)
   - [A Program with its own configuration builder](#a-program-with-its-own-configuration-builder)
-  - [What the service logged: `Logs`](#what-the-service-logged-logs)
+  - [What the service logged: `Logs`, `RenderedLogs`](#what-the-service-logged-logs-renderedlogs)
   - [The message bus on the test harness: `UsesMessageBusTestHarness`](#the-message-bus-on-the-test-harness-usesmessagebustestharness)
+- [Waiting for what a test expects: `Waiting/`](#waiting-for-what-a-test-expects-waiting)
 - [Container fixtures](#container-fixtures)
   - [A production-like broker](#a-production-like-broker)
   - [Events on a real broker: `PublishedEventListener`](#events-on-a-real-broker-publishedeventlistener)
+- [Another service's image: `ImageUnderTest`](#another-services-image-imageundertest)
 
 ## What you get
 
@@ -32,13 +34,18 @@ RabbitMQ in Testcontainers, and a host fixture that runs a service's `Program` i
   hosts that own no containers. The settings win over `appsettings*.json` and environment variables, with
   `WebApplication.CreateBuilder` and `Host.CreateDefaultBuilder` alike.
 - `ServiceHostFixture.Logs`: what the host logged, through the logging abstraction and Serilog, in Microsoft's
-  `FakeLogCollector`; `UsesMessageBusTestHarness`: the service's buses on the message bus test harness, in memory.
+  `FakeLogCollector`; `RenderedLogs`: its Serilog lines as production's console prints them;
+  `UsesMessageBusTestHarness`: the service's buses on the message bus test harness, in memory.
 - `PostgresContainerFixture`, `RabbitMqContainerFixture` (`Fixtures/`): one container each, on the images production
   runs, `postgres:18` and `rabbitmq:4.3.4-management` (the RabbitMQ Cluster Operator v2.23.0's default)
   (`RESRCIFY_TEST_POSTGRES_IMAGE` / `RESRCIFY_TEST_RABBITMQ_IMAGE` replace the image for every fixture), their
   database and credentials set with init properties (no subclass), a readiness probe, `JoinNetwork(network, aliases)`,
   and for RabbitMQ production's queue defaults (`ProductionQueueDefaults`), `QueuesAsync`, `AddQuorumVirtualHostAsync`,
   `Connection` and `WaitForExchangePublish`.
+- `ImageUnderTest`, `ImageAcquisition` (`Containers/`): another service's image in a system or end-to-end test, pulled
+  fresh (or pinned by digest), and a `[tested against]` line saying exactly which build ran.
+- `HangGuard`, `AwaitableLog<T>`, `CallCounter` (`Waiting/`): waiting for a signal instead of a deadline, with one
+  limit that only catches a hang.
 - With Resrcify.SharedKernel.MessageBus.Testing (which this references): `PublishedEventListener`, a subscriber to
   the integration events a service publishes on a real broker.
 
@@ -226,7 +233,7 @@ can drop it for `UsesNetwork` (its alias is the same, `rabbitmq`). Tests reach t
 `host.RabbitMq`, the broker as the bus connects to it as `host.RabbitMq.Connection`, and its user as
 `host.RabbitMq.BrokerUsername` / `BrokerPassword`.
 
-### What the service logged: `Logs`
+### What the service logged: `Logs`, `RenderedLogs`
 
 `Logs` is Microsoft's `FakeLogCollector` (Microsoft.Extensions.Diagnostics.Testing): every line the host logged that
 its own level filters let through, with its category, level, message, exception and structured state.
@@ -241,6 +248,19 @@ through a sink registered in the container, which `AddServiceTelemetry`'s Serilo
 arrives once (Serilog bypasses the abstraction's providers). A service setting up Serilog itself without
 `ReadFrom.Services(provider)` is heard through the providers only, i.e. not at all. `Logs.Clear()` between tests in a
 shared fixture.
+
+`RenderedLogs` holds what the host logged through Serilog as production's console prints it: each line's level,
+template and message as `RenderedCompactJsonFormatter` (the formatter the services' `appsettings.Production.json`
+configures) renders `@m`. Serilog quotes a string property there unless the template says `:l`, which `Logs`, rendered
+as the logging abstraction does, never shows:
+
+```csharp
+var line = host.RenderedLogs.Lines.ShouldHaveSingleItem(line => line.Template == "Sync of {Shard} failed");
+line.Message.ShouldBe("Sync of \"alpha\" failed");   // production's console, quotes included
+```
+
+It is a sink registered in the container next to `Logs`' (`ILogEventSink`), so it hears a service whose Serilog reads
+them (`AddServiceTelemetry`, `ReadFrom.Services`), and nothing otherwise. `RenderedLogs.Clear()` between tests.
 
 ### The message bus on the test harness: `UsesMessageBusTestHarness`
 
@@ -278,6 +298,35 @@ builder.Services.AddPersistenceServices(configuration);
 
 `builder.Configuration` already has the same JSON files, environment variables and command line: pass it instead
 (`AddPersistenceServices(builder.Configuration)`) before moving such a service to this fixture.
+
+## Waiting for what a test expects: `Waiting/`
+
+A test waits for its condition itself, never for a time: a correct but slow run (a loaded CI runner) then passes,
+and a fast run doesn't wait for nothing.
+
+- **`AwaitableLog<T>`**: what a recorder or spy saw. `Add(entry)` records; `WaitForAsync(matches)` completes with the
+  first matching entry, at once if it is already there, or as soon as it is added. `Entries` lists them in order.
+- **`CallCounter`**: calls a stand-in received. `Increment()` counts one; `ReachedAsync(n)` completes once `n` were made.
+- **`HangGuard`**: the only limit. `AwaitAsync(signal, "what it waits for", diagnostics)` awaits a signal and fails
+  with a `TimeoutException` naming what it waited for (and the diagnostics: a container's log, the last state seen)
+  only after `HangGuard.Limit`, 10 minutes, far beyond any correct run. `UntilAsync(holds, …)` checks state every
+  250 ms until it holds: only for state another process knows with no signal to wait on (a container's readiness,
+  a row another service writes).
+
+```csharp
+var calls = new CallCounter();
+var replies = new AwaitableLog<PingReply>();
+// … a stand-in increments calls, a consumer adds replies …
+
+await HangGuard.AwaitAsync(calls.ReachedAsync(3), "three calls to SwgohApi");
+var reply = await HangGuard.AwaitAsync(replies.WaitForAsync(r => r.Id == id), $"the reply to {id}");
+```
+
+The limit is a hang detector, not an assertion: a passing run never comes near it, so a generous one costs nothing but
+the time a broken run takes to fail. Ten minutes covers the slowest correct waits the services have (a cold image pull
+on a CI runner, a large download through a stand-in); the services' copies used 5 and 10 minutes, and the longer one is
+kept so no correct wait is cut short. Pass `limit:` to fail a broken run sooner. A deterministic test of the guard
+itself passes `limit: TimeSpan.Zero` (and `UntilAsync` `checkEvery: TimeSpan.Zero`).
 
 ## Container fixtures
 
@@ -323,3 +372,39 @@ var created = await events.Received.WaitForAsync<ShardCreated>(e => e.Name == "M
 
 Start it before the publish (a publish before its queue is bound has nowhere to go); disposing it unsubscribes and
 stops it. It replaces Shard's `TopicListener` (raw RabbitMQ on `RebusTopics`) and Sentinel's `EventSubscriber`.
+
+## Another service's image: `ImageUnderTest`
+
+A system or end-to-end test that runs another service's image needs to know it ran the release it meant to. One
+`ImageUnderTest` per image per run (a static of the fixture) starts every container of that image:
+
+```csharp
+private static readonly ImageUnderTest Orders = new(
+    service: "Orders",
+    reference: Environment.GetEnvironmentVariable("ORDERS_IMAGE") ?? "ghcr.io/acme/orders:latest",
+    origin: Environment.GetEnvironmentVariable("ORDERS_IMAGE") is null ? "the default" : "ORDERS_IMAGE",
+    acquisition: Environment.GetEnvironmentVariable("ORDERS_IMAGE_LOCAL") is "1" ? ImageAcquisition.LocalOnly : ImageAcquisition.PullFresh,
+    overrides: "set ORDERS_IMAGE (a tag or a digest), or ORDERS_IMAGE_LOCAL=1 to run the local copy");
+
+var container = await Orders.StartAsync(builder => builder
+    .WithNetwork(network)
+    .WithEnvironment("ConnectionStrings__Database", connectionString)
+    .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r.ForPath("/health/ready"))));
+```
+
+- **`ImageAcquisition.PullFresh`** (for CI): the run's first container pulls the image (Testcontainers'
+  `PullPolicy.Always`), so a stale local copy of a moving tag like `latest` never stands in for a newer release; a
+  failed pull fails the run, naming the image, its registry (`docker login …`) and `overrides`, and never falls back
+  to the local copy. **`ImageAcquisition.LocalOnly`** (offline, or an image built on this machine): the local copy,
+  pulled only when there is none.
+- **Pinned by digest** (`ghcr.io/acme/orders@sha256:…`): exactly that build, never re-pulled when present.
+- After the first start, the run names the image by its registry digest, so every later container runs the same
+  build even if the tag moves meanwhile, and `Description` (also written to the console once, for the CI log) says
+  what it was:
+
+```text
+[tested against] Orders: ghcr.io/acme/orders:latest (the default; pulled fresh) = version 2.4.0, revision 1f3c9e2, ghcr.io/acme/orders@sha256:…, image sha256:…, created 2026-10-18T09:12:44Z
+```
+
+The version and revision come from the image's `org.opencontainers.image.version` / `.revision` labels
+(`(unlabelled)` without them).

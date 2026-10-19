@@ -1,29 +1,37 @@
 using System;
-using System.Collections.Concurrent;
-using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Resrcify.SharedKernel.IntegrationTesting.Waiting;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Postgres.IntegrationTests.Models;
 
-/// <summary>Counts the outbox listener's "Waking" log lines: one per wake-up it gives the outbox.</summary>
+/// <summary>
+/// Counts the outbox listener's "Waking" log lines, one per wake-up it gives the outbox, and signals when the count
+/// reaches a number (<see cref="ReachedAsync"/>): a test waits for the wake-up itself, not for a time.
+/// </summary>
 internal sealed class WakeUpLog : ILoggerProvider
 {
-    private readonly ConcurrentQueue<DateTimeOffset> _wakeUps = new();
+    private readonly CallCounter _wakeUps = new();
 
-    public int Count => _wakeUps.Count;
+    /// <summary>The wake-ups so far.</summary>
+    public int Count
+        => _wakeUps.Count;
 
-    public DateTimeOffset[] WokenAt => [.. _wakeUps];
+    /// <summary>Completes once the listener woke the outbox <paramref name="count"/> times.</summary>
+    public Task ReachedAsync(int count)
+        => _wakeUps.ReachedAsync(count);
 
     public ILogger CreateLogger(string categoryName)
         => categoryName.Contains("PostgresOutboxListener", StringComparison.Ordinal)
             ? new Listener(_wakeUps)
-            : Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
+            : NullLogger.Instance;
 
     public void Dispose()
     {
     }
 
-    private sealed class Listener(ConcurrentQueue<DateTimeOffset> wakeUps) : ILogger
+    private sealed class Listener(CallCounter wakeUps) : ILogger
     {
         public IDisposable? BeginScope<TState>(TState state)
             where TState : notnull
@@ -40,11 +48,7 @@ internal sealed class WakeUpLog : ILoggerProvider
             Func<TState, Exception?, string> formatter)
         {
             if (formatter(state, exception).StartsWith("Waking", StringComparison.Ordinal))
-                wakeUps.Enqueue(TimeProvider.System.GetUtcNow());
+                wakeUps.Increment();
         }
     }
-
-    /// <summary>The wake-ups after the first <paramref name="skip"/> (e.g. the one each connect gives).</summary>
-    public int CountAfter(int skip)
-        => WokenAt.Skip(skip).Count();
 }

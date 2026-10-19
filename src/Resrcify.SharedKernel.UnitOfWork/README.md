@@ -561,8 +561,9 @@ services.AddQuartz(quartz => quartz
 
 Every command job:
 
-- logs a failed result with its errors, at `Warning` when another try may pass (`IsTransient()`) and at `Information`
-  when it is an expected answer; the trigger keeps its schedule;
+- logs a failed result with its errors at `Warning`, transient or not: a scheduled run has no caller to hand its
+  failure to, and production logs at `Warning`, so a `NotFound` or `Validation` failure must not drop to
+  `Information` (an endpoint's and the mediator's expected answers still do); the trigger keeps its schedule;
 - lets a cancellation (shutdown, an interrupt) through;
 - logs any other exception at `Error` and throws it as a `JobExecutionException` (what Quartz expects from a job):
   listeners and Quartz's telemetry see the failed run, and the trigger keeps its schedule (no refire). The services'

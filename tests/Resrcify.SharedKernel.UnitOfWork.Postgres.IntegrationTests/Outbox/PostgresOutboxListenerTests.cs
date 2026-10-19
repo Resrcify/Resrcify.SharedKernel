@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using Resrcify.SharedKernel.IntegrationTesting.Waiting;
 using Resrcify.SharedKernel.Abstractions.UnitOfWork;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 using Resrcify.SharedKernel.UnitOfWork.Postgres.IntegrationTests.Fixtures;
@@ -30,6 +31,9 @@ public sealed class PostgresOutboxListenerTests(
     : IClassFixture<PostgresFixture>
 {
     private static readonly TimeSpan WellUnderThePoll = TimeSpan.FromSeconds(10);
+
+    // A debounce no other timer of the host uses, so DebounceClock tells the listener's apart.
+    private static readonly TimeSpan Debounce = TimeSpan.FromMilliseconds(3_517);
 
     [Fact]
     public async Task ASavedEvent_ShouldBeProcessedWellBeforeTheNextPoll()
@@ -121,53 +125,34 @@ public sealed class PostgresOutboxListenerTests(
         (await Task.WhenAny(handled, Task.Delay(TimeSpan.FromSeconds(1)))).ShouldNotBe(handled);
     }
 
+    /// <summary>
+    /// A burst sent while the listener's debounce is pending wakes the outbox once. The host's clock is held
+    /// (<see cref="DebounceClock"/>): the debounce ends when the test ends it, after the whole burst was sent, so the
+    /// outcome doesn't depend on how fast the machine delivers the notifications (on real time, a loaded machine spread
+    /// them over many debounces and woke the outbox some 20 times).
+    /// </summary>
     [Fact]
     public async Task ABurstOfNotifications_ShouldWakeTheOutboxOnce()
     {
+        var clock = new DebounceClock(Debounce);
         using var wakeUps = new WakeUpLog();
         await using var host = await TestHost.CreateAsync(
             postgres,
-            db => db.WithOutbox().WithOutboxWakeUp(),
-            services => services.AddLogging(logging => logging.SetMinimumLevel(LogLevel.Debug).AddProvider(wakeUps)));
-        await host.StartAndListenAsync();
-        await WaitUntilAsync(() => wakeUps.Count >= 1);   // the wake-up every connect gives
-        var afterConnect = wakeUps.Count;
+            db => db.WithOutbox().WithOutboxWakeUp(wakeUp => wakeUp.Debounce = Debounce),
+            services => services
+                .AddSingleton<TimeProvider>(clock)
+                .AddLogging(logging => logging.SetMinimumLevel(LogLevel.Debug).AddProvider(wakeUps)));
+        await host.Host.StartAsync();
+        await HangGuard.AwaitAsync(wakeUps.ReachedAsync(1), "the wake-up the listener's connect gives");
 
-        await host.NotifyAsync(times: 100);
-        // Until the burst has woken it, then until the wake-ups stop: a fixed wait failed on a loaded machine, where the
-        // notifications took longer to arrive.
-        await WaitUntilAsync(() => wakeUps.CountAfter(afterConnect) >= 1);
-        await WaitUntilQuietAsync(() => wakeUps.Count);
+        await host.NotifyAsync(times: 1);
+        await HangGuard.AwaitAsync(clock.DebouncingAsync(1), "the listener's debounce of the first notification");
+        await host.NotifyAsync(times: 99);
+        clock.EndDebounce();
+        await HangGuard.AwaitAsync(wakeUps.ReachedAsync(2), "the burst's wake-up");
 
-        // One wake-up per notification, a debounce apart, would be dozens (33 before the burst was drained).
-        output.WriteLine($"{wakeUps.CountAfter(afterConnect)} wake-up(s) for 100 notifications");
-        wakeUps.CountAfter(afterConnect).ShouldBeInRange(1, 9);
-    }
-
-    private static async Task WaitUntilQuietAsync(Func<int> count)
-    {
-        var deadline = TimeProvider.System.GetUtcNow() + TimeSpan.FromSeconds(10);
-        var last = count();
-        while (true)
-        {
-            await Task.Delay(TimeSpan.FromMilliseconds(500));
-            var now = count();
-            if (now == last)
-                return;
-            if (TimeProvider.System.GetUtcNow() > deadline)
-                throw new TimeoutException("The outbox kept being woken.");
-            last = now;
-        }
-    }
-
-    private static async Task WaitUntilAsync(Func<bool> condition)
-    {
-        var deadline = TimeProvider.System.GetUtcNow() + TimeSpan.FromSeconds(10);
-        while (!condition())
-        {
-            if (TimeProvider.System.GetUtcNow() > deadline)
-                throw new TimeoutException("The condition wasn't met in time.");
-            await Task.Delay(TimeSpan.FromMilliseconds(20));
-        }
+        // The connect's and the burst's. Another would need another debounce to end, and the clock stands still.
+        wakeUps.Count.ShouldBe(2);
+        output.WriteLine("2 wake-ups: the connect's, and one for the burst of 100 notifications");
     }
 }

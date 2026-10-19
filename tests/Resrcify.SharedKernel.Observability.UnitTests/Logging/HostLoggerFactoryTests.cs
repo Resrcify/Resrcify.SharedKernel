@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Resrcify.SharedKernel.Observability.Extensions;
 using Resrcify.SharedKernel.Observability.Logging;
-using Resrcify.SharedKernel.Observability.UnitTests.Support;
+using Resrcify.SharedKernel.Observability.UnitTests.TelemetryCapture;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;

@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Logging;
 using Resrcify.SharedKernel.Observability.Extensions;
 using Resrcify.SharedKernel.Observability.Logging;
-using Resrcify.SharedKernel.Observability.UnitTests.Support;
+using Resrcify.SharedKernel.Observability.UnitTests.TelemetryCapture;
 using Resrcify.SharedKernel.Results.Diagnostics;
 using Resrcify.SharedKernel.Web.Exceptions;
 using Resrcify.SharedKernel.Web.Extensions;

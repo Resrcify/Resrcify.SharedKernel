@@ -52,7 +52,7 @@ outbox messages.
 | Layer | References | Uses |
 |---|---|---|
 | Domain | `Resrcify.SharedKernel.DomainDrivenDesign` | Raises the domain event (optionally `IDedupable`). |
-| Application | `Resrcify.SharedKernel.Abstractions` | From `Resrcify.SharedKernel.Abstractions.MessageBus`: `IEventBus`, `IIntegrationEventHandler`, `IScatterGatherClient`, `IScatterGatherHandler`, `IScatterGatherRequestHandler`, `IStreamingScatterGatherRequestHandler`, `IGathered`, `IScatterReply` and `IRequestResponder`. |
+| Application | `Resrcify.SharedKernel.Abstractions` | From `Resrcify.SharedKernel.Abstractions.MessageBus`: `IEventBus`, `IIntegrationEventHandler`, `IScatterGatherClient`, `IScatterGatherHandler`, `IScatterGatherRequestHandler`, `IStreamingScatterGatherRequestHandler`, `IGathered`, `GatheredCounts`, `IScatterReply` and `IRequestResponder`. |
 | Infrastructure | `Resrcify.SharedKernel.MessageBus` | `AddMessageBus(...)`: transport, `AddRequest`, `AddScatterGather`, `AddRateLimitedQueue`, `AddEventHandlers`, strategies; `AddHealthChecks().AddMessageBus()`. |
 
 Handlers only see the contracts, so the Application layer never references Rebus or this package. The
@@ -197,6 +197,12 @@ internal sealed class SyncShardRanksHandler(IShardRepository shards)
 
 Publishing the event straight through `IPublisher` runs the same handler in-process, without the
 outbox's durability.
+
+To count what came of a scatter for a summary line, `GatheredCounts.Of(replies)` (Abstractions) gives `Asked`,
+`Answered`, the settled failures by their first error's code (`FailedByCode`, `Failed`, and `FailedCodes`:
+` (RECORDNOTFOUND 3, Unknown 1)`, written `{FailedCodes:l}` in a template), the failures the responder gave up on
+(`GaveUp`) and `Unanswered`; `+` sums several scatters (one per chunk). It only counts: what is logged, and any count
+that needs the responses themselves (an answer that is unusable), stays the service's.
 
 ## Requesting inside a request: gather before the handler
 

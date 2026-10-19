@@ -37,6 +37,8 @@ domain-driven design primitives, result handling, messaging behaviors, repositor
 - Keep public APIs consistent with the existing shared-kernel naming and module boundaries.
 - Place interfaces by reach: an interface used only within one project goes in that project's own `Abstractions/` folder (namespace `Resrcify.SharedKernel.<Module>.Abstractions`); an interface shared across projects goes in the `Resrcify.SharedKernel.Abstractions` project, in the sub-folder matching its concern.
 - Keep namespace declarations aligned to folder structure from `src/` and `tests/` roots.
+- Name a folder for what its types do (`Layering/`, `Outbox/`, `Hosts/`, `Strategies/`), never a catch-all
+  (`Helpers/`, `Support/`, `Shared/`, `Common/`, `Utils/`); an `Extensions/` folder holds extension classes only.
 - Ensure the namespace root reflects the owning module path (for example, `Abstractions/Mediator` maps to `Resrcify.SharedKernel.Abstractions.Mediator`).
 - When moving files between folders, update namespace declarations and related `using` directives in the same change.
 - Preserve existing project style and avoid unrelated refactors while applying namespace corrections.

@@ -3,6 +3,118 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.7.0 (2026-10-19)
+
+### Breaking changes
+
+- **Namespaces renamed, no forwarders** (ArchitectureTesting, UnitOfWork): update the `using`s —
+  `ArchitectureTesting.Helpers` → `.Tests` (`BaseArchitectureTest`), `.Layering` (`Layers`, `LayerAssemblyResolver`),
+  `.PackageRules` (`SharedKernelPackage`); `UnitOfWork.Extensions` → `.Outbox` (`OutboxOptions`, `OutboxLaneOptions`),
+  `.Health` (`QuartzJobsHealthCheckOptions`).
+
+### Behaviour changes
+
+- **A command job's failed result is logged at `Warning`, transient or not** (Resrcify.SharedKernel.UnitOfWork,
+  `CommandJob`, `AsyncCommandJob`): a `NotFound` or `Validation` failure was logged at `Information`, which production
+  (at `Warning`) never shows, so a scheduled run that failed left no trace; Sentinel's own job wrapper logged it at
+  `Error` before the jobs were shared. Exceptions keep their levels (`Error`, `Warning` when transient, `Debug` when
+  logged already); endpoints and the mediator's logging behavior keep an expected answer at `Information`.
+
+### Added
+
+- **`ConventionalApplicationTests.Handlers_Should_NotDependOnSenderOrMediator`: a request handler doesn't send
+  requests** (Resrcify.SharedKernel.ArchitectureTesting). It fails for every mediator request handler
+  (`ICommandHandler<>`, `ICommandHandler<,>`, `IQueryHandler<,>`, `IRequestHandler<,>`,
+  `IValueTaskRequestHandler<,>`, `IStreamRequestHandler<,>`, and the scatter-gather request handlers
+  `IScatterGatherRequestHandler<,,,>` / `IStreamingScatterGatherRequestHandler<,,,>`, which are sent like any request)
+  with a constructor parameter (a primary constructor's included), field or property, its base classes' included, of
+  `ISender` or `IMediator` (or of anything that is one, also wrapped: `Lazy<ISender>`, `Func<IMediator>`, an array),
+  and names each by layer, handler and member (`Infrastructure: <Handler> → constructor parameter 'sender' (ISender)`).
+  It checks every layer assembly, not only Application, since a handler can live in Infrastructure (a scatter-gather
+  request handler) or anywhere the mediator scans. A request sent from inside a handler runs the pipeline again inside
+  the first request's (validation, a second unit of work, …) and hides the workflow; only entry points send
+  (endpoints, Quartz command jobs, bus consumers, UI handlers). Allowed: `IPublisher` (publishing a notification isn't
+  sending a request); integration event handlers, scatter-gather event handlers, request responders and notification
+  handlers, which aren't request handlers; pipeline behaviors; a type nested in a handler (a type of its own).
+
+  Adopting it: apps that inherit `ConventionalApplicationTests` get the rule on upgrade; a handler that sends another
+  request fails it — move the workflow into the handler through its abstractions, or send from the entry point. To keep
+  one for now, override the test and skip it with the reason.
+- **`ConventionalApplicationTests(IReadOnlyDictionary<string, Assembly> layerAssemblies)`**
+  (Resrcify.SharedKernel.ArchitectureTesting): checks the given layer assemblies instead of the ones found by naming
+  convention, as `ConventionalLayerDependencyTests` already could.
+- **Waiting for a signal: `HangGuard`, `AwaitableLog<T>`, `CallCounter`** (Resrcify.SharedKernel.IntegrationTesting,
+  `Waiting`), from the copies in the services' test projects (Discord's, the newest). A test waits for its condition,
+  never for a time: `AwaitableLog<T>.WaitForAsync(matches)` completes as a matching entry is added (at once if one
+  is), `CallCounter.ReachedAsync(n)` once `n` calls were made, and `HangGuard.AwaitAsync(signal, "what", diagnostics)`
+  awaits one with the only limit, `HangGuard.Limit`, which fails a hung test naming what it waited for (and the
+  diagnostics). `HangGuard.UntilAsync(holds, …)` checks state every 250 ms, only for state with no signal (another
+  process's). The limit is **10 minutes**: the services' copies had 5 (Sentinel's `TestClock.HangGuard`,
+  `SwgohApiPod.HangGuard`) and 10 (Discord, SwgohApi); a hang detector costs a passing run nothing, so the longer one
+  is kept, and `limit:` takes a shorter one per wait. New over the copies: the `limit:` and `checkEvery:` parameters
+  (a zero limit tests a hang without waiting), and the message names the limit it used.
+
+  Adopting it: a service deletes its `HangGuard.cs`, `AwaitableLog.cs` and `CallCounter.cs` and adds
+  `using Resrcify.SharedKernel.IntegrationTesting.Waiting;` (Discord: `IntegrationTests/Fixtures`,
+  `Infrastructure.UnitTests/TestDoubles`; Sentinel: its `HangGuard` constants become `HangGuard.Limit`, or
+  `limit: TimeSpan.FromMinutes(5)` to keep its 5).
+- **`ImageUnderTest` and `ImageAcquisition`: another service's image, and exactly which build ran**
+  (Resrcify.SharedKernel.IntegrationTesting, `Containers`), from the identical copies in the services' system and
+  end-to-end tests. `StartAsync(configure)` starts a container of the image: the run's first one pulls it fresh
+  (`PullFresh`: Testcontainers' `PullPolicy.Always`, so a stale `latest` never stands in for a newer release, and a
+  failed pull fails the run naming the image, its registry and how to pick another) or uses the local copy
+  (`LocalOnly`); a reference pinned by digest is used as it is. From then on the run names the image by its registry
+  digest, and `Description` — written once to the console as a `[tested against]` line — gives its version and
+  revision labels, digest, image id and creation time. Generic now: no service's image or registry in it (the
+  failed-pull message names the reference's own registry). Adopting it: a service deletes its
+  `Support/ImageUnderTest.cs` (`Fixtures/` in Discord) and adds `using Resrcify.SharedKernel.IntegrationTesting.Containers;`.
+- **`ServiceHostFixture.RenderedLogs`: what the host logged through Serilog, as production's console prints it**
+  (Resrcify.SharedKernel.IntegrationTesting, `Logging`: `ProductionRenderedLogs`, `ProductionRenderedLine`), from the
+  identical copies in Shard, Sentinel, Oracle and Tournament. Each line's level, template and message as
+  `RenderedCompactJsonFormatter` renders `@m` — a string property quoted (`failed "0"`) unless the template says `:l`,
+  which `Logs` never shows. Registered in the container as an `ILogEventSink` beside `Logs`' sink, so a service whose
+  Serilog reads the container's sinks (`AddServiceTelemetry`) feeds both; `Clear()` between tests. The package now
+  references Serilog.Formatting.Compact 3.0.0. Adopting it: a service deletes its `ProductionRenderedLogs.cs` and
+  its registration in `ConfigureTestServices`, and reads `fixture.RenderedLogs.Lines`.
+- **`ConventionalConfigurationTests`: no type takes `IConfiguration` in a constructor**
+  (Resrcify.SharedKernel.ArchitectureTesting), from SwgohApi's `ConfigurationTests`, in the style of the other
+  conventional bases (`BaseArchitectureTest`'s layer assemblies, `[SkippableFact]`, virtual, a constructor taking the
+  assemblies). `Types_Should_NotTakeIConfigurationInAConstructor` checks every class of every layer assembly but the
+  generated `Program`: a constructor of any visibility with a parameter of `IConfiguration` or anything implementing it
+  (`IConfigurationSection`, …) fails, named by layer, type and parameter. **Constructors only**: a registration
+  extension method taking `IConfiguration` (`AddInfrastructure(this IServiceCollection, IConfiguration)`) is where
+  configuration is read, and passes. Matched by full name, so the package takes no configuration dependency. Adopting
+  it: a service adds `public sealed class ConfigurationTests : ConventionalConfigurationTests;` (SwgohApi replaces its
+  own `ConfigurationTests`); a class that takes `IConfiguration` moves to `IOptions<T>` bound at registration.
+- **`AddServiceApiVersioning` and `ApiVersioning`: the API versioning every service set up** (Resrcify.SharedKernel.Web,
+  `Versioning`). `services.AddServiceApiVersioning(versionReader, configureOpenApi)` is the
+  `AddApiVersioning(...).AddApiExplorer(...).AddOpenApi()` block of each service's `InfrastructureServiceRegistration`
+  (versions reported, 1.0 assumed when unspecified, `'v'VVV` groups with the version substituted in the URL, an
+  OpenAPI document per version); `versionReader` keeps each service's wire behaviour: left out, Asp.Versioning's
+  default (Shard, Oracle); `new MediaTypeApiVersionReader("api-version")` for Sentinel, Tournament and SwgohApi.
+  `configureOpenApi` takes SwgohApi's schema transformer. `ApiVersioning.VersionSet` / `app.CreateApiVersionSet()` is
+  the identical static class of each service's `Presentation/Endpoints/ApiVersioning.cs`. The package now references
+  Asp.Versioning.Http 10.2.3, Asp.Versioning.Mvc.ApiExplorer 10.2.1 and Asp.Versioning.OpenApi 10.2.3 (the versions
+  the services pin). Adopting it: a service deletes its `ApiVersioning.cs`, replaces the block with
+  `services.AddServiceApiVersioning()` (or with its reader), and adds `using Resrcify.SharedKernel.Web.Versioning;`
+  where it calls `CreateApiVersionSet()` or names `ApiVersioning.VersionSet`.
+- **`AddServiceCors(policyName)`: the CORS policy every service defined** (Resrcify.SharedKernel.Web, `Extensions`):
+  any origin, header and method, without credentials, under the service's name for it (`ShardCors`, `SentinelCors`,
+  `OracleCors`, `TournamentCors`, `SwgohApi`), applied as before with `app.UseCors(name)`. The S5122 suppression and its
+  reasoning (bearer tokens guard the routes; `AllowAnyOrigin` excludes credentials) move with it. Adopting it: a
+  service replaces its `services.AddCors(...)` block and `#pragma warning disable S5122` in
+  `PresentationServiceRegistration` with `services.AddServiceCors("<its name>")`.
+- **`GatheredCounts`: what came of a scatter, counted** (Resrcify.SharedKernel.Abstractions, `MessageBus`, next to
+  `IGathered`). `GatheredCounts.Of(gathered)` gives `Asked` (results, failures and unanswered), `Answered`, the
+  settled failures by their first error's code (`FailedByCode`, `Unknown` without one; `Failed`), the failures not in
+  `SettledKeys` (`GaveUp`) and `Unanswered`, with `FailedCodes` (` (RECORDNOTFOUND 3, Unknown 1)`, or nothing) for a
+  log line and `+` / `Add` to sum several scatters. Counts only: no logging, no metrics. It replaces the copies in the
+  apps — Tournament's `GatherOutcome` (`Of` → `GatheredCounts.Of`, the same members plus `Answered`), Shard's loops in
+  `UpdateShardMembersCommandHandler` and `ShardRankSyncRequestedEventHandler`, Sentinel's grouping in
+  `PlayerProfilesGathering` (which counted every failure by code: take `FailedByCode` plus `GaveUp`) and Oracle's
+  per-chunk loop in `GuildProfileGatherer` (sum the chunks with `+`); app-specific counts (Shard's and Sentinel's
+  `Invalid`: answered but unusable) stay in the apps. `IGathered` is unchanged.
+
 ## 4.6.0 (2026-10-19)
 
 ### Added

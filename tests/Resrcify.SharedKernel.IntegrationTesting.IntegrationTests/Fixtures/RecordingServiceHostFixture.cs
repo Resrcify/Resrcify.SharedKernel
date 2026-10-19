@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Resrcify.SharedKernel.IntegrationTesting.Factories;
 using Resrcify.SharedKernel.IntegrationTesting.Fixtures;
-using Resrcify.SharedKernel.IntegrationTesting.IntegrationTests.Support;
+using Resrcify.SharedKernel.IntegrationTesting.IntegrationTests.Docker;
 using Testcontainers.PostgreSql;
 using Xunit;
 

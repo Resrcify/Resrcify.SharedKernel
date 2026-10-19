@@ -4,7 +4,8 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using NetArchTest.Rules;
-using Resrcify.SharedKernel.ArchitectureTesting.Helpers;
+using Resrcify.SharedKernel.ArchitectureTesting.Layering;
+using Resrcify.SharedKernel.ArchitectureTesting.PackageRules;
 using Shouldly;
 using Xunit;
 

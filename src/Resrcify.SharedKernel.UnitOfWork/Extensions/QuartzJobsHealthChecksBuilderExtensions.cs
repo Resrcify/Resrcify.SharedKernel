@@ -5,6 +5,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Resrcify.SharedKernel.Abstractions.Health;
 using Quartz;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
+using Resrcify.SharedKernel.UnitOfWork.Health;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Extensions;
 

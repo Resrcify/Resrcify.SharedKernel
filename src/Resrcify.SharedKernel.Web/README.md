@@ -25,6 +25,8 @@
     - [The outbox](#the-outbox)
     - [Calling another service: resilience keyed on ErrorType](#calling-another-service-resilience-keyed-on-errortype)
     - [Accepting Resrcify.Identity's tokens](#accepting-resrcifyidentitys-tokens)
+    - [API versioning and the OpenAPI documents](#api-versioning-and-the-openapi-documents)
+    - [The CORS policy](#the-cors-policy)
   - [Common issues](#common-issues)
   - [Sample project](#sample-project)
 
@@ -516,6 +518,49 @@ are checked. `RequireHttpsMetadata` is off unless set: the services reach Identi
 The optional `Action<JwtBearerOptions>` runs after, for events or claim mapping.
 `Microsoft.AspNetCore.Authentication.JwtBearer` comes with the package. It replaces Sandbox's `JwtOptions` and `ConfigureJwtOptions`
 (same section, same keys).
+
+### API versioning and the OpenAPI documents
+
+The versioning every service sets up, in one call, and the version set its endpoints use
+(`Resrcify.SharedKernel.Web.Versioning`):
+
+```csharp
+// Infrastructure (or wherever the service registers its HTTP surface)
+services.AddServiceApiVersioning();                                            // the version in the query string or URL
+services.AddServiceApiVersioning(new MediaTypeApiVersionReader("api-version")); // the version in the media type
+
+// Program.cs
+app.CreateApiVersionSet();
+app.MapApiEndpoints();
+if (app.Environment.IsDevelopment())
+    app.MapOpenApi().WithDocumentPerVersion();
+
+// An endpoint
+app.MapGet(Routes.Shards.Get, handler)
+    .WithApiVersionSet(ApiVersioning.VersionSet)
+    .HasApiVersion(new ApiVersion(1, 0));
+```
+
+`AddServiceApiVersioning` reports the supported versions (`api-supported-versions`), takes a request without a version
+as 1.0, groups the API explorer by `'v'VVV` with the version substituted in the URL, and adds an OpenAPI document per
+version (`/openapi/v1.json`). Its `versionReader` is where a request names its version: left out, Asp.Versioning's
+own (the `api-version` query string, or a URL segment); `MediaTypeApiVersionReader("api-version")` reads
+`Accept: application/json; api-version=1.0` instead (an unsupported version there is a 406, in the query string a
+400). It is wire behaviour: keep the reader the service has. `configureOpenApi` configures the documents
+(`options => options.Document.AddSchemaTransformer(...)`). It returns Asp.Versioning's builder, for anything more.
+`ApiVersioning.VersionSet` is version 1.0, reported; `CreateApiVersionSet()` builds it before the endpoints map.
+
+### The CORS policy
+
+```csharp
+services.AddServiceCors("ShardCors");   // Presentation's registration
+app.UseCors("ShardCors");               // Program.cs
+```
+
+A named policy allowing any origin, header and method, without credentials: the one every service defined. CORS isn't
+the authorization boundary: bearer tokens, which a browser never attaches on its own, guard every non-anonymous route,
+and `AllowAnyOrigin` excludes `AllowCredentials`, so no cookie or credentialed cross-site request rides it. A service
+that restricts its origins registers a policy of its own.
 
 ## Common issues
 

@@ -61,6 +61,32 @@ public sealed class ServiceHostFixtureLogsAndBusTests(
     }
 
     [Fact]
+    public async Task RenderedLogs_ShouldHoldTheLineAsProductionPrintsIt_WithItsStringPropertyQuoted()
+    {
+        var message = $"rendered-{Guid.NewGuid():N}";
+        using var client = serilog.CreateClient();
+
+        using var response = await client.PostAsync(new Uri($"/log/{message}", UriKind.Relative), null);
+
+        response.EnsureSuccessStatusCode();
+        var line = serilog.RenderedLogs.Lines.Where(line => line.Template == "Logged {Message}" && line.Message.Contains(message, StringComparison.Ordinal)).ShouldHaveSingleItem();
+        line.Message.ShouldBe($"Logged \"{message}\"");
+        line.Level.ShouldBe(Serilog.Events.LogEventLevel.Information);
+    }
+
+    [Fact]
+    public async Task RenderedLogs_ShouldNotHoldALine_TheServiceLoggedWithoutSerilog()
+    {
+        var message = $"plain-rendered-{Guid.NewGuid():N}";
+        using var client = full.CreateClient();
+
+        using var response = await client.PostAsync(new Uri($"/log/{message}", UriKind.Relative), null);
+
+        response.EnsureSuccessStatusCode();
+        full.RenderedLogs.Lines.ShouldNotContain(line => line.Message.Contains(message, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Harness_ShouldRecordWhatTheServicePublished_WithoutABroker()
     {
         var name = $"harness-{Guid.NewGuid():N}";

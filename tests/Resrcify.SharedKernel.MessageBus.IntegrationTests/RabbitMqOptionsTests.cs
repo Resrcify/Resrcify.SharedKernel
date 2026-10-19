@@ -3,7 +3,8 @@ using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
 using Resrcify.SharedKernel.MessageBus.IntegrationTests.Fixtures;
-using Resrcify.SharedKernel.MessageBus.IntegrationTests.Support;
+using Resrcify.SharedKernel.MessageBus.IntegrationTests.Hosts;
+using Resrcify.SharedKernel.MessageBus.IntegrationTests.Messages;
 using Shouldly;
 using Xunit;
 

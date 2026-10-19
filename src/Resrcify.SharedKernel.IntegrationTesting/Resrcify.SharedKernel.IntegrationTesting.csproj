@@ -22,10 +22,15 @@
     <!-- ServiceHostFixture.Logs: Microsoft's FakeLogCollector, fed by the logging abstraction and by Serilog. -->
     <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
     <PackageReference Include="Serilog" />
+    <!-- ServiceHostFixture.RenderedLogs: the formatter production's console uses. -->
+    <PackageReference Include="Serilog.Formatting.Compact" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- ServiceHostFixture's message bus test harness switch, and RabbitMqContainerFixture.Connection. -->
     <ProjectReference Include="..\Resrcify.SharedKernel.MessageBus.Testing\Resrcify.SharedKernel.MessageBus.Testing.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.IntegrationTesting.UnitTests" />
   </ItemGroup>
 </Project>

@@ -13,7 +13,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Resrcify.SharedKernel.Abstractions.Health;
 using Resrcify.SharedKernel.Web.Extensions;
 using Resrcify.SharedKernel.Web.Health;
-using Resrcify.SharedKernel.Web.UnitTests.Support;
+using Resrcify.SharedKernel.Web.UnitTests.Hosting;
 using Shouldly;
 using Xunit;
 

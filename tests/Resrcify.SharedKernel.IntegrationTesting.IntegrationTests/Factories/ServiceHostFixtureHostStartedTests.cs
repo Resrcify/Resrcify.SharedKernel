@@ -2,8 +2,8 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Tasks;
+using Resrcify.SharedKernel.IntegrationTesting.IntegrationTests.Docker;
 using Resrcify.SharedKernel.IntegrationTesting.IntegrationTests.Fixtures;
-using Resrcify.SharedKernel.IntegrationTesting.IntegrationTests.Support;
 using Shouldly;
 using Xunit;
 

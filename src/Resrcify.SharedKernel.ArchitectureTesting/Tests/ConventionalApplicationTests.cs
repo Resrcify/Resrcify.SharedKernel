@@ -2,11 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using NetArchTest.Rules;
 using Resrcify.SharedKernel.Abstractions.Mediator;
 using Resrcify.SharedKernel.ArchitectureTesting.Extensions;
-using Resrcify.SharedKernel.ArchitectureTesting.Helpers;
+using Resrcify.SharedKernel.ArchitectureTesting.Handlers;
+using Resrcify.SharedKernel.ArchitectureTesting.Layering;
 using Resrcify.SharedKernel.Results.Primitives;
 using Shouldly;
 using Xunit;
@@ -31,6 +33,10 @@ namespace Resrcify.SharedKernel.ArchitectureTesting.Tests;
 /// The three buckets are mutually exclusive — a service that uses split
 /// (Command/Query) gets nothing in the pure-IRequest bucket, and vice versa.
 ///
+/// And in every layer, a request handler doesn't depend on <c>ISender</c> or
+/// <c>IMediator</c> (see <see cref="Handlers_Should_NotDependOnSenderOrMediator"/>):
+/// only entry points send requests.
+///
 /// Every test is <c>virtual</c>. Consumers can override and skip when they
 /// genuinely need to:
 /// <code>
@@ -46,6 +52,19 @@ namespace Resrcify.SharedKernel.ArchitectureTesting.Tests;
 public abstract class ConventionalApplicationTests : BaseArchitectureTest
 {
     private const string Layer = Layers.Application;
+
+    /// <summary>Checks the layer assemblies found by naming convention (see <see cref="LayerAssemblyResolver"/>).</summary>
+    protected ConventionalApplicationTests()
+    {
+    }
+
+    /// <summary>
+    /// Checks the given layer assemblies (layer name → assembly) instead of the ones found by naming convention.
+    /// </summary>
+    protected ConventionalApplicationTests(IReadOnlyDictionary<string, Assembly> layerAssemblies)
+        : base(layerAssemblies)
+    {
+    }
 
     // ─────────────────────────── Commands ───────────────────────────
 
@@ -315,6 +334,51 @@ public abstract class ConventionalApplicationTests : BaseArchitectureTest
 
         var handlers = GetPureRequestHandlerTypes();
         AssertHandlersReturnTaskOfResult(handlers);
+    }
+
+    // ───────────────────── Handlers don't send ──────────────────────
+
+    /// <summary>
+    /// A mediator request handler (<c>ICommandHandler&lt;&gt;</c>, <c>ICommandHandler&lt;,&gt;</c>,
+    /// <c>IQueryHandler&lt;,&gt;</c>, <c>IRequestHandler&lt;,&gt;</c>, <c>IValueTaskRequestHandler&lt;,&gt;</c>,
+    /// <c>IStreamRequestHandler&lt;,&gt;</c>, and the scatter-gather request handlers, which are sent like any
+    /// request) doesn't depend on <see cref="ISender"/> or <see cref="IMediator"/>: no constructor parameter, field
+    /// or property of either (or of anything that is one, also wrapped, like <c>Lazy&lt;ISender&gt;</c>). A request
+    /// sent from inside a handler hides a workflow in the pipeline: it runs the behaviors again (validation, a second
+    /// unit of work, …) inside the first request's. Only the entry points send: endpoints, Quartz command jobs, bus
+    /// consumers, UI handlers.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="IPublisher"/> is allowed: publishing a notification is not sending a request. Integration event
+    /// handlers, scatter-gather event handlers, request responders and pipeline behaviors aren't request handlers
+    /// (they are entry points, or the pipeline itself), so they may send. Every layer is checked, not only
+    /// Application: a handler can live in Infrastructure (a scatter-gather request handler) or anywhere the mediator
+    /// scans.
+    /// </remarks>
+    [SkippableFact]
+    public virtual void Handlers_Should_NotDependOnSenderOrMediator()
+    {
+        Skip.If(LayerAssemblies.Count == 0);
+
+        var failing = new List<string>();
+        foreach (var (layer, assembly) in LayerAssemblies.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            var handlers = Types
+                .InAssembly(assembly)
+                .That()
+                .AreClasses()
+                .GetTypes()
+                .Where(MediatorRequestHandlers.IsRequestHandler);
+
+            foreach (var handler in handlers)
+            {
+                failing.AddRange(MediatorRequestHandlers
+                    .SenderDependencies(handler)
+                    .Select(dependency => $"{layer}: {handler.FullName} → {dependency}"));
+            }
+        }
+
+        failing.ShouldBeEmpty();
     }
 
     private List<Type> GetPureRequestTypes()

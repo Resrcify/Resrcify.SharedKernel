@@ -18,6 +18,8 @@
     </PackageReference>
     <PackageReference Include="Shouldly" />
     <PackageReference Include="Xunit.SkippableFact" />
+    <!-- The configuration rule's samples: IConfiguration, IOptions<T>, IServiceCollection. -->
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
   </ItemGroup>
 
   <ItemGroup>
