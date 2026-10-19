@@ -67,6 +67,16 @@ every package in the repository is released together under one version.
   Serilog reads the container's sinks (`AddServiceTelemetry`) feeds both; `Clear()` between tests. The package now
   references Serilog.Formatting.Compact 3.0.0. Adopting it: a service deletes its `ProductionRenderedLogs.cs` and
   its registration in `ConfigureTestServices`, and reads `fixture.RenderedLogs.Lines`.
+- **`ConventionalConfigurationTests`: no type takes `IConfiguration` in a constructor**
+  (Resrcify.SharedKernel.ArchitectureTesting), from SwgohApi's `ConfigurationTests`, in the style of the other
+  conventional bases (`BaseArchitectureTest`'s layer assemblies, `[SkippableFact]`, virtual, a constructor taking the
+  assemblies). `Types_Should_NotTakeIConfigurationInAConstructor` checks every class of every layer assembly but the
+  generated `Program`: a constructor of any visibility with a parameter of `IConfiguration` or anything implementing it
+  (`IConfigurationSection`, …) fails, named by layer, type and parameter. **Constructors only**: a registration
+  extension method taking `IConfiguration` (`AddInfrastructure(this IServiceCollection, IConfiguration)`) is where
+  configuration is read, and passes. Matched by full name, so the package takes no configuration dependency. Adopting
+  it: a service adds `public sealed class ConfigurationTests : ConventionalConfigurationTests;` (SwgohApi replaces its
+  own `ConfigurationTests`); a class that takes `IConfiguration` moves to `IOptions<T>` bound at registration.
 
 ## 4.6.0 (2026-10-19)
 

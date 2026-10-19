@@ -10,6 +10,7 @@ architecture-test project and xUnit runs its tests there; no rules to write.
 | `ConventionalLayerDependencyTests` | Dependencies point inward: a layer never depends on a higher tier or on a peer (Domain 0, Application 1, Persistence 2, Infrastructure and Presentation 3, Web 4), Web never reaches Domain and Presentation never reaches Persistence. Also which SharedKernel packages each layer may use (a custom layer: what the layers at its tier may use). |
 | `ConventionalDomainTests` | Domain events are sealed and end with `Event`; entities have a private constructor. |
 | `ConventionalApplicationTests` | Commands, queries, requests and their handlers are sealed and named by convention (`…Command`, `…CommandHandler`, `…Query`, `…QueryHandler`, `…Request`, `…RequestHandler`); handlers return `Task<Result>`. In every layer, a request handler doesn't depend on `ISender` or `IMediator` ([below](#handlers-dont-send-requests)). |
+| `ConventionalConfigurationTests` | In every layer, no type takes `IConfiguration` in a constructor: services get validated options (`IOptions<T>`); configuration is read at registration ([below](#configuration-is-read-at-registration)). |
 | `ConventionalPresentationTests` | Endpoints implement `IEndpoint`, are sealed, expose a single map method and go through the mediator; so do controllers. |
 
 The service's layer assemblies are found by name: a test project called `Titan.Shard.ArchitectureTests` uses every
@@ -32,6 +33,7 @@ public sealed class LayerTests : ConventionalLayerDependencyTests;
 public sealed class DomainTests : ConventionalDomainTests;
 public sealed class ApplicationTests : ConventionalApplicationTests;
 public sealed class PresentationTests : ConventionalPresentationTests;
+public sealed class ConfigurationTests : ConventionalConfigurationTests;
 ```
 
 Every test is `virtual`; skip one the service deliberately breaks, with the reason:
@@ -110,6 +112,23 @@ What the rule allows:
 Every layer assembly is checked, not only Application: a handler can live in Infrastructure (a scatter-gather request
 handler) or in any assembly the mediator scans. The rule has no allow-list; a service that must keep a sending handler
 for now skips the test with the reason, as above, until it is moved.
+
+## Configuration is read at registration
+
+`ConventionalConfigurationTests.Types_Should_NotTakeIConfigurationInAConstructor` fails for a class with a constructor
+(of any visibility) that takes `IConfiguration`, or anything implementing it (`IConfigurationSection`,
+`IConfigurationRoot`, `ConfigurationManager`), in any layer assembly:
+
+```text
+Infrastructure: Titan.Shard.Infrastructure.SwgohApiClient → constructor parameter 'configuration' (IConfiguration)
+```
+
+A service reads configuration where it registers (`Program`, the `Add*` registration extensions) and binds it to
+options validated at start-up (`AddOptions<T>().BindConfiguration(…).ValidateOnStart()`), which its classes take as
+`IOptions<T>`: a missing or invalid setting then fails the start, not the first request that reads it, and a test
+hands a class its options without building a configuration. Only constructors are checked: a registration extension
+method taking `IConfiguration` as a parameter is where configuration belongs. The generated `Program` class of a
+top-level program is left out.
 
 ## Sample project
 
