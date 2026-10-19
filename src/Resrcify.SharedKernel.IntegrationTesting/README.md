@@ -18,6 +18,7 @@ RabbitMQ in Testcontainers, and a host fixture that runs a service's `Program` i
   - [A Program with its own configuration builder](#a-program-with-its-own-configuration-builder)
   - [What the service logged: `Logs`](#what-the-service-logged-logs)
   - [The message bus on the test harness: `UsesMessageBusTestHarness`](#the-message-bus-on-the-test-harness-usesmessagebustestharness)
+- [Waiting for what a test expects: `Waiting/`](#waiting-for-what-a-test-expects-waiting)
 - [Container fixtures](#container-fixtures)
   - [A production-like broker](#a-production-like-broker)
   - [Events on a real broker: `PublishedEventListener`](#events-on-a-real-broker-publishedeventlistener)
@@ -39,6 +40,8 @@ RabbitMQ in Testcontainers, and a host fixture that runs a service's `Program` i
   database and credentials set with init properties (no subclass), a readiness probe, `JoinNetwork(network, aliases)`,
   and for RabbitMQ production's queue defaults (`ProductionQueueDefaults`), `QueuesAsync`, `AddQuorumVirtualHostAsync`,
   `Connection` and `WaitForExchangePublish`.
+- `HangGuard`, `AwaitableLog<T>`, `CallCounter` (`Waiting/`): waiting for a signal instead of a deadline, with one
+  limit that only catches a hang.
 - With Resrcify.SharedKernel.MessageBus.Testing (which this references): `PublishedEventListener`, a subscriber to
   the integration events a service publishes on a real broker.
 
@@ -278,6 +281,35 @@ builder.Services.AddPersistenceServices(configuration);
 
 `builder.Configuration` already has the same JSON files, environment variables and command line: pass it instead
 (`AddPersistenceServices(builder.Configuration)`) before moving such a service to this fixture.
+
+## Waiting for what a test expects: `Waiting/`
+
+A test waits for its condition itself, never for a time: a correct but slow run (a loaded CI runner) then passes,
+and a fast run doesn't wait for nothing.
+
+- **`AwaitableLog<T>`**: what a recorder or spy saw. `Add(entry)` records; `WaitForAsync(matches)` completes with the
+  first matching entry, at once if it is already there, or as soon as it is added. `Entries` lists them in order.
+- **`CallCounter`**: calls a stand-in received. `Increment()` counts one; `ReachedAsync(n)` completes once `n` were made.
+- **`HangGuard`**: the only limit. `AwaitAsync(signal, "what it waits for", diagnostics)` awaits a signal and fails
+  with a `TimeoutException` naming what it waited for (and the diagnostics: a container's log, the last state seen)
+  only after `HangGuard.Limit`, 10 minutes, far beyond any correct run. `UntilAsync(holds, …)` checks state every
+  250 ms until it holds: only for state another process knows with no signal to wait on (a container's readiness,
+  a row another service writes).
+
+```csharp
+var calls = new CallCounter();
+var replies = new AwaitableLog<PingReply>();
+// … a stand-in increments calls, a consumer adds replies …
+
+await HangGuard.AwaitAsync(calls.ReachedAsync(3), "three calls to SwgohApi");
+var reply = await HangGuard.AwaitAsync(replies.WaitForAsync(r => r.Id == id), $"the reply to {id}");
+```
+
+The limit is a hang detector, not an assertion: a passing run never comes near it, so a generous one costs nothing but
+the time a broken run takes to fail. Ten minutes covers the slowest correct waits the services have (a cold image pull
+on a CI runner, a large download through a stand-in); the services' copies used 5 and 10 minutes, and the longer one is
+kept so no correct wait is cut short. Pass `limit:` to fail a broken run sooner. A deterministic test of the guard
+itself passes `limit: TimeSpan.Zero` (and `UntilAsync` `checkEvery: TimeSpan.Zero`).
 
 ## Container fixtures
 

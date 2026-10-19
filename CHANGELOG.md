@@ -55,6 +55,21 @@ every package in the repository is released together under one version.
 - **`ConventionalApplicationTests(IReadOnlyDictionary<string, Assembly> layerAssemblies)`**
   (Resrcify.SharedKernel.ArchitectureTesting): checks the given layer assemblies instead of the ones found by naming
   convention, as `ConventionalLayerDependencyTests` already could.
+- **Waiting for a signal: `HangGuard`, `AwaitableLog<T>`, `CallCounter`** (Resrcify.SharedKernel.IntegrationTesting,
+  `Waiting`), from the copies in the services' test projects (Discord's, the newest). A test waits for its condition,
+  never for a time: `AwaitableLog<T>.WaitForAsync(matches)` completes as a matching entry is added (at once if one
+  is), `CallCounter.ReachedAsync(n)` once `n` calls were made, and `HangGuard.AwaitAsync(signal, "what", diagnostics)`
+  awaits one with the only limit, `HangGuard.Limit`, which fails a hung test naming what it waited for (and the
+  diagnostics). `HangGuard.UntilAsync(holds, …)` checks state every 250 ms, only for state with no signal (another
+  process's). The limit is **10 minutes**: the services' copies had 5 (Sentinel's `TestClock.HangGuard`,
+  `SwgohApiPod.HangGuard`) and 10 (Discord, SwgohApi); a hang detector costs a passing run nothing, so the longer one
+  is kept, and `limit:` takes a shorter one per wait. New over the copies: the `limit:` and `checkEvery:` parameters
+  (a zero limit tests a hang without waiting), and the message names the limit it used.
+
+  Adopting it: a service deletes its `HangGuard.cs`, `AwaitableLog.cs` and `CallCounter.cs` and adds
+  `using Resrcify.SharedKernel.IntegrationTesting.Waiting;` (Discord: `IntegrationTests/Fixtures`,
+  `Infrastructure.UnitTests/TestDoubles`; Sentinel: its `HangGuard` constants become `HangGuard.Limit`, or
+  `limit: TimeSpan.FromMinutes(5)` to keep its 5).
 
 ## 4.6.0 (2026-10-19)
 

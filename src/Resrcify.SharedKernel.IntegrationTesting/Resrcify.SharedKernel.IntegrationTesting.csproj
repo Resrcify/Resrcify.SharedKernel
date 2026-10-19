@@ -28,4 +28,7 @@
     <!-- ServiceHostFixture's message bus test harness switch, and RabbitMqContainerFixture.Connection. -->
     <ProjectReference Include="..\Resrcify.SharedKernel.MessageBus.Testing\Resrcify.SharedKernel.MessageBus.Testing.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.IntegrationTesting.UnitTests" />
+  </ItemGroup>
 </Project>
