@@ -89,6 +89,12 @@ every package in the repository is released together under one version.
   the services pin). Adopting it: a service deletes its `ApiVersioning.cs`, replaces the block with
   `services.AddServiceApiVersioning()` (or with its reader), and adds `using Resrcify.SharedKernel.Web.Versioning;`
   where it calls `CreateApiVersionSet()` or names `ApiVersioning.VersionSet`.
+- **`AddServiceCors(policyName)`: the CORS policy every service defined** (Resrcify.SharedKernel.Web, `Extensions`):
+  any origin, header and method, without credentials, under the service's name for it (`ShardCors`, `SentinelCors`,
+  `OracleCors`, `TournamentCors`, `SwgohApi`), applied as before with `app.UseCors(name)`. The S5122 suppression and its
+  reasoning (bearer tokens guard the routes; `AllowAnyOrigin` excludes credentials) move with it. Adopting it: a
+  service replaces its `services.AddCors(...)` block and `#pragma warning disable S5122` in
+  `PresentationServiceRegistration` with `services.AddServiceCors("<its name>")`.
 
 ## 4.6.0 (2026-10-19)
 

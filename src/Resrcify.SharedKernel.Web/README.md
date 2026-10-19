@@ -26,6 +26,7 @@
     - [Calling another service: resilience keyed on ErrorType](#calling-another-service-resilience-keyed-on-errortype)
     - [Accepting Resrcify.Identity's tokens](#accepting-resrcifyidentitys-tokens)
     - [API versioning and the OpenAPI documents](#api-versioning-and-the-openapi-documents)
+    - [The CORS policy](#the-cors-policy)
   - [Common issues](#common-issues)
   - [Sample project](#sample-project)
 
@@ -548,6 +549,18 @@ own (the `api-version` query string, or a URL segment); `MediaTypeApiVersionRead
 400). It is wire behaviour: keep the reader the service has. `configureOpenApi` configures the documents
 (`options => options.Document.AddSchemaTransformer(...)`). It returns Asp.Versioning's builder, for anything more.
 `ApiVersioning.VersionSet` is version 1.0, reported; `CreateApiVersionSet()` builds it before the endpoints map.
+
+### The CORS policy
+
+```csharp
+services.AddServiceCors("ShardCors");   // Presentation's registration
+app.UseCors("ShardCors");               // Program.cs
+```
+
+A named policy allowing any origin, header and method, without credentials: the one every service defined. CORS isn't
+the authorization boundary: bearer tokens, which a browser never attaches on its own, guard every non-anonymous route,
+and `AllowAnyOrigin` excludes `AllowCredentials`, so no cookie or credentialed cross-site request rides it. A service
+that restricts its origins registers a policy of its own.
 
 ## Common issues
 
