@@ -166,8 +166,8 @@ public sealed class OutboxRetryLimitsTests
     [Fact]
     public void Options_ShouldDefaultToThreeAttempts_FiveSecondsToFiveMinutes_AndAnUnsetTransientSchedule()
     {
-        var outbox = new Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxOptions();
-        var lanes = new Resrcify.SharedKernel.UnitOfWork.Extensions.OutboxLaneOptions();
+        var outbox = new Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxOptions();
+        var lanes = new Resrcify.SharedKernel.UnitOfWork.Outbox.OutboxLaneOptions();
 
         outbox.Retries.ShouldBe(new RetrySchedule(3, TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(5)));
         outbox.TransientRetries.ShouldBeNull();

@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Resrcify.SharedKernel.Abstractions.Health;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
+using Resrcify.SharedKernel.UnitOfWork.Health;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Extensions;

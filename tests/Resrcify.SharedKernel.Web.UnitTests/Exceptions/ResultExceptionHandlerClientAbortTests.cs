@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Resrcify.SharedKernel.Web.Extensions;
-using Resrcify.SharedKernel.Web.UnitTests.Support;
+using Resrcify.SharedKernel.Web.UnitTests.Hosting;
 using Shouldly;
 using Xunit;
 

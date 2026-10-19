@@ -38,4 +38,8 @@
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.DomainDrivenDesign\Resrcify.SharedKernel.DomainDrivenDesign.csproj" />
     <ProjectReference Include="..\..\src\Resrcify.SharedKernel.IntegrationTesting\Resrcify.SharedKernel.IntegrationTesting.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- One copy of the bus start that fails on demand, shared with the unit tests (namespace UnitTests.Strategies). -->
+    <Compile Include="..\Resrcify.SharedKernel.MessageBus.UnitTests\Strategies\FailingStartStrategy.cs" Link="Strategies\FailingStartStrategy.cs" />
+  </ItemGroup>
 </Project>

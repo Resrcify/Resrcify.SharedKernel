@@ -1,7 +1,8 @@
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
-using Resrcify.SharedKernel.ArchitectureTesting.Helpers;
+using Resrcify.SharedKernel.ArchitectureTesting.Layering;
+using Resrcify.SharedKernel.ArchitectureTesting.PackageRules;
 using Resrcify.SharedKernel.ArchitectureTesting.Tests;
 using Resrcify.SharedKernel.Repository.Primitives;
 using Resrcify.SharedKernel.Results.Primitives;

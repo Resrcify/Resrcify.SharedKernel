@@ -8,8 +8,8 @@ using Resrcify.SharedKernel.MessageBus.Broker;
 using Resrcify.SharedKernel.MessageBus.Configuration;
 using Resrcify.SharedKernel.MessageBus.Extensions;
 using Resrcify.SharedKernel.MessageBus.IntegrationTests.Fixtures;
-using Resrcify.SharedKernel.MessageBus.IntegrationTests.Support;
 using Resrcify.SharedKernel.MessageBus.ScatterGather;
+using Resrcify.SharedKernel.MessageBus.UnitTests.Strategies;
 using Shouldly;
 using Xunit;
 

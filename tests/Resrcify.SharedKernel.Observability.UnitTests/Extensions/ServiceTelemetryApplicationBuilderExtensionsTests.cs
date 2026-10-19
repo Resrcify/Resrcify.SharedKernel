@@ -16,7 +16,7 @@ using OpenTelemetry.Trace;
 using Resrcify.SharedKernel.Observability.Configuration;
 using Resrcify.SharedKernel.Observability.Extensions;
 using Resrcify.SharedKernel.Observability.Logging;
-using Resrcify.SharedKernel.Observability.UnitTests.Support;
+using Resrcify.SharedKernel.Observability.UnitTests.TelemetryCapture;
 using Serilog.AspNetCore;
 using Serilog.Events;
 using Shouldly;

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Quartz;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
+using Resrcify.SharedKernel.UnitOfWork.Health;
 
 namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 

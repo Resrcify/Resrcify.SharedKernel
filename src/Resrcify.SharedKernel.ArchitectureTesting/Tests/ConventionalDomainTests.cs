@@ -6,7 +6,7 @@ using System.Reflection;
 using NetArchTest.Rules;
 using Resrcify.SharedKernel.Abstractions.DomainDrivenDesign;
 using Resrcify.SharedKernel.ArchitectureTesting.Extensions;
-using Resrcify.SharedKernel.ArchitectureTesting.Helpers;
+using Resrcify.SharedKernel.ArchitectureTesting.Layering;
 using Resrcify.SharedKernel.DomainDrivenDesign.Primitives;
 using Shouldly;
 using Xunit;

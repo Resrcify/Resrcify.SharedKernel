@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Quartz;
 using Resrcify.SharedKernel.UnitOfWork.Abstractions;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
+using Resrcify.SharedKernel.UnitOfWork.Outbox;
 
 namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 

@@ -24,7 +24,7 @@ using Resrcify.SharedKernel.Results.Diagnostics;
 using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.Web.Exceptions;
 using Resrcify.SharedKernel.Web.Extensions;
-using Resrcify.SharedKernel.Web.UnitTests.Support;
+using Resrcify.SharedKernel.Web.UnitTests.Hosting;
 using Shouldly;
 using Xunit;
 

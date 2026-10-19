@@ -17,7 +17,7 @@ using Resrcify.SharedKernel.MessageBus.Abstractions;
 using Resrcify.SharedKernel.MessageBus.Configuration;
 using Resrcify.SharedKernel.MessageBus.Extensions;
 using Resrcify.SharedKernel.MessageBus.RateLimitedQueues;
-using Resrcify.SharedKernel.MessageBus.UnitTests.Support;
+using Resrcify.SharedKernel.MessageBus.UnitTests.Hosting;
 using Resrcify.SharedKernel.Results.Primitives;
 using Shouldly;
 using Xunit;

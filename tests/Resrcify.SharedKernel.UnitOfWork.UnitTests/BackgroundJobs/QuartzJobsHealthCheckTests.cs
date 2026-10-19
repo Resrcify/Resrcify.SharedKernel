@@ -11,6 +11,7 @@ using Quartz;
 using Resrcify.SharedKernel.Abstractions.Health;
 using Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
+using Resrcify.SharedKernel.UnitOfWork.Health;
 using Resrcify.SharedKernel.UnitOfWork.UnitTests.Models;
 using Shouldly;
 using Xunit;

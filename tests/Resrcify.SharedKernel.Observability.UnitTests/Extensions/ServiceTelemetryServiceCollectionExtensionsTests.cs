@@ -22,7 +22,7 @@ using Resrcify.SharedKernel.MessageBus.Diagnostics;
 using Resrcify.SharedKernel.Observability.Configuration;
 using Resrcify.SharedKernel.Observability.Extensions;
 using Resrcify.SharedKernel.Observability.Logging;
-using Resrcify.SharedKernel.Observability.UnitTests.Support;
+using Resrcify.SharedKernel.Observability.UnitTests.TelemetryCapture;
 using Resrcify.SharedKernel.UnitOfWork.Outbox;
 using Serilog.Events;
 using Shouldly;

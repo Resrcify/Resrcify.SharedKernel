@@ -8,7 +8,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Rebus.Transport.InMem;
 using Resrcify.SharedKernel.MessageBus.RateLimitedQueues;
-using Resrcify.SharedKernel.MessageBus.UnitTests.Support;
+using Resrcify.SharedKernel.MessageBus.UnitTests.Hosting;
 using Resrcify.SharedKernel.Results.Primitives;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
 using Shouldly;

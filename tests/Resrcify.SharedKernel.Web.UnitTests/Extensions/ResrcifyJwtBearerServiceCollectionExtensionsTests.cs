@@ -19,7 +19,7 @@ using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 using Resrcify.SharedKernel.Web.Authentication;
 using Resrcify.SharedKernel.Web.Extensions;
-using Resrcify.SharedKernel.Web.UnitTests.Support;
+using Resrcify.SharedKernel.Web.UnitTests.Hosting;
 using Shouldly;
 using Xunit;
 
