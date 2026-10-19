@@ -11,6 +11,14 @@ every package in the repository is released together under one version.
   `.PackageRules` (`SharedKernelPackage`); `UnitOfWork.Extensions` → `.Outbox` (`OutboxOptions`, `OutboxLaneOptions`),
   `.Health` (`QuartzJobsHealthCheckOptions`).
 
+### Behaviour changes
+
+- **A command job's failed result is logged at `Warning`, transient or not** (Resrcify.SharedKernel.UnitOfWork,
+  `CommandJob`, `AsyncCommandJob`): a `NotFound` or `Validation` failure was logged at `Information`, which production
+  (at `Warning`) never shows, so a scheduled run that failed left no trace; Sentinel's own job wrapper logged it at
+  `Error` before the jobs were shared. Exceptions keep their levels (`Error`, `Warning` when transient, `Debug` when
+  logged already); endpoints and the mediator's logging behavior keep an expected answer at `Information`.
+
 ### Added
 
 - **`ConventionalApplicationTests.Handlers_Should_NotDependOnSenderOrMediator`: a request handler doesn't send

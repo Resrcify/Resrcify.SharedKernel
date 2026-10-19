@@ -55,14 +55,19 @@ public sealed class CommandJobTests
         entry.Message.ShouldContain("ping-job");
     }
 
-    [Fact]
-    public async Task Execute_ShouldLogAnExpectedAnswerAtInformation()
+    [Theory]
+    [InlineData(ErrorType.NotFound)]
+    [InlineData(ErrorType.Validation)]
+    [InlineData(ErrorType.Conflict)]
+    public async Task Execute_ShouldLogAFailureThatIsNotTransientAtWarning_WithItsErrors(ErrorType type)
     {
-        Sends(Result.Failure(Error.NotFound("Shard.NotFound", "No shard.")));
+        Sends(Result.Failure(new Error("Shard.Refused", "No shard.", type)));
 
         await _job.Execute(Context());
 
-        _logger.Entries.ShouldHaveSingleItem().Level.ShouldBe(LogLevel.Information);
+        var entry = _logger.Entries.ShouldHaveSingleItem();
+        entry.Level.ShouldBe(LogLevel.Warning);
+        entry.Message.ShouldContain($"Shard.Refused ({type}): No shard.");
     }
 
     [Fact]

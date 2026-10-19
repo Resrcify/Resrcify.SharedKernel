@@ -14,9 +14,10 @@ namespace Resrcify.SharedKernel.UnitOfWork.BackgroundJobs;
 /// <summary>
 /// A Quartz job that sends a command through the mediator (<see cref="ISender"/>) and reports how it went:
 /// <list type="bullet">
-/// <item>a failed result is logged with its errors, at <see cref="LogLevel.Warning"/> when another try may pass
-/// (<see cref="ErrorTypeExtensions.IsTransient"/>) and at <see cref="LogLevel.Information"/> when it is an expected
-/// answer (not found, invalid, ...); the trigger keeps its schedule either way;</item>
+/// <item>a failed result is logged with its errors at <see cref="LogLevel.Warning"/>, whether another try may pass
+/// (<see cref="ErrorTypeExtensions.IsTransient"/>) or not (not found, invalid, ...): nobody waits for a scheduled run's
+/// answer, so its failure is a warning, seen at the level production runs at (an endpoint's or the mediator's expected
+/// answer stays <see cref="LogLevel.Information"/>); the trigger keeps its schedule either way;</item>
 /// <item>a cancellation (the scheduler shutting down, or the job interrupted) goes through as it is;</item>
 /// <item>any other exception is logged at <see cref="LogLevel.Error"/>, or at <see cref="LogLevel.Warning"/> when it is
 /// transient (by the <see cref="ITransientFailureClassifier"/> given, else <see cref="TransientFailures"/>: e.g. a
@@ -80,8 +81,8 @@ public abstract class CommandJob<TCommand, TResponse>
 /// <see cref="LogLevel.Debug"/>, and ends normally, so it counts as a heartbeat for the <c>AddQuartzJobs</c> liveness
 /// check like any other run.
 /// <list type="bullet">
-/// <item>a failed result is logged with its errors, at <see cref="LogLevel.Warning"/> when another try may pass and at
-/// <see cref="LogLevel.Information"/> when it is an expected answer; the trigger keeps its schedule;</item>
+/// <item>a failed result is logged with its errors at <see cref="LogLevel.Warning"/>, transient or not; the trigger
+/// keeps its schedule;</item>
 /// <item>a cancellation (the scheduler shutting down, or the job interrupted), also while the command is made, goes
 /// through as it is;</item>
 /// <item>any other exception, from <see cref="CreateCommandAsync"/> too, is logged at <see cref="LogLevel.Error"/> (at
@@ -269,25 +270,24 @@ internal sealed partial class CommandJobRun<TCommand, TResponse>
     private bool IsTransient(Exception exception)
         => _transientFailures?.IsTransient(exception) ?? TransientFailures.IsTransient(exception);
 
+    // At Warning, transient or not: a scheduled run has no caller to hand its failure to, and production logs at
+    // Warning, so an expected answer (not found, invalid) at Information would leave no trace of the failed run.
     private void LogFailure(
         string job,
         TResponse response)
     {
-        var level = response.Errors.Any(error => error.IsTransient())
-            ? LogLevel.Warning
-            : LogLevel.Information;
-        if (!_logger.IsEnabled(level))
+        if (!_logger.IsEnabled(LogLevel.Warning))
             return;
 
         var errors = string.Join("; ", response.Errors.Select(error => $"{error.Code} ({error.Type}): {error.Message}"));
-        LogFailed(level, job, typeof(TCommand).Name, errors);
+        LogFailed(job, typeof(TCommand).Name, errors);
     }
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Job {Job} had no {Command} to send this run; skipped")]
     private partial void LogSkipped(string job, string command);
 
-    [LoggerMessage(Message = "Job {Job} sent {Command}, which failed: {Errors}")]
-    private partial void LogFailed(LogLevel level, string job, string command, string errors);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Job {Job} sent {Command}, which failed: {Errors}")]
+    private partial void LogFailed(string job, string command, string errors);
 
     [LoggerMessage(Message = "Job {Job} sent {Command}, which threw")]
     private partial void LogThrew(LogLevel level, Exception exception, string job, string command);

@@ -83,6 +83,21 @@ public sealed class AsyncCommandJobTests
     }
 
     [Fact]
+    public async Task Execute_ShouldLogAFailedResultThatIsNotTransientAtWarning()
+    {
+        _sender
+            .Send<Result>(Arg.Any<PingCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result.Failure(Error.Validation("Ping.Invalid", "Nothing to ping.")));
+        var job = new PingWhenAskedJob(_sender, _logger, _ => ValueTask.FromResult<PingCommand?>(new PingCommand()));
+
+        await job.Execute(Context());
+
+        var entry = _logger.Entries.ShouldHaveSingleItem();
+        entry.Level.ShouldBe(LogLevel.Warning);
+        entry.Message.ShouldContain("Ping.Invalid");
+    }
+
+    [Fact]
     public async Task Execute_ShouldLogAnExceptionFromCreateCommandAsyncAtError_AndThrowItAsAJobExecutionException()
     {
         var failure = new InvalidOperationException("the database is down");
