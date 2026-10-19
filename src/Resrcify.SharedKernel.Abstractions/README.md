@@ -20,7 +20,10 @@ It exists to keep dependency direction explicit and prevent circular references 
 ## What you get
 
 - Contracts grouped by module under `src/Resrcify.SharedKernel.Abstractions`:
-    - `Mediator/`
+    - `Mediator/`: the requests, handlers and dispatchers, and the markers the mediator's behaviors act on:
+      `ICachingQuery`, `ITransactionalCommand`, `IIdempotentRequest` (answered with the first result when sent again
+      with its key) and `INonConcurrentRequest` (handled one at a time per request type and `ConcurrencyKey`: another
+      waits, then runs itself; per process, not across replicas; see the Mediator package's "Non-concurrent requests")
     - `MessageBus/`
     - `UnitOfWork/`
     - `DomainDrivenDesign/`
@@ -33,9 +36,10 @@ It exists to keep dependency direction explicit and prevent circular references 
       `RetrySchedule(MaxAttempts, FirstDelay, MaxDelay, Jitter)`, SharedKernel's one backoff: attempts in all, the
       first delay doubling up to the longest (`DelayAfter(failedAttempt)`), which the outbox, the message bus and the
       HTTP resilience pipeline take as their retry options.
-- Interfaces/contracts only, but for the resilience registration and its default classifier. (One interface carries a
+- Interfaces/contracts only, but for the resilience registration and its default classifier. (Some interfaces carry a
   default: `ISingleValueObject`'s static `FromPersisted` is `Create(value).Value` unless the value object implements
-  it.)
+  it; `IIdempotentRequest.IdempotencyScope` and `INonConcurrentRequest.ConcurrencyKey` are `null` unless the request
+  sets them.)
 
 ## Prerequisites
 

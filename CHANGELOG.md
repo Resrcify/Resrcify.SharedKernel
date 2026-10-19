@@ -3,6 +3,49 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.6.0 (2026-10-19)
+
+### Added
+
+- **`INonConcurrentRequest`: requests that run one at a time** (Resrcify.SharedKernel.Abstractions, `Mediator`, and
+  Resrcify.SharedKernel.Mediator). A request implementing it is handled one at a time per request type and
+  `string? ConcurrencyKey` (a default member: `null`): while one is handled, another of the same type and key waits
+  until it has finished, whatever its end (a result, a failure, an exception), and is then handled itself.
+  `null` or empty is one lock for the whole request type; a key narrows it (a shard's ID: different shards side by
+  side). It **serialises, it doesn't coalesce** (the run that waited gets its own result, not the first one's: that is
+  `IIdempotentRequest`'s); it holds **per process**, not across replicas; it **waits rather than refuses**, with
+  nothing timing out on its own; cancelled while waiting (the send's `CancellationToken`), the request isn't handled
+  and the send throws `OperationCanceledException`. It isn't re-entrant: a handler that sends and awaits a request of
+  its own type and key waits for itself. **`NonConcurrentPipelineBehavior<TRequest, TResponse>`**
+  (`Mediator.Behaviors`; `TRequest : INonConcurrentRequest`, `TResponse : Result`, so the container closes it for no
+  other request) holds the lock around the rest of the pipeline; the locks are the mediator's (a singleton per
+  container, registered by `AddMediator`), and a lock is kept only while a run holds it or waits for it, so keys can
+  be as many as the data makes. The lock stays internal: nothing outside the pipeline needs to share it.
+- **`StandardBehavior.NonConcurrent`, in the standard set right after validation**: Logging → Idempotency →
+  Validation → **NonConcurrent** → Transaction → UnitOfWork → Caching. After validation, so an invalid request is
+  refused without waiting; outside the transaction and the unit of work, so the next run starts once the previous one
+  committed and sees what it saved (and waits without holding a connection); outside caching, so a query that waited
+  is answered from what the first one cached instead of missing the cache and running again. Leave it out with
+  `.Without(StandardBehavior.NonConcurrent)`. Like the other request markers, the behavior check
+  (`AddMediator`) refuses a scanned `INonConcurrentRequest` that no registered behavior handles, rather than letting
+  it run concurrently unnoticed. `StandardBehavior.NonConcurrent` is declared last (value 6): order by name.
+
+  Adopting it:
+
+  - **SwgohApi** replaces its `ISingleFlightRequest` (same semantics: serialisation, per process): in
+    `ApplicationServiceRegistration`, `config.AddOpenBehavior(typeof(SingleFlightPipelineBehavior<,>), ServiceLifetime.Singleton)`
+    becomes `config.AddOpenBehavior(typeof(NonConcurrentPipelineBehavior<,>))`, in the same place (its behaviors are
+    added by hand, not as the standard set); `GetGameDataRequest` implements `INonConcurrentRequest` instead and drops
+    `SingleFlightKey => nameof(GetGameDataRequest)` (no key is one lock for the request type, as that constant was);
+    `ISingleFlightRequest`, `SingleFlightPipelineBehavior` and `SingleFlightPipelineBehaviorTests` go.
+    `ClientVersionUpdatorPipelineBehavior` keeps a lock of its own (its `"ClientVersion"` key was never a request's,
+    so it never shared one with the pipeline): one `SemaphoreSlim` in a singleton of SwgohApi's in place of
+    `ISingleFlightLockProvider`.
+  - **Titan services** mark their job commands `INonConcurrentRequest` (with a key where runs for different targets
+    may overlap), so a scheduled Quartz run and an on-demand `POST api/Jobs/run` of the same job never overlap within
+    an instance. Services on `AddStandardBehaviors()` need nothing else; across replicas, a job still needs Quartz's
+    clustering or a lock in the database.
+
 ## 4.5.0 (2026-10-18)
 
 ### Added

@@ -38,6 +38,7 @@ internal static class BehaviorCheck
         (typeof(ICachingQuery), typeof(CachingPipelineBehavior<,>)),
         (typeof(ITransactionalCommand), typeof(TransactionPipelineBehavior<,>)),
         (typeof(IIdempotentRequest), typeof(IdempotencyPipelineBehavior<,>)),
+        (typeof(INonConcurrentRequest), typeof(NonConcurrentPipelineBehavior<,>)),
     ];
 
     private static readonly Dictionary<Type, PipelineKind> BehaviorKinds = new()

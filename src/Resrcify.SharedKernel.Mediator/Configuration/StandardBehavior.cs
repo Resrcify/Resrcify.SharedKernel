@@ -3,11 +3,11 @@ namespace Resrcify.SharedKernel.Mediator.Configuration;
 /// <summary>
 /// The behaviors of the standard set (<see cref="MediatorConfiguration.AddStandardBehaviors"/>). They run in this order,
 /// the first the outermost: <see cref="Logging"/> → <see cref="Idempotency"/> → <see cref="Validation"/> →
-/// <see cref="Transaction"/> → <see cref="UnitOfWork"/> → <see cref="Caching"/>.
+/// <see cref="NonConcurrent"/> → <see cref="Transaction"/> → <see cref="UnitOfWork"/> → <see cref="Caching"/>.
 /// </summary>
 /// <remarks>
-/// The members are not declared in that order (<see cref="Idempotency"/> came last, in 4.0, and keeps its value): use
-/// the names, never the values, to order behaviors.
+/// The members are not declared in that order (<see cref="Idempotency"/> came in 4.0 and <see cref="NonConcurrent"/>
+/// in 4.6, each after the others, and keep their values): use the names, never the values, to order behaviors.
 /// </remarks>
 public enum StandardBehavior
 {
@@ -41,4 +41,13 @@ public enum StandardBehavior
     /// <see cref="UnitOfWork"/>, so a result is kept only once committed and a repeat opens neither.
     /// </summary>
     Idempotency,
+
+    /// <summary>
+    /// <c>NonConcurrentPipelineBehavior</c>: handles an <c>INonConcurrentRequest</c> one at a time per request type and
+    /// concurrency key; another waits until it has finished. Runs right after <see cref="Validation"/>, so an invalid
+    /// request is refused without waiting; outside <see cref="Transaction"/> and <see cref="UnitOfWork"/>, so the next
+    /// run starts once the previous one committed; and outside <see cref="Caching"/>, so a query that waited is answered
+    /// from what the first one cached.
+    /// </summary>
+    NonConcurrent,
 }

@@ -105,8 +105,8 @@ public sealed class MediatorConfiguration
     }
 
     /// <summary>
-    /// Adds the standard behaviors, outermost first: Logging → Idempotency → Validation → Transaction → UnitOfWork →
-    /// Caching (see <see cref="StandardBehavior"/>), after any behavior added before. <paramref name="configure"/> can leave one out
+    /// Adds the standard behaviors, outermost first: Logging → Idempotency → Validation → NonConcurrent → Transaction →
+    /// UnitOfWork → Caching (see <see cref="StandardBehavior"/>), after any behavior added before. <paramref name="configure"/> can leave one out
     /// or put the service's own behaviors between them.
     /// </summary>
     public MediatorConfiguration AddStandardBehaviors(Action<StandardBehaviorsOptions>? configure = null)

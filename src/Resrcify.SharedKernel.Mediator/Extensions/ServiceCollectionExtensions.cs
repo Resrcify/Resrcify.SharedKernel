@@ -66,6 +66,8 @@ public static class ServiceCollectionExtensions
         // Which requests of a scope were answered with an earlier result: the HTTP endpoints read it.
         services.TryAddScoped<IdempotencyContext>();
         services.TryAddScoped<IIdempotencyContext>(provider => provider.GetRequiredService<IdempotencyContext>());
+        // The locks of the non-concurrent requests: one set per container, so every scope's requests share them.
+        services.TryAddSingleton<NonConcurrentLocks>();
 
         return services.AddMediatorRuntime(
             configuration.NotificationPublishStrategy,

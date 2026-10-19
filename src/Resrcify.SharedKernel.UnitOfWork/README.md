@@ -569,6 +569,11 @@ Every command job:
   jobs either swallowed the exception after logging it (Quartz never knew) or let it out raw (Quartz logged it as an
   unhandled error).
 
+Quartz keeps the job's own runs from overlapping (`DisallowConcurrentExecution`), but not a run of its command sent
+from elsewhere: an endpoint that runs the job on demand sends the command straight through the mediator. Make the
+command an `INonConcurrentRequest` (Abstractions; the Mediator package's standard set runs it one at a time), and the
+scheduled run and the on-demand one never overlap within an instance.
+
 A job that reads first and may have nothing to send derives from `AsyncCommandJob<TCommand>` (or
 `AsyncCommandJob<TCommand, TResponse>`; `TCommand` is a class) and overrides `CreateCommandAsync(context, ct)`, which
 returns the command or `null`. A `null` skips the run: it is logged at `Debug` and ends normally, so the job's
