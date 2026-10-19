@@ -77,6 +77,18 @@ every package in the repository is released together under one version.
   configuration is read, and passes. Matched by full name, so the package takes no configuration dependency. Adopting
   it: a service adds `public sealed class ConfigurationTests : ConventionalConfigurationTests;` (SwgohApi replaces its
   own `ConfigurationTests`); a class that takes `IConfiguration` moves to `IOptions<T>` bound at registration.
+- **`AddServiceApiVersioning` and `ApiVersioning`: the API versioning every service set up** (Resrcify.SharedKernel.Web,
+  `Versioning`). `services.AddServiceApiVersioning(versionReader, configureOpenApi)` is the
+  `AddApiVersioning(...).AddApiExplorer(...).AddOpenApi()` block of each service's `InfrastructureServiceRegistration`
+  (versions reported, 1.0 assumed when unspecified, `'v'VVV` groups with the version substituted in the URL, an
+  OpenAPI document per version); `versionReader` keeps each service's wire behaviour: left out, Asp.Versioning's
+  default (Shard, Oracle); `new MediaTypeApiVersionReader("api-version")` for Sentinel, Tournament and SwgohApi.
+  `configureOpenApi` takes SwgohApi's schema transformer. `ApiVersioning.VersionSet` / `app.CreateApiVersionSet()` is
+  the identical static class of each service's `Presentation/Endpoints/ApiVersioning.cs`. The package now references
+  Asp.Versioning.Http 10.2.3, Asp.Versioning.Mvc.ApiExplorer 10.2.1 and Asp.Versioning.OpenApi 10.2.3 (the versions
+  the services pin). Adopting it: a service deletes its `ApiVersioning.cs`, replaces the block with
+  `services.AddServiceApiVersioning()` (or with its reader), and adds `using Resrcify.SharedKernel.Web.Versioning;`
+  where it calls `CreateApiVersionSet()` or names `ApiVersioning.VersionSet`.
 
 ## 4.6.0 (2026-10-19)
 
