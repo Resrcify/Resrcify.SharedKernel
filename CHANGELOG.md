@@ -95,6 +95,16 @@ every package in the repository is released together under one version.
   reasoning (bearer tokens guard the routes; `AllowAnyOrigin` excludes credentials) move with it. Adopting it: a
   service replaces its `services.AddCors(...)` block and `#pragma warning disable S5122` in
   `PresentationServiceRegistration` with `services.AddServiceCors("<its name>")`.
+- **`GatheredCounts`: what came of a scatter, counted** (Resrcify.SharedKernel.Abstractions, `MessageBus`, next to
+  `IGathered`). `GatheredCounts.Of(gathered)` gives `Asked` (results, failures and unanswered), `Answered`, the
+  settled failures by their first error's code (`FailedByCode`, `Unknown` without one; `Failed`), the failures not in
+  `SettledKeys` (`GaveUp`) and `Unanswered`, with `FailedCodes` (` (RECORDNOTFOUND 3, Unknown 1)`, or nothing) for a
+  log line and `+` / `Add` to sum several scatters. Counts only: no logging, no metrics. It replaces the copies in the
+  apps — Tournament's `GatherOutcome` (`Of` → `GatheredCounts.Of`, the same members plus `Answered`), Shard's loops in
+  `UpdateShardMembersCommandHandler` and `ShardRankSyncRequestedEventHandler`, Sentinel's grouping in
+  `PlayerProfilesGathering` (which counted every failure by code: take `FailedByCode` plus `GaveUp`) and Oracle's
+  per-chunk loop in `GuildProfileGatherer` (sum the chunks with `+`); app-specific counts (Shard's and Sentinel's
+  `Invalid`: answered but unusable) stay in the apps. `IGathered` is unchanged.
 
 ## 4.6.0 (2026-10-19)
 
