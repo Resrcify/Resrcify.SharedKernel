@@ -47,6 +47,8 @@
       <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.11.0" />
       <PackageVersion Include="Microsoft.Extensions.Diagnostics.Testing" Version="10.11.0" />
       <PackageVersion Include="Serilog" Version="4.3.0" />
+      <!-- IntegrationTesting: ServiceHostFixture.RenderedLogs renders as production's RenderedCompactJsonFormatter. -->
+      <PackageVersion Include="Serilog.Formatting.Compact" Version="3.0.0" />
       <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
       <PackageVersion Include="Xunit.SkippableFact" Version="1.5.85" />
       <!-- Observability (Resrcify.SharedKernel.Observability): the OpenTelemetry and Serilog wiring every service copied. -->

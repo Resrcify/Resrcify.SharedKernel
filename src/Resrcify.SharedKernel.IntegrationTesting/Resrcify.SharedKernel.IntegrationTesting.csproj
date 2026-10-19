@@ -22,6 +22,8 @@
     <!-- ServiceHostFixture.Logs: Microsoft's FakeLogCollector, fed by the logging abstraction and by Serilog. -->
     <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
     <PackageReference Include="Serilog" />
+    <!-- ServiceHostFixture.RenderedLogs: the formatter production's console uses. -->
+    <PackageReference Include="Serilog.Formatting.Compact" />
   </ItemGroup>
 
   <ItemGroup>

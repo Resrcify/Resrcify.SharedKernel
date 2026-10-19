@@ -15,6 +15,7 @@ using Resrcify.SharedKernel.IntegrationTesting.Fixtures;
 using Resrcify.SharedKernel.IntegrationTesting.Logging;
 using Resrcify.SharedKernel.MessageBus.Testing;
 using Serilog.Core;
+using Serilog.Formatting.Compact;
 using Xunit;
 
 namespace Resrcify.SharedKernel.IntegrationTesting.Factories;
@@ -41,7 +42,7 @@ namespace Resrcify.SharedKernel.IntegrationTesting.Factories;
 /// <para>
 /// What the host logs is in <see cref="Logs"/> (a <see cref="FakeLogCollector"/>), through the logging abstraction's
 /// providers and through Serilog when <c>AddServiceTelemetry</c> set it up (it writes to the sinks registered in the
-/// container). With <see cref="UsesMessageBusTestHarness"/> the service's buses run on <see cref="BusNetwork"/>, in
+/// container); what it logs through Serilog is also in <see cref="RenderedLogs"/>, as production prints it. With <see cref="UsesMessageBusTestHarness"/> the service's buses run on <see cref="BusNetwork"/>, in
 /// memory, recorded by <see cref="Harness"/>: no RabbitMQ.
 /// </para>
 /// <para>
@@ -142,6 +143,14 @@ public abstract class ServiceHostFixture<TProgram>
     /// container (<c>AddServiceTelemetry</c> does). Read it with <c>GetSnapshot()</c>, or wait with <c>WaitForLogAsync</c>.
     /// </summary>
     public FakeLogCollector Logs { get; } = new();
+
+    /// <summary>
+    /// What the host logged through Serilog, each line's message as production's console prints it
+    /// (<see cref="RenderedCompactJsonFormatter"/>'s <c>@m</c>): a string property quoted unless the template says
+    /// <c>:l</c>, which <see cref="Logs"/> (rendered as the logging abstraction does) doesn't show. Empty for a service
+    /// whose Serilog doesn't read the sinks registered in the container. <c>Clear()</c> between tests in a shared fixture.
+    /// </summary>
+    public ProductionRenderedLogs RenderedLogs { get; } = new();
 
     /// <summary>
     /// The in-memory network the service's buses run on with <see cref="UsesMessageBusTestHarness"/>; stand-ins for
@@ -325,6 +334,7 @@ public abstract class ServiceHostFixture<TProgram>
     {
         services.AddLogging(logging => logging.AddProvider(new FakeLoggerProvider(Logs)));
         services.AddSingleton<ILogEventSink>(new FakeLogCollectorSink(Logs));
+        services.AddSingleton<ILogEventSink>(RenderedLogs);
     }
 
     private async Task StartAsync()

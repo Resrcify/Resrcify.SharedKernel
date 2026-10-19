@@ -59,6 +59,14 @@ every package in the repository is released together under one version.
   revision labels, digest, image id and creation time. Generic now: no service's image or registry in it (the
   failed-pull message names the reference's own registry). Adopting it: a service deletes its
   `Support/ImageUnderTest.cs` (`Fixtures/` in Discord) and adds `using Resrcify.SharedKernel.IntegrationTesting.Containers;`.
+- **`ServiceHostFixture.RenderedLogs`: what the host logged through Serilog, as production's console prints it**
+  (Resrcify.SharedKernel.IntegrationTesting, `Logging`: `ProductionRenderedLogs`, `ProductionRenderedLine`), from the
+  identical copies in Shard, Sentinel, Oracle and Tournament. Each line's level, template and message as
+  `RenderedCompactJsonFormatter` renders `@m` — a string property quoted (`failed "0"`) unless the template says `:l`,
+  which `Logs` never shows. Registered in the container as an `ILogEventSink` beside `Logs`' sink, so a service whose
+  Serilog reads the container's sinks (`AddServiceTelemetry`) feeds both; `Clear()` between tests. The package now
+  references Serilog.Formatting.Compact 3.0.0. Adopting it: a service deletes its `ProductionRenderedLogs.cs` and
+  its registration in `ConfigureTestServices`, and reads `fixture.RenderedLogs.Lines`.
 
 ## 4.6.0 (2026-10-19)
 

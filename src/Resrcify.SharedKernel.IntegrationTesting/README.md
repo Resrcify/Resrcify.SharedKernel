@@ -16,7 +16,7 @@ RabbitMQ in Testcontainers, and a host fixture that runs a service's `Program` i
   - [A service without a database](#a-service-without-a-database)
   - [What a service changes](#what-a-service-changes)
   - [A Program with its own configuration builder](#a-program-with-its-own-configuration-builder)
-  - [What the service logged: `Logs`](#what-the-service-logged-logs)
+  - [What the service logged: `Logs`, `RenderedLogs`](#what-the-service-logged-logs-renderedlogs)
   - [The message bus on the test harness: `UsesMessageBusTestHarness`](#the-message-bus-on-the-test-harness-usesmessagebustestharness)
 - [Waiting for what a test expects: `Waiting/`](#waiting-for-what-a-test-expects-waiting)
 - [Container fixtures](#container-fixtures)
@@ -34,7 +34,7 @@ RabbitMQ in Testcontainers, and a host fixture that runs a service's `Program` i
   hosts that own no containers. The settings win over `appsettings*.json` and environment variables, with
   `WebApplication.CreateBuilder` and `Host.CreateDefaultBuilder` alike.
 - `ServiceHostFixture.Logs`: what the host logged, through the logging abstraction and Serilog, in Microsoft's
-  `FakeLogCollector`; `UsesMessageBusTestHarness`: the service's buses on the message bus test harness, in memory.
+  `FakeLogCollector`; `RenderedLogs`: its Serilog lines as production's console prints them; `UsesMessageBusTestHarness`: the service's buses on the message bus test harness, in memory.
 - `PostgresContainerFixture`, `RabbitMqContainerFixture` (`Fixtures/`): one container each, on the images production
   runs, `postgres:18` and `rabbitmq:4.3.4-management` (the RabbitMQ Cluster Operator v2.23.0's default)
   (`RESRCIFY_TEST_POSTGRES_IMAGE` / `RESRCIFY_TEST_RABBITMQ_IMAGE` replace the image for every fixture), their
@@ -232,7 +232,7 @@ can drop it for `UsesNetwork` (its alias is the same, `rabbitmq`). Tests reach t
 `host.RabbitMq`, the broker as the bus connects to it as `host.RabbitMq.Connection`, and its user as
 `host.RabbitMq.BrokerUsername` / `BrokerPassword`.
 
-### What the service logged: `Logs`
+### What the service logged: `Logs`, `RenderedLogs`
 
 `Logs` is Microsoft's `FakeLogCollector` (Microsoft.Extensions.Diagnostics.Testing): every line the host logged that
 its own level filters let through, with its category, level, message, exception and structured state.
@@ -247,6 +247,19 @@ through a sink registered in the container, which `AddServiceTelemetry`'s Serilo
 arrives once (Serilog bypasses the abstraction's providers). A service setting up Serilog itself without
 `ReadFrom.Services(provider)` is heard through the providers only, i.e. not at all. `Logs.Clear()` between tests in a
 shared fixture.
+
+`RenderedLogs` holds what the host logged through Serilog as production's console prints it: each line's level,
+template and message as `RenderedCompactJsonFormatter` (the formatter the services' `appsettings.Production.json`
+configures) renders `@m`. Serilog quotes a string property there unless the template says `:l`, which `Logs`, rendered
+as the logging abstraction does, never shows:
+
+```csharp
+var line = host.RenderedLogs.Lines.ShouldHaveSingleItem(line => line.Template == "Sync of {Shard} failed");
+line.Message.ShouldBe("Sync of \"alpha\" failed");   // production's console, quotes included
+```
+
+It is a sink registered in the container next to `Logs`' (`ILogEventSink`), so it hears a service whose Serilog reads
+them (`AddServiceTelemetry`, `ReadFrom.Services`), and nothing otherwise. `RenderedLogs.Clear()` between tests.
 
 ### The message bus on the test harness: `UsesMessageBusTestHarness`
 
