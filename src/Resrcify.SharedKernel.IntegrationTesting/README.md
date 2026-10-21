@@ -97,7 +97,8 @@ would wait for the first `CreateClient()` or `Services`), then runs `OnHostStart
 `DisposeWithFixture` (last first), then the containers, then deletes the network. A start that fails (a container,
 `StartDependenciesAsync`, `ConfigureSettings`, the host's own start, `OnHostStartedAsync`) tears down what it had
 started the same way before it throws, so nothing is left running, and the failure is the fixture's, not the first
-test's.
+test's. What it throws is the start's own failure (a hosted service's exception, say), with the teardown's failures
+after it in an `AggregateException` when tearing down failed too.
 
 ### Settings
 

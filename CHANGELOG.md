@@ -27,6 +27,16 @@ every package in the repository is released together under one version.
   lines (`services.AddScoped<TStep>()`) can go, as the mediator's scan registers them. An app with no steps and no
   handler-injecting handlers needs nothing but the upgrade.
 
+### Fixed
+
+- **A host that fails to start throws its own failure, never `ObjectDisposedException`**
+  (Resrcify.SharedKernel.IntegrationTesting, `ServiceHostFixture`). A `Program` starts its host itself (`app.Run`), and
+  `WebApplicationFactory` waits for that start by reading the host's services: when the start failed and the `Program`
+  disposed its host first (a race a loaded machine wins, as in the first 4.8.0 release run),
+  `InitializeAsync` threw `ObjectDisposedException: Cannot access a disposed object. Object name: 'IServiceProvider'`
+  in place of the hosted service's exception. The fixture now throws the start's failure (the exception the host
+  logged as it failed, its stack kept), with any teardown failure after it in an `AggregateException`.
+
 ## 4.7.0 (2026-10-19)
 
 ### Breaking changes

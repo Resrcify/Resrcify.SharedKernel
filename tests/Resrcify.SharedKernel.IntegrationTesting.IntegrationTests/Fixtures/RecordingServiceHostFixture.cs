@@ -9,6 +9,7 @@ using Microsoft.Extensions.Hosting;
 using Resrcify.SharedKernel.IntegrationTesting.Factories;
 using Resrcify.SharedKernel.IntegrationTesting.Fixtures;
 using Resrcify.SharedKernel.IntegrationTesting.IntegrationTests.Docker;
+using Resrcify.SharedKernel.IntegrationTesting.Waiting;
 using Testcontainers.PostgreSql;
 using Xunit;
 
@@ -19,7 +20,8 @@ namespace Resrcify.SharedKernel.IntegrationTesting.IntegrationTests.Fixtures;
 /// <c>StartDependenciesAsync</c> handed to <c>DisposeWithFixture</c>: a real container (an <c>IAsyncDisposable</c>)
 /// between two markers (<c>IAsyncLifetime</c>) that note, as they are disposed, whether the container is still there.
 /// Optionally it fails after them, as the host starts, or in <c>OnHostStartedAsync</c>; it counts the runs of
-/// <c>OnHostStartedAsync</c>.
+/// <c>OnHostStartedAsync</c>. <see cref="Failure.HostStartSeenLate"/> fails the host's start and holds the factory at
+/// the racing point (<see cref="CreateHost"/>) until the program has disposed the host it failed to start.
 /// </summary>
 [SuppressMessage(
     "Performance",
@@ -34,6 +36,7 @@ public sealed class RecordingServiceHostFixture(
     public const string HostStartedFailure = "Getting the host ready failed.";
 
     private readonly List<string> _stopped = [];
+    private readonly TaskCompletionSource _hostDisposed = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _hostStartedRuns;
 
     /// <summary>Where the fixture fails, if anywhere.</summary>
@@ -42,6 +45,12 @@ public sealed class RecordingServiceHostFixture(
         None,
         StartDependencies,
         HostStart,
+
+        /// <summary>
+        /// The host fails to start, and the factory looks only once the program has disposed it: the order a loaded
+        /// machine can give, in which <c>WebApplicationFactory</c> finds the host's services disposed.
+        /// </summary>
+        HostStartSeenLate,
         OnHostStarted,
     }
 
@@ -103,8 +112,27 @@ public sealed class RecordingServiceHostFixture(
     protected override void ConfigureTestServices(IServiceCollection services)
     {
         services.AddHostedService(_ => new HostStop(this));
-        if (failure == Failure.HostStart)
+        // Built by the container (the failing start takes it), so the container disposes it with the host.
+        services.AddSingleton(_ => new HostDisposal(_hostDisposed));
+        if (failure is Failure.HostStart or Failure.HostStartSeenLate)
             services.AddHostedService<FailingStart>();
+    }
+
+    // The racing point: WebApplicationFactory has the host the program built and is about to wait for the program's own
+    // start. Held until the program's start has failed and it has disposed the host, then let go.
+    protected override IHost CreateHost(IHostBuilder builder)
+    {
+        if (failure != Failure.HostStartSeenLate)
+            return base.CreateHost(builder);
+
+        ArgumentNullException.ThrowIfNull(builder);
+        var host = builder.Build();
+        HangGuard
+            .AwaitAsync(_hostDisposed.Task, "the program to dispose the host it failed to start")
+            .GetAwaiter()
+            .GetResult();
+        host.Start();
+        return host;
     }
 
     private void Record(string name)
@@ -130,9 +158,21 @@ public sealed class RecordingServiceHostFixture(
         }
     }
 
-    private sealed class FailingStart
+    private sealed class HostDisposal(
+        TaskCompletionSource disposed)
+        : IDisposable
+    {
+        public void Dispose()
+            => disposed.TrySetResult();
+    }
+
+    private sealed class FailingStart(
+        HostDisposal disposal)
         : IHostedService
     {
+        // Taken so the container builds the disposal signal, and disposes it with the host.
+        public HostDisposal Disposal { get; } = disposal;
+
         public Task StartAsync(CancellationToken cancellationToken)
             => throw new InvalidOperationException(HostStartFailure);
 
