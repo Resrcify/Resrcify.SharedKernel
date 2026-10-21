@@ -316,6 +316,24 @@ internal sealed partial class ScatterGatherTransport(
         }
     }
 
+    // The chunks on this client's GatherAsync, the budget on the container's clock (a fake clock in tests).
+    public IAsyncEnumerable<GatheredChunk<TResponse>> GatherInChunksAsync<TRequest, TResponse>(
+        IReadOnlyDictionary<string, TRequest> requests,
+        int chunkSize,
+        Func<int, TimeSpan> timeoutForChunk,
+        TimeSpan? budget = null,
+        CancellationToken cancellationToken = default)
+        where TRequest : class
+        where TResponse : class
+        => ChunkedGathering.GatherAsync<TRequest, TResponse>(
+            this,
+            requests,
+            chunkSize,
+            timeoutForChunk,
+            budget,
+            time,
+            cancellationToken);
+
     public IAsyncEnumerable<IScatterReply<TResponse>> StreamAsync<TRequest, TResponse>(
         IReadOnlyDictionary<string, TRequest> requests,
         TimeSpan timeout,

@@ -3,6 +3,31 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.9.0 (unreleased)
+
+### Added
+
+- **`IScatterGatherClient.GatherInChunksAsync`: a large batch in chunks** (Resrcify.SharedKernel.Abstractions,
+  `MessageBus`, and Resrcify.SharedKernel.MessageBus). `GatherInChunksAsync<TRequest, TResponse>(requests, chunkSize,
+  timeoutForChunk, budget = null, cancellationToken)` asks for the items `chunkSize` at a time, chunk after chunk, each
+  with its own timeout (`timeoutForChunk(items)`), and yields a `GatheredChunk<TResponse>` per chunk, lazily: the next
+  chunk is asked only when the caller asks for it, so a caller that processes each chunk holds one chunk's answers at a
+  time.
+  - **A chunk carries:** `Index`, `Count` (the chunks in all), its `Keys`, its `Timeout`, its `Status` (`Gathered`,
+    `Failed`, `NotAsked`), `Gathered` or `Exception`, and its `Counts` (`GatheredCounts`, `None` when failed or not
+    asked).
+  - **Isolation:** a throwing chunk never stops the next.
+  - **Budget:** counted from the first chunk; a chunk whose timeout no longer fits isn't asked, nor any after it, and
+    they are reported once, as `NotAsked`, with their keys.
+  - **Cancellation** (the caller's) throws. A `chunkSize` below 1 or a negative budget throws at the call.
+  - **Clock:** the message bus' client measures the budget on the container's `TimeProvider`.
+  - **Existing implementers keep compiling:** it is a default interface method on `GatherAsync`. A stand-in that
+    implements only `GatherAsync` gets it, measured on the system clock.
+
+  Adopting it: Oracle's guild gather replaces its own chunk loop (chunk size, per-chunk timeout, budget, a failed chunk
+  logged and skipped, counts summed) with it; Sentinel's tracked-player update gathers and stores chunk by chunk instead
+  of gathering every profile first.
+
 ## 4.8.0 (2026-10-21)
 
 ### Added

@@ -17,4 +17,10 @@
          Domain and Application reference this package. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- ChunkedGathering: the message bus' client runs it on the container's clock. -->
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.MessageBus" />
+    <InternalsVisibleTo Include="Resrcify.SharedKernel.Abstractions.UnitTests" />
+  </ItemGroup>
 </Project>
