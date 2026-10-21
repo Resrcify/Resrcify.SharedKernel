@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -15,6 +14,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 using Resrcify.SharedKernel.UnitOfWork.Extensions;
 using Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Fixtures;
+using Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Migrations;
 using Resrcify.SharedKernel.UnitOfWork.IntegrationTests.Models;
 using Shouldly;
 using Xunit;
@@ -33,12 +33,11 @@ public sealed class MigrateOnStartupServiceTests(
     ITestOutputHelper output)
     : IClassFixture<PostgresFixture>
 {
-    /// <summary>Overrides <see cref="RaceIterations"/> for a long stress run.</summary>
-    private const string RaceIterationsVariable = "RESRCIFY_MIGRATION_RACE_ITERATIONS";
-
-    private const int RaceIterations = 5;
-
-    private const int RaceInstances = 8;
+    /// <summary>
+    /// The instances that create the database at once: enough for a race (one wins, the others collide) and for the
+    /// winner not to be the only one; few enough that the run opens a few dozen connections, not hundreds.
+    /// </summary>
+    private const int RaceInstances = 4;
 
     [Fact]
     public async Task StartAsync_ShouldApplyThePendingMigrations_BeforeTheHostRuns()
@@ -89,40 +88,47 @@ public sealed class MigrateOnStartupServiceTests(
 
     /// <summary>
     /// The deploy of a new service: its database doesn't exist yet and every pod starts at once, each creating the
-    /// database (EF Core does that before it takes the migration lock). Repeated on a fresh database per round.
+    /// database (EF Core does that before it takes the migration lock). The instances are held at their
+    /// <c>CREATE DATABASE</c> until all of them have reached it (<see cref="DatabaseCreationGate"/>), so they create it at
+    /// once on every run, then let go together (the statements collide on the server) or one first (the others then get
+    /// <c>42P04 duplicate_database</c>, which the service must take as a lost race and migrate again).
     /// </summary>
     [Theory]
-    [InlineData(null)]
-    [InlineData("ledgers")]
-    public async Task StartAsync_ShouldStartEveryInstance_WhenTheyCreateTheDatabaseAtOnce(string? historySchema)
-    {
-        var failures = new List<Exception>();
-        var rounds = RaceRounds();
-        using var logs = new FakeLoggerProvider();
-
-        for (var round = 0; round < rounds; round++)
-            failures.AddRange(await StartAtOnceAsync(round, historySchema, logs));
-
-        var retries = logs.Collector.GetSnapshot()
-            .Where(entry => entry.Level == LogLevel.Warning)
-            .Where(entry => entry.Category?.Contains("MigrateOnStartupService", StringComparison.Ordinal) == true)
-            .ToList();
-        output.WriteLine($"{failures.Count} of {rounds * RaceInstances} instances failed to start in {rounds} rounds");
-        output.WriteLine($"{retries.Count} tries lost a creation race and were retried");
-        retries.ForEach(retry => output.WriteLine(retry.Message));
-        failures.ShouldBeEmpty();
-    }
-
-    private async Task<List<Exception>> StartAtOnceAsync(
-        int round,
+    [InlineData(null, false)]
+    [InlineData(null, true)]
+    [InlineData("ledgers", false)]
+    [InlineData("ledgers", true)]
+    public async Task StartAsync_ShouldStartEveryInstance_WhenTheyCreateTheDatabaseAtOnce(
         string? historySchema,
-        FakeLoggerProvider logs)
+        bool oneFirst)
     {
+        using var logs = new FakeLoggerProvider();
+        var gate = new DatabaseCreationGate(RaceInstances, oneFirst ? CreationOrder.OneFirst : CreationOrder.Together);
         var connectionString = postgres.CreateIsolatedConnectionString();
         var hosts = Enumerable.Range(0, RaceInstances)
-            .Select(_ => BuildHost(connectionString, run: "true", historySchema, logs))
+            .Select(_ => BuildHost(connectionString, run: "true", historySchema, logs, gate))
             .ToList();
+
         var starts = hosts.Select(host => host.StartAsync()).ToList();
+        var failures = await FailuresOfAsync(starts);
+
+        var retries = LostRaces(logs);
+        output.WriteLine($"{failures.Count} of {RaceInstances} instances failed to start");
+        failures.ForEach(failure => output.WriteLine(Describe(failure)));
+        retries.ForEach(retry => output.WriteLine(retry));
+        gate.HeldTogether.ShouldBeTrue();
+        gate.Arrived.ShouldBe(RaceInstances);
+        failures.ShouldBeEmpty();
+        (await AppliedMigrationsAsync(hosts[0])).ShouldBe(["20261006000000_CreateLedgers"]);
+        if (oneFirst)
+            retries.Count(retry => retry.Contains("SQLSTATE 42P04", StringComparison.Ordinal)).ShouldBe(RaceInstances - 1);
+        await StopAsync(hosts, starts);
+        await DropAsync(hosts[0]);
+        hosts.ForEach(host => host.Dispose());
+    }
+
+    private static async Task<List<Exception>> FailuresOfAsync(List<Task> starts)
+    {
         try
         {
             await Task.WhenAll(starts);
@@ -132,17 +138,18 @@ public sealed class MigrateOnStartupServiceTests(
             // Every failure is read from its own task below.
         }
 
-        var failures = starts
+        return starts
             .Where(start => start.IsFaulted)
             .Select(start => start.Exception!.GetBaseException())
             .ToList();
-        failures.ForEach(failure => output.WriteLine($"round {round}: {Describe(failure)}"));
-        (await AppliedMigrationsAsync(hosts[0])).ShouldBe(["20261006000000_CreateLedgers"]);
-        await StopAsync(hosts, starts);
-        await DropAsync(hosts[0]);
-        hosts.ForEach(host => host.Dispose());
-        return failures;
     }
+
+    private static List<string> LostRaces(FakeLoggerProvider logs)
+        => logs.Collector.GetSnapshot()
+            .Where(entry => entry.Level == LogLevel.Warning)
+            .Where(entry => entry.Category?.Contains("MigrateOnStartupService", StringComparison.Ordinal) == true)
+            .Select(entry => entry.Message)
+            .ToList();
 
     private static async Task StopAsync(
         List<IHost> hosts,
@@ -154,15 +161,6 @@ public sealed class MigrateOnStartupServiceTests(
                 await hosts[index].StopAsync();
         }
     }
-
-    private static int RaceRounds()
-        => int.TryParse(
-            Environment.GetEnvironmentVariable(RaceIterationsVariable),
-            NumberStyles.Integer,
-            CultureInfo.InvariantCulture,
-            out var rounds)
-            ? rounds
-            : RaceIterations;
 
     private static string Describe(Exception exception)
     {
@@ -180,7 +178,8 @@ public sealed class MigrateOnStartupServiceTests(
         string connectionString,
         string? run,
         string? historySchema = null,
-        FakeLoggerProvider? logs = null)
+        FakeLoggerProvider? logs = null,
+        DatabaseCreationGate? gate = null)
     {
         var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings());
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["Migrations:Run"] = run });
@@ -189,12 +188,17 @@ public sealed class MigrateOnStartupServiceTests(
             if (logs is not null)
                 logging.AddProvider(logs);
         });
-        builder.Services.AddDbContext<MigratedDbContext>(options => options
-            .UseNpgsql(
-                connectionString,
-                npgsql => npgsql.MigrationsHistoryTable(HistoryRepository.DefaultTableName, historySchema))
-            // The migration is written by hand, without a model snapshot to compare with.
-            .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning)));
+        builder.Services.AddDbContext<MigratedDbContext>(options =>
+        {
+            options
+                .UseNpgsql(
+                    connectionString,
+                    npgsql => npgsql.MigrationsHistoryTable(HistoryRepository.DefaultTableName, historySchema))
+                // The migration is written by hand, without a model snapshot to compare with.
+                .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning));
+            if (gate is not null)
+                options.AddInterceptors(gate);
+        });
         builder.Services.AddMigrationsOnStartup<MigratedDbContext>(builder.Configuration);
         return builder.Build();
     }
