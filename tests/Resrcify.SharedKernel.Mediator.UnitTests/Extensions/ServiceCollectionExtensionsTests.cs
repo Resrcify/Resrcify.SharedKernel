@@ -95,6 +95,62 @@ public sealed class ServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public async Task AddMediator_ShouldRegisterTheScannedFeatureSteps_AsThemselves_Scoped_InternalOnesIncluded()
+    {
+        var services = new ServiceCollection();
+
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(ServiceCollectionExtensionsTests).Assembly));
+
+        services.Single(descriptor => descriptor.ServiceType == typeof(GreetingStep)).Lifetime.ShouldBe(ServiceLifetime.Scoped);
+        services.Single(descriptor => descriptor.ServiceType == typeof(InternalGreetingStep)).Lifetime.ShouldBe(ServiceLifetime.Scoped);
+        await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        await using var scope = provider.CreateAsyncScope();
+        var step = scope.ServiceProvider.GetRequiredService<GreetingStep>();
+        scope.ServiceProvider.GetRequiredService<GreetingStep>().ShouldBeSameAs(step);
+        scope.ServiceProvider.GetRequiredService<InternalGreetingStep>().Greet("Ada").ShouldBe("Hello, Ada");
+    }
+
+    [Fact]
+    public void AddMediator_ShouldNotRegisterAnAbstractFeatureStep()
+    {
+        var services = new ServiceCollection();
+
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(ServiceCollectionExtensionsTests).Assembly));
+
+        services.ShouldNotContain(descriptor => descriptor.ServiceType == typeof(AbstractGreetingStep));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AddMediator_ShouldKeepAFeatureStepRegisteredByHand_BeforeTheScan(bool scanTwice)
+    {
+        var services = new ServiceCollection();
+        services.AddTransient<GreetingStep>();
+
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(ServiceCollectionExtensionsTests).Assembly));
+        if (scanTwice)
+            services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(ServiceCollectionExtensionsTests).Assembly));
+
+        services
+            .Where(descriptor => descriptor.ServiceType == typeof(GreetingStep))
+            .ShouldHaveSingleItem()
+            .Lifetime.ShouldBe(ServiceLifetime.Transient);
+    }
+
+    [Fact]
+    public void AddMediator_ShouldRegisterAFeatureStepOnce_WhenTwoCallsScanTheSameAssembly()
+    {
+        var services = new ServiceCollection();
+        var assembly = typeof(ServiceCollectionExtensionsTests).Assembly;
+
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(assembly));
+        services.AddMediator(config => config.RegisterServicesFromAssemblies(assembly));
+
+        services.Where(descriptor => descriptor.ServiceType == typeof(InternalGreetingStep)).ShouldHaveSingleItem();
+    }
+
+    [Fact]
     public async Task Send_ShouldFailWithTheScannedValidatorsErrors_WhenTheValidationBehaviorIsAdded()
     {
         var services = new ServiceCollection();
@@ -473,6 +529,20 @@ public sealed class ServiceCollectionExtensionsTests
             => Scans.Add(assemblies);
     }
 
+    // A feature step nested in the test class (private, as a step below its handler is internal).
+    private sealed class GreetingStep : IFeatureStep
+    {
+        private readonly string _greeting = "Hi";
+
+        public string Greet(string name)
+            => $"{_greeting}, {name}";
+    }
+
+    private abstract class AbstractGreetingStep : IFeatureStep
+    {
+        public abstract string Greet(string name);
+    }
+
     private sealed class PingRequest : IRequest<Result>;
 
     private sealed record ValidatedRequest(string Name) : IRequest<Result>;
@@ -504,4 +574,13 @@ public sealed class ServiceCollectionExtensionsTests
         public Task<Result> Handle(PingRequest request, CancellationToken cancellationToken)
             => Task.FromResult(Result.Success());
     }
+}
+
+/// <summary>A feature step as an app writes one: internal and sealed, below its handler in the handler's file.</summary>
+internal sealed class InternalGreetingStep : IFeatureStep
+{
+    private readonly string _greeting = "Hello";
+
+    public string Greet(string name)
+        => $"{_greeting}, {name}";
 }
