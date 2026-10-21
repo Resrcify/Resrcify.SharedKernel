@@ -35,7 +35,10 @@ namespace Resrcify.SharedKernel.ArchitectureTesting.Tests;
 ///
 /// And in every layer, a request handler doesn't depend on <c>ISender</c> or
 /// <c>IMediator</c> (see <see cref="Handlers_Should_NotDependOnSenderOrMediator"/>):
-/// only entry points send requests.
+/// only entry points send requests. Nor does it take another handler
+/// (<see cref="Handlers_Should_NotDependOnOtherHandlers"/>), and a feature step is
+/// internal, sealed and depends on no sender or handler
+/// (<see cref="FeatureSteps_Should_BeInternalSealed_AndNotDependOnSenderMediatorOrHandlers"/>).
 ///
 /// Every test is <c>virtual</c>. Consumers can override and skip when they
 /// genuinely need to:
@@ -380,6 +383,66 @@ public abstract class ConventionalApplicationTests : BaseArchitectureTest
 
         failing.ShouldBeEmpty();
     }
+
+    /// <summary>
+    /// A request handler (the ones <see cref="Handlers_Should_NotDependOnSenderOrMediator"/> checks) doesn't take
+    /// another handler in its constructor: no handler interface (<c>IRequestHandler&lt;,&gt;</c>,
+    /// <c>ICommandHandler&lt;&gt;</c>, ...), no handler class, and no <c>IEnumerable</c>, <c>Lazy</c>, <c>Func</c> or
+    /// array of one. A use case another needs is a feature step (<see cref="IFeatureStep"/>), injected by both.
+    /// </summary>
+    /// <remarks>
+    /// Integration event handlers and pipeline behaviors aren't request handlers, so they aren't checked; the same layer
+    /// assemblies are.
+    /// </remarks>
+    [SkippableFact]
+    public virtual void Handlers_Should_NotDependOnOtherHandlers()
+    {
+        Skip.If(LayerAssemblies.Count == 0);
+
+        var failing = new List<string>();
+        foreach (var (layer, assembly) in LayerAssemblies.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            foreach (var handler in ClassesOf(assembly).Where(MediatorRequestHandlers.IsRequestHandler))
+            {
+                failing.AddRange(MediatorRequestHandlers
+                    .HandlerDependencies(handler)
+                    .Select(dependency => $"{layer}: {handler.FullName} → {dependency}"));
+            }
+        }
+
+        failing.ShouldBeEmpty();
+    }
+
+    /// <summary>
+    /// A feature step (a non-abstract class implementing <see cref="IFeatureStep"/>) is internal and sealed, and doesn't
+    /// depend on <see cref="ISender"/>, <see cref="IMediator"/> or a request handler: it is a use case's logic, called by
+    /// its handler and by orchestrators, and never sends. Every layer assembly is checked.
+    /// </summary>
+    [SkippableFact]
+    public virtual void FeatureSteps_Should_BeInternalSealed_AndNotDependOnSenderMediatorOrHandlers()
+    {
+        Skip.If(LayerAssemblies.Count == 0);
+
+        var failing = new List<string>();
+        foreach (var (layer, assembly) in LayerAssemblies.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            foreach (var step in ClassesOf(assembly).Where(FeatureSteps.IsFeatureStep))
+            {
+                failing.AddRange(FeatureSteps
+                    .Violations(step)
+                    .Select(violation => $"{layer}: {step.FullName} → {violation}"));
+            }
+        }
+
+        failing.ShouldBeEmpty();
+    }
+
+    private static IEnumerable<Type> ClassesOf(Assembly assembly)
+        => Types
+            .InAssembly(assembly)
+            .That()
+            .AreClasses()
+            .GetTypes();
 
     private List<Type> GetPureRequestTypes()
         => Types

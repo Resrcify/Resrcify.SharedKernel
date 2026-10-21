@@ -20,6 +20,8 @@
     <PackageReference Include="Xunit.SkippableFact" />
     <!-- The configuration rule's samples: IConfiguration, IOptions<T>, IServiceCollection. -->
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+    <!-- The handler and feature step samples log: ILogger<T>. -->
+    <PackageReference Include="Microsoft.Extensions.Logging" />
   </ItemGroup>
 
   <ItemGroup>

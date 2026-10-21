@@ -64,7 +64,8 @@ public sealed class MediatorConfiguration
     /// <summary>
     /// Registers the request handlers (<see cref="IRequestHandler{TRequest, TResponse}"/>,
     /// <see cref="IValueTaskRequestHandler{TRequest, TResponse}"/>, <see cref="IStreamRequestHandler{TRequest, TResponse}"/>),
-    /// notification handlers (<see cref="INotificationHandler{TNotification}"/>) and FluentValidation validators
+    /// notification handlers (<see cref="INotificationHandler{TNotification}"/>), feature steps (every
+    /// <see cref="IFeatureStep"/> as itself, scoped, internal ones included, unless registered already) and FluentValidation validators
     /// (every <c>IValidator&lt;T&gt;</c>, internal ones included, scoped, unless <see cref="SkipValidatorScan"/>) of
     /// <paramref name="assemblies"/>.
     /// Behaviors and processors in them are not registered: add them with <see cref="AddOpenBehavior(Type)"/>,

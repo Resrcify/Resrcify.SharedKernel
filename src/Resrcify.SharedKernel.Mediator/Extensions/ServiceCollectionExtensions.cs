@@ -19,7 +19,8 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Registers the mediator: the handlers of the assemblies <paramref name="configure"/> names
-    /// (<see cref="MediatorConfiguration.RegisterServicesFromAssemblies"/>), their FluentValidation validators (unless
+    /// (<see cref="MediatorConfiguration.RegisterServicesFromAssemblies"/>), their feature steps (each
+    /// <see cref="IFeatureStep"/> as itself, scoped, unless registered already), their FluentValidation validators (unless
     /// <see cref="MediatorConfiguration.SkipValidatorScan"/>), and the behaviors and processors it adds, in order. Each request's pipeline (its handler, behaviors and processors) is
     /// resolved from the container as one service, so the container builds it with their lifetimes: transient unless
     /// registered otherwise, the mediator too (<see cref="MediatorConfiguration.UseMediatorLifetime"/>).
@@ -131,6 +132,8 @@ public static class ServiceCollectionExtensions
 
             foreach (var type in types)
             {
+                services.RegisterFeatureStep(type);
+
                 var implementedInterfaces = type.GetInterfaces()
                     .Where(i => i.IsGenericType)
                     .Where(i => SupportedOpenGenericTypes.Contains(i.GetGenericTypeDefinition()));
@@ -168,6 +171,23 @@ public static class ServiceCollectionExtensions
 
         services.AnnounceAssemblyScan(assemblies);
         return services;
+    }
+
+    /// <summary>
+    /// Registers a feature step (<see cref="IFeatureStep"/>) as itself, scoped: its handler and the orchestrators inject
+    /// it by its class. One registered already (by hand, or by another scan) is kept.
+    /// </summary>
+    private static void RegisterFeatureStep(
+        this IServiceCollection services,
+        Type type)
+    {
+        if (!typeof(IFeatureStep).IsAssignableFrom(type))
+            return;
+
+        var step = type.ContainsGenericParameters
+            ? type.GetGenericTypeDefinition()
+            : type;
+        services.TryAdd(ServiceDescriptor.Scoped(step, step));
     }
 
     /// <summary>

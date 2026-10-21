@@ -3,6 +3,30 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.8.0 (2026-10-21)
+
+### Added
+
+- **`IFeatureStep`: a use case's logic next to its handler** (Resrcify.SharedKernel.Abstractions, `Mediator`, and
+  Resrcify.SharedKernel.Mediator). A marker for a class holding a use case's logic, kept in its handler's file below
+  the handler and injected by that handler and by orchestrators: its dependencies by constructor, its inputs as
+  parameters, a `Result` back; it never saves, never sends a request and never depends on a handler.
+  `RegisterServicesFromAssemblies` registers every non-abstract class implementing it as itself, scoped, internal ones
+  included; one registered already (by hand, or by another scan) is kept.
+- **`ConventionalApplicationTests.Handlers_Should_NotDependOnOtherHandlers`** (Resrcify.SharedKernel.ArchitectureTesting):
+  no request handler's constructor takes a handler interface (`IRequestHandler<,>`, `ICommandHandler<>`, ...), a handler
+  class, or an `IEnumerable<>`, `Lazy<>`, `Func<>` or array of one, in any layer assembly (the scope of
+  `Handlers_Should_NotDependOnSenderOrMediator`); integration event handlers and behaviors aren't checked.
+- **`ConventionalApplicationTests.FeatureSteps_Should_BeInternalSealed_AndNotDependOnSenderMediatorOrHandlers`**
+  (Resrcify.SharedKernel.ArchitectureTesting): a feature step is internal and sealed, with no `ISender` or `IMediator`
+  (constructor parameter, field or property, also wrapped) and no request handler in its constructor.
+
+  Adopting it: apps that inherit `ConventionalApplicationTests` get both rules on upgrade. An orchestrator that injects
+  other handlers moves each use case's logic into a feature step (`internal sealed class <Step> : IFeatureStep`, below
+  its handler in the handler's file), which the handler and the orchestrator both inject; the steps' registration
+  lines (`services.AddScoped<TStep>()`) can go, as the mediator's scan registers them. An app with no steps and no
+  handler-injecting handlers needs nothing but the upgrade.
+
 ## 4.7.0 (2026-10-19)
 
 ### Breaking changes

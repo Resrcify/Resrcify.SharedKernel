@@ -9,7 +9,7 @@ architecture-test project and xUnit runs its tests there; no rules to write.
 |---|---|
 | `ConventionalLayerDependencyTests` | Dependencies point inward: a layer never depends on a higher tier or on a peer (Domain 0, Application 1, Persistence 2, Infrastructure and Presentation 3, Web 4), Web never reaches Domain and Presentation never reaches Persistence. Also which SharedKernel packages each layer may use (a custom layer: what the layers at its tier may use). |
 | `ConventionalDomainTests` | Domain events are sealed and end with `Event`; entities have a private constructor. |
-| `ConventionalApplicationTests` | Commands, queries, requests and their handlers are sealed and named by convention (`…Command`, `…CommandHandler`, `…Query`, `…QueryHandler`, `…Request`, `…RequestHandler`); handlers return `Task<Result>`. In every layer, a request handler doesn't depend on `ISender` or `IMediator` ([below](#handlers-dont-send-requests)). |
+| `ConventionalApplicationTests` | Commands, queries, requests and their handlers are sealed and named by convention (`…Command`, `…CommandHandler`, `…Query`, `…QueryHandler`, `…Request`, `…RequestHandler`); handlers return `Task<Result>`. In every layer, a request handler doesn't depend on `ISender` or `IMediator` ([below](#handlers-dont-send-requests)) nor on another handler, and a feature step is internal, sealed and depends on neither ([below](#handlers-dont-take-handlers-feature-steps-dont-send)). |
 | `ConventionalConfigurationTests` | In every layer, no type takes `IConfiguration` in a constructor: services get validated options (`IOptions<T>`); configuration is read at registration ([below](#configuration-is-read-at-registration)). |
 | `ConventionalPresentationTests` | Endpoints implement `IEndpoint`, are sealed, expose a single map method and go through the mediator; so do controllers. |
 
@@ -115,6 +115,29 @@ What the rule allows:
 Every layer assembly is checked, not only Application: a handler can live in Infrastructure (a scatter-gather request
 handler) or in any assembly the mediator scans. The rule has no allow-list; a service that must keep a sending handler
 for now skips the test with the reason, as above, until it is moved.
+
+## Handlers don't take handlers; feature steps don't send
+
+Two more facts of `ConventionalApplicationTests`, over the same layer assemblies as the sender rule:
+
+- **`Handlers_Should_NotDependOnOtherHandlers`**: no request handler's constructor takes another handler: a handler
+  interface (`IRequestHandler<,>`, `ICommandHandler<>`, `ICommandHandler<,>`, `IQueryHandler<,>`, ...), a handler
+  class, or an `IEnumerable<>`, `Lazy<>`, `Func<>` or array of one. A handler's own `ILogger<THandler>` (a generic
+  argument, not a dependency) is fine. A use case another needs moves into a feature step (`IFeatureStep`, Mediator)
+  that both inject. Integration event handlers and pipeline behaviors aren't request handlers, so they aren't checked.
+
+  ```text
+  Application: Titan.Oracle.Application.Features.Oracles.UpdateOracle.UpdateOracleCommandHandler → constructor parameter 'guilds' (ICommandHandler<UpdateGuildsCommand>)
+  ```
+
+- **`FeatureSteps_Should_BeInternalSealed_AndNotDependOnSenderMediatorOrHandlers`**: every non-abstract class
+  implementing `IFeatureStep` is internal (not visible outside its assembly) and sealed, and has no constructor
+  parameter, field or property of `ISender` or `IMediator` (also wrapped) and no constructor parameter that is a
+  request handler. `IPublisher` is allowed, as for handlers.
+
+  ```text
+  Application: Titan.Oracle.Application.Features.Guilds.UpdateGuilds.GuildsUpdate → is not sealed
+  ```
 
 ## Configuration is read at registration
 
