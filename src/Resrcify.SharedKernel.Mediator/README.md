@@ -24,6 +24,7 @@ The contracts live in `Resrcify.SharedKernel.Abstractions.Mediator`, so the Doma
       - [ValueTask handler example](#valuetask-handler-example)
     - [Notifications](#notifications)
     - [Streaming Requests](#streaming-requests)
+    - [Feature steps](#feature-steps)
   - [Pipeline Behaviors](#pipeline-behaviors)
     - [The standard set](#the-standard-set)
     - [The behavior check](#the-behavior-check)
@@ -165,6 +166,8 @@ Mediator contracts are in `src/Resrcify.SharedKernel.Abstractions/Mediator` (nam
     - `IIdempotentRequest` (`IdempotencyKey`, `IdempotencyScope`): answered with the first result when sent again with
       its key
     - `INonConcurrentRequest` (`ConcurrencyKey`, `null` by default): handled one at a time per request type and key
+- **Feature steps**
+    - `IFeatureStep`: a use case's logic next to its handler, registered as itself, scoped ([below](#feature-steps))
 
 ## Usage Guide
 
@@ -315,6 +318,50 @@ await foreach (var item in streamSender.CreateStream(new GetNumbersStream(10), c
         // consume stream item
 }
 ```
+
+### Feature steps
+
+A use case's logic lives in a feature step, next to its handler in the handler's file: the handler stays thin (it gets
+the inputs, calls the step, saves), and an orchestrator that runs several use cases injects their steps, never their
+handlers.
+
+```csharp
+// Features/Guilds/UpdateGuilds/UpdateGuildsCommandHandler.cs
+internal sealed class UpdateGuildsCommandHandler(
+    GuildsUpdate update,
+    IUnitOfWork unitOfWork)
+    : ICommandHandler<UpdateGuildsCommand>
+{
+    public async Task<Result> Handle(UpdateGuildsCommand request, CancellationToken cancellationToken)
+    {
+        var updated = await update.RunAsync(request.GuildIds, cancellationToken);
+        if (updated.IsFailure)
+            return updated;
+
+        await unitOfWork.CompleteAsync(cancellationToken);
+        return Result.Success();
+    }
+}
+
+internal sealed partial class GuildsUpdate(
+    IGuildRepository guilds,
+    ILogger<GuildsUpdate> logger)
+    : IFeatureStep
+{
+    public async Task<Result> RunAsync(IReadOnlyCollection<string> guildIds, CancellationToken cancellationToken)
+    {
+        // fetch, call the domain, log the summary line: no save, no request sent
+    }
+}
+```
+
+`IFeatureStep` is a marker (`Resrcify.SharedKernel.Abstractions.Mediator`). A step's dependencies come in by
+constructor, its inputs are parameters, and it returns a `Result`. It never saves (its handler or orchestrator owns the
+unit of work), never sends a request (no `ISender` or `IMediator`) and never depends on a handler.
+`RegisterServicesFromAssemblies` registers every non-abstract class implementing it as itself, **scoped**, internal ones
+included, so no step needs a registration line; one the service registered already (by hand, with another lifetime) is
+kept. ArchitectureTesting's `ConventionalApplicationTests` checks the rules: a step is internal and sealed and depends
+on no sender, mediator or handler, and no handler takes another handler.
 
 ## Pipeline Behaviors
 
@@ -580,6 +627,7 @@ When nothing listens, a send costs one check: no span, no clock reading, no tags
 - request handlers (`IRequestHandler<,>`, `IValueTaskRequestHandler<,>`)
 - stream handlers (`IStreamRequestHandler<,>`)
 - notification handlers (`INotificationHandler<>`)
+- feature steps (every `IFeatureStep`, internal ones included, as itself, scoped; one registered already is kept)
 - FluentValidation validators (every `IValidator<T>`, internal ones included, scoped, as itself too), as
   `AddValidatorsFromAssembly(assembly, includeInternalTypes: true)` registers them and with its semantics: one
   registered already, by that call before or after `AddMediator` or by hand, isn't registered again, so the validation
