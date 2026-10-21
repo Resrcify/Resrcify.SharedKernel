@@ -67,6 +67,49 @@ internal static class MediatorRequestHandlers
             .ToList();
     }
 
+    /// <summary>
+    /// The constructor parameters of <paramref name="type"/> that are a request handler: a handler interface
+    /// (<see cref="IRequestHandler{TRequest, TResponse}"/>, <c>ICommandHandler&lt;&gt;</c>, ...), a handler class, or an
+    /// <see cref="IEnumerable{T}"/>, <see cref="Lazy{T}"/>, <see cref="Func{TResult}"/> or array of one, described for
+    /// a failure message, e.g. <c>constructor parameter 'inner' (ICommandHandler&lt;PayCommand&gt;)</c>. Another
+    /// generic argument (a handler's own <c>ILogger&lt;THandler&gt;</c>) isn't a dependency on it.
+    /// </summary>
+    public static IReadOnlyList<string> HandlerDependencies(Type type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+
+        return type
+            .GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .SelectMany(constructor => constructor.GetParameters())
+            .Where(parameter => IsHandler(parameter.ParameterType))
+            .Select(parameter => $"constructor parameter '{parameter.Name}' ({Describe(parameter.ParameterType)})")
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private static readonly Type[] HandlerWrappers =
+    [
+        typeof(IEnumerable<>),
+        typeof(Lazy<>),
+        typeof(Func<>),
+    ];
+
+    private static bool IsHandler(Type type)
+    {
+        if (type.HasElementType)
+            return IsHandler(type.GetElementType()!);
+
+        if (type.IsGenericType && HandlerWrappers.Contains(type.GetGenericTypeDefinition()))
+            return type.GetGenericArguments().Any(IsHandler);
+
+        return IsHandlerContract(type)
+            || type.GetInterfaces().Any(IsHandlerContract);
+    }
+
+    private static bool IsHandlerContract(Type type)
+        => type.IsGenericType
+            && RequestHandlerInterfaces.Contains(type.GetGenericTypeDefinition());
+
     private static IEnumerable<string> ConstructorParameters(Type handler)
         => handler
             .GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
