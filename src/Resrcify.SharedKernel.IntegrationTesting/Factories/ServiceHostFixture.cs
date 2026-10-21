@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -276,7 +277,10 @@ public abstract class ServiceHostFixture<TProgram>
 
     /// <summary>
     /// Starts the containers, <see cref="StartDependenciesAsync"/>, the settings, then the host, and runs
-    /// <see cref="OnHostStartedAsync"/>. On a failure it tears down what it had started, then throws.
+    /// <see cref="OnHostStartedAsync"/>. On a failure it tears down what it had started, then throws the failure: the
+    /// host's own start failure when that is what failed (even when the Program disposed its host before
+    /// <c>WebApplicationFactory</c> looked), and an <see cref="AggregateException"/> with it first and the teardown's
+    /// failures after when tearing down failed too.
     /// </summary>
     public async Task InitializeAsync()
     {
@@ -364,9 +368,37 @@ public abstract class ServiceHostFixture<TProgram>
 
         // WebApplicationFactory builds and starts the host on first use (Services, CreateClient): start it here, so a
         // host that can't start fails the fixture (and tears it down) rather than the first test.
-        var services = Services;
+        var services = StartHost();
         await OnHostStartedAsync(services, _lifetime.Token);
     }
+
+    /// <summary>The host's own category: it logs a start that failed, with the exception, before it throws it.</summary>
+    private const string HostCategory = "Microsoft.Extensions.Hosting.Internal.Host";
+
+    // A Program starts its host itself (app.Run), and WebApplicationFactory waits for that start by reading the host's
+    // services. When the start fails and the Program disposes its host before the factory reads them (a race a loaded
+    // machine wins), the factory throws ObjectDisposedException for the disposed provider instead of the start's
+    // failure. The host logged that failure, with the very exception, before throwing it: throw it again, its stack kept.
+    private IServiceProvider StartHost()
+    {
+        try
+        {
+            return Services;
+        }
+        catch (ObjectDisposedException) when (LoggedStartFailure() is { } startFailure)
+        {
+            ExceptionDispatchInfo.Capture(startFailure).Throw();
+            throw;
+        }
+    }
+
+    private Exception? LoggedStartFailure()
+        => Logs
+            .GetSnapshot()
+            .FirstOrDefault(record =>
+                record.Exception is not null
+                && string.Equals(record.Category, HostCategory, StringComparison.Ordinal))
+            ?.Exception;
 
     // Every step runs whatever the one before did (a container that failed to build, a host that failed to stop), so
     // nothing started is left behind; their failures are returned together.

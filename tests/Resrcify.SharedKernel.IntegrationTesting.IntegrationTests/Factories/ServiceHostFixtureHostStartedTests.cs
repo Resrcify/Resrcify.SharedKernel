@@ -60,9 +60,31 @@ public sealed class ServiceHostFixtureHostStartedTests(
         await using var recording = new RecordingServiceHostFixture(RecordingServiceHostFixture.Failure.HostStart);
         IAsyncLifetime lifetime = recording;
 
-        var thrown = await Should.ThrowAsync<Exception>(lifetime.InitializeAsync);
+        var thrown = await Should.ThrowAsync<InvalidOperationException>(lifetime.InitializeAsync);
 
-        thrown.ToString().ShouldContain(RecordingServiceHostFixture.HostStartFailure);
+        thrown.Message.ShouldBe(RecordingServiceHostFixture.HostStartFailure);
+        recording.HostStartedRuns.ShouldBe(0);
+        recording.Stopped.TakeLast(2).ShouldBe(["last, container up", "first, container gone"]);
+        (await DockerResources.ContainerExistsAsync(recording.DependencyId.ShouldNotBeNull())).ShouldBeFalse();
+        (await DockerResources.NetworkExistsAsync(recording.NetworkName.ShouldNotBeNull())).ShouldBeFalse();
+
+        await Should.NotThrowAsync(lifetime.DisposeAsync);
+    }
+
+    /// <summary>
+    /// The order a loaded machine gave the 4.8.0 release run: the program's start fails and it disposes its host before
+    /// <c>WebApplicationFactory</c> looks, which then throws <see cref="ObjectDisposedException"/> for the host's services.
+    /// Held there deterministically by the fixture; the start's own failure must still be what is thrown.
+    /// </summary>
+    [Fact]
+    public async Task InitializeAsync_ShouldThrowTheHostsStartFailure_WhenTheProgramDisposedTheHostBeforeTheFactoryLooked()
+    {
+        await using var recording = new RecordingServiceHostFixture(RecordingServiceHostFixture.Failure.HostStartSeenLate);
+        IAsyncLifetime lifetime = recording;
+
+        var thrown = await Should.ThrowAsync<InvalidOperationException>(lifetime.InitializeAsync);
+
+        thrown.Message.ShouldBe(RecordingServiceHostFixture.HostStartFailure);
         recording.HostStartedRuns.ShouldBe(0);
         recording.Stopped.TakeLast(2).ShouldBe(["last, container up", "first, container gone"]);
         (await DockerResources.ContainerExistsAsync(recording.DependencyId.ShouldNotBeNull())).ShouldBeFalse();
