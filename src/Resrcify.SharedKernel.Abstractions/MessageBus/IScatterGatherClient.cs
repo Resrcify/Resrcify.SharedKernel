@@ -61,8 +61,8 @@ public interface IScatterGatherClient
     /// chunk.</item>
     /// <item>No requests, no chunks. A <paramref name="chunkSize"/> below 1 or a negative budget throws when called.</item>
     /// </list>
-    /// The message bus' client measures the budget on the container's <see cref="TimeProvider"/>; this default (for a
-    /// stand-in that implements only <see cref="GatherAsync{TRequest, TResponse}"/>) on the system clock.
+    /// The message bus' client measures the budget on the container's <see cref="TimeProvider"/>; the test double
+    /// (<c>ScatterGatherClientStandIn</c>, MessageBus.Testing) on the test's.
     /// </remarks>
     IAsyncEnumerable<GatheredChunk<TResponse>> GatherInChunksAsync<TRequest, TResponse>(
         IReadOnlyDictionary<string, TRequest> requests,
@@ -71,13 +71,5 @@ public interface IScatterGatherClient
         TimeSpan? budget = null,
         CancellationToken cancellationToken = default)
         where TRequest : class
-        where TResponse : class
-        => ChunkedGathering.GatherAsync<TRequest, TResponse>(
-            this,
-            requests,
-            chunkSize,
-            timeoutForChunk,
-            budget,
-            TimeProvider.System,
-            cancellationToken);
+        where TResponse : class;
 }

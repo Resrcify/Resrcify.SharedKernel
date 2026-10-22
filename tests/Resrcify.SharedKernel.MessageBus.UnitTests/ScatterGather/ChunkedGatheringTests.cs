@@ -6,11 +6,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Time.Testing;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
+using Resrcify.SharedKernel.MessageBus.ScatterGather;
 using Resrcify.SharedKernel.Results.Primitives;
 using Shouldly;
 using Xunit;
 
-namespace Resrcify.SharedKernel.Abstractions.UnitTests.MessageBus;
+namespace Resrcify.SharedKernel.MessageBus.UnitTests.ScatterGather;
 
 /// <summary>
 /// The chunked gather on a scripted client: each chunk's gather is answered (or thrown) by the script, which can move a
@@ -171,19 +172,6 @@ public sealed class ChunkedGatheringTests
         client.Calls.Count.ShouldBe(2);
     }
 
-    [Fact]
-    public async Task GatherInChunksAsync_ShouldWorkOnAClientThatImplementsOnlyGatherAsync()
-    {
-        IScatterGatherClient client = new ScriptedClient();
-
-        var chunks = new List<GatheredChunk<Answer>>();
-        await foreach (var chunk in client.GatherInChunksAsync<Question, Answer>(Requests("a", "b", "c"), 2, count => Seconds(count)))
-            chunks.Add(chunk);
-
-        chunks.Select(chunk => chunk.Keys.Count).ShouldBe([2, 1]);
-        chunks.ShouldAllBe(chunk => chunk.IsGathered);
-    }
-
     private IAsyncEnumerable<GatheredChunk<Answer>> Gather(
         ScriptedClient client,
         Dictionary<string, Question> requests,
@@ -264,6 +252,17 @@ public sealed class ChunkedGatheringTests
         public IAsyncEnumerable<IScatterReply<TResponse>> StreamAsync<TRequest, TResponse>(
             IReadOnlyDictionary<string, TRequest> requests,
             TimeSpan timeout,
+            CancellationToken cancellationToken = default)
+            where TRequest : class
+            where TResponse : class
+            => throw new NotSupportedException();
+
+        // The tests call ChunkedGathering directly, with their clock.
+        public IAsyncEnumerable<GatheredChunk<TResponse>> GatherInChunksAsync<TRequest, TResponse>(
+            IReadOnlyDictionary<string, TRequest> requests,
+            int chunkSize,
+            Func<int, TimeSpan> timeoutForChunk,
+            TimeSpan? budget = null,
             CancellationToken cancellationToken = default)
             where TRequest : class
             where TResponse : class

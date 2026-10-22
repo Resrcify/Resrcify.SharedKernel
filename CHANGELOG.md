@@ -5,6 +5,12 @@ every package in the repository is released together under one version.
 
 ## 4.9.0 (unreleased)
 
+### Breaking changes
+
+- **`IScatterGatherClient` has a fourth member, `GatherInChunksAsync`, with no default implementation**
+  (Resrcify.SharedKernel.Abstractions): custom `IScatterGatherClient` implementations must implement
+  `GatherInChunksAsync`; test doubles should use `ScatterGatherClientStandIn` (MessageBus.Testing) instead.
+
 ### Added
 
 - **`IScatterGatherClient.GatherInChunksAsync`: a large batch in chunks** (Resrcify.SharedKernel.Abstractions,
@@ -20,13 +26,41 @@ every package in the repository is released together under one version.
   - **Budget:** counted from the first chunk; a chunk whose timeout no longer fits isn't asked, nor any after it, and
     they are reported once, as `NotAsked`, with their keys.
   - **Cancellation** (the caller's) throws. A `chunkSize` below 1 or a negative budget throws at the call.
-  - **Clock:** the message bus' client measures the budget on the container's `TimeProvider`.
-  - **Existing implementers keep compiling:** it is a default interface method on `GatherAsync`. A stand-in that
-    implements only `GatherAsync` gets it, measured on the system clock.
+  - **Clock:** the message bus' client measures the budget on the container's `TimeProvider`; the chunking itself lives
+    in one place (MessageBus), which `ScatterGatherClientStandIn` runs too, on the test's clock.
+  - **`GatheredChunk<TResponse>.FromGathered`, `FromFailure`, `NotAsked`:** the chunks' factories, public.
 
   Adopting it: Oracle's guild gather replaces its own chunk loop (chunk size, per-chunk timeout, budget, a failed chunk
   logged and skipped, counts summed) with it; Sentinel's tracked-player update gathers and stores chunk by chunk instead
   of gathering every profile first.
+- **`ScatterGatherClientStandIn`: a scripted `IScatterGatherClient` for tests** (Resrcify.SharedKernel.MessageBus.Testing),
+  on the test's `TimeProvider`.
+  - **Answers** per request type and key (`Answer`), or for every item of a type (`AnswerEvery`).
+  - **Failures:** responder errors, settled or not (`Fail`).
+  - **No answer:** an item that never answers (`NeverAnswer`; `NeverAnswerAny` for an outage); its call ends when the
+    test moves the clock past its timeout (from `OnCall`, or after `TimeoutWaitsReachedAsync`).
+  - **Throws:** a call that throws (`ThrowOnNextCall`, `ThrowOnCall`).
+  - **Holding:** calls held until the test releases them (`Hold`, `WaitUntilHeldAsync`, `Release`).
+  - **Recording:** every call, with its kind, request type, keys, timeout and requests (`Calls`, `CallsOf`).
+  - **The chunked gather:** `GatherInChunksAsync` on the same chunking as the bus.
+  - **`RequestAsync` and `StreamAsync`** from the same script.
+  - **Registering it:** `services.ReplaceScatterGatherClient(standIn)` makes it the host's client;
+    `services.HoldScatterGathers(standIn)` puts it in front of the real one (it then records, holds and throws, and
+    forwards every call).
+
+  Adopting it:
+  - **Oracle** deletes `FakeScatterGatherClient` (Application.UnitTests): `AnswerEvery` for the profiles, `Fail` for
+    `NotFound` / `Unavailable`, `NeverAnswer` with `OnCall = call => clock.Advance(call.Timeout)` for `Unanswered`
+    (an answered gather's `AnswerTime` is an `OnCall` advance too), `ThrowOnCall` for `Throwing`, `CallsOf` for
+    `Gathers`.
+  - **Oracle** also deletes `ScriptedGuildGather` (IntegrationTests): `NeverAnswer` for `Silent`, `Fail` for
+    `NotFound`, `NeverAnswerAny` / `ResumeAnswering` for `Down`, `ThrowOnNextCall` for `ThrowNextGather`, `Answer` per
+    guild for `AnswerOnly`.
+  - **Shard** deletes `ScriptedScatterGatherClient` (and `ScriptedScatterGatherShardHostFixture` registers the stand-in
+    with `ReplaceScatterGatherClient`): `Answer`, `Fail`, `Hold` / `WaitUntilHeldAsync` / `Release` for
+    `HoldGathers` / `Held` / `ReleaseGathers`.
+  - **Shard** also deletes `ScatterGatherHold`, `HoldingScatterGatherClient` and its `HoldScatterGathers` extension:
+    `ShardHostFixture` calls SharedKernel's `services.HoldScatterGathers(standIn)` instead.
 
 ## 4.8.0 (2026-10-21)
 

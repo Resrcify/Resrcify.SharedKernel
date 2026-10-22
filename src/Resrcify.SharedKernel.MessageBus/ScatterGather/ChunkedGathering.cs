@@ -5,11 +5,14 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Resrcify.SharedKernel.Abstractions.MessageBus;
+using Resrcify.SharedKernel.Abstractions.MessageBus;
+
+namespace Resrcify.SharedKernel.MessageBus.ScatterGather;
 
 /// <summary>
-/// <see cref="IScatterGatherClient.GatherInChunksAsync"/> on any client's <see cref="IScatterGatherClient.GatherAsync"/>:
-/// the default implementation (on the system clock) and the message bus' (on the container's).
+/// <see cref="IScatterGatherClient.GatherInChunksAsync"/> on a client's own <see cref="IScatterGatherClient.GatherAsync"/>,
+/// in one place: the message bus' client runs it on the container's clock, its test double
+/// (<c>ScatterGatherClientStandIn</c>, MessageBus.Testing) on the test's.
 /// </summary>
 internal static class ChunkedGathering
 {
@@ -69,7 +72,7 @@ internal static class ChunkedGathering
             var timeout = timeoutForChunk(chunkKeys.Count);
             if (budget is { } total && time.GetElapsedTime(started) + timeout > total)
             {
-                yield return GatheredChunk<TResponse>.NotAskedFrom(
+                yield return GatheredChunk<TResponse>.NotAsked(
                     index,
                     count,
                     keys.GetRange(first, keys.Count - first),
@@ -108,11 +111,11 @@ internal static class ChunkedGathering
         try
         {
             var gathered = await client.GatherAsync<TRequest, TResponse>(chunk, timeout, cancellationToken);
-            return GatheredChunk<TResponse>.Of(index, count, keys, timeout, gathered);
+            return GatheredChunk<TResponse>.FromGathered(index, count, keys, timeout, gathered);
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
-            return GatheredChunk<TResponse>.FailedWith(index, count, keys, timeout, exception);
+            return GatheredChunk<TResponse>.FromFailure(index, count, keys, timeout, exception);
         }
     }
 }

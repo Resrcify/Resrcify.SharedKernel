@@ -78,26 +78,40 @@ public sealed class GatheredChunk<TResponse>
     public bool IsNotAsked
         => Status == GatheredChunkStatus.NotAsked;
 
-    internal static GatheredChunk<TResponse> Of(
+    /// <summary>A chunk that was asked and gathered.</summary>
+    public static GatheredChunk<TResponse> FromGathered(
         int index,
         int count,
         IReadOnlyList<string> keys,
         TimeSpan timeout,
         IGathered<TResponse> gathered)
-        => new(index, count, keys, timeout, GatheredChunkStatus.Gathered, gathered, exception: null);
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        ArgumentNullException.ThrowIfNull(gathered);
+        return new(index, count, keys, timeout, GatheredChunkStatus.Gathered, gathered, exception: null);
+    }
 
-    internal static GatheredChunk<TResponse> FailedWith(
+    /// <summary>A chunk that was asked, and whose gather threw <paramref name="exception"/>.</summary>
+    public static GatheredChunk<TResponse> FromFailure(
         int index,
         int count,
         IReadOnlyList<string> keys,
         TimeSpan timeout,
         Exception exception)
-        => new(index, count, keys, timeout, GatheredChunkStatus.Failed, gathered: null, exception);
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        ArgumentNullException.ThrowIfNull(exception);
+        return new(index, count, keys, timeout, GatheredChunkStatus.Failed, gathered: null, exception);
+    }
 
-    internal static GatheredChunk<TResponse> NotAskedFrom(
+    /// <summary>The chunks from <paramref name="index"/> on, not asked: <paramref name="keys"/> holds all their items.</summary>
+    public static GatheredChunk<TResponse> NotAsked(
         int index,
         int count,
         IReadOnlyList<string> keys,
         TimeSpan timeout)
-        => new(index, count, keys, timeout, GatheredChunkStatus.NotAsked, gathered: null, exception: null);
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        return new(index, count, keys, timeout, GatheredChunkStatus.NotAsked, gathered: null, exception: null);
+    }
 }

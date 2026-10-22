@@ -324,8 +324,9 @@ await foreach (var chunk in client.GatherInChunksAsync<PlayerProfileRequest, Pla
 }
 ```
 
-The message bus' client measures the budget on the container's `TimeProvider` (a `FakeTimeProvider` in tests). The
-interface's default implementation, for a stand-in that implements only `GatherAsync`, measures it on the system clock.
+The message bus' client measures the budget on the container's `TimeProvider` (a `FakeTimeProvider` in tests). In a
+test that replaces the client, use `ScatterGatherClientStandIn` (MessageBus.Testing): it runs the same chunking on the
+test's clock.
 
 ## Failures: the result pattern
 
