@@ -34,6 +34,7 @@ outbox messages.
     - [Handlers](#handlers)
   - [Requesting inside a request: gather before the handler](#requesting-inside-a-request-gather-before-the-handler)
   - [Asking directly: IScatterGatherClient](#asking-directly-iscattergatherclient)
+    - [A large batch: in chunks](#a-large-batch-in-chunks)
   - [Failures: the result pattern](#failures-the-result-pattern)
   - [Responding: rate-limited queues](#responding-rate-limited-queues)
   - [Publish/subscribe: integration events](#publishsubscribe-integration-events)
@@ -52,7 +53,7 @@ outbox messages.
 | Layer | References | Uses |
 |---|---|---|
 | Domain | `Resrcify.SharedKernel.DomainDrivenDesign` | Raises the domain event (optionally `IDedupable`). |
-| Application | `Resrcify.SharedKernel.Abstractions` | From `Resrcify.SharedKernel.Abstractions.MessageBus`: `IEventBus`, `IIntegrationEventHandler`, `IScatterGatherClient`, `IScatterGatherHandler`, `IScatterGatherRequestHandler`, `IStreamingScatterGatherRequestHandler`, `IGathered`, `GatheredCounts`, `IScatterReply` and `IRequestResponder`. |
+| Application | `Resrcify.SharedKernel.Abstractions` | From `Resrcify.SharedKernel.Abstractions.MessageBus`: `IEventBus`, `IIntegrationEventHandler`, `IScatterGatherClient`, `IScatterGatherHandler`, `IScatterGatherRequestHandler`, `IStreamingScatterGatherRequestHandler`, `IGathered`, `GatheredCounts`, `GatheredChunk`, `IScatterReply` and `IRequestResponder`. |
 | Infrastructure | `Resrcify.SharedKernel.MessageBus` | `AddMessageBus(...)`: transport, `AddRequest`, `AddScatterGather`, `AddRateLimitedQueue`, `AddEventHandlers`, strategies; `AddHealthChecks().AddMessageBus()`. |
 
 Handlers only see the contracts, so the Application layer never references Rebus or this package. The
@@ -248,6 +249,84 @@ internal sealed class GuildProfileService(IScatterGatherClient client)
 `RequestAsync` gives the response, the responder's errors, or `ScatterGather.Unanswered` (`ErrorType.Timeout`).
 `GatherAsync` and `StreamAsync` do the same for a batch. Nothing survives a crash: for work that must, use an
 `IScatterGatherHandler` through the outbox.
+
+### A large batch: in chunks
+
+`GatherInChunksAsync` asks for the items `chunkSize` at a time, one chunk after another, each chunk with its own
+timeout (`timeoutForChunk`, given the chunk's number of items), and yields each chunk once it is gathered
+(`GatheredChunk<TResponse>`). It is lazy: a chunk is asked only when the caller asks for it.
+
+- **What a chunk carries:**
+  - `Index` (from 0) and `Count` (the chunks in all);
+  - its `Keys` and `Timeout`;
+  - its `Status`: `Gathered` (`Gathered` holds the `IGathered<TResponse>`), `Failed` (`Exception` holds what its
+    gather threw), or `NotAsked`;
+  - its `Counts` (`GatheredCounts`, to sum with `+`; `None` for a chunk failed or not asked).
+- **A throwing chunk** never stops the next.
+- **With a `budget`:**
+  - it counts from the first chunk, including the caller's work between chunks;
+  - a chunk whose timeout no longer fits in what is left isn't asked, nor any after it;
+  - they come once, together, as `NotAsked`, with all their keys, and the gather ends.
+- **Cancelling the token** is the caller's own act, so it throws instead of failing a chunk.
+- **Order and argument checks:**
+  - the chunks follow the order of the requests' keys;
+  - no requests means no chunks;
+  - a `chunkSize` below 1, or a negative budget, throws at the call.
+
+Collect everything, as a gather of guild profiles does with a budget:
+
+```csharp
+var answered = new Dictionary<string, GetGuildResponse>(StringComparer.Ordinal);
+var counts = GatheredCounts.None;
+await foreach (var chunk in client.GatherInChunksAsync<GetGuildRequest, GetGuildResponse>(
+    requests,
+    chunkSize: 200,
+    timeoutForChunk: items => timeouts.For<GetGuildRequest>(items),
+    budget: TimeSpan.FromMinutes(5),
+    cancellationToken))
+{
+    switch (chunk.Status)
+    {
+        case GatheredChunkStatus.Gathered:
+            foreach (var (guildId, guild) in chunk.Gathered!.Results)
+                answered[guildId] = guild;
+            counts += chunk.Counts;
+            LogChunkGathered(chunk.Index + 1, chunk.Count, chunk.Counts.Answered, chunk.Keys.Count, chunk.Timeout);
+            break;
+        case GatheredChunkStatus.Failed:
+            LogChunkFailed(chunk.Exception!, chunk.Index + 1, chunk.Count, chunk.Keys.Count);
+            break;
+        case GatheredChunkStatus.NotAsked:
+            LogBudgetSpent(chunk.Index + 1, chunk.Count, chunk.Timeout, chunk.Keys.Count);
+            break;
+    }
+}
+```
+
+Or process each chunk before the next is asked, so only one chunk's answers are held at a time, as storing the
+tracked players' profiles does (each chunk in a scope of its own):
+
+```csharp
+await foreach (var chunk in client.GatherInChunksAsync<PlayerProfileRequest, PlayerProfileResponse>(
+    requests,
+    chunkSize: 10,
+    timeoutForChunk: items => timeouts.For<PlayerProfileRequest>(items),
+    cancellationToken: cancellationToken))
+{
+    counts += chunk.Counts;
+    if (!chunk.IsGathered)
+        continue;   // a failed chunk is logged; the next run asks for its players again
+
+    await using var scope = scopes.CreateAsyncScope();
+    await scope.ServiceProvider
+        .GetRequiredService<TrackedPlayersChunk>()
+        .StoreAsync(chunk.Gathered.Results.Values, cancellationToken);
+}
+```
+
+The message bus' client measures the budget on the container's `TimeProvider` (a `FakeTimeProvider` in tests). In a
+test that replaces the client, use `ScatterGatherClientStandIn` (MessageBus.Testing): it runs the same chunking on the
+test's clock.
 
 ## Failures: the result pattern
 

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Time.Testing;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
 using Resrcify.SharedKernel.MessageBus.Abstractions;
 using Resrcify.SharedKernel.MessageBus.ScatterGather;
@@ -45,6 +46,24 @@ internal sealed class FakeScatterGatherTransport(Func<string, object> answer) : 
         var results = requests.Keys.ToDictionary(key => key, key => (TResponse)answer(key));
         return Task.FromResult<IGathered<TResponse>>(new Gathered<TResponse>(requests.Keys.ToList(), results, new Dictionary<string, IReadOnlyList<Error>>()));
     }
+
+    // The chunks on this fake's GatherAsync; no test here sets a budget, so its clock never matters.
+    public IAsyncEnumerable<GatheredChunk<TResponse>> GatherInChunksAsync<TRequest, TResponse>(
+        IReadOnlyDictionary<string, TRequest> requests,
+        int chunkSize,
+        Func<int, TimeSpan> timeoutForChunk,
+        TimeSpan? budget = null,
+        CancellationToken cancellationToken = default)
+        where TRequest : class
+        where TResponse : class
+        => ChunkedGathering.GatherAsync<TRequest, TResponse>(
+            this,
+            requests,
+            chunkSize,
+            timeoutForChunk,
+            budget,
+            new FakeTimeProvider(),
+            cancellationToken);
 
     public async IAsyncEnumerable<IScatterReply<TResponse>> StreamAsync<TRequest, TResponse>(
         IReadOnlyDictionary<string, TRequest> requests,
