@@ -9,7 +9,7 @@ architecture-test project and xUnit runs its tests there; no rules to write.
 |---|---|
 | `ConventionalLayerDependencyTests` | Dependencies point inward: a layer never depends on a higher tier or on a peer (Domain 0, Application 1, Persistence 2, Infrastructure and Presentation 3, Web 4), Web never reaches Domain and Presentation never reaches Persistence. Also which SharedKernel packages each layer may use (a custom layer: what the layers at its tier may use). |
 | `ConventionalDomainTests` | Domain events are sealed and end with `Event`; entities have a private constructor. |
-| `ConventionalApplicationTests` | Commands, queries, requests and their handlers are sealed and named by convention (`…Command`, `…CommandHandler`, `…Query`, `…QueryHandler`, `…Request`, `…RequestHandler`); handlers return `Task<Result>`. In every layer, a request handler doesn't depend on `ISender` or `IMediator` ([below](#handlers-dont-send-requests)) nor on another handler, and a feature step is internal, sealed and depends on neither ([below](#handlers-dont-take-handlers-feature-steps-dont-send)). |
+| `ConventionalApplicationTests` | Commands, queries, requests and their handlers are sealed and named by convention (`…Command`, `…CommandHandler`, `…Query`, `…QueryHandler`, `…Request`, `…RequestHandler`); handlers return `Task<Result>`. In every layer, a request handler doesn't depend on `ISender` or `IMediator` ([below](#handlers-dont-send-requests)) nor on another handler, and a feature step is internal, sealed and depends on neither ([below](#handlers-dont-take-handlers-feature-steps-dont-send)); nor do validators or the app's own behaviors depend on `ISender` or `IMediator` ([below](#nothing-else-in-the-pipeline-sends)). |
 | `ConventionalConfigurationTests` | In every layer, no type takes `IConfiguration` in a constructor: services get validated options (`IOptions<T>`); configuration is read at registration ([below](#configuration-is-read-at-registration)). |
 | `ConventionalPresentationTests` | Endpoints implement `IEndpoint`, are sealed, expose a single map method and go through the mediator; so do controllers. |
 
@@ -108,7 +108,8 @@ What the rule allows:
   (`IScatterGatherHandler<,,>`) and request responders (`IRequestResponder<,>`): they are bus consumers, entry points
   of their own, so they may send. So may notification handlers (`INotificationHandler<>`, `IDomainEventHandler<>`):
   the rule is about request handlers only.
-- **Pipeline behaviors**: they are the pipeline, not a handler.
+- **Pipeline behaviors and validators**: they aren't request handlers; their own rules
+  ([below](#nothing-else-in-the-pipeline-sends)) keep them from sending too.
 - **A nested type**: it is a type of its own. A handler isn't failed for what a type nested in it holds (and a handler
   nested in a static class is checked like any other).
 
@@ -138,6 +139,27 @@ Two more facts of `ConventionalApplicationTests`, over the same layer assemblies
   ```text
   Application: Titan.Oracle.Application.Features.Guilds.UpdateGuilds.GuildsUpdate → is not sealed
   ```
+
+## Nothing else in the pipeline sends
+
+Whatever runs inside the mediator pipeline, around a request's handler, doesn't send requests either: a request sent
+from there runs a pipeline inside the pipeline. Two facts of `ConventionalApplicationTests`, over every layer assembly,
+with the sender rule's detection (a constructor parameter, field or property of `ISender` or `IMediator`, also wrapped:
+`Lazy<>`, `Func<>`, `IEnumerable<>`, an array; `IPublisher` is allowed):
+
+- **`Validators_Should_NotDependOnSenderOrMediator`**: every non-abstract FluentValidation validator (a class
+  implementing `IValidator<T>`, an `AbstractValidator<T>` included). FluentValidation is matched by its full type name,
+  so this package takes no dependency on it. An existence check ("the guild exists", "the player is registered") is a
+  use case's work: it belongs in the handler or a feature step (`IFeatureStep`), not the validator, which checks the
+  request's own shape.
+
+  ```text
+  Application: Titan.Discord.Application.Features.Guilds.LinkGuild.LinkGuildCommandValidator → constructor parameter 'sender' (ISender)
+  ```
+
+- **`Behaviors_Should_NotDependOnSenderOrMediator`**: every non-abstract pipeline behavior of the service
+  (`IPipelineBehavior<,>`, the value-task, request and stream behaviors) and request pre- and post-processor.
+  SharedKernel's own behaviors aren't in the service's layer assemblies, so they aren't checked.
 
 ## Configuration is read at registration
 

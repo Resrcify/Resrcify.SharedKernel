@@ -3,6 +3,24 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.10.0 (2026-10-23)
+
+### Added
+
+- **`ConventionalApplicationTests.Validators_Should_NotDependOnSenderOrMediator`** (Resrcify.SharedKernel.ArchitectureTesting):
+  no FluentValidation validator (a non-abstract class implementing `IValidator<T>`, an `AbstractValidator<T>` included;
+  matched by full type name, so the package takes no FluentValidation dependency) has a constructor parameter, field or
+  property of `ISender` or `IMediator`, also wrapped (`Lazy`, `Func`, `IEnumerable`, an array), in any layer assembly:
+  the validation behavior runs validators inside the pipeline, and a query one sends runs a pipeline inside it.
+  `IPublisher` is allowed.
+- **`ConventionalApplicationTests.Behaviors_Should_NotDependOnSenderOrMediator`** (Resrcify.SharedKernel.ArchitectureTesting):
+  the same for a service's own pipeline behaviors (`IPipelineBehavior<,>`, the value-task, request and stream
+  behaviors) and request pre- and post-processors. SharedKernel's behaviors aren't in a service's layer assemblies.
+
+  Adopting it: apps that inherit `ConventionalApplicationTests` get both rules on upgrade. A validator that sends a
+  query fails: existence checks belong in the handler or an `IFeatureStep`, not the validator. A behavior that sends a
+  request fails the same way.
+
 ## 4.9.0 (2026-10-22)
 
 ### Breaking changes

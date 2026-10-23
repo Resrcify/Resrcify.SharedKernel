@@ -38,7 +38,9 @@ namespace Resrcify.SharedKernel.ArchitectureTesting.Tests;
 /// only entry points send requests. Nor does it take another handler
 /// (<see cref="Handlers_Should_NotDependOnOtherHandlers"/>), and a feature step is
 /// internal, sealed and depends on no sender or handler
-/// (<see cref="FeatureSteps_Should_BeInternalSealed_AndNotDependOnSenderMediatorOrHandlers"/>).
+/// (<see cref="FeatureSteps_Should_BeInternalSealed_AndNotDependOnSenderMediatorOrHandlers"/>). Nothing else that runs
+/// inside the pipeline sends: validators and the app's own behaviors
+/// (<see cref="Validators_Should_NotDependOnSenderOrMediator"/>, <see cref="Behaviors_Should_NotDependOnSenderOrMediator"/>).
 ///
 /// Every test is <c>virtual</c>. Consumers can override and skip when they
 /// genuinely need to:
@@ -353,10 +355,11 @@ public abstract class ConventionalApplicationTests : BaseArchitectureTest
     /// </summary>
     /// <remarks>
     /// <see cref="IPublisher"/> is allowed: publishing a notification is not sending a request. Integration event
-    /// handlers, scatter-gather event handlers, request responders and pipeline behaviors aren't request handlers
-    /// (they are entry points, or the pipeline itself), so they may send. Every layer is checked, not only
-    /// Application: a handler can live in Infrastructure (a scatter-gather request handler) or anywhere the mediator
-    /// scans.
+    /// handlers, scatter-gather event handlers and request responders aren't request handlers (they are entry points),
+    /// so they may send. Nothing else that runs inside the pipeline sends either: validators
+    /// (<see cref="Validators_Should_NotDependOnSenderOrMediator"/>) and behaviors
+    /// (<see cref="Behaviors_Should_NotDependOnSenderOrMediator"/>). Every layer is checked, not only Application: a
+    /// handler can live in Infrastructure (a scatter-gather request handler) or anywhere the mediator scans.
     /// </remarks>
     [SkippableFact]
     public virtual void Handlers_Should_NotDependOnSenderOrMediator()
@@ -431,6 +434,52 @@ public abstract class ConventionalApplicationTests : BaseArchitectureTest
                 failing.AddRange(FeatureSteps
                     .Violations(step)
                     .Select(violation => $"{layer}: {step.FullName} → {violation}"));
+            }
+        }
+
+        failing.ShouldBeEmpty();
+    }
+
+    // ──────────────── Nothing else in the pipeline sends ────────────────
+
+    /// <summary>
+    /// A FluentValidation validator (any non-abstract class implementing <c>IValidator&lt;T&gt;</c>, an
+    /// <c>AbstractValidator&lt;T&gt;</c> included; matched by full name, so this package takes no FluentValidation
+    /// dependency) doesn't depend on <see cref="ISender"/> or <see cref="IMediator"/>, as
+    /// <see cref="Handlers_Should_NotDependOnSenderOrMediator"/> checks a handler: no constructor parameter, field or
+    /// property of either, also wrapped (<c>Lazy</c>, <c>Func</c>, <c>IEnumerable</c>, an array). The validation
+    /// behavior runs it inside the pipeline, so a query it sends runs a pipeline inside the pipeline. Existence checks
+    /// belong in the handler or a feature step (<see cref="IFeatureStep"/>), not the validator.
+    /// </summary>
+    /// <remarks><see cref="IPublisher"/> is allowed. Every layer assembly is checked.</remarks>
+    [SkippableFact]
+    public virtual void Validators_Should_NotDependOnSenderOrMediator()
+        => AssertNoSenderIn(PipelineParticipants.IsValidator);
+
+    /// <summary>
+    /// An app's own pipeline behavior (<c>IPipelineBehavior&lt;,&gt;</c>, the value-task, request and stream
+    /// behaviors) or pre- or post-processor doesn't depend on <see cref="ISender"/> or <see cref="IMediator"/>, as
+    /// <see cref="Handlers_Should_NotDependOnSenderOrMediator"/> checks a handler: it runs around every request, so a
+    /// request it sends runs the pipeline again inside it. SharedKernel's own behaviors aren't in the app's layer
+    /// assemblies, so they aren't checked.
+    /// </summary>
+    /// <remarks><see cref="IPublisher"/> is allowed. Every layer assembly is checked.</remarks>
+    [SkippableFact]
+    public virtual void Behaviors_Should_NotDependOnSenderOrMediator()
+        => AssertNoSenderIn(PipelineParticipants.IsBehavior);
+
+    private void AssertNoSenderIn(Func<Type, bool> participates)
+    {
+        Skip.If(LayerAssemblies.Count == 0);
+
+        var failing = new List<string>();
+        foreach (var (layer, assembly) in LayerAssemblies.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            foreach (var type in ClassesOf(assembly).Where(participates))
+            {
+                failing.AddRange(MediatorRequestHandlers
+                    .SenderDependencies(type)
+                    .Select(dependency => $"{layer}: {type.FullName} → {dependency}"));
             }
         }
 

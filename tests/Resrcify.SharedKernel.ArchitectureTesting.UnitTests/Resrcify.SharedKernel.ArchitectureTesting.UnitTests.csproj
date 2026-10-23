@@ -22,6 +22,8 @@
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
     <!-- The handler and feature step samples log: ILogger<T>. -->
     <PackageReference Include="Microsoft.Extensions.Logging" />
+    <!-- The validator rule's samples: AbstractValidator<T>, IValidator<T>. -->
+    <PackageReference Include="FluentValidation" />
   </ItemGroup>
 
   <ItemGroup>
