@@ -273,6 +273,17 @@ once `RequestAborted` fired) never reaches the handler: `UseExceptionHandler()` 
 stands for, with problem details of its `Errors` (a 502 for an upstream's failure, a 504 for a timeout ...), logged at
 `Warning`, once.
 
+Any other exception the container's `ITransientFailureClassifier` (Abstractions) calls transient is answered 503, with a
+`Retry-After` (`options.TransientFailureRetryAfter`, 1 second by default, in whole seconds rounded up) and problem
+details whose `errors` hold one `Failure` error coded `Unavailable` (`ErrorCodes.Request.Unavailable`), logged at
+`Warning`, once (a `Debug` line when a mediator behavior logged it already). It is the classifier the outbox, the jobs
+and the mediator's behaviors judge by: a transient database failure (`DbException.IsTransient`, e.g. a dropped
+connection), a timeout or a handler's own cancellation, an HTTP call without an answer or with a 408, 429 or 5xx, a
+`TransientFailureException` without errors, and whatever a registered `ITransientFailureRule` adds.
+`AddResultProblemDetails()` registers the default classifier unless the service registered one. A caller's
+`ToResultAsync` reads the answer back as a transient failure, and the resilience preset of a client retries a 503 after
+its `Retry-After`. Any other exception stays the 500 above.
+
 A request ASP.NET Core couldn't bind (its `BadHttpRequestException`: a required query, route, header or body value left
 out, a value that doesn't parse, such as `/shards/abc` for a `Guid id`, a body that isn't valid JSON) isn't a fault of
 the service: it is answered with the exception's status (400, or 413, 415 ...) and problem details whose `errors` hold
@@ -530,7 +541,6 @@ services.AddServiceApiVersioning();                                            /
 services.AddServiceApiVersioning(new MediaTypeApiVersionReader("api-version")); // the version in the media type
 
 // Program.cs
-app.CreateApiVersionSet();
 app.MapApiEndpoints();
 if (app.Environment.IsDevelopment())
     app.MapOpenApi().WithDocumentPerVersion();
@@ -548,7 +558,12 @@ own (the `api-version` query string, or a URL segment); `MediaTypeApiVersionRead
 `Accept: application/json; api-version=1.0` instead (an unsupported version there is a 406, in the query string a
 400). It is wire behaviour: keep the reader the service has. `configureOpenApi` configures the documents
 (`options => options.Document.AddSchemaTransformer(...)`). It returns Asp.Versioning's builder, for anything more.
-`ApiVersioning.VersionSet` is version 1.0, reported; `CreateApiVersionSet()` builds it before the endpoints map.
+`ApiVersioning.VersionSet` is version 1.0, reported. It is complete from the start and no endpoint changes it, so the
+hosts of a process (tests' hosts, side by side) share it safely: Asp.Versioning's own set records every version an
+endpoint declares in a collection that isn't safe to write from two threads, and before 4.11.0 hosts building their
+endpoints at the same time could corrupt it. An endpoint whose version the set doesn't hold fails as the endpoints are
+built, saying so; give it a version set of its own (`app.NewApiVersionSet()`). `app.CreateApiVersionSet()` has nothing
+left to build: a `Program` that calls it needn't change, and a new one leaves it out.
 
 ### The CORS policy
 

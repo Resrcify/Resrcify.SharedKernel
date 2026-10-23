@@ -87,6 +87,12 @@ public static class ErrorCodes
         public const string Unhandled = "Unhandled";
 
         /// <summary>
+        /// An exception nothing handled that is transient (another try may get past it, e.g. a transient database
+        /// failure or a timeout): a 503 with <c>Retry-After</c>, its error a <see cref="ErrorType.Failure"/>.
+        /// </summary>
+        public const string Unavailable = "Unavailable";
+
+        /// <summary>
         /// A request that couldn't be bound, when the exception names no parameter (otherwise the code is the
         /// parameter's name).
         /// </summary>

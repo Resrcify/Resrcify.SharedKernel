@@ -3,6 +3,58 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.11.0 (2026-10-23)
+
+### Fixed
+
+- **`ApiVersioning.VersionSet` is complete and never changed by an endpoint, so hosts that build their endpoints at the
+  same time can't corrupt it** (Resrcify.SharedKernel.Web). It was ONE static Asp.Versioning set, shared by every host
+  in the process, and Asp.Versioning's set records each version an endpoint declares (`HasApiVersion`) in a `HashSet`
+  as the endpoint is built. Hosts building their endpoints at once (tests' hosts, side by side) wrote to it from
+  several threads, and a host failed to start with `InvalidOperationException: Operations that change non-concurrent
+  collections must have exclusive access` (in `ApiVersionSetBuilder.AdvertisesApiVersion`, seen in SwgohApi's tests
+  under load). One host per process in production very likely never hit it.
+  - **Now:** the set is created once, complete (version 1.0, versions reported), and an endpoint's version is checked
+    against it, never written to it. What the set reports is unchanged: its supported versions were its declared ones
+    plus the advertised ones, and every endpoint advertised 1.0, which it declares already.
+  - **Another version:** an endpoint whose version the set doesn't hold (`HasApiVersion(new ApiVersion(2, 0))`,
+    `HasDeprecatedApiVersion`) fails as the endpoints are built, saying so. Before, the shared set took it in, for every
+    host. Give such an endpoint a version set of its own (`app.NewApiVersionSet()`).
+  - **`app.CreateApiVersionSet()`** has nothing left to build. It is kept, so a `Program` that calls it needn't change.
+
+### Changed
+
+- **`ResultExceptionHandler` answers a transient exception 503 with `Retry-After`, not 500** (Resrcify.SharedKernel.Web,
+  Resrcify.SharedKernel.Results).
+  - **Which exceptions:** an exception that isn't a binding failure or a `TransientFailureException` holding errors,
+    and that the container's `ITransientFailureClassifier` calls transient. It is the classifier the outbox, the jobs
+    and the mediator's behaviors judge by. Its built-in rule covers a transient database failure
+    (`DbException.IsTransient`, e.g. a dropped connection), a timeout or a handler's own cancellation, an HTTP call
+    without an answer or with a 408, 429 or 5xx, and a `TransientFailureException` without errors. A registered
+    `ITransientFailureRule` adds to it.
+  - **The answer:** a 503 with `Retry-After` (`ResultProblemDetailsOptions.TransientFailureRetryAfter`, 1 second by
+    default, in whole seconds rounded up). The problem details hold one `Failure` error coded `Unavailable` (the new
+    `ErrorCodes.Request.Unavailable`), which a caller's `ToResultAsync` reads back as a transient failure.
+  - **Logging:** at `Warning`, once (the transient = Warning rule); a `Debug` line when a mediator behavior logged it
+    already.
+  - **Unchanged:** any other exception is still a 500 `Unhandled`, logged at `Error`, and a `TransientFailureException`
+    holding errors is still answered with them.
+  - **Registration:** `AddResultProblemDetails()` registers the default classifier unless one is registered already.
+    The handler takes it as an optional constructor parameter; without one it uses the built-in rule
+    (`TransientFailures.IsTransient`).
+
+### Adopting it
+
+- **Every service:** upgrade. No call site changes: `.WithApiVersionSet(ApiVersioning.VersionSet).HasApiVersion(new
+  ApiVersion(1, 0))` and `app.CreateApiVersionSet()` stay as they are (a new `Program` can leave the call out).
+- **A service whose endpoint declares a version other than 1.0 on `ApiVersioning.VersionSet`** now fails at startup,
+  saying so. Give that endpoint a version set of its own.
+- **Callers see a 503 where they saw a 500**, for a transient exception only. SharedKernel's client resilience preset
+  retries a 503 (after its `Retry-After`) and never retried a 500. A client's retry tests or contract checks that pinned
+  500 for a transient failure, such as a dropped database connection or a handler's own timeout, now get 503.
+- **A test that pinned 500 for a handler's own cancellation** (an `OperationCanceledException` that wasn't the
+  client's) now gets 503. SharedKernel's own test did; it changed with this release.
+
 ## 4.10.0 (2026-10-23)
 
 ### Added

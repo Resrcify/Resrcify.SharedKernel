@@ -1,3 +1,5 @@
+using System;
+
 namespace Resrcify.SharedKernel.Web.Exceptions;
 
 /// <summary>
@@ -24,4 +26,11 @@ public sealed class ResultProblemDetailsOptions
     /// <c>BadHttpRequestException</c> that does reach the handler is answered with problem details either way.
     /// </summary>
     public bool ProblemDetailsForBindingFailures { get; set; } = true;
+
+    /// <summary>
+    /// How long the <c>Retry-After</c> of a 503 asks a caller to wait: <see cref="ResultExceptionHandler"/> answers an
+    /// exception the transient-failure classifier calls transient with a 503 and this, in whole seconds (rounded up;
+    /// zero or less is 0). One second by default, the first retry delay of the Web package's resilience preset.
+    /// </summary>
+    public TimeSpan TransientFailureRetryAfter { get; set; } = TimeSpan.FromSeconds(1);
 }
