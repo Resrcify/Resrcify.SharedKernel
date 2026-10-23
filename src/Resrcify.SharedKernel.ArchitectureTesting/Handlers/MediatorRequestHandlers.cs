@@ -52,8 +52,8 @@ internal static class MediatorRequestHandlers
     }
 
     /// <summary>
-    /// The handler's constructor parameters, fields and properties (its base classes' included) that can send a
-    /// request, described for a failure message, e.g. <c>constructor parameter 'sender' (ISender)</c>. Nested types
+    /// The handler's (or a validator's, a behavior's, a feature step's) constructor parameters, fields and properties
+    /// (its base classes' included) that can send a request, described for a failure message, e.g. <c>constructor parameter 'sender' (ISender)</c>. Nested types
     /// are types of their own and aren't looked at.
     /// </summary>
     public static IReadOnlyList<string> SenderDependencies(Type handler)
