@@ -244,7 +244,7 @@ public sealed class ResultExceptionHandlerTests
     }
 
     [Fact]
-    public async Task TryHandleAsync_ShouldAnswer500_WhenACancellationWasNotTheClients()
+    public async Task TryHandleAsync_ShouldAnswer503_WhenACancellationWasNotTheClients()
     {
         using var logs = new FakeLoggerProvider();
         using var loggerFactory = LoggerFactory.Create(logging => logging.AddProvider(logs));
@@ -253,8 +253,9 @@ public sealed class ResultExceptionHandlerTests
         var handled = await Handler(loggerFactory).TryHandleAsync(context, new OperationCanceledException(), CancellationToken.None);
 
         handled.ShouldBeTrue();
-        context.Response.StatusCode.ShouldBe(StatusCodes.Status500InternalServerError);
-        logs.Collector.GetSnapshot().ShouldContain(entry => entry.Level == LogLevel.Error);
+        // A handler's own cancellation (e.g. an HTTP call's timeout) is transient: another try may get past it.
+        context.Response.StatusCode.ShouldBe(StatusCodes.Status503ServiceUnavailable);
+        logs.Collector.GetSnapshot().ShouldHaveSingleItem().Level.ShouldBe(LogLevel.Warning);
     }
 
     private static Task<WebApplication> StartAsync(
