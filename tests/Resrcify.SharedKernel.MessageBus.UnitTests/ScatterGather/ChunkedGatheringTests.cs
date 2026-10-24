@@ -44,19 +44,20 @@ public sealed class ChunkedGatheringTests
     }
 
     [Fact]
-    public async Task GatherAsync_ShouldAskAChunk_OnlyWhenTheCallerAsksForIt()
+    public async Task GatherAsync_ShouldAskTheFirstChunkWhenTheCallerAsksForIt_AndEachNextOneAheadOfTheCaller()
     {
         var client = new ScriptedClient();
-        var chunks = Gather(client, Requests("a", "b", "c"), chunkSize: 1);
+        var chunks = Gather(client, Requests("a", "b", "c", "d"), chunkSize: 1);
 
         client.Calls.ShouldBeEmpty();
         await using var enumerator = chunks.GetAsyncEnumerator();
         client.Calls.ShouldBeEmpty();
 
-        (await enumerator.MoveNextAsync()).ShouldBeTrue();
-        client.Calls.Count.ShouldBe(1);
+        // The caller holds a chunk while the next one is asked; the one after that waits for the caller to take it.
         (await enumerator.MoveNextAsync()).ShouldBeTrue();
         client.Calls.Count.ShouldBe(2);
+        (await enumerator.MoveNextAsync()).ShouldBeTrue();
+        client.Calls.Count.ShouldBe(3);
         enumerator.Current.Keys.ShouldBe(["b"]);
     }
 
@@ -111,9 +112,11 @@ public sealed class ChunkedGatheringTests
         await foreach (var chunk in Gather(client, Requests("a", "b", "c"), chunkSize: 1, timeoutForChunk: _ => Seconds(2), budget: Seconds(5)))
         {
             chunks.Add(chunk);
-            _time.Advance(Seconds(2));   // the caller stores the chunk
+            _time.Advance(Seconds(4));   // the caller stores the chunk
         }
 
+        // The second chunk was asked at 0 s, ahead of the caller's work on the first; the third would start at 4 s,
+        // once the caller took the second, and end at 6 s, past the 5 s budget.
         chunks.Select(chunk => chunk.Status)
             .ShouldBe([GatheredChunkStatus.Gathered, GatheredChunkStatus.Gathered, GatheredChunkStatus.NotAsked]);
         client.Calls.Count.ShouldBe(2);
