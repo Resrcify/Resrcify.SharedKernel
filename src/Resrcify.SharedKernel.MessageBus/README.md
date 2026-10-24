@@ -254,8 +254,14 @@ internal sealed class GuildProfileService(IScatterGatherClient client)
 
 `GatherInChunksAsync` asks for the items `chunkSize` at a time, one chunk after another, each chunk with its own
 timeout (`timeoutForChunk`, given the chunk's number of items), and yields each chunk once it is gathered
-(`GatheredChunk<TResponse>`). It is lazy: a chunk is asked only when the caller asks for it.
+(`GatheredChunk<TResponse>`).
 
+- **One chunk ahead of the caller:**
+  - the first chunk is asked when the caller asks for it;
+  - each next one as soon as the one before is gathered, so it is gathered while the caller handles that one;
+  - the one after it waits until the caller takes it;
+  - so one gather is under way at a time (each chunk's timeout and the responders' pace assume that), and at most two
+    chunks' answers are held: the one the caller holds and the one being gathered.
 - **What a chunk carries:**
   - `Index` (from 0) and `Count` (the chunks in all);
   - its `Keys` and `Timeout`;
@@ -266,10 +272,14 @@ timeout (`timeoutForChunk`, given the chunk's number of items), and yields each 
 - **With a `budget`:**
   - it counts from the first chunk, including the caller's work between chunks;
   - a chunk whose timeout no longer fits in what is left isn't asked, nor any after it;
+  - the check is made as a chunk is about to start, which, a chunk ahead, is before the caller's work on the chunk
+    before it: that work counts against the chunks after it, not against the next one;
   - they come once, together, as `NotAsked`, with all their keys, and the gather ends.
 - **Cancelling the token** is the caller's own act, so it throws instead of failing a chunk.
+- **Stopping early** (a `break`, an exception, `DisposeAsync` of the enumerator) or cancelling cancels the chunk being
+  gathered ahead, and `DisposeAsync` returns once it has ended (its answers are dropped). Nothing is asked after that.
 - **Order and argument checks:**
-  - the chunks follow the order of the requests' keys;
+  - the chunks follow the order of the requests' keys, each yielded once;
   - no requests means no chunks;
   - a `chunkSize` below 1, or a negative budget, throws at the call.
 
@@ -303,8 +313,8 @@ await foreach (var chunk in client.GatherInChunksAsync<GetGuildRequest, GetGuild
 }
 ```
 
-Or process each chunk before the next is asked, so only one chunk's answers are held at a time, as storing the
-tracked players' profiles does (each chunk in a scope of its own):
+Or process each chunk as it comes, so at most two chunks' answers are held (the one being stored and the next, gathered
+meanwhile), as storing the tracked players' profiles does (each chunk in a scope of its own):
 
 ```csharp
 await foreach (var chunk in client.GatherInChunksAsync<PlayerProfileRequest, PlayerProfileResponse>(
@@ -760,6 +770,7 @@ The package's own metrics (`MessageBusDiagnostics.MeterName`):
 | A request's requester stops waiting while it is handled | The handler's token is cancelled and the request is dropped unanswered. |
 | A responder stops consuming mid-request (unhealthy, or shutting down) | The handler's token is cancelled and the request goes back to the queue, for another instance. |
 | A responder's host is stopped twice at once, or disposed while it stops (a test host: `WebApplicationFactory` stops it while `app.RunAsync()` does too), or stops while the health gate restarts a queue | Each queue's bus is stopped once, and `Stopped consuming <queue>` logged once. No bus runs after the host stopped: one that was starting is stopped as soon as it has started. |
+| A service's host is stopped twice at once, and its container disposed meanwhile (a test host, as above) | The service's own bus is disposed once (Rebus' `BusDisposing` fires once). A stop or disposal that arrives while it is being disposed waits until it is, then returns (logged at `Debug`: `... is being disposed by another caller: waiting until it is`), so none returns early and none disposes it again: Rebus' own guards don't stop two callers at once, and the second then threw `ObjectDisposedException` from a periodic task's disposal. A production host stops once. |
 | An integration event's handler keeps failing | After 5 attempts (or the strategy's `RetryStrategy`) it moves to the service's `<input queue>.error` queue, counted in `messagebus.messages.dead_lettered`. |
 | A message is moved back from the error queue (`IErrorQueue.RetryAsync`) | It is handled again from the handler that failed: the handlers that had finished with it don't run twice. |
 | An outbox message is retried after its handler published | The event goes out again under the same message ID; a subscriber with `SkipDuplicateEvents()` handles it once. |

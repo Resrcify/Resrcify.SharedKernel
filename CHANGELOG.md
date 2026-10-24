@@ -3,6 +3,56 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.12.0 (2026-10-24)
+
+### Fixed
+
+- **The service's bus is disposed once, however many callers dispose it at once** (Resrcify.SharedKernel.MessageBus).
+  A test host stops its host twice at once: `WebApplicationFactory.DisposeAsync` stops it, which wakes `Program.cs`'s
+  `app.RunAsync()`, and that stops it too. Each stop disposed the bus (Rebus.ServiceProvider's hosted service), and
+  the container's disposal did once more (its disposal helper). Rebus' own guards against a second disposal (in
+  `RebusBus`, its error tracker, its periodic tasks) check a flag and then set it, so two callers could both pass
+  them. The second then cancelled a `CancellationTokenSource` the first had disposed: `ObjectDisposedException` from
+  `TplAsyncTask.Dispose`, failing a test class's cleanup about one run in seven in the services' suites. Rebus' master
+  has the same guards, so upgrading Rebus doesn't help. A production host (SIGTERM) stops once and was never affected.
+  - **Now:** `AddMessageBus` puts a wrapper around the bus, one-way or with an input queue, as the outermost `IBus`
+    (after the configuration strategy's own decorators), so it is the bus the hosted service and the disposal helper
+    hold. It disposes the bus inside once. A caller that arrives during that disposal waits until it has ended, then
+    returns, logged at `Debug` (`Bus ... is being disposed by another caller: waiting until it is`). A call back from
+    inside the disposal (Rebus disposes what it resolved, the wrapper included) returns at once. Every other `IBus`
+    member, `Advanced` included, goes to the bus inside.
+  - **Unchanged:** the public API, and a single stop.
+
+### Changed
+
+- **`IScatterGatherClient.GatherInChunksAsync` gathers one chunk ahead of the caller** (Resrcify.SharedKernel.MessageBus,
+  and Resrcify.SharedKernel.Abstractions' documentation of it). It was strictly lazy: chunk N+1 was asked only when the
+  caller asked for it, so while the caller processed chunk N (stored it, as Sentinel's tracked players do) nothing was
+  gathered.
+  - **Now:** each next chunk is asked as soon as the one before is gathered, so it is gathered while the caller handles
+    that one. The one after it waits until the caller takes it.
+  - **Never more:** one gather is under way at a time (each chunk's timeout and the responders' per-instance pace assume
+    that), and at most two chunks' answers are held: the caller's and the one being gathered.
+  - **Unchanged:** the chunks come in order, each once; a throwing chunk is yielded as failed and the next still
+    asked; `Counts`; the first chunk is asked only when the caller asks for it; the public API.
+  - **The budget:** still checked for each chunk as it is about to start, so a chunk whose timeout no longer fits isn't
+    asked, nor any after it. That start is now ahead of the caller's work on the chunk before, so that work counts
+    against the chunks after it, not against the next one.
+  - **Stopping early:** a `break`, an exception or `DisposeAsync` of the enumerator, or the token's cancellation,
+    cancels the chunk being gathered ahead. The enumerator's `DisposeAsync` returns once it has ended; its answers are
+    dropped, and nothing is asked after that.
+
+### Adopting it
+
+- **Every service:** upgrade. No call site changes.
+- **A test that counts a scripted client's calls while it enumerates chunks** (e.g. `ScatterGatherClientStandIn.Calls`
+  after the first chunk) sees one more: the chunk ahead. **A test whose caller moves a fake clock between chunks** sees
+  that work count against the chunk after next, and, against the real client, moves the clock while the next chunk is
+  being gathered: keep each move below that chunk's timeout (or the gather ends at it). SharedKernel's own tests of the
+  chunked gather changed this way with this release.
+- **A test that stops a host twice at once** no longer fails its cleanup with `ObjectDisposedException` from the
+  message bus.
+
 ## 4.11.0 (2026-10-23)
 
 ### Fixed

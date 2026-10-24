@@ -4,7 +4,9 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Resrcify.SharedKernel.MessageBus.Broker;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Rebus.Bus;
 using Rebus.Config;
+using Rebus.Logging;
 using Rebus.Pipeline;
 using Rebus.Pipeline.Receive;
 using Rebus.Retry;
@@ -12,6 +14,7 @@ using Rebus.Retry.Simple;
 using Resrcify.SharedKernel.Abstractions.MessageBus;
 using Resrcify.SharedKernel.MessageBus.Diagnostics;
 using Resrcify.SharedKernel.MessageBus.ErrorQueues;
+using Resrcify.SharedKernel.MessageBus.Lifetime;
 using Resrcify.SharedKernel.MessageBus.PublishSubscribe;
 using Rebus.Routing.TypeBased;
 using Rebus.Transport;
@@ -28,7 +31,9 @@ public static class MessageBusServiceCollectionExtensions
     /// <c>&lt;input queue&gt;.error</c> queue, and tracing (Rebus.Diagnostics) on every bus. Destination queues of
     /// registered messages are declared when the bus starts, so a request sent before its responder's
     /// first start waits in its queue instead of being dropped. The builder's
-    /// <see cref="Abstractions.IBusConfigurationStrategy"/> runs last on every bus, so it can change any default.
+    /// <see cref="Abstractions.IBusConfigurationStrategy"/> runs last on every bus, so it can change any default. The
+    /// bus is disposed once, however many callers dispose it at once (a test host stops its host twice at once): a
+    /// caller that arrives during the disposal returns once it has ended.
     /// </summary>
     /// <example>
     /// <code>
@@ -126,6 +131,11 @@ public static class MessageBusServiceCollectionExtensions
                     });
                     settings.ConfigureEveryBus(options, provider);
                     strategy.ConfigureOptions(options);
+                    // Last, so it is the outermost bus (Rebus runs the decorator registered last first): the one the
+                    // host's stops and the container's disposal dispose, at once in a test host.
+                    options.Decorate<IBus>(context => new DisposeOnceBus(
+                        context.Get<IBus>(),
+                        context.Get<IRebusLoggerFactory>().GetLogger<DisposeOnceBus>()));
                 });
         });
         return services;

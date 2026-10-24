@@ -55,21 +55,24 @@ public sealed class ScatterGatherTransportGatherInChunksTests
         {
             var chunks = new List<GatheredChunk<Echoed>>();
             await foreach (var chunk in Client(requester).GatherInChunksAsync<Echo, Echoed>(
-                Requests(3),
+                Requests(4),
                 1,
                 _ => TimeSpan.FromSeconds(4),
-                budget: TimeSpan.FromSeconds(10)))
+                budget: TimeSpan.FromSeconds(9)))
             {
                 chunks.Add(chunk);
-                // The caller's work between chunks, 4 s each on the container's clock: the third chunk would start at
-                // 8 s and end at 12 s, past the 10 s budget. On the system clock nothing would have gone.
-                time.Advance(TimeSpan.FromSeconds(4));
+                // The caller's work on each chunk, 3 s on the container's clock, while the next chunk is gathered (it
+                // started as the one before was gathered: the second at 0 s, the third at 3 s), so the clock never
+                // reaches the timeout of a chunk under way. The fourth would start at 6 s and end at 10 s, past the
+                // 9 s budget. On the system clock nothing would have gone.
+                time.Advance(TimeSpan.FromSeconds(3));
             }
 
             chunks.Select(chunk => chunk.Status)
-                .ShouldBe([GatheredChunkStatus.Gathered, GatheredChunkStatus.Gathered, GatheredChunkStatus.NotAsked]);
-            chunks[2].Keys.ShouldBe(["2"]);
-            calls.Count.ShouldBe(2);
+                .ShouldBe([GatheredChunkStatus.Gathered, GatheredChunkStatus.Gathered, GatheredChunkStatus.Gathered, GatheredChunkStatus.NotAsked]);
+            chunks.Take(3).ShouldAllBe(chunk => chunk.Gathered!.IsComplete);
+            chunks[3].Keys.ShouldBe(["3"]);
+            calls.Count.ShouldBe(3);
         }
     }
 
