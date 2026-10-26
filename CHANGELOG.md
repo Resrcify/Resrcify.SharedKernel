@@ -3,6 +3,30 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.13.0 (unreleased)
+
+### Fixed
+
+- **The duration histograms bucket by seconds** (Resrcify.SharedKernel.Mediator, MessageBus and UnitOfWork):
+  `mediator.request.duration`, `messagebus.requests.duration`, `messagebus.rate_limiter.wait`,
+  `messagebus.events.duration`, `messagebus.scatter_gather.batch.duration`, `outbox.message.duration` and
+  `outbox.message.wait`. They record seconds but gave no bucket boundaries, so OpenTelemetry used its default ones
+  (0, 5, 10, 25, ... 10000), which are sized for milliseconds. Almost every duration fell into the first bucket or two,
+  and a quantile came out as a fixed fraction of a bucket's edge: in production SwgohApi's arena profiles showed a p50
+  of 2.5 s, a p90 of 4.5 s and a p99 of 4.95 s (the 0-5 s bucket), where the day before, on MassTransit, the same
+  requests' consume duration had a p50 of 0.3 s.
+  - **Now:** each takes `DurationBuckets.Seconds` as its advice, 5 ms to 1 h (below).
+  - **What a consumer sees:** the `_bucket` series of these histograms get new `le` values once a service moves to this
+    version. A dashboard or alert that reads their quantiles reads real durations from then on; one that matched a
+    specific `le` value (`le="5"`) has to be changed. Nothing changes in the code that records them.
+
+### Added
+
+- **`DurationBuckets.Seconds`** (Resrcify.SharedKernel.Abstractions, namespace
+  `Resrcify.SharedKernel.Abstractions.Metrics`): the bucket boundaries of a duration histogram in seconds, 5 ms to 1 h
+  with most of them between 0.1 s and 10 s. Hand them to a service's own second-based histograms:
+  `advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = DurationBuckets.Seconds }`.
+
 ## 4.12.0 (2026-10-24)
 
 ### Fixed

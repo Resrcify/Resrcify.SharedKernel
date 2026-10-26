@@ -5,11 +5,13 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics.Metrics;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using Resrcify.SharedKernel.Abstractions.Mediator;
+using Resrcify.SharedKernel.Abstractions.Metrics;
 using Resrcify.SharedKernel.Mediator.Diagnostics;
 using Resrcify.SharedKernel.Mediator.Extensions;
 using Resrcify.SharedKernel.Results.Primitives;
@@ -69,6 +71,14 @@ public sealed class MediatorDiagnosticsTests : IDisposable
         var (seconds, tags) = DurationOf(nameof(DiagnosedSuccess));
         tags["outcome"].ShouldBe("success");
         seconds.ShouldBe(0.25);
+    }
+
+    [Fact]
+    public void Duration_ShouldBucketBySeconds_WhenAMeterListenerSubscribes()
+    {
+        var boundaries = AdvisedBoundaries(typeof(MediatorDiagnostics), MediatorDiagnostics.MeterName);
+
+        boundaries["mediator.request.duration"].ShouldBe(DurationBuckets.Seconds);
     }
 
     [Fact]
@@ -136,6 +146,24 @@ public sealed class MediatorDiagnosticsTests : IDisposable
         services.AddSingleton<TimeProvider>(_clock);
         services.AddMediator(config => config.RegisterServicesFromAssemblies(typeof(MediatorDiagnosticsTests).Assembly));
         return services.BuildServiceProvider();
+    }
+
+    private static Dictionary<string, IReadOnlyList<double>?> AdvisedBoundaries(
+        Type diagnostics,
+        string meterName)
+    {
+        RuntimeHelpers.RunClassConstructor(diagnostics.TypeHandle);
+        var boundaries = new Dictionary<string, IReadOnlyList<double>?>(StringComparer.Ordinal);
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, _) =>
+            {
+                if (instrument.Meter.Name == meterName && instrument is Histogram<double> histogram)
+                    boundaries[histogram.Name] = histogram.Advice?.HistogramBucketBoundaries;
+            },
+        };
+        listener.Start();
+        return boundaries;
     }
 
     private Activity ActivityOf(string requestName)

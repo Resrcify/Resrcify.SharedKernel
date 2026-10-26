@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Linq;
+using Resrcify.SharedKernel.Abstractions.Metrics;
 using Resrcify.SharedKernel.Results.Primitives;
 
 namespace Resrcify.SharedKernel.Mediator.Diagnostics;
@@ -45,7 +46,9 @@ public static class MediatorDiagnostics
     private static readonly Histogram<double> Duration = Meter.CreateHistogram<double>(
         "mediator.request.duration",
         unit: "s",
-        description: "How long a request sent through the mediator took, by request and outcome.");
+        description: "How long a request sent through the mediator took, by request and outcome.",
+        tags: null,
+        advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = DurationBuckets.Seconds });
 
     /// <summary>Whether anything listens: a trace listener for the source, or a meter listener for the duration.</summary>
     internal static bool IsObserved

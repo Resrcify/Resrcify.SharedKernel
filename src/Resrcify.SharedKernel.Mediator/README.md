@@ -614,7 +614,8 @@ The mediator itself (whatever behaviors are registered) records every `Send`:
   recorded on the span. The status is `Error` for an exception and for a failure another try may fix
   (`ErrorType.IsTransient()`); a failure about the request (not found, invalid, ...) leaves it unset.
 - **Metrics**: `.AddMeter(MediatorDiagnostics.MeterName)`. `mediator.request.duration` (s), tagged `request` (the
-  request type's name) and `outcome` (`success`, the first error's `ErrorType`, or `exception`).
+  request type's name) and `outcome` (`success`, the first error's `ErrorType`, or `exception`), bucketed by
+  `DurationBuckets.Seconds` (5 ms to 1 h).
 
 When nothing listens, a send costs one check: no span, no clock reading, no tags.
 

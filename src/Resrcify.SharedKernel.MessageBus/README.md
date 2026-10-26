@@ -747,6 +747,8 @@ The package's own metrics (`MessageBusDiagnostics.MeterName`):
 | `messagebus.messages.unknown` | `message` | Messages of a type this service doesn't receive (e.g. a deleted handler's event) |
 | `messagebus.events.name_clashes` | `event`, `publishers` | One event name arriving from two services: rename one (owner prefix) |
 
+The histograms in seconds are bucketed by `DurationBuckets.Seconds` (Abstractions: 5 ms to 1 h).
+
 ## Behaviour you can rely on
 
 | Situation | What happens |

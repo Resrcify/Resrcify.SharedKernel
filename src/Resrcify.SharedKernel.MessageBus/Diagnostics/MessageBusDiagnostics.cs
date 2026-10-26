@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.Metrics;
 using System.Linq;
+using Resrcify.SharedKernel.Abstractions.Metrics;
 using Resrcify.SharedKernel.MessageBus.PublishSubscribe;
 using Resrcify.SharedKernel.MessageBus.RateLimitedQueues;
 using Resrcify.SharedKernel.MessageBus.ScatterGather;
@@ -75,7 +76,9 @@ public static class MessageBusDiagnostics
     private static readonly Histogram<double> BatchDuration = Meter.CreateHistogram<double>(
         "messagebus.scatter_gather.batch.duration",
         unit: "s",
-        description: "From sending a batch's requests to its end: complete, timeout or stopped.");
+        description: "From sending a batch's requests to its end: complete, timeout or stopped.",
+        tags: null,
+        advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = DurationBuckets.Seconds });
 
     private static readonly Counter<long> RequestsHandled = Meter.CreateCounter<long>(
         "messagebus.requests.handled",
@@ -85,7 +88,9 @@ public static class MessageBusDiagnostics
     private static readonly Histogram<double> RequestDuration = Meter.CreateHistogram<double>(
         "messagebus.requests.duration",
         unit: "s",
-        description: "How long the handler took, by outcome (excludes the rate-limit wait).");
+        description: "How long the handler took, by outcome (excludes the rate-limit wait).",
+        tags: null,
+        advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = DurationBuckets.Seconds });
 
     private static readonly Counter<long> RequestsDropped = Meter.CreateCounter<long>(
         "messagebus.requests.dropped",
@@ -95,7 +100,9 @@ public static class MessageBusDiagnostics
     private static readonly Histogram<double> RateLimiterWait = Meter.CreateHistogram<double>(
         "messagebus.rate_limiter.wait",
         unit: "s",
-        description: "How long a request waited for its queue's rate limit.");
+        description: "How long a request waited for its queue's rate limit.",
+        tags: null,
+        advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = DurationBuckets.Seconds });
 
     private static readonly Counter<long> EventsPublished = Meter.CreateCounter<long>(
         "messagebus.events.published",
@@ -125,7 +132,9 @@ public static class MessageBusDiagnostics
     private static readonly Histogram<double> EventDuration = Meter.CreateHistogram<double>(
         "messagebus.events.duration",
         unit: "s",
-        description: "How long an integration event's handlers took, by outcome.");
+        description: "How long an integration event's handlers took, by outcome.",
+        tags: null,
+        advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = DurationBuckets.Seconds });
 
     private static readonly ObservableGauge<int> QueueConsuming = Meter.CreateObservableGauge(
         "messagebus.queue.consuming",
