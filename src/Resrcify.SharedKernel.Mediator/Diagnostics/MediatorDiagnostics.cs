@@ -12,7 +12,7 @@ namespace Resrcify.SharedKernel.Mediator.Diagnostics;
 /// <para>
 /// Traces (<c>.AddSource(MediatorDiagnostics.ActivitySourceName)</c>): one span per request, named after the request
 /// type, tagged <c>mediator.request.type</c> (its full name) and, when it ends, <c>mediator.outcome</c>
-/// (<c>success</c>, <c>failure</c> or <c>exception</c>); a failure also gets <c>mediator.error.code</c> and
+/// (<c>success</c>, <c>failure</c>, <c>exception</c> or <c>cancelled</c>: its caller cancelled it); a failure also gets <c>mediator.error.code</c> and
 /// <c>mediator.error.type</c> (its first error's), and an exception is recorded on the span. The span's status is
 /// <c>Error</c> for an exception and for a failure another try might fix (<see cref="ErrorTypeExtensions.IsTransient"/>);
 /// a failure about the request (not found, invalid, ...) is an expected answer and leaves it unset.
@@ -20,7 +20,8 @@ namespace Resrcify.SharedKernel.Mediator.Diagnostics;
 /// <para>
 /// Metrics (<c>.AddMeter(MediatorDiagnostics.MeterName)</c>): <c>mediator.request.duration</c> (s), how long a
 /// request took, tagged <c>request</c> (the request type's name) and <c>outcome</c>: <c>success</c>, the
-/// <see cref="ErrorType"/> of a failure's first error (<c>NotFound</c>, <c>Validation</c>, ...), or <c>exception</c>.
+/// <see cref="ErrorType"/> of a failure's first error (<c>NotFound</c>, <c>Validation</c>, ...), <c>exception</c>, or
+/// <c>cancelled</c> (an <see cref="OperationCanceledException"/> while the caller's token was cancelled: no error).
 /// </para>
 /// <para>
 /// When nothing listens (no trace listener for the source, no meter listener for the histogram), a send costs one
@@ -38,6 +39,8 @@ public static class MediatorDiagnostics
     internal const string FailureOutcome = "failure";
 
     internal const string ExceptionOutcome = "exception";
+
+    internal const string CancelledOutcome = "cancelled";
 
     internal static ActivitySource ActivitySource { get; } = new(ActivitySourceName);
 
@@ -85,13 +88,25 @@ public static class MediatorDiagnostics
         RecordDuration(requestType, SuccessOutcome, elapsed);
     }
 
-    /// <summary>Records a request that threw <paramref name="exception"/>.</summary>
+    /// <summary>
+    /// Records a request that threw <paramref name="exception"/>: <c>cancelled</c> when its caller cancelled it
+    /// (<paramref name="cancelledByCaller"/>: an <see cref="OperationCanceledException"/> while the caller's token was
+    /// cancelled), which leaves the span's status unset; <c>exception</c> otherwise, a handler's own timeout included.
+    /// </summary>
     internal static void RecordThrown(
         Activity? activity,
         Type requestType,
         Exception exception,
+        bool cancelledByCaller,
         TimeSpan elapsed)
     {
+        if (cancelledByCaller)
+        {
+            activity?.SetTag("mediator.outcome", CancelledOutcome);
+            RecordDuration(requestType, CancelledOutcome, elapsed);
+            return;
+        }
+
         if (activity is not null)
         {
             activity.SetTag("mediator.outcome", ExceptionOutcome);

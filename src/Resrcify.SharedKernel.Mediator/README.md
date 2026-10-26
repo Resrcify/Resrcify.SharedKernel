@@ -610,11 +610,13 @@ The mediator itself (whatever behaviors are registered) records every `Send`:
 
 - **Traces**: `.AddSource(MediatorDiagnostics.ActivitySourceName)` (`Resrcify.SharedKernel.Mediator`). One span per
   request, named after its type, tagged `mediator.request.type` and `mediator.outcome` (`success`, `failure`,
-  `exception`); a failure adds `mediator.error.code` and `mediator.error.type` (its first error's), an exception is
+  `exception`, `cancelled`); a failure adds `mediator.error.code` and `mediator.error.type` (its first error's), an exception is
   recorded on the span. The status is `Error` for an exception and for a failure another try may fix
-  (`ErrorType.IsTransient()`); a failure about the request (not found, invalid, ...) leaves it unset.
+  (`ErrorType.IsTransient()`); a failure about the request (not found, invalid, ...) leaves it unset, and so does a
+  request its caller cancelled (`cancelled`: an `OperationCanceledException` while the caller's token is cancelled; a
+  handler's own timeout stays `exception`).
 - **Metrics**: `.AddMeter(MediatorDiagnostics.MeterName)`. `mediator.request.duration` (s), tagged `request` (the
-  request type's name) and `outcome` (`success`, the first error's `ErrorType`, or `exception`), bucketed by
+  request type's name) and `outcome` (`success`, the first error's `ErrorType`, `exception` or `cancelled`), bucketed by
   `DurationBuckets.Seconds` (5 ms to 1 h).
 
 When nothing listens, a send costs one check: no span, no clock reading, no tags.

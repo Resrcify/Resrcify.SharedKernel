@@ -20,6 +20,19 @@ every package in the repository is released together under one version.
     version. A dashboard or alert that reads their quantiles reads real durations from then on; one that matched a
     specific `le` value (`le="5"`) has to be changed. Nothing changes in the code that records them.
 
+### Changed
+
+- **A request its caller cancelled is `cancelled`, not `exception`** (Resrcify.SharedKernel.Mediator):
+  `mediator.request.duration`'s `outcome` tag and the span's `mediator.outcome`. An `OperationCanceledException` thrown
+  while the caller's `CancellationToken` is cancelled (a message bus queue stopping mid-request, a host shutting down,
+  an HTTP client giving up) is the caller's choice, not a failure: the span's status stays unset and no exception is
+  recorded on it. Production SwgohApi (2026-10-26) counted 68 detailed profiles as `exception` in 4 hours, every one a
+  request its queue cancelled while stepping aside (64 `cancelled` on `messagebus.requests.duration`). An
+  `OperationCanceledException` while the caller's token is NOT cancelled (a handler's own timeout, e.g. an `HttpClient`
+  timeout) stays `exception`, with an `Error` span.
+  - **What a consumer sees:** a new `outcome="cancelled"` series; fewer `outcome="exception"` ones. An alert on
+    `exception` stops firing for cancellations. The exception still reaches the caller unchanged.
+
 ### Added
 
 - **`DurationBuckets.Seconds`** (Resrcify.SharedKernel.Abstractions, namespace

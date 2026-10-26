@@ -117,6 +117,34 @@ public sealed class MediatorDiagnosticsTests : IDisposable
     }
 
     [Fact]
+    public async Task Send_ShouldRecordCancelled_NotAnException_WhenItsCallerCancelsIt()
+    {
+        using var provider = BuildProvider();
+        using var caller = new CancellationTokenSource();
+        await caller.CancelAsync();
+
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => provider.GetRequiredService<ISender>().Send(new DiagnosedCancelled(), caller.Token));
+
+        var activity = ActivityOf(nameof(DiagnosedCancelled));
+        activity.GetTagItem("mediator.outcome").ShouldBe("cancelled");
+        activity.Status.ShouldBe(ActivityStatusCode.Unset);   // the caller's choice, not an error
+        activity.Events.ShouldNotContain(e => e.Name == "exception");
+        DurationOf(nameof(DiagnosedCancelled)).Tags["outcome"].ShouldBe("cancelled");
+    }
+
+    [Fact]
+    public async Task Send_ShouldRecordAnException_WhenTheHandlerTimesOutOnItsOwn_TheCallerNotCancelling()
+    {
+        await Should.ThrowAsync<OperationCanceledException>(() => SendAsync(new DiagnosedOwnTimeout()));
+
+        var activity = ActivityOf(nameof(DiagnosedOwnTimeout));
+        activity.GetTagItem("mediator.outcome").ShouldBe("exception");
+        activity.Status.ShouldBe(ActivityStatusCode.Error);
+        DurationOf(nameof(DiagnosedOwnTimeout)).Tags["outcome"].ShouldBe("exception");
+    }
+
+    [Fact]
     public async Task Send_ShouldRecordTheSend_WhenTheRequestIsSentAsAnObject()
     {
         using var provider = BuildProvider();
@@ -182,6 +210,10 @@ public sealed class MediatorDiagnosticsTests : IDisposable
 
     private sealed class DiagnosedAsObject : IRequest<Result>;
 
+    private sealed class DiagnosedCancelled : IRequest<Result>;
+
+    private sealed class DiagnosedOwnTimeout : IRequest<Result>;
+
     private sealed class DiagnosedSuccessHandler(TimeProvider clock) : IRequestHandler<DiagnosedSuccess, Result>
     {
         public Task<Result> Handle(DiagnosedSuccess request, CancellationToken cancellationToken)
@@ -207,6 +239,22 @@ public sealed class MediatorDiagnosticsTests : IDisposable
     {
         public Task<Result> Handle(DiagnosedThrow request, CancellationToken cancellationToken)
             => throw new InvalidOperationException("The handler threw.");
+    }
+
+    private sealed class DiagnosedCancelledHandler : IRequestHandler<DiagnosedCancelled, Result>
+    {
+        public Task<Result> Handle(DiagnosedCancelled request, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(Result.Success());
+        }
+    }
+
+    // An HttpClient timeout: an OperationCanceledException the caller's token had nothing to do with.
+    private sealed class DiagnosedOwnTimeoutHandler : IRequestHandler<DiagnosedOwnTimeout, Result>
+    {
+        public Task<Result> Handle(DiagnosedOwnTimeout request, CancellationToken cancellationToken)
+            => throw new OperationCanceledException("The handler's own timeout ran out.");
     }
 
     private sealed class DiagnosedAsObjectHandler : IRequestHandler<DiagnosedAsObject, Result>
