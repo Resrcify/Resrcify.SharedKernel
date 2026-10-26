@@ -36,7 +36,11 @@ It exists to keep dependency direction explicit and prevent circular references 
       `RetrySchedule(MaxAttempts, FirstDelay, MaxDelay, Jitter)`, SharedKernel's one backoff: attempts in all, the
       first delay doubling up to the longest (`DelayAfter(failedAttempt)`), which the outbox, the message bus and the
       HTTP resilience pipeline take as their retry options.
-- Interfaces/contracts only, but for the resilience registration and its default classifier. (Some interfaces carry a
+    - `Metrics/`: `DurationBuckets.Seconds`, the bucket boundaries (5 ms to 1 h) every SharedKernel duration histogram
+      in seconds advises, for a service's own too:
+      `advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = DurationBuckets.Seconds }`. Without advice,
+      OpenTelemetry buckets a histogram for milliseconds, and durations in seconds all land in the first bucket.
+- Interfaces/contracts only, but for the resilience registration and its default classifier, and the duration buckets. (Some interfaces carry a
   default: `ISingleValueObject`'s static `FromPersisted` is `Create(value).Value` unless the value object implements
   it; `IIdempotentRequest.IdempotencyScope` and `INonConcurrentRequest.ConcurrencyKey` are `null` unless the request
   sets them.)

@@ -17,6 +17,7 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using Quartz.Diagnostics;
 using Rebus.Diagnostics;
+using Resrcify.SharedKernel.Abstractions.Metrics;
 using Resrcify.SharedKernel.Mediator.Diagnostics;
 using Resrcify.SharedKernel.MessageBus.Diagnostics;
 using Resrcify.SharedKernel.Observability.Configuration;
@@ -71,6 +72,29 @@ public sealed partial class ServiceTelemetryServiceCollectionExtensionsTests
         meterProvider.ForceFlush();
 
         exported.ShouldContain(metric => metric.MeterName == meterName && metric.Name == instrument);
+    }
+
+    [Fact]
+    public void AddServiceTelemetry_ShouldExportADurationHistogram_InTheSecondsBucketsItAdvises()
+    {
+        var exported = new List<Metric>();
+        using var provider = Telemetry.Build(options => options.ConfigureMetrics = metrics => metrics.AddInMemoryExporter(exported));
+        var meterProvider = provider.GetRequiredService<MeterProvider>();
+        var instrument = $"test.duration.{Guid.NewGuid():N}";
+        using var meter = new Meter(MediatorDiagnostics.MeterName);
+        meter.CreateHistogram<double>(
+                instrument,
+                unit: "s",
+                description: null,
+                tags: null,
+                advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = DurationBuckets.Seconds })
+            .Record(2);
+
+        meterProvider.ForceFlush();
+
+        var buckets = HistogramBuckets(exported.Single(metric => metric.Name == instrument));
+        buckets.Select(bucket => bucket.ExplicitBound).SkipLast(1).ShouldBe(DurationBuckets.Seconds);
+        buckets.Single(bucket => bucket.BucketCount > 0).ExplicitBound.ShouldBe(2.5);
     }
 
     [Fact]
@@ -457,6 +481,17 @@ public sealed partial class ServiceTelemetryServiceCollectionExtensionsTests
     {
         using var source = new ActivitySource(sourceName);
         using var activity = source.StartActivity("operation");
+    }
+
+    private static List<HistogramBucket> HistogramBuckets(
+        Metric metric)
+    {
+        var buckets = new List<HistogramBucket>();
+        foreach (ref readonly var point in metric.GetMetricPoints())
+            foreach (var bucket in point.GetHistogramBuckets())
+                buckets.Add(bucket);
+
+        return buckets;
     }
 
     private static string RecordMeasurement(

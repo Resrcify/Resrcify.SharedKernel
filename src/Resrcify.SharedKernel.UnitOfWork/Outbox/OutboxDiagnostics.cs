@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using Resrcify.SharedKernel.Abstractions.Metrics;
 
 namespace Resrcify.SharedKernel.UnitOfWork.Outbox;
 
@@ -42,12 +43,16 @@ public static class OutboxDiagnostics
     private static readonly Histogram<double> Duration = Meter.CreateHistogram<double>(
         "outbox.message.duration",
         unit: "s",
-        description: "How long handling an outbox message took.");
+        description: "How long handling an outbox message took.",
+        tags: null,
+        advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = DurationBuckets.Seconds });
 
     private static readonly Histogram<double> Wait = Meter.CreateHistogram<double>(
         "outbox.message.wait",
         unit: "s",
-        description: "How long a processed outbox message waited in the outbox.");
+        description: "How long a processed outbox message waited in the outbox.",
+        tags: null,
+        advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = DurationBuckets.Seconds });
 
     /// <summary>The backlog monitors, by DbContext; the gauges read their last measurement.</summary>
     private static readonly ConcurrentDictionary<string, Func<OutboxBacklog?>> Backlogs = new(StringComparer.Ordinal);

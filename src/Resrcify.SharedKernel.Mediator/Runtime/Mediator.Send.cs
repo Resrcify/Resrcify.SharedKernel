@@ -175,7 +175,7 @@ internal sealed partial class Mediator
             MediatorDiagnostics.RecordSent(activity, typeof(TRequest), response, time.GetElapsedTime(started));
             return response;
         }
-        catch (Exception exception) when (RecordThrown(activity, typeof(TRequest), exception, time.GetElapsedTime(started)))
+        catch (Exception exception) when (RecordThrown(activity, typeof(TRequest), exception, time.GetElapsedTime(started), cancellationToken))
         {
             throw;   // never reached: the filter records and lets the exception go on unchanged
         }
@@ -185,9 +185,12 @@ internal sealed partial class Mediator
         Activity? activity,
         Type requestType,
         Exception exception,
-        TimeSpan elapsed)
+        TimeSpan elapsed,
+        CancellationToken cancellationToken)
     {
-        MediatorDiagnostics.RecordThrown(activity, requestType, exception, elapsed);
+        // Cancelled by its caller: the caller's token was cancelled and the request stopped for it, not a failure.
+        var cancelledByCaller = exception is OperationCanceledException && cancellationToken.IsCancellationRequested;
+        MediatorDiagnostics.RecordThrown(activity, requestType, exception, cancelledByCaller, elapsed);
         return false;
     }
 

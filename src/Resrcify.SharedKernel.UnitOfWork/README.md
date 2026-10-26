@@ -657,6 +657,8 @@ builder.Services.AddHealthChecks().AddOutbox<ShardDbContext>();   // tagged Heal
 | `outbox.messages.poison` | gauge | `context` | Messages that gave up. |
 | `outbox.oldest_waiting.age` | gauge (s) | `context` | How long the oldest waiting message has waited. |
 
+The two histograms are bucketed by `DurationBuckets.Seconds` (Abstractions: 5 ms to 1 h).
+
 The gauges come from a backlog monitor that measures every 30 s (`BacklogCheckInterval`), so neither a
 scrape nor a health check queries the database. Both outbox registrations run it: `AddOutboxProcessing<TDbContext>`
 and the bare `quartz.AddProcessOutboxMessagesJob<TDbContext>()` (every 30 s; `AddOutboxProcessing` sets its own
