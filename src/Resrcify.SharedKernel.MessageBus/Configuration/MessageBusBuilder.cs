@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -18,6 +19,7 @@ using Resrcify.SharedKernel.MessageBus.PublishSubscribe;
 using Resrcify.SharedKernel.MessageBus.ScatterGather;
 using Resrcify.SharedKernel.MessageBus.RateLimitedQueues;
 using Resrcify.SharedKernel.MessageBus.Abstractions;
+using Resrcify.SharedKernel.MessageBus.Diagnostics;
 
 namespace Resrcify.SharedKernel.MessageBus.Configuration;
 
@@ -72,6 +74,46 @@ public sealed class MessageBusBuilder
             .ValidateOnStart();
         Services.AddSingleton<IValidateOptions<RabbitMqOptions>>(new RabbitMqOptionsValidator(Settings, connection, sectionName));
         return UseRabbitMq(connection);
+    }
+
+    /// <summary>
+    /// Chooses the transport from the host's configuration and environment, the rule the services share:
+    /// <list type="bullet">
+    /// <item>a <c>MessageBus</c> section (any key under it): RabbitMQ, in every environment
+    /// (<see cref="UseRabbitMqFromConfiguration"/>: the section validated when the host starts);</item>
+    /// <item>no section, in Production: RabbitMQ all the same, so the start fails naming the key
+    /// (<c>MessageBus:Host is required.</c>) rather than running an instance whose messages never leave it;</item>
+    /// <item>no section anywhere else (a local run, Development, a test): in memory (<see cref="UseInMemory"/>),
+    /// needing no broker.</item>
+    /// </list>
+    /// The start logs which: RabbitMQ and its broker (never the password) as information; in memory as information in
+    /// Development and as a warning in any other environment, so an instance deployed without its section is visible in
+    /// its log. Nothing is logged once the bus was given another transport afterwards (a later <c>UseRabbitMq</c> or
+    /// <c>UseInMemory</c>, the test harness). The health check (<c>AddHealthChecks().AddMessageBus()</c>) reports the
+    /// transport as for the other two calls (<c>transport</c>: <c>rabbitmq</c> or <c>in-memory</c>).
+    /// </summary>
+    /// <param name="configuration">The host's configuration, to see whether it has a <c>MessageBus</c> section.</param>
+    /// <param name="environment">The host's environment: Production never runs in memory.</param>
+    /// <example><c>services.AddMessageBus(bus =&gt; bus.UseTransportFromConfiguration(configuration, environment).WithServiceName("sandbox"))</c></example>
+    public MessageBusBuilder UseTransportFromConfiguration(
+        IConfiguration configuration,
+        IHostEnvironment environment)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(environment);
+
+        if (TransportSelection.CallsForRabbitMq(configuration, environment))
+            UseRabbitMqFromConfiguration();
+        else
+            UseInMemory();
+
+        Settings.TransportSelection = new TransportSelection(
+            TransportSelection.HasSectionIn(configuration),
+            environment,
+            Settings.Connection,
+            Settings.InMemoryNetwork);
+        Services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, MessageBusTransportStartupLog>());
+        return this;
     }
 
     /// <summary>

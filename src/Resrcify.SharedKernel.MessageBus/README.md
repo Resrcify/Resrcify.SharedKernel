@@ -64,14 +64,14 @@ ArchitectureTesting package's `ConventionalLayerDependencyTests` enforces it (se
 | Folder | What |
 |---|---|
 | `Extensions/` | `AddMessageBus` |
-| `Configuration/` | `MessageBusBuilder`, `RabbitMqConnection`, `RabbitMqOptions` (the `MessageBus` section), the transport (RabbitMQ or in memory), the default bus configuration strategy |
+| `Configuration/` | `MessageBusBuilder`, `RabbitMqConnection`, `RabbitMqOptions` (the `MessageBus` section), the transport (RabbitMQ or in memory, and the choice between them: `TransportSelection`), the default bus configuration strategy |
 | `Broker/` | `BrokerConnectionWatcher`: restarts the buses as soon as RabbitMQ is back |
 | `Abstractions/` | The strategy interfaces: `IBusConfigurationStrategy`, `IMessageSerializationStrategy`, `IRateLimiterStrategy` |
 | `ScatterGather/` | The requester side: reply queue, pending batches, the mediator adapter |
 | `RateLimitedQueues/` | The responder side: one bus per queue, limiters, the health gate, request deadlines |
 | `PublishSubscribe/` | `IEventBus`, the event handler registration and dispatch, `SubscriptionOptions` |
 | `Serialization/` | The wire JSON and its default strategy; the gzip of large bodies (`MessageCompression` and its two pipeline steps) |
-| `Diagnostics/` | `MessageBusDiagnostics` (metrics), the health check, Rebus logging |
+| `Diagnostics/` | `MessageBusDiagnostics` (metrics), the health check, the transport's start-up log, Rebus logging |
 
 ## Install
 
@@ -137,6 +137,10 @@ start, naming it (`MessageBus:Host is required.`). It isn't checked once nothing
 `UseInMemory()` afterwards). The settings are `RabbitMqOptions`, registered as the default `IOptions<RabbitMqOptions>`:
 a service that opens a connection of its own reads them there (`options.Value.ToConnection()`). Another section:
 `UseRabbitMqFromConfiguration("Bus")`.
+
+To run on RabbitMQ where the service is configured for it and in memory where it isn't (a local run without a broker),
+`UseTransportFromConfiguration(configuration, environment)`: see
+[Running without RabbitMQ: in memory](#running-without-rabbitmq-in-memory).
 
 To build the connection yourself, `UseRabbitMq(new RabbitMqConnection(host, port, username, password))`, or
 `UseRabbitMq(provider => ...)` to resolve it when the bus starts. A `RabbitMqConnection` prints without its password.
@@ -594,16 +598,34 @@ the cluster's one address (in Kubernetes, its Service), not at a list of nodes.
 `UseInMemory()` runs every bus of the service in memory: scatter-gather, rate-limited queues and publish/subscribe
 all work within the process. Use it for local runs without a broker and in tests; messages don't survive a restart.
 
+To choose between the two from the host's configuration, the rule the services share:
+
 ```csharp
-services.AddMessageBus(bus =>
-{
-    if (configuration["MessageBus:Host"] is { Length: > 0 })
-        bus.UseRabbitMqFromConfiguration();
-    else
-        bus.UseInMemory();
-    ...
-});
+// Infrastructure, with the host's IConfiguration and IHostEnvironment (builder.Configuration, builder.Environment).
+services.AddMessageBus(bus => bus
+    .UseTransportFromConfiguration(configuration, environment)
+    .WithServiceName("sandbox"));
 ```
+
+| `MessageBus` section | Environment | Transport |
+|---|---|---|
+| yes (any key under it) | any | RabbitMQ (`UseRabbitMqFromConfiguration()`), the section validated when the host starts |
+| no | Production | RabbitMQ all the same: the start fails naming the key (`MessageBus:Host is required.`), rather than running an instance whose messages never leave it |
+| no | any other | in memory (`UseInMemory()`) |
+
+The start logs which, as `Resrcify.SharedKernel.MessageBus.Diagnostics.MessageBusTransportStartupLog`:
+
+| Transport | Level | Line |
+|---|---|---|
+| RabbitMQ | Information | `Message bus: RabbitMQ at {Host}:{Port}, virtual host {VirtualHost} (the MessageBus section)` (never the password) |
+| in memory, Development | Information | `Message bus: in memory (no MessageBus section): ...` |
+| in memory, any other environment | Warning | `Message bus: in memory (no MessageBus section) in {Environment}: ... Set MessageBus__Host, MessageBus__Username and MessageBus__Password to ...` |
+
+The in-memory line says what it costs: for a bus that only publishes, `nothing it publishes leaves this process`; for
+one that receives (an input queue, a rate-limited queue, scatter-gather's replies), also that `nothing outside this
+process reaches its queues`. Nothing is logged once the bus is given another transport afterwards (a later
+`UseRabbitMq` / `UseInMemory`, or the test harness). The health check's `transport` is `rabbitmq` or `in-memory`, as
+for the two calls it chooses between.
 
 To test several services together, give their hosts the same network: `var network = new InMemNetwork();` then
 `bus.UseInMemory(network)` in each.

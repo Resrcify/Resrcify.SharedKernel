@@ -51,6 +51,9 @@ internal sealed class MessageBusSettings
 
     public bool IsInMemory => InMemoryNetwork is not null;
 
+    /// <summary>The transport <c>UseTransportFromConfiguration</c> chose, when the service let it choose.</summary>
+    public TransportSelection? TransportSelection { get; set; }
+
     public Func<IServiceProvider, IBusConfigurationStrategy>? ConfigurationStrategy { get; set; }
     public Func<IServiceProvider, IMessageSerializationStrategy>? SerializationStrategy { get; set; }
     public string? InputQueue { get; set; }

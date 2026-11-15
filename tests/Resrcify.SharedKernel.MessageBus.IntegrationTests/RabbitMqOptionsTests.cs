@@ -13,7 +13,8 @@ namespace Resrcify.SharedKernel.MessageBus.IntegrationTests;
 /// <summary>
 /// <c>UseRabbitMqFromConfiguration</c> over real RabbitMQ: a service given the <c>MessageBus:*</c> settings
 /// (<c>ServiceHostFixture</c>'s keys, its appsettings', its Kubernetes manifest's) connects with them, on a virtual host
-/// of its own whose queues are quorum queues, as on a production cluster.
+/// of its own whose queues are quorum queues, as on a production cluster. <c>UseTransportFromConfiguration</c> does the
+/// same with the section.
 /// </summary>
 [Collection(BusCollection.Name)]
 [SuppressMessage(
@@ -36,6 +37,21 @@ public sealed class RabbitMqOptionsTests(BusFixture bus)
         var reply = await requester.RequestAsync(new PingRequest("configured"), TimeSpan.FromSeconds(15));
 
         reply.Value.ShouldBe(new PingResponse("pong configured"));
+    }
+
+    [Fact]
+    public async Task UseTransportFromConfiguration_ConnectsWithTheMessageBusSection()
+    {
+        var quorum = await bus.QuorumVirtualHostAsync();
+        await using var pod = await ResponderPod.StartAsync(quorum, _requestQueue, perSecond: 100, burst: 10);
+        await using var requester = await ConfiguredRequesterHost.StartAsync(
+            ConfiguredRequesterHost.SettingsFor(quorum),
+            _requestQueue,
+            chooseTheTransport: true);
+
+        var reply = await requester.RequestAsync(new PingRequest("chosen"), TimeSpan.FromSeconds(15));
+
+        reply.Value.ShouldBe(new PingResponse("pong chosen"));
     }
 
     [Fact]

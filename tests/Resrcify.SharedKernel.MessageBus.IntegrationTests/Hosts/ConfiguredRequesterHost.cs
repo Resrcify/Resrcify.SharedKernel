@@ -45,13 +45,19 @@ internal sealed class ConfiguredRequesterHost : IAsyncDisposable
     public static async Task<ConfiguredRequesterHost> StartAsync(
         Dictionary<string, string?> settings,
         string requestQueue,
-        Action<MessageBusBuilder>? configureBus = null)
+        Action<MessageBusBuilder>? configureBus = null,
+        bool chooseTheTransport = false)
     {
         var builder = Host.CreateApplicationBuilder();
         builder.Configuration.AddInMemoryCollection(settings);
         builder.Services.AddMessageBus(bus =>
         {
-            bus.UseRabbitMqFromConfiguration()
+            // UseTransportFromConfiguration picks UseRabbitMqFromConfiguration for a configuration with the section.
+            if (chooseTheTransport)
+                bus.UseTransportFromConfiguration(builder.Configuration, builder.Environment);
+            else
+                bus.UseRabbitMqFromConfiguration();
+            bus
                 .AddMessage<PingRequest>(WireNames.PingRequest, sendTo: requestQueue)
                 .AddMessage<PingResponse>(WireNames.PingResponse)
                 .AddScatterGather();
