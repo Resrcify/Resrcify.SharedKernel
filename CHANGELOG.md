@@ -3,6 +3,32 @@
 All notable changes to the Resrcify.SharedKernel packages. Versions follow [Semantic Versioning](https://semver.org/);
 every package in the repository is released together under one version.
 
+## 4.14.0 (2026-11-15)
+
+### Added
+
+- **`MessageBusBuilder.UseTransportFromConfiguration(configuration, environment)`** (Resrcify.SharedKernel.MessageBus):
+  the services' shared rule for choosing the transport, which SwgohApi and Sandbox each carried a copy of.
+  - **The rule:** a `MessageBus` section (any key under it) means RabbitMQ in every environment
+    (`UseRabbitMqFromConfiguration()`, the section validated when the host starts). No section in Production means
+    RabbitMQ all the same, so the start fails naming the key (`MessageBus:Host is required.`) instead of running an
+    instance whose messages never leave it. No section anywhere else (a local run, Development, a test) means in memory
+    (`UseInMemory()`), needing no broker.
+  - **The start logs which:** `Message bus: RabbitMQ at {Host}:{Port}, virtual host {VirtualHost} (the MessageBus
+    section)` (never the password), as information. In memory, information in Development and a warning in any other
+    environment, so an instance deployed without its section is visible in its log. The in-memory line says what that
+    costs: for a bus that only publishes, `nothing it publishes leaves this process`; for one that receives (an input
+    queue, a rate-limited queue, scatter-gather's replies), also that `nothing outside this process reaches its
+    queues`. The warning names the keys to set (`MessageBus__Host`, `MessageBus__Username`, `MessageBus__Password`).
+    The logger is `Resrcify.SharedKernel.MessageBus.Diagnostics.MessageBusTransportStartupLog`. Nothing is logged once
+    the bus is given another transport afterwards (a later `UseRabbitMq` / `UseInMemory`, or the test harness).
+  - **The health check** (`AddHealthChecks().AddMessageBus()`) reports the transport as for the other two calls:
+    `transport` is `rabbitmq` or `in-memory`.
+  - **Moving to it:** replace a service's own choice (`configuration.GetSection("MessageBus").Exists()` or
+    `configuration["MessageBus:Host"]`, then `UseRabbitMqFromConfiguration()` or `UseInMemory()`) and its own start-up
+    log with `services.AddMessageBus(bus => bus.UseTransportFromConfiguration(configuration, environment)...)`. A test
+    that read the log line by its source context reads the logger above.
+
 ## 4.13.0 (2026-10-26)
 
 ### Fixed

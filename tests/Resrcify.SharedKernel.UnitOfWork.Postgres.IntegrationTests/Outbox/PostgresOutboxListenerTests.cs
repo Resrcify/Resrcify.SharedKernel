@@ -60,7 +60,7 @@ public sealed class PostgresOutboxListenerTests(
         var shardId = await host.SaveShardAsync(shard => shard.Rename("not woken"));
 
         var handled = host.Tracker.HandledAsync(shardId);
-        (await Task.WhenAny(handled, Task.Delay(TimeSpan.FromSeconds(3)))).ShouldNotBe(handled);
+        await Should.ThrowAsync<TimeoutException>(() => handled.WaitAsync(TimeSpan.FromSeconds(3)));
     }
 
     [Fact]
@@ -122,7 +122,7 @@ public sealed class PostgresOutboxListenerTests(
         await using (var scope = host.Services.CreateAsyncScope())
             (await scope.ServiceProvider.GetRequiredService<TestDbContext>().OutboxMessages.CountAsync()).ShouldBe(0);
         var handled = host.Tracker.HandledAsync(shard.Id);
-        (await Task.WhenAny(handled, Task.Delay(TimeSpan.FromSeconds(1)))).ShouldNotBe(handled);
+        await Should.ThrowAsync<TimeoutException>(() => handled.WaitAsync(TimeSpan.FromSeconds(1)));
     }
 
     /// <summary>
